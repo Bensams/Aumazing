@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_gradients.dart';
+import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/app_card.dart';
+import '../../core/widgets/parent_mode_top_bar.dart';
 import '../splash/auth/login_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,11 +18,11 @@ class HomeScreen extends StatelessWidget {
     final user = authService.currentUser;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Aumazing'),
+      appBar: ParentModeTopBar(
+        title: 'Aumazing',
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sign Out',
             onPressed: () async {
               await authService.signOut();
@@ -30,28 +36,45 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle, size: 80, color: Colors.green),
-              const SizedBox(height: 24),
-              Text(
-                'Welcome!',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        child: Center(
+          child: Padding(
+            padding: AppSpacing.paddingLg,
+            child: AppCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: const BoxDecoration(
+                      color: AppColors.mintLight,
+                      shape: BoxShape.circle,
                     ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                user?.email ?? 'Signed in',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey.shade600,
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      size: 40,
+                      color: AppColors.mint,
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Welcome!',
+                    style: AppTextStyles.headlineLarge.copyWith(
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    user?.email ?? 'Signed in',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
