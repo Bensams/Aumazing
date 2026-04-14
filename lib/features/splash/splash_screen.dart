@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'auth/login_screen.dart'; // Import the new LoginScreen
+
+import '../../core/services/auth_service.dart';
+import '../home/home_screen.dart';
+import 'auth/login_screen.dart';
 
 /// A vibrant, animated splash screen for the Aumazing Gamified Learning App.
 class AumazingSplashScreen extends StatefulWidget {
@@ -43,11 +46,15 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen>
     // Start the animation
     _controller.forward();
 
-    // Navigate to the Login Screen after 3.5 seconds
+    // After splash, navigate based on auth state
     Timer(const Duration(seconds: 3, milliseconds: 500), () {
       if (mounted) {
+        final isLoggedIn = AuthService().isLoggedIn;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          MaterialPageRoute(
+            builder: (_) =>
+                isLoggedIn ? const HomeScreen() : const LoginScreen(),
+          ),
         );
       }
     });
