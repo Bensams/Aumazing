@@ -22,26 +22,35 @@ class _ParentModeIconButtonState extends State<ParentModeIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      label: 'Exit child mode',
+      hint: 'Long press to exit child mode',
+      button: true,
       onLongPress: widget.onLongPress,
-      onLongPressStart: (_) => setState(() => _pressing = true),
-      onLongPressEnd: (_) => setState(() => _pressing = false),
-      onLongPressCancel: () => setState(() => _pressing = false),
-      child: AnimatedScale(
-        scale: _pressing ? 0.9 : 1.0,
-        duration: AppAnimations.tapFeedback,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.white.withAlpha(200),
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.border),
-          ),
-          child: const Icon(
-            Icons.lock_outline_rounded,
-            size: 20,
-            color: AppColors.mutedForeground,
+      child: Tooltip(
+        message: 'Exit child mode (long press)',
+        child: GestureDetector(
+          onLongPress: widget.onLongPress,
+          onLongPressStart: (_) => setState(() => _pressing = true),
+          onLongPressEnd: (_) => setState(() => _pressing = false),
+          onLongPressCancel: () => setState(() => _pressing = false),
+          child: AnimatedScale(
+            scale: _pressing ? 0.9 : 1.0,
+            duration: AppAnimations.tapFeedback,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.white.withAlpha(200),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.lock_outline_rounded,
+                size: 20,
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
         ),
       ),
