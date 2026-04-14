@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/theme/app_theme.dart';
 import 'features/splash/splash_screen.dart';
 
 Future<void> main() async {
@@ -23,10 +24,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Aumazing',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
       home: const AumazingSplashScreen(),
     );
   }
