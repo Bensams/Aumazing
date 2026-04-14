@@ -5,6 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_gradients.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_primary_button.dart';
+import '../../../core/widgets/parent_mode_top_bar.dart';
 import '../../home/home_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -61,8 +67,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
   }
 
-  String get _otpCode =>
-      _controllers.map((c) => c.text).join();
+  String get _otpCode => _controllers.map((c) => c.text).join();
 
   void _onDigitChanged(int index, String value) {
     if (value.length == 1 && index < 5) {
@@ -138,8 +143,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.destructiveSoftRed,
       ),
     );
   }
@@ -149,186 +153,145 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.mint,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.blue.shade900),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+      appBar: ParentModeTopBar(
+        title: '',
+        onBack: () => Navigator.of(context).pop(),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppGradients.parentSkyButter),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: AppSpacing.horizontalLg,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: AppSpacing.lg),
 
-              // Header
-              Center(
-                child: Column(
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(
+                          color: AppColors.lavenderLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.mark_email_read_outlined,
+                          size: 56,
+                          color: AppColors.primaryPurple,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Verify Your Email',
+                        style: AppTextStyles.headlineLarge.copyWith(
+                          color: AppColors.primaryPurple,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'We sent a 6-digit code to',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.email,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          color: AppColors.primaryPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.xxl),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(6, (index) {
+                    return SizedBox(
+                      width: 48,
+                      child: KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (event) => _onKeyEvent(index, event),
+                        child: TextFormField(
+                          controller: _controllers[index],
+                          focusNode: _focusNodes[index],
+                          enabled: !_isLoading,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          maxLength: 1,
+                          style: AppTextStyles.headlineMedium,
+                          decoration: InputDecoration(
+                            counterText: '',
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: AppColors.primaryPurple,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: (value) => _onDigitChanged(index, value),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                AppPrimaryButton(
+                  label: 'Verify Email',
+                  onPressed: _isLoading ? null : _verifyCode,
+                  isLoading: _isLoading,
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.mark_email_read_outlined,
-                        size: 64,
-                        color: Colors.blue,
+                    Text(
+                      "Didn't receive the code? ",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.mutedForeground,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Verify Your Email',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'We sent a 6-digit code to',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.email,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
+                    TextButton(
+                      onPressed:
+                          (_canResend && !_isLoading) ? _resendCode : null,
+                      child: Text(
+                        _canResend
+                            ? 'Resend Code'
+                            : 'Resend in ${_resendCountdown}s',
                       ),
                     ),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: 40),
-
-              // OTP input fields
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 48,
-                    child: KeyboardListener(
-                      focusNode: FocusNode(),
-                      onKeyEvent: (event) => _onKeyEvent(index, event),
-                      child: TextFormField(
-                        controller: _controllers[index],
-                        focusNode: _focusNodes[index],
-                        enabled: !_isLoading,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        maxLength: 1,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        decoration: InputDecoration(
-                          counterText: '',
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 14),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: Colors.blue,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: (value) => _onDigitChanged(index, value),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Verify button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _verifyCode,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.orange.shade200,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 2,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Verify Email',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Resend code
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "Didn't receive the code? ",
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
-                  TextButton(
-                    onPressed: (_canResend && !_isLoading) ? _resendCode : null,
-                    child: Text(
-                      _canResend
-                          ? 'Resend Code'
-                          : 'Resend in ${_resendCountdown}s',
-                      style: TextStyle(
-                        color: _canResend ? Colors.blue : Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: AppSpacing.lg),
+              ],
+            ),
           ),
         ),
       ),
