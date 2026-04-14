@@ -20,41 +20,55 @@ class VoiceOverPromptBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: isVisible ? 1.0 : 0.0,
+    return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.white.withAlpha(230),
-          borderRadius: AppRadius.largeBorder,
-          boxShadow: AppShadows.card,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.volume_up_rounded,
-              color: AppColors.primaryPurple,
-              size: 22,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                text,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.foreground,
-                  fontWeight: FontWeight.w600,
-                ),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axis: Axis.vertical,
+            child: child,
+          ),
+        );
+      },
+      child: isVisible
+          ? Container(
+              key: const ValueKey('voice_over_prompt_bubble_visible'),
+              constraints: const BoxConstraints(maxWidth: 400),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
               ),
+              decoration: BoxDecoration(
+                color: AppColors.white.withAlpha(230),
+                borderRadius: AppRadius.largeBorder,
+                boxShadow: AppShadows.card,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.volume_up_rounded,
+                    color: AppColors.primaryPurple,
+                    size: 22,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.foreground,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox(
+              key: ValueKey('voice_over_prompt_bubble_hidden'),
             ),
-          ],
-        ),
-      ),
     );
   }
 }
