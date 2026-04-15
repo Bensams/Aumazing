@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/utils/parent_screen_orientation.dart';
 import '../home/home_screen.dart';
+import 'auth/child_profile_setup_screen.dart';
 import 'auth/login_screen.dart';
 
 class AumazingSplashScreen extends StatefulWidget {
@@ -53,21 +55,30 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
     }
   }
 
-  void _navigateToNextScreen() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+  Future<void> _navigateToNextScreen() async {
+    lockParentLandscape();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
     if (!mounted) return;
 
-    final isLoggedIn = AuthService().isLoggedIn;
+    final authService = AuthService();
+    final Widget destination;
+
+    if (!authService.isLoggedIn) {
+      destination = const LoginScreen();
+    } else {
+      // Refresh the local session so userMetadata is up-to-date
+      // before deciding whether the child profile has been set up.
+      await authService.refreshSession();
+      if (!mounted) return;
+
+      destination = authService.hasChildProfile
+          ? const HomeScreen()
+          : const ChildProfileSetupScreen();
+    }
+
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) =>
-            isLoggedIn ? const HomeScreen() : const LoginScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => destination),
     );
   }
 

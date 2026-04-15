@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/parent_screen_orientation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_gradients.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -24,7 +25,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    lockParentLandscape();
+  }
+
+  @override
   void dispose() {
+    lockParentLandscape();
     _emailController.dispose();
     super.dispose();
   }

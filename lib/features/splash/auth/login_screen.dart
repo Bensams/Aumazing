@@ -5,11 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/parent_screen_orientation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_primary_button.dart';
 import '../../home/home_screen.dart';
+import 'child_profile_setup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'otp_verification_screen.dart';
 
@@ -44,10 +46,13 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
 
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    lockParentLandscape();
+    // Restore normal system overlays after the splash screen's
+    // immersiveSticky / edgeToEdge mode to prevent ghost touches.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
 
     _logoAnimController = AnimationController(
       vsync: this,
@@ -77,12 +82,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    unlockParentOrientation();
     _logoAnimController.dispose();
     _videoController.dispose();
     _nameController.dispose();
@@ -91,9 +91,16 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _navigateToHome() {
+  Future<void> _navigateAfterAuth() async {
+    await _authService.refreshSession();
+    if (!mounted) return;
+
+    final destination = _authService.hasChildProfile
+        ? const HomeScreen()
+        : const ChildProfileSetupScreen();
+
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => destination),
       (_) => false,
     );
   }
@@ -119,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen>
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        _navigateToHome();
+        await _navigateAfterAuth();
       } else {
         final response = await _authService.signUpWithEmail(
           email: _emailController.text.trim(),
@@ -138,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen>
             );
           }
         } else {
-          _navigateToHome();
+          await _navigateAfterAuth();
         }
       }
     } on AuthException catch (e) {
@@ -169,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       await _authService.signInWithGoogle();
-      _navigateToHome();
+      await _navigateAfterAuth();
     } on AuthException catch (e) {
       debugPrint('Google Sign-In AuthException: ${e.message}');
       _showError(e.message);

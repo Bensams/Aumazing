@@ -135,6 +135,52 @@ class AuthService {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  // --- Child Profile ---
+
+  /// Refreshes the local session so that [currentUser] and its metadata
+  /// reflect the latest server-side state. Call this before reading
+  /// [hasChildProfile] after a cold start or sign-in.
+  Future<void> refreshSession() async {
+    try {
+      await _client.auth.refreshSession();
+    } catch (e) {
+      debugPrint('refreshSession failed (non-fatal): $e');
+    }
+  }
+
+  bool get hasChildProfile {
+    final meta = currentUser?.userMetadata;
+    if (meta == null) return false;
+    return meta['child_name'] != null && meta['child_age'] != null;
+  }
+
+  Map<String, dynamic>? get childProfile {
+    final meta = currentUser?.userMetadata;
+    if (meta == null || meta['child_name'] == null) return null;
+    return {
+      'name': meta['child_name'],
+      'age': meta['child_age'],
+      'avatar': meta['child_avatar'],
+    };
+  }
+
+  Future<void> saveChildProfile({
+    required String name,
+    required int age,
+    required String avatar,
+  }) async {
+    await _client.auth.updateUser(
+      UserAttributes(data: {
+        'child_name': name,
+        'child_age': age,
+        'child_avatar': avatar,
+      }),
+    );
+    // Refresh the local session so that currentUser.userMetadata
+    // reflects the newly-saved child profile immediately.
+    await refreshSession();
+  }
+
   // --- Sign Out ---
 
   Future<void> signOut() async {
