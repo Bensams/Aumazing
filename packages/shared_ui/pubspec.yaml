@@ -1,0 +1,13 @@
+name: shared_ui
+description: Reusable theme, widgets, and UI utilities for the Aumazing app ecosystem.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.7.2
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.3.2
