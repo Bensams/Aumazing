@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/parent_screen_orientation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_gradients.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -44,11 +45,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   void initState() {
     super.initState();
+    lockParentLandscape();
     _startResendTimer();
   }
 
   @override
   void dispose() {
+    lockParentLandscape();
     _timer?.cancel();
     _passwordController.dispose();
     _confirmPasswordController.dispose();

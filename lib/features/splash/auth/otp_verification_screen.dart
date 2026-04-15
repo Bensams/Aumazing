@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/parent_screen_orientation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_gradients.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -12,6 +13,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_primary_button.dart';
 import '../../../core/widgets/parent_mode_top_bar.dart';
 import '../../home/home_screen.dart';
+import 'child_profile_setup_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String email;
@@ -36,11 +38,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    lockParentLandscape();
     _startResendTimer();
   }
 
   @override
   void dispose() {
+    lockParentLandscape();
     _timer?.cancel();
     for (final c in _controllers) {
       c.dispose();
@@ -100,8 +104,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       await _authService.verifyOTP(email: widget.email, token: code);
       if (mounted) {
+        // Refresh so that userMetadata is up-to-date before checking.
+        await _authService.refreshSession();
+        if (!mounted) return;
+
+        final destination = _authService.hasChildProfile
+            ? const HomeScreen()
+            : const ChildProfileSetupScreen();
+
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => destination),
           (_) => false,
         );
       }
