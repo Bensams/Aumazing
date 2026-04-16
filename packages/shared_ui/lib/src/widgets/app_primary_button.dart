@@ -122,8 +122,13 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                                 color: AppColors.white, size: 20),
                             const SizedBox(width: 10),
                           ],
-                          Text(
-                              widget.label, style: AppTextStyles.buttonLarge),
+                          Flexible(
+                            child: Text(
+                              widget.label,
+                              style: AppTextStyles.buttonLarge,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
               ),

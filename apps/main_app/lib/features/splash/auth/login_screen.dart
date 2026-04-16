@@ -74,6 +74,9 @@ class _LoginScreenState extends State<LoginScreen>
               setState(() => _videoInitialized = true);
               _videoController.play();
             }
+          }).catchError((_) {
+            // Video format not supported on this device — keep gradient bg.
+            debugPrint('Login background video failed to load.');
           });
   }
 

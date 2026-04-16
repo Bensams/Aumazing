@@ -54,7 +54,6 @@ class _MatchItScreenState extends State<MatchItScreen> {
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
 

@@ -13,3 +13,4 @@ export 'parent_verification_dialog.dart';
 export 'progress_dots.dart';
 export 'section_title.dart';
 export 'voice_over_prompt_bubble.dart';
+export 'game_celebration_overlay.dart';

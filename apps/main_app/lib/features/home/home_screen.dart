@@ -9,6 +9,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../games/match_it/match_it_screen.dart';
+import '../pre_assessment/pre_assessment_intro_screen.dart';
 import '../splash/auth/login_screen.dart';
 
 /// Parent Dashboard — the main hub after login.
@@ -66,9 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startPreAssessment() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const MatchItScreen(
-          assessmentContext: 'pre_assessment',
-        ),
+        builder: (_) => const PreAssessmentIntroScreen(),
       ),
     );
   }
@@ -720,7 +719,6 @@ class _ActionCard extends StatelessWidget {
             border: Border.all(color: color.withAlpha(80)),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 44,
@@ -732,17 +730,24 @@ class _ActionCard extends StatelessWidget {
                 child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: AppTextStyles.titleMedium),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.mutedForeground,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.titleMedium,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

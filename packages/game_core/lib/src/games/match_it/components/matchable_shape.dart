@@ -62,10 +62,6 @@ class MatchableShape extends PositionComponent with TapCallbacks {
       Vector2.all(0.9),
       EffectController(duration: 0.3, curve: Curves.easeInOut),
     ));
-    add(OpacityEffect.to(
-      0.4,
-      EffectController(duration: 0.3),
-    ));
   }
 
   void showError() {
