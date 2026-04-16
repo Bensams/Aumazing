@@ -8,11 +8,10 @@ void lockParentLandscape() {
   ]);
 }
 
-/// Call when leaving a parent screen so games or system UI can choose orientation.
+/// Call when leaving a parent screen — keeps landscape since the entire
+/// app is landscape-only.
 void unlockParentOrientation() {
   SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);

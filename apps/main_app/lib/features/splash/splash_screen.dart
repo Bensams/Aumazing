@@ -17,8 +17,9 @@ class AumazingSplashScreen extends StatefulWidget {
 }
 
 class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _navigated = false;
+  bool _videoReady = false;
 
   @override
   void initState() {
@@ -30,30 +31,61 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
-    _videoController = VideoPlayerController.asset(
-      'assets/videos/Aumazing_Splash_Screen_Generation.webm',
-    );
+    _initVideo();
+  }
 
-    _videoController.addListener(_onVideoProgress);
+  Future<void> _initVideo() async {
+    const videoAsset = 'assets/videos/Aumazing_Splash_Screen_Generation.mp4';
 
-    _videoController.initialize().then((_) {
-      if (mounted) {
-        setState(() {});
-        _videoController.play();
-      }
-    });
+    // Verify the asset actually exists before handing it to ExoPlayer.
+    try {
+      await rootBundle.load(videoAsset);
+    } catch (_) {
+      // Asset not bundled — skip splash immediately.
+      _skipSplash();
+      return;
+    }
+
+    try {
+      final controller = VideoPlayerController.asset(videoAsset);
+      _videoController = controller;
+
+      await controller.initialize();
+      if (!mounted || _navigated) return;
+
+      controller.addListener(_onVideoProgress);
+      _videoReady = true;
+      setState(() {});
+      controller.play();
+    } catch (_) {
+      // Initialization or playback failed — skip.
+      _skipSplash();
+    }
   }
 
   void _onVideoProgress() {
     if (_navigated) return;
+    final ctl = _videoController;
+    if (ctl == null) return;
 
-    final position = _videoController.value.position;
-    final duration = _videoController.value.duration;
+    if (ctl.value.hasError) {
+      _skipSplash();
+      return;
+    }
+
+    final position = ctl.value.position;
+    final duration = ctl.value.duration;
 
     if (duration > Duration.zero && position >= duration) {
       _navigated = true;
       _navigateToNextScreen();
     }
+  }
+
+  void _skipSplash() {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+    _navigateToNextScreen();
   }
 
   Future<void> _navigateToNextScreen() async {
@@ -85,23 +117,24 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
 
   @override
   void dispose() {
-    _videoController.removeListener(_onVideoProgress);
-    _videoController.dispose();
+    _videoController?.removeListener(_onVideoProgress);
+    _videoController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ctl = _videoController;
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _videoController.value.isInitialized
+      body: (_videoReady && ctl != null && ctl.value.isInitialized)
           ? SizedBox.expand(
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: _videoController.value.size.width,
-                  height: _videoController.value.size.height,
-                  child: VideoPlayer(_videoController),
+                  width: ctl.value.size.width,
+                  height: ctl.value.size.height,
+                  child: VideoPlayer(ctl),
                 ),
               ),
             )

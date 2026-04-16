@@ -55,19 +55,68 @@ class MatchItGame extends FlameGame with TapCallbacks {
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
 
+  /// Tracks indices of pairs already used in previous rounds to reduce
+  /// repetition. Resets when the pool is exhausted.
+  final Set<int> _usedPairIndices = {};
+
   static const List<MatchPairData> _allPairs = [
+    // Stars — 3 colour variants
     MatchPairData(
-        shape: ShapeType.star, color: AppColors.butterYellow, label: 'Star'),
+        shape: ShapeType.star, color: Color(0xFFF5C842), label: 'Gold Star'),
     MatchPairData(
-        shape: ShapeType.heart, color: AppColors.peach, label: 'Heart'),
+        shape: ShapeType.star, color: Color(0xFFFF8C42), label: 'Orange Star'),
     MatchPairData(
-        shape: ShapeType.circle, color: AppColors.mint, label: 'Circle'),
+        shape: ShapeType.star, color: Color(0xFFFF5252), label: 'Red Star'),
+    // Hearts — 3 colour variants
     MatchPairData(
-        shape: ShapeType.diamond, color: AppColors.skyBlue, label: 'Diamond'),
+        shape: ShapeType.heart, color: Color(0xFFE86B6B), label: 'Red Heart'),
+    MatchPairData(
+        shape: ShapeType.heart,
+        color: Color(0xFFC76BD1),
+        label: 'Purple Heart'),
+    MatchPairData(
+        shape: ShapeType.heart,
+        color: Color(0xFFFF6B9D),
+        label: 'Pink Heart'),
+    // Circles — 3 colour variants
+    MatchPairData(
+        shape: ShapeType.circle,
+        color: Color(0xFF5DAF8E),
+        label: 'Green Circle'),
+    MatchPairData(
+        shape: ShapeType.circle,
+        color: Color(0xFF42B4E8),
+        label: 'Blue Circle'),
+    MatchPairData(
+        shape: ShapeType.circle,
+        color: Color(0xFFFFB74D),
+        label: 'Orange Circle'),
+    // Diamonds — 3 colour variants
+    MatchPairData(
+        shape: ShapeType.diamond,
+        color: Color(0xFF5B9BD5),
+        label: 'Blue Diamond'),
+    MatchPairData(
+        shape: ShapeType.diamond,
+        color: Color(0xFF7ED957),
+        label: 'Green Diamond'),
+    MatchPairData(
+        shape: ShapeType.diamond,
+        color: Color(0xFFE040FB),
+        label: 'Magenta Diamond'),
+    // Triangles — 3 colour variants
     MatchPairData(
         shape: ShapeType.triangle,
-        color: AppColors.lavender,
-        label: 'Triangle'),
+        color: Color(0xFF9B82C4),
+        label: 'Purple Triangle'),
+    MatchPairData(
+        shape: ShapeType.triangle,
+        color: Color(0xFF26C6DA),
+        label: 'Teal Triangle'),
+    MatchPairData(
+        shape: ShapeType.triangle,
+        color: Color(0xFFFFCA28),
+        label: 'Yellow Triangle'),
   ];
 
   @override
@@ -92,10 +141,49 @@ class MatchItGame extends FlameGame with TapCallbacks {
     _selectedLeftIndex = null;
     _selectedRightIndex = null;
 
-    // Pick 3 random pairs for this round
     final rng = math.Random();
-    final shuffled = List<MatchPairData>.from(_allPairs)..shuffle(rng);
-    final roundPairs = shuffled.take(3).toList();
+
+    // Reset used-pair tracking when the pool is nearly exhausted.
+    if (_usedPairIndices.length > _allPairs.length - 3) {
+      _usedPairIndices.clear();
+    }
+
+    // Build a list of available (not-yet-used) pairs, shuffled.
+    final available = <int>[];
+    for (var i = 0; i < _allPairs.length; i++) {
+      if (!_usedPairIndices.contains(i)) available.add(i);
+    }
+    available.shuffle(rng);
+
+    // Pick 3 pairs with DISTINCT shape types so children can match by shape.
+    final roundPairs = <MatchPairData>[];
+    final roundIndices = <int>[];
+    final usedShapes = <ShapeType>{};
+
+    for (final idx in available) {
+      final p = _allPairs[idx];
+      if (usedShapes.contains(p.shape)) continue;
+      usedShapes.add(p.shape);
+      roundPairs.add(p);
+      roundIndices.add(idx);
+      if (roundPairs.length == 3) break;
+    }
+
+    // Fallback: if we still have < 3 (shouldn't happen with 15 pairs),
+    // allow duplicates from the full pool.
+    if (roundPairs.length < 3) {
+      final fallback = List<int>.generate(_allPairs.length, (i) => i)
+        ..shuffle(rng);
+      for (final idx in fallback) {
+        if (roundIndices.contains(idx)) continue;
+        roundPairs.add(_allPairs[idx]);
+        roundIndices.add(idx);
+        if (roundPairs.length == 3) break;
+      }
+    }
+
+    // Record these pairs as used for cross-round dedup.
+    _usedPairIndices.addAll(roundIndices);
 
     // Create a shuffled order for right column
     final rightOrder = List<int>.generate(3, (i) => i)..shuffle(rng);
@@ -142,8 +230,9 @@ class MatchItGame extends FlameGame with TapCallbacks {
   }
 
   void _onLeftSelected(int index) {
-    if (_selectedLeftIndex != null && _selectedLeftIndex! < _leftShapes.length) {
-      _leftShapes[_selectedLeftIndex!].deselect();
+    // Deselect previous
+    for (final s in _leftShapes) {
+      if (s.isSelected) s.deselect();
     }
     _selectedLeftIndex = index;
     _leftShapes[index].select();
@@ -151,10 +240,9 @@ class MatchItGame extends FlameGame with TapCallbacks {
   }
 
   void _onRightSelected(int index) {
-    if (_selectedRightIndex != null) {
-      for (final s in _rightShapes) {
-        if (s.index == _selectedRightIndex) s.deselect();
-      }
+    // Deselect previous
+    for (final s in _rightShapes) {
+      if (s.isSelected) s.deselect();
     }
     _selectedRightIndex = index;
     for (final s in _rightShapes) {
@@ -170,16 +258,28 @@ class MatchItGame extends FlameGame with TapCallbacks {
         ? DateTime.now().difference(_roundStartTime!).inMilliseconds
         : 0;
 
-    if (_selectedLeftIndex == _selectedRightIndex) {
+    // Match by shape identity (shape type + color), not by index
+    final leftShape = _leftShapes[_selectedLeftIndex!];
+    MatchableShape? rightShape;
+    for (final s in _rightShapes) {
+      if (s.index == _selectedRightIndex) {
+        rightShape = s;
+        break;
+      }
+    }
+
+    if (rightShape == null) return;
+
+    final isMatch = leftShape.shapeType == rightShape.shapeType &&
+        leftShape.shapeColor.value == rightShape.shapeColor.value;
+
+    if (isMatch) {
       // Correct match!
       _score++;
       _totalResponseTimeMs += responseTime;
 
-      // Mark both as matched
-      _leftShapes[_selectedLeftIndex!].markMatched();
-      for (final s in _rightShapes) {
-        if (s.index == _selectedRightIndex) s.markMatched();
-      }
+      leftShape.markMatched();
+      rightShape.markMatched();
 
       _selectedLeftIndex = null;
       _selectedRightIndex = null;
@@ -211,10 +311,8 @@ class MatchItGame extends FlameGame with TapCallbacks {
       // Wrong match
       _errorCount++;
 
-      _leftShapes[_selectedLeftIndex!].showError();
-      for (final s in _rightShapes) {
-        if (s.index == _selectedRightIndex) s.showError();
-      }
+      leftShape.showError();
+      rightShape.showError();
 
       Future.delayed(const Duration(milliseconds: 500), () {
         _selectedLeftIndex = null;

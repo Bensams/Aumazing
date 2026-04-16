@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../config/game_config.dart';
 import '../games/match_it/match_it_game.dart';
+import '../games/copy_me/copy_me_game.dart';
+import '../games/do_what_i_say/do_what_i_say_game.dart';
+import '../games/my_turn_your_turn/my_turn_your_turn_game.dart';
 
 /// Metadata for a single playable mini-game.
 class GameEntry {
@@ -78,12 +81,115 @@ class GameRegistry {
         );
       },
     ),
-
-    // TODO: Add more games here as they are implemented:
-    // - Copy Me (drag-and-drop)
-    // - Do What I Say (tapping / following instructions)
-    // - My Turn Your Turn (turn-taking)
-    // - Trace It (tracing / fine motor)
+    GameEntry(
+      id: 'copy_me',
+      name: 'Copy Me',
+      description: 'Watch the sequence, then copy it!',
+      icon: Icons.content_copy_rounded,
+      gradientColors: [
+        const Color(0xFFFFF3D4),
+        const Color(0xFFFFDDD4),
+        const Color(0xFFD4F4E8),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return CopyMeGame(
+          totalRounds: config.totalRounds,
+          onStepChanged: onStepChanged,
+          onGameComplete: onGameComplete,
+        );
+      },
+    ),
+    GameEntry(
+      id: 'do_what_i_say',
+      name: 'Do What I Say',
+      description: 'Follow the instructions to tap the right shape!',
+      icon: Icons.record_voice_over_rounded,
+      gradientColors: [
+        const Color(0xFFE8DEFA),
+        const Color(0xFFD4F4E8),
+        const Color(0xFFFFF3D4),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return DoWhatISayGame(
+          totalRounds: config.totalRounds,
+          onStepChanged: onStepChanged,
+          onInstructionChanged: (_) {}, // placeholder
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'my_turn_your_turn',
+      name: 'My Turn, Your Turn',
+      description: 'Take turns placing shapes with your buddy!',
+      icon: Icons.people_rounded,
+      gradientColors: [
+        const Color(0xFFD4E8FA),
+        const Color(0xFFE8DEFA),
+        const Color(0xFFFFDDD4),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return MyTurnYourTurnGame(
+          totalRounds: config.totalRounds,
+          onStepChanged: onStepChanged,
+          onTurnChanged: (_) {}, // placeholder
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
   ];
 
   /// Look up a game by its ID. Returns null if not found.
@@ -94,4 +200,12 @@ class GameRegistry {
       return null;
     }
   }
+
+  /// The 4 assessment game IDs in play order.
+  static const assessmentGameIds = [
+    'copy_me',
+    'do_what_i_say',
+    'my_turn_your_turn',
+    'match_it',
+  ];
 }
