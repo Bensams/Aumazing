@@ -23,5 +23,8 @@ export 'src/games/do_what_i_say/components/instruction_shape.dart';
 export 'src/games/my_turn_your_turn/my_turn_your_turn_game.dart';
 export 'src/games/my_turn_your_turn/components/turn_slot.dart';
 
+// Analytics
+export 'src/analytics/gameplay_analytics_mixin.dart';
+
 // Registry
 export 'src/registry/game_registry.dart';

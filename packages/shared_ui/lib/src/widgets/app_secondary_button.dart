@@ -4,6 +4,7 @@ import '../theme/app_animations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_text_styles.dart';
+import 'ui_tap_sfx_provider.dart';
 
 class AppSecondaryButton extends StatefulWidget {
   const AppSecondaryButton({
@@ -37,6 +38,7 @@ class _AppSecondaryButtonState extends State<AppSecondaryButton> {
       onTapUp: enabled
           ? (_) {
               setState(() => _pressed = false);
+              UiTapSfxProvider.play(context);
               widget.onPressed?.call();
             }
           : null,
