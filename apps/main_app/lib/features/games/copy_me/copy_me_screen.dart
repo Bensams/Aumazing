@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../home/home_screen.dart';
+
 /// Screen wrapper for the Copy Me game during pre-assessment.
 class CopyMeScreen extends StatefulWidget {
   const CopyMeScreen({
@@ -55,7 +57,12 @@ class _CopyMeScreenState extends State<CopyMeScreen> {
 
   Future<void> _handleParentTap() async {
     final verified = await ParentVerificationDialog.show(context);
-    if (verified && mounted) Navigator.of(context).pop();
+    if (verified && mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
+      );
+    }
   }
 
   @override
