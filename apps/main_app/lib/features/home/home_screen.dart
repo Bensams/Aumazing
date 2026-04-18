@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _authService = AuthService();
+  bool _isLeftPanelExpanded = true;
 
   @override
   void initState() {
@@ -80,39 +82,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _toggleLeftPanel() {
+    setState(() {
+      _isLeftPanelExpanded = !_isLeftPanelExpanded;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: ParentModeTopBar(
-        title: 'Aumazing',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-            onPressed: _loadData,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Sign Out',
-            onPressed: _signOut,
-          ),
-        ],
-      ),
       body: Container(
         decoration:
             const BoxDecoration(gradient: AppGradients.parentLavenderMint),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: [
-              // ── Left Panel: Child Summary ─────────────────────────
-              SizedBox(
-                width: 280,
-                child: _buildChildPanel(),
-              ),
+        child: Row(
+          children: [
+            // ── Left Panel: Child Summary (no SafeArea, sticks to edge) ─────────────────────────
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              width: _isLeftPanelExpanded ? 280 : 56,
+              child: _buildChildPanel(),
+            ),
 
-              // ── Main Content ──────────────────────────────────────
-              Expanded(
+            // ── Main Content ──────────────────────────────────────
+            Expanded(
+              child: SafeArea(
+                left: false,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.md,
@@ -123,6 +118,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _buildHeader(),
+                      const SizedBox(height: AppSpacing.md),
                       _buildActionButtons(),
                       const SizedBox(height: AppSpacing.md),
                       _buildAssessmentStatus(),
@@ -134,10 +131,103 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Consumer<ChildProvider>(
+      builder: (context, childProv, _) {
+        final profile = childProv.profile;
+        final meta = _authService.childProfile;
+
+        final name = profile?.name ?? meta?['name'] ?? 'Child';
+        final age = profile?.age ?? meta?['age'] ?? '?';
+        final avatar = profile?.avatar ?? meta?['avatar'] ?? '🐻';
+        final email = _authService.currentUser?.email ?? '';
+
+        return Row(
+          children: [
+            // Avatar
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.lavenderLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(avatar, style: const TextStyle(fontSize: 28)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            // Child info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "$name's Dashboard",
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Age $age',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Email chip + Sign out
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (email.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.white.withAlpha(180),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.email_outlined,
+                          size: 16,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          email,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(width: AppSpacing.sm),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded),
+                  tooltip: 'Sign Out',
+                  onPressed: _signOut,
+                  color: AppColors.mutedForeground,
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -162,100 +252,149 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Column(
             children: [
-              // Scrollable top section
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(top: AppSpacing.md),
+              // Toggle button (always visible, right-aligned)
+              SizedBox(
+                height: 48,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(
+                      _isLeftPanelExpanded
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                    ),
+                    onPressed: _toggleLeftPanel,
+                    tooltip: _isLeftPanelExpanded ? 'Collapse' : 'Expand',
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+
+              // Collapsed view - just avatar
+              if (!_isLeftPanelExpanded)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            color: AppColors.lavenderLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(avatar, style: const TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Expanded view - full content
+              if (_isLeftPanelExpanded) ...[
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: Column(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: AppColors.lavenderLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(avatar,
+                                style: const TextStyle(fontSize: 32)),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+
+                        // Name
+                        Text(
+                          name.toString(),
+                          style: AppTextStyles.titleLarge.copyWith(
+                            color: AppColors.primaryPurple,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Age $age',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+
+                        const SizedBox(height: AppSpacing.sm),
+                        const Divider(indent: 24, endIndent: 24, height: 1),
+                        const SizedBox(height: AppSpacing.sm),
+
+                        // Quick stats
+                        _buildQuickStat(
+                          Icons.games_rounded,
+                          'Sessions',
+                          context
+                              .watch<ProgressProvider>()
+                              .totalSessions
+                              .toString(),
+                        ),
+                        _buildQuickStat(
+                          Icons.trending_up_rounded,
+                          'Modules',
+                          '${context.watch<ProgressProvider>().completedModules} done',
+                        ),
+                        _buildQuickStat(
+                          Icons.assessment_rounded,
+                          'Assessment',
+                          context.watch<AssessmentProvider>().hasPreAssessment
+                              ? 'Completed'
+                              : 'Pending',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Pinned comfort settings at bottom
+                const Divider(indent: 24, endIndent: 24, height: 1),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.xs,
+                  ),
                   child: Column(
                     children: [
-                      // Avatar
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: const BoxDecoration(
-                          color: AppColors.lavenderLight,
-                          shape: BoxShape.circle,
+                      _buildToggle(
+                        Icons.music_note_rounded,
+                        'Music',
+                        childProv.musicEnabled,
+                        (val) {
+                          childProv.updateComfortSettings(musicEnabled: val);
+                          final audioService = context.read<AudioService>();
+                          if (val) {
+                            audioService.resumeMusic();
+                          } else {
+                            audioService.pauseMusic();
+                          }
+                        },
+                      ),
+                      _buildToggle(
+                        Icons.vibration_rounded,
+                        'Vibration',
+                        childProv.vibrationEnabled,
+                        (val) => childProv.updateComfortSettings(
+                          vibrationEnabled: val,
                         ),
-                        child: Center(
-                          child: Text(avatar,
-                              style: const TextStyle(fontSize: 32)),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-
-                      // Name
-                      Text(
-                        name.toString(),
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: AppColors.primaryPurple,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Age $age',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-
-                      const SizedBox(height: AppSpacing.sm),
-                      const Divider(indent: 24, endIndent: 24, height: 1),
-                      const SizedBox(height: AppSpacing.sm),
-
-                      // Quick stats
-                      _buildQuickStat(
-                        Icons.games_rounded,
-                        'Sessions',
-                        context
-                            .watch<ProgressProvider>()
-                            .totalSessions
-                            .toString(),
-                      ),
-                      _buildQuickStat(
-                        Icons.trending_up_rounded,
-                        'Modules',
-                        '${context.watch<ProgressProvider>().completedModules} done',
-                      ),
-                      _buildQuickStat(
-                        Icons.assessment_rounded,
-                        'Assessment',
-                        context.watch<AssessmentProvider>().hasPreAssessment
-                            ? 'Completed'
-                            : 'Pending',
                       ),
                     ],
                   ),
                 ),
-              ),
-
-              // Pinned comfort settings at bottom
-              const Divider(indent: 24, endIndent: 24, height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                child: Column(
-                  children: [
-                    _buildToggle(
-                      Icons.music_note_rounded,
-                      'Music',
-                      childProv.musicEnabled,
-                      (val) => childProv.updateComfortSettings(
-                        musicEnabled: val,
-                      ),
-                    ),
-                    _buildToggle(
-                      Icons.vibration_rounded,
-                      'Vibration',
-                      childProv.vibrationEnabled,
-                      (val) => childProv.updateComfortSettings(
-                        vibrationEnabled: val,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ],
           ),
         );

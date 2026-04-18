@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../../home/home_screen.dart';
 
 /// Child game screen: "Match It"
 ///
@@ -141,7 +142,10 @@ class _MatchItScreenState extends State<MatchItScreen> {
   Future<void> _handleParentTap() async {
     final verified = await ParentVerificationDialog.show(context);
     if (verified && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
+      );
     }
   }
 
