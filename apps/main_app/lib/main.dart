@@ -35,18 +35,30 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   /// Shared audio service for UI sound effects (button taps, etc.).
   late final AudioService _audioService;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _audioService = AudioService();
+  }
+
+  /// Pause music when the app goes to background, resume when it returns.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _audioService.pauseMusic();
+    } else if (state == AppLifecycleState.resumed) {
+      _audioService.resumeMusic();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _audioService.dispose();
     super.dispose();
   }
@@ -59,13 +71,16 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AssessmentProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
       ],
-      child: UiTapSfxProvider(
-        onTap: _audioService.playButtonTap,
-        child: MaterialApp(
+      child: Provider<AudioService>.value(
+        value: _audioService,
+        child: UiTapSfxProvider(
+          onTap: _audioService.playButtonTap,
+          child: MaterialApp(
           title: 'Aumazing',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           home: const AumazingSplashScreen(),
+          ),
         ),
       ),
     );

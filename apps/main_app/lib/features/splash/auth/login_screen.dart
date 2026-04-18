@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
@@ -27,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLogin = true;
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _musicOn = true;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -36,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen>
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
 
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _videoInitialized = false;
 
   @override
@@ -65,26 +68,110 @@ class _LoginScreenState extends State<LoginScreen>
     );
     _logoAnimController.forward();
 
-    _videoController =
-        VideoPlayerController.asset('assets/videos/login_page_bg.webm')
-          ..setLooping(true)
-          ..setVolume(0)
-          ..initialize().then((_) {
-            if (mounted) {
-              setState(() => _videoInitialized = true);
-              _videoController.play();
-            }
-          }).catchError((_) {
-            // Video format not supported on this device — keep gradient bg.
-            debugPrint('Login background video failed to load.');
+    _initVideoPlayer();
+    // Music already started by LoadingScreen, just verify it's playing
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _verifyMusicPlaying();
+    });
+  }
+
+  void _verifyMusicPlaying() async {
+    try {
+      final audioService = context.read<AudioService>();
+      debugPrint('[LoginScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}');
+      if (!audioService.isMusicPlaying) {
+        debugPrint('[LoginScreen] Music not playing, starting...');
+        await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
+      } else {
+        debugPrint('[LoginScreen] Music already playing from LoadingScreen');
+      }
+    } catch (e) {
+      debugPrint('[LoginScreen] ✖ Error checking music: $e');
+    }
+  }
+
+  void _toggleMusic() async {
+    final audioService = context.read<AudioService>();
+    setState(() => _musicOn = !_musicOn);
+    if (_musicOn) {
+      await audioService.resumeMusic();
+    } else {
+      await audioService.pauseMusic();
+    }
+    // Ensure video is still playing after music toggle
+    if (_videoController != null &&
+        _videoController!.value.isInitialized &&
+        !_videoController!.value.isPlaying) {
+      _videoController!.play();
+    }
+  }
+
+  Future<void> _initVideoPlayer() async {
+    // Try MP4 first (best Android compatibility), then WebM as fallback
+    final videoPaths = [
+      'assets/videos/login_page_bg.mp4',
+      'assets/videos/login_page_bg.webm',
+    ];
+
+    for (final path in videoPaths) {
+      try {
+        // Use mixWithOthers so video doesn't request audio focus and pause background music
+        final controller = VideoPlayerController.asset(
+          path,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: true,
+            allowBackgroundPlayback: false,
+          ),
+        );
+        await controller.setLooping(true);
+        await controller.setVolume(0);
+        await controller.initialize();
+
+        if (mounted) {
+          setState(() {
+            _videoController = controller;
+            _videoInitialized = true;
           });
+          controller.play();
+          // Add listener to auto-resume video if it pauses unexpectedly
+          controller.addListener(() {
+            if (controller.value.isInitialized &&
+                !controller.value.isPlaying &&
+                !controller.value.isBuffering) {
+              debugPrint('[LoginScreen] Video paused unexpectedly, resuming...');
+              controller.play();
+            }
+          });
+          debugPrint('Login background video loaded: $path');
+          return;
+        } else {
+          controller.dispose();
+          return;
+        }
+      } catch (e, stackTrace) {
+        debugPrint('Failed to load video $path: $e');
+        debugPrint('Stack trace: $stackTrace');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Video error ($path): $e'),
+              duration: const Duration(seconds: 5),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        continue;
+      }
+    }
+
+    debugPrint('All video formats failed, using gradient background.');
   }
 
   @override
   void dispose() {
     unlockParentOrientation();
     _logoAnimController.dispose();
-    _videoController.dispose();
+    _videoController?.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -219,9 +306,9 @@ class _LoginScreenState extends State<LoginScreen>
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: _videoController.value.size.width,
-                  height: _videoController.value.size.height,
-                  child: VideoPlayer(_videoController),
+                  width: _videoController!.value.size.width,
+                  height: _videoController!.value.size.height,
+                  child: VideoPlayer(_videoController!),
                 ),
               ),
             )
@@ -501,6 +588,20 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const Expanded(child: SizedBox()),
               ],
+            ),
+          ),
+
+          // ── Music toggle button (bottom right) ─────────────────────
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton.small(
+              onPressed: _toggleMusic,
+              backgroundColor: AppColors.white.withValues(alpha: 0.9),
+              child: Icon(
+                _musicOn ? Icons.music_note : Icons.music_off,
+                color: AppColors.primaryPurple,
+              ),
             ),
           ),
         ],
