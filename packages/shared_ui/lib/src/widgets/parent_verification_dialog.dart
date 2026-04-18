@@ -72,9 +72,10 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
           boxShadow: AppShadows.modal,
         ),
         constraints: const BoxConstraints(maxWidth: 360),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Container(
               width: 56,
               height: 56,
@@ -140,6 +141,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
               ],
             ),
           ],
+        ),
         ),
       ),
     );

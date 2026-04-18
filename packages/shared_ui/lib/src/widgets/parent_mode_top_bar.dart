@@ -18,7 +18,7 @@ class ParentModeTopBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(48);
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,9 @@ class ParentModeTopBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      centerTitle: true,
+      toolbarHeight: 48,
+      centerTitle: false,
+      titleSpacing: 0,
       leading: onBack != null
           ? IconButton(
               icon: const Icon(Icons.arrow_back_rounded),
@@ -34,7 +36,7 @@ class ParentModeTopBar extends StatelessWidget implements PreferredSizeWidget {
               onPressed: onBack,
             )
           : null,
-      title: Text(title, style: AppTextStyles.headlineSmall),
+      title: Text(title, style: AppTextStyles.titleLarge),
       actions: [
         if (actions != null) ...actions!,
         const SizedBox(width: AppSpacing.sm),
