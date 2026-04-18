@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -7,6 +6,7 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 
 import 'package:shared_ui/shared_ui.dart';
+import '../../shared/shape_painter_3d.dart';
 
 /// Shape size category for Do What I Say instructions.
 enum SizeCategory { big, small }
@@ -71,67 +71,28 @@ class InstructionShape extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
-    final rrect = RRect.fromRectAndRadius(
-      rect,
-      const Radius.circular(_cornerRadius),
-    );
 
     int bgAlpha = 40;
     if (showingCorrect) bgAlpha = 120;
     if (showingWrong) bgAlpha = 100;
 
-    canvas.drawRRect(rrect, Paint()..color = shapeColor.withAlpha(bgAlpha));
+    Color? borderColor;
+    if (showingCorrect) borderColor = AppColors.mint;
+    if (showingWrong) borderColor = const Color(0xFFE88888);
 
-    if (showingCorrect || showingWrong) {
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..color = showingWrong ? const Color(0xFFE88888) : AppColors.mint
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
-    }
+    ShapePainter3D.drawCard3D(
+      canvas,
+      rect,
+      color: shapeColor,
+      cornerRadius: _cornerRadius,
+      alpha: bgAlpha,
+      showBorder: showingCorrect || showingWrong,
+      borderColor: borderColor,
+    );
 
-    _drawShape(canvas, size.x / 2, size.y / 2, size.x * 0.3);
-  }
-
-  void _drawShape(Canvas canvas, double cx, double cy, double r) {
-    final paint = Paint()
-      ..color = shapeColor
-      ..style = PaintingStyle.fill;
-
-    switch (shapeType) {
-      case 'circle':
-        canvas.drawCircle(Offset(cx, cy), r, paint);
-      case 'star':
-        _drawStar(canvas, cx, cy, r, paint);
-      case 'triangle':
-        final path = Path()
-          ..moveTo(cx, cy - r)
-          ..lineTo(cx + r * 0.87, cy + r * 0.5)
-          ..lineTo(cx - r * 0.87, cy + r * 0.5)
-          ..close();
-        canvas.drawPath(path, paint);
-      case 'diamond':
-        final path = Path()
-          ..moveTo(cx, cy - r)
-          ..lineTo(cx + r * 0.7, cy)
-          ..lineTo(cx, cy + r)
-          ..lineTo(cx - r * 0.7, cy)
-          ..close();
-        canvas.drawPath(path, paint);
-    }
-  }
-
-  void _drawStar(Canvas canvas, double cx, double cy, double r, Paint p) {
-    final path = Path();
-    final inner = r * 0.45;
-    for (var i = 0; i < 10; i++) {
-      final angle = (i * math.pi / 5) - math.pi / 2;
-      final radius = i.isEven ? r : inner;
-      path.lineTo(cx + radius * math.cos(angle), cy + radius * math.sin(angle));
-    }
-    path.close();
-    canvas.drawPath(path, p);
+    // 3D shape in center
+    ShapePainter3D.drawByName(
+      canvas, shapeType, size.x / 2, size.y / 2, size.x * 0.3, shapeColor,
+    );
   }
 }

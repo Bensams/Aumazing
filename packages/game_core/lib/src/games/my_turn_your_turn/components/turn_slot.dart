@@ -7,6 +7,7 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
+import '../../shared/shape_painter_3d.dart';
 
 /// A slot in the turn-taking grid.
 class TurnSlot extends PositionComponent with TapCallbacks {
@@ -68,19 +69,23 @@ class TurnSlot extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
-    final rrect = RRect.fromRectAndRadius(
-      rect,
-      const Radius.circular(_cornerRadius),
-    );
 
     if (isFilled) {
-      canvas.drawRRect(rrect, Paint()..color = fillColor.withAlpha(160));
+      // 3D filled card
+      ShapePainter3D.drawCard3D(
+        canvas,
+        rect,
+        color: fillColor,
+        cornerRadius: _cornerRadius,
+        alpha: 160,
+      );
+
       // Emoji indicator
       final label = isBuddy ? '🐻' : '⭐';
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(fontSize: 32),
+          style: TextStyle(fontSize: size.x * 0.32),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -89,17 +94,46 @@ class TurnSlot extends PositionComponent with TapCallbacks {
         Offset(size.x / 2 - tp.width / 2, size.y / 2 - tp.height / 2),
       );
     } else {
-      // Empty slot
+      // 3D recessed empty slot
+      final rrect = RRect.fromRectAndRadius(
+        rect,
+        const Radius.circular(_cornerRadius),
+      );
+
+      // Inset shadow (darker inside)
       canvas.drawRRect(
         rrect,
-        Paint()..color = const Color(0xFFE8E4F0).withAlpha(120),
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0x18000000),
+              Color(0x08E8E4F0),
+              Color(0x20FFFFFF),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ).createShader(rect),
       );
+
+      // Subtle border
       canvas.drawRRect(
         rrect,
         Paint()
           ..color = AppColors.lavender.withAlpha(80)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
+      );
+
+      // Inner shadow top-left for depth
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(2, 2, size.x - 4, size.y - 4),
+          const Radius.circular(_cornerRadius - 2),
+        ),
+        Paint()
+          ..color = const Color(0x0C000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.inner, 4),
       );
     }
   }

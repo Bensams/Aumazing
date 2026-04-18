@@ -65,9 +65,9 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   void _layoutShapes() {
     final gameW = size.x;
     final gameH = size.y;
-    const cardSize = 110.0;
-    const gap = 24.0;
-    const totalW = 4 * cardSize + 3 * gap;
+    final cardSize = math.min(gameW / 5.5, gameH / 3.0);
+    final gap = cardSize * 0.22;
+    final totalW = 4 * cardSize + 3 * gap;
     final startX = (gameW - totalW) / 2;
     final centerY = gameH / 2 - cardSize / 2;
 
@@ -175,6 +175,7 @@ class CopyMeGame extends FlameGame with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
+    final fontSize = (size.x * 0.035).clamp(16.0, 24.0);
     // Demo phase label
     if (_demonstrating) {
       final tp = TextPainter(
@@ -182,7 +183,7 @@ class CopyMeGame extends FlameGame with TapCallbacks {
           text: 'Watch carefully…',
           style: TextStyle(
             color: Color(0xFF9B82C4),
-            fontSize: 22,
+            fontSize: fontSize,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -195,7 +196,7 @@ class CopyMeGame extends FlameGame with TapCallbacks {
           text: 'Your turn! Tap the shapes!',
           style: TextStyle(
             color: Color(0xFF5DAF8E),
-            fontSize: 22,
+            fontSize: fontSize,
             fontWeight: FontWeight.w600,
           ),
         ),

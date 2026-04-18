@@ -85,17 +85,17 @@ class DoWhatISayGame extends FlameGame with TapCallbacks {
       items.add((shapeType, colorData.$1, colorData.$2));
     }
 
-    // Layout shapes in a scattered grid
+    // Layout shapes in a responsive grid
     final gameW = size.x;
     final gameH = size.y;
-    const cardSize = 90.0;
     final cols = count <= 4 ? 4 : 3;
     final rows = (count / cols).ceil();
-    const gap = 20.0;
+    final cardSize = math.min(gameW / (cols + 1.5), gameH / (rows + 1.5));
+    final gap = cardSize * 0.2;
     final totalW = cols * cardSize + (cols - 1) * gap;
     final totalH = rows * cardSize + (rows - 1) * gap;
     final startX = (gameW - totalW) / 2;
-    final startY = (gameH - totalH) / 2 + 20;
+    final startY = (gameH - totalH) / 2 + gameH * 0.03;
 
     for (var i = 0; i < items.length; i++) {
       final col = i % cols;
