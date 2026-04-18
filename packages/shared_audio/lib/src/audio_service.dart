@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -61,6 +63,9 @@ class AudioService {
   ///
   /// Music loops indefinitely until [stopMusic] is called.
   Future<void> playMusic(String trackName) async {
+    debugPrint('[AudioService] playMusic() called with: $trackName');
+    debugPrint('[AudioService] Current state: musicEnabled=$_config.musicEnabled, isMusicPlaying=$isMusicPlaying, currentTrack=$_currentTrack');
+
     if (!_config.musicEnabled) {
       debugPrint('[AudioService] Music disabled, skipping: $trackName');
       return;
@@ -72,19 +77,26 @@ class AudioService {
       return;
     }
 
-    try {
+    final assetPath = '$_assetPrefix/$trackName';
+    debugPrint('[AudioService] Loading music from: $assetPath');
+
+    try { 
+      debugPrint('[AudioService] Stopping current player...');
       await _musicPlayer.stop();
+      debugPrint('[AudioService] Setting loop mode...');
       _musicPlayer.setReleaseMode(ReleaseMode.loop);
+      debugPrint('[AudioService] Setting volume: ${_config.effectiveMusicVolume}');
       await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-      await _musicPlayer.setSource(
-        AssetSource('$_assetPrefix/$trackName'),
-      );
+      debugPrint('[AudioService] Setting source...');
+      await _musicPlayer.setSource(AssetSource(assetPath));
+      debugPrint('[AudioService] Resuming playback...');
       await _musicPlayer.resume();
       _currentTrack = trackName;
       debugPrint('[AudioService] ▶ Playing music: $trackName '
           '(vol=${_config.effectiveMusicVolume.toStringAsFixed(1)})');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[AudioService] ✖ Error playing music "$trackName": $e');
+      debugPrint('[AudioService] Stack: $stackTrace');
     }
   }
 
@@ -109,24 +121,41 @@ class AudioService {
     debugPrint('[AudioService] ⏹ Music stopped');
   }
 
+  /// Play a random track from the provided list.
+  ///
+  /// Useful for shuffling between multiple background music tracks.
+  /// Example: `playRandomMusic(['bg_music.ogg', 'bg_music1.ogg'])`
+  Future<void> playRandomMusic(List<String> trackNames) async {
+    if (trackNames.isEmpty) return;
+    final random = Random();
+    final selectedTrack = trackNames[random.nextInt(trackNames.length)];
+    debugPrint('[AudioService] 🎲 Randomly selected: $selectedTrack');
+    await playMusic(selectedTrack);
+  }
+
   // ── Sound Effects ──────────────────────────────────────────────────
 
   /// Play a one-shot sound effect from the shared_audio assets.
   ///
   /// [sfxName] is just the filename, e.g. `'correct.ogg'`.
   Future<void> playSfx(String sfxName) async {
-    if (!_config.sfxEnabled) return;
+    if (!_config.sfxEnabled) {
+      debugPrint('[AudioService] SFX disabled, skipping: $sfxName');
+      return;
+    }
+
+    final assetPath = '$_assetPrefix/$sfxName';
+    debugPrint('[AudioService] Loading SFX from: $assetPath');
 
     try {
       final player = _getAvailableSfxPlayer();
       await player.setVolume(_config.effectiveSfxVolume);
-      await player.setSource(
-        AssetSource('$_assetPrefix/$sfxName'),
-      );
+      await player.setSource(AssetSource(assetPath));
       await player.resume();
-      debugPrint('[AudioService] 🔊 SFX: $sfxName');
-    } catch (e) {
+      debugPrint('[AudioService] 🔊 SFX: $sfxName (vol=${_config.effectiveSfxVolume.toStringAsFixed(1)})');
+    } catch (e, stackTrace) {
       debugPrint('[AudioService] ✖ Error playing SFX "$sfxName": $e');
+      debugPrint('[AudioService] Stack: $stackTrace');
     }
   }
 
