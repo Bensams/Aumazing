@@ -74,15 +74,15 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     _slots.clear();
     _turnsInRound = 0;
 
-    // Layout 3x2 grid
+    // Layout 3x2 responsive grid
     final gameW = size.x;
     final gameH = size.y;
-    const cardSize = 100.0;
-    const gap = 16.0;
     const cols = 3;
     const rows = 2;
-    const totalW = cols * cardSize + (cols - 1) * gap;
-    const totalH = rows * cardSize + (rows - 1) * gap;
+    final cardSize = math.min(gameW / (cols + 1.5), gameH / (rows + 1.5));
+    final gap = cardSize * 0.16;
+    final totalW = cols * cardSize + (cols - 1) * gap;
+    final totalH = rows * cardSize + (rows - 1) * gap;
     final startX = (gameW - totalW) / 2;
     final startY = (gameH - totalH) / 2;
 
@@ -219,13 +219,14 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     final color = _isBuddyTurn
         ? const Color(0xFF9B82C4)
         : const Color(0xFF5DAF8E);
+    final fontSize = (size.x * 0.04).clamp(16.0, 28.0);
 
     final tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: color,
-          fontSize: 24,
+          fontSize: fontSize,
           fontWeight: FontWeight.w600,
         ),
       ),

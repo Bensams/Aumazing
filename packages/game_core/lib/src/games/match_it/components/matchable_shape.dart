@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -6,12 +5,14 @@ import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 
+import '../../shared/shape_painter_3d.dart';
+
 /// The shape type drawn on each matchable card.
 enum ShapeType { star, heart, circle, diamond, triangle }
 
 /// A large, ASD-friendly tappable shape component for the Match It game.
 ///
-/// Renders a colored rounded-rect card with a centered shape icon.
+/// Renders a colored rounded-rect card with a centered 3D shape icon.
 /// Supports selection highlight, correct/incorrect feedback, and
 /// gentle scale animations.
 class MatchableShape extends PositionComponent with TapCallbacks {
@@ -96,112 +97,31 @@ class MatchableShape extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
-    final rrect = RRect.fromRectAndRadius(
+
+    // Card background
+    final bgAlpha = isMatched ? 30 : (isSelected ? 80 : 40);
+    Color? borderColor;
+    if (_showError) borderColor = const Color(0xFFE88888);
+    if (isSelected && !_showError) {
+      borderColor = const Color(0xFF9B82C4).withAlpha(140);
+    }
+
+    ShapePainter3D.drawCard3D(
+      canvas,
       rect,
-      const Radius.circular(_cornerRadius),
+      color: shapeColor,
+      cornerRadius: _cornerRadius,
+      alpha: bgAlpha,
+      showBorder: isSelected || _showError,
+      borderColor: borderColor,
+      borderWidth: _borderWidth,
     );
 
-    // Background fill
-    final bgColor = isMatched
-        ? shapeColor.withAlpha(30)
-        : shapeColor.withAlpha(isSelected ? 80 : 40);
-    canvas.drawRRect(
-      rrect,
-      Paint()..color = bgColor,
+    // 3D shape icon in center
+    final drawColor = isMatched ? shapeColor.withAlpha(80) : shapeColor;
+    final shapeName = shapeType.name; // enum name matches shape_painter_3d keys
+    ShapePainter3D.drawByName(
+      canvas, shapeName, size.x / 2, size.y / 2, size.x * 0.3, drawColor,
     );
-
-    // Border
-    if (isSelected || _showError) {
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..color = _showError
-              ? const Color(0xFFE88888)
-              : const Color(0xFF9B82C4).withAlpha(140)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _borderWidth,
-      );
-    }
-
-    // Draw shape icon in center
-    _drawShape(canvas, size.x / 2, size.y / 2, size.x * 0.3);
-  }
-
-  void _drawShape(Canvas canvas, double cx, double cy, double r) {
-    final paint = Paint()
-      ..color = isMatched ? shapeColor.withAlpha(80) : shapeColor
-      ..style = PaintingStyle.fill;
-
-    switch (shapeType) {
-      case ShapeType.star:
-        _drawStar(canvas, cx, cy, r, paint);
-      case ShapeType.heart:
-        _drawHeart(canvas, cx, cy, r, paint);
-      case ShapeType.circle:
-        canvas.drawCircle(Offset(cx, cy), r, paint);
-      case ShapeType.diamond:
-        _drawDiamond(canvas, cx, cy, r, paint);
-      case ShapeType.triangle:
-        _drawTriangle(canvas, cx, cy, r, paint);
-    }
-  }
-
-  void _drawStar(Canvas canvas, double cx, double cy, double r, Paint paint) {
-    final path = Path();
-    const points = 5;
-    final innerR = r * 0.45;
-    for (var i = 0; i < points * 2; i++) {
-      final angle = (i * math.pi / points) - math.pi / 2;
-      final radius = i.isEven ? r : innerR;
-      final x = cx + radius * math.cos(angle);
-      final y = cy + radius * math.sin(angle);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawHeart(Canvas canvas, double cx, double cy, double r, Paint paint) {
-    final path = Path();
-    final w = r * 1.1;
-    final h = r * 1.1;
-    path.moveTo(cx, cy + h * 0.6);
-    path.cubicTo(
-      cx - w * 1.2, cy - h * 0.2,
-      cx - w * 0.4, cy - h * 0.9,
-      cx, cy - h * 0.3,
-    );
-    path.cubicTo(
-      cx + w * 0.4, cy - h * 0.9,
-      cx + w * 1.2, cy - h * 0.2,
-      cx, cy + h * 0.6,
-    );
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawDiamond(
-      Canvas canvas, double cx, double cy, double r, Paint paint) {
-    final path = Path()
-      ..moveTo(cx, cy - r)
-      ..lineTo(cx + r * 0.7, cy)
-      ..lineTo(cx, cy + r)
-      ..lineTo(cx - r * 0.7, cy)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawTriangle(
-      Canvas canvas, double cx, double cy, double r, Paint paint) {
-    final path = Path()
-      ..moveTo(cx, cy - r)
-      ..lineTo(cx + r * 0.87, cy + r * 0.5)
-      ..lineTo(cx - r * 0.87, cy + r * 0.5)
-      ..close();
-    canvas.drawPath(path, paint);
   }
 }

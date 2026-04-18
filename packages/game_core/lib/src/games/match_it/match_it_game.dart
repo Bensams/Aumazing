@@ -188,12 +188,12 @@ class MatchItGame extends FlameGame with TapCallbacks {
     // Create a shuffled order for right column
     final rightOrder = List<int>.generate(3, (i) => i)..shuffle(rng);
 
-    // Layout constants
+    // Responsive layout constants
     final gameW = size.x;
     final gameH = size.y;
-    const cardSize = 110.0;
-    const cardGap = 16.0;
-    const totalHeight = 3 * cardSize + 2 * cardGap;
+    final cardSize = math.min(gameW / 5.0, gameH / 4.5);
+    final cardGap = cardSize * 0.15;
+    final totalHeight = 3 * cardSize + 2 * cardGap;
     final startY = (gameH - totalHeight) / 2;
     final leftX = gameW * 0.18;
     final rightX = gameW * 0.82 - cardSize;
