@@ -4,10 +4,7 @@ import 'package:video_player/video_player.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../core/services/auth_service.dart';
-import '../home/home_screen.dart';
-import 'auth/child_profile_setup_screen.dart';
-import 'auth/login_screen.dart';
+import 'loading_screen.dart';
 
 class AumazingSplashScreen extends StatefulWidget {
   const AumazingSplashScreen({super.key});
@@ -94,24 +91,9 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
 
     if (!mounted) return;
 
-    final authService = AuthService();
-    final Widget destination;
-
-    if (!authService.isLoggedIn) {
-      destination = const LoginScreen();
-    } else {
-      // Refresh the local session so userMetadata is up-to-date
-      // before deciding whether the child profile has been set up.
-      await authService.refreshSession();
-      if (!mounted) return;
-
-      destination = authService.hasChildProfile
-          ? const HomeScreen()
-          : const ChildProfileSetupScreen();
-    }
-
+    // Always go to LoadingScreen first to preload assets
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => destination),
+      MaterialPageRoute(builder: (_) => const LoadingScreen()),
     );
   }
 
