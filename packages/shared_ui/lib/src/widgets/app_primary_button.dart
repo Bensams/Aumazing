@@ -7,6 +7,7 @@ import '../theme/app_gradients.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
+import 'ui_tap_sfx_provider.dart';
 
 class AppPrimaryButton extends StatefulWidget {
   const AppPrimaryButton({
@@ -45,6 +46,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
       final enabled = widget.onPressed != null && !widget.isLoading;
       if (enabled) {
         setState(() => _pressed = true);
+        UiTapSfxProvider.play(context);
         widget.onPressed?.call();
         Future.delayed(AppAnimations.tapFeedback, () {
           if (mounted) setState(() => _pressed = false);
@@ -75,6 +77,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
         onTapUp: enabled
             ? (_) {
                 setState(() => _pressed = false);
+                UiTapSfxProvider.play(context);
                 widget.onPressed?.call();
               }
             : null,

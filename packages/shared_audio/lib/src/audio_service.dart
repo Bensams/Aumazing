@@ -12,7 +12,7 @@ class AudioService {
   AudioConfig _config;
 
   /// Dedicated player for looping background music.
-  final AudioPlayer _musicPlayer = AudioPlayer();
+  late final AudioPlayer _musicPlayer;
 
   /// Pool of SFX players (created on demand, reused when possible).
   final List<AudioPlayer> _sfxPlayers = [];
@@ -22,10 +22,17 @@ class AudioService {
 
   /// Asset prefix for package-based assets.
   /// Flutter resolves package assets at: packages/<pkg_name>/assets/...
+  /// The audioplayers AudioCache default prefix is 'assets/', but for
+  /// package assets we need the full path from the asset bundle root.
   static const String _assetPrefix = 'packages/shared_audio/assets/audio';
 
   AudioService({AudioConfig? config})
-      : _config = config ?? AudioConfig.defaults;
+      : _config = config ?? AudioConfig.defaults {
+    _musicPlayer = AudioPlayer();
+    // Override the default 'assets/' prefix so we can supply the full
+    // Flutter asset-bundle path for package-based assets.
+    _musicPlayer.audioCache = AudioCache(prefix: '');
+  }
 
   AudioConfig get config => _config;
 
@@ -135,12 +142,24 @@ class AudioService {
     // Create a new one (pool grows as needed, capped at 8)
     if (_sfxPlayers.length < 8) {
       final player = AudioPlayer();
+      // Use empty prefix so we can supply full package asset paths.
+      player.audioCache = AudioCache(prefix: '');
       _sfxPlayers.add(player);
       return player;
     }
     // Fallback: reuse the oldest
     return _sfxPlayers.first;
   }
+
+  // ── UI Sound Effects ───────────────────────────────────────────────
+
+  /// Filename of the UI button-tap sound effect.
+  static const String _uiTapSfx = 'ui_tap.wav';
+
+  /// Play the soft tap sound for UI button presses.
+  ///
+  /// This is intended for Flutter widget buttons only (not in-game / Flame).
+  Future<void> playButtonTap() => playSfx(_uiTapSfx);
 
   // ── Lifecycle ──────────────────────────────────────────────────────
 
