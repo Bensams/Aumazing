@@ -254,7 +254,7 @@ class _MatchItWrapper extends StatefulWidget {
 }
 
 class _MatchItWrapperState extends State<_MatchItWrapper> {
-  bool _reported = false;
+  final bool _reported = false;
 
   @override
   Widget build(BuildContext context) {

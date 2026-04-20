@@ -11,4 +11,9 @@ class SupabaseConfig {
 
   // TODO: Replace with your Google OAuth iOS Client ID (only needed for iOS).
   static const String googleIosClientId = 'YOUR_GOOGLE_IOS_CLIENT_ID';
+
+  // ── Facebook OAuth ───────────────────────────────────────────────────
+  // TODO: Replace with your Facebook App ID from https://developers.facebook.com/apps
+  static const String facebookAppId = '4458074451092574';
+  static const String facebookClientToken = '594a43ec476f200bd4f77bad8b160006';
 }

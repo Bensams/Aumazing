@@ -76,8 +76,23 @@ class GameRegistry {
       }) {
         return MatchItGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
-          onGameComplete: onGameComplete,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
         );
       },
     ),
@@ -103,8 +118,23 @@ class GameRegistry {
       }) {
         return CopyMeGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
-          onGameComplete: onGameComplete,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
         );
       },
     ),
@@ -130,6 +160,8 @@ class GameRegistry {
       }) {
         return DoWhatISayGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
           onInstructionChanged: (_) {}, // placeholder
           onGameComplete: ({
@@ -138,6 +170,7 @@ class GameRegistry {
             required int errorCount,
             required int totalResponseTimeMs,
             required Map<String, dynamic> extras,
+            analytics,
           }) {
             onGameComplete(
               score: score,
@@ -171,6 +204,8 @@ class GameRegistry {
       }) {
         return MyTurnYourTurnGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
           onTurnChanged: (_) {}, // placeholder
           onGameComplete: ({
@@ -179,6 +214,7 @@ class GameRegistry {
             required int errorCount,
             required int totalResponseTimeMs,
             required Map<String, dynamic> extras,
+            analytics,
           }) {
             onGameComplete(
               score: score,

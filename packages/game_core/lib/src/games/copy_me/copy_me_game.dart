@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
@@ -7,25 +7,32 @@ import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 import 'components/sequence_shape.dart';
+import '../../analytics/enhanced_analytics_mixin.dart';
+import '../../analytics/models/models.dart';
 
-/// Copy Me — a "Simon Says" style sequence memory game.
+/// Copy Me — a "Simon Says" style sequence memory game with XGBoost-ready analytics.
 ///
 /// The app highlights shapes in an increasing sequence and the child
 /// must reproduce the sequence by tapping in order.
-class CopyMeGame extends FlameGame with TapCallbacks {
+class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
   CopyMeGame({
     required this.totalRounds,
     required this.onStepChanged,
     required this.onGameComplete,
+    required this.childId,
+    this.gameVersion,
   });
 
   final int totalRounds;
+  final String childId;
+  final String? gameVersion;
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
+    GameSessionMetrics? analytics,
   }) onGameComplete;
 
   // ── State ───────────────────────────────────────────────────────────
@@ -34,6 +41,7 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   int _errorCount = 0;
   int _totalResponseTimeMs = 0;
   int _retries = 0;
+  int _consecutiveErrors = 0; // Track consecutive invalid taps
   DateTime? _inputStartTime;
 
   final List<SequenceShape> _shapes = [];
@@ -41,9 +49,24 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   int _inputIndex = 0;
   bool _demonstrating = false;
   bool _inputPhase = false;
+  Timer? _noResponseTimer;
 
   /// Notify Flutter layer about phase changes
   void Function(bool isDemoPhase)? onPhaseChanged;
+  
+  /// Public method to trigger visual guide replay
+  void replaySequenceAsVisualGuide() {
+    if (_inputPhase && !_demonstrating) {
+      _showSequentialVisualGuide();
+    }
+  }
+  
+  /// Public method to show visual hints for entire sequence
+  void showFullSequenceHints() {
+    if (_inputPhase && !_demonstrating) {
+      _showEntireSequenceHints();
+    }
+  }
 
   static const _shapeData = [
     (CopyMeShapeType.circle, AppColors.mint, 'Circle'),
@@ -58,6 +81,16 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Initialize and start analytics session
+    analyticsInitialize(
+      gameId: 'copy_me',
+      childId: childId,
+      totalRounds: totalRounds,
+      gameVersion: gameVersion ?? '1.0.0',
+    );
+    analyticsStartSession();
+
     _layoutShapes();
     _startRound();
   }
@@ -89,11 +122,16 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   void _startRound() {
     _inputIndex = 0;
     _inputPhase = false;
+    _consecutiveErrors = 0; // Reset consecutive errors for new round
 
     // Build sequence: length = round + 1 (round 0 → 1 item, etc.)
     final rng = math.Random();
     final len = (_currentRound + 1).clamp(1, 5);
     _sequence = List.generate(len, (_) => rng.nextInt(4));
+
+    // Start analytics round tracking
+    analyticsStartRound(roundNumber: _currentRound + 1);
+    analyticsAddRoundData('sequence_length', len);
 
     // Disable input during demo
     for (final s in _shapes) {
@@ -108,6 +146,10 @@ class CopyMeGame extends FlameGame with TapCallbacks {
   Future<void> _playDemoSequence() async {
     await Future.delayed(const Duration(milliseconds: 500));
 
+    // Record stimulus when sequence demonstration starts
+    analyticsShowStimulus();
+    analyticsRecordPrompt(promptType: 'sequence_demonstration');
+
     for (final idx in _sequence) {
       if (!isMounted) return;
       _shapes[idx].highlight();
@@ -120,22 +162,49 @@ class CopyMeGame extends FlameGame with TapCallbacks {
     _inputStartTime = DateTime.now();
     onPhaseChanged?.call(false);
 
+    // New stimulus for child's input phase
+    analyticsShowStimulus();
+
     for (final s in _shapes) {
       s.inputEnabled = true;
     }
+
+    _startNoResponseTimer();
   }
 
   void _onShapeTapped(int index) {
     if (!_inputPhase || _demonstrating) return;
 
+    _cancelNoResponseTimer();
+
+    // Record valid action on first tap in sequence
+    if (_inputIndex == 0) {
+      analyticsRecordValidAction();
+    }
+
     if (index == _sequence[_inputIndex]) {
       // Correct
       _shapes[index].showCorrect();
+
+      // Record correct response with details
+      analyticsRecordCorrect(extraData: {
+        'shape_index': index,
+        'sequence_position': _inputIndex,
+        'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
+      });
+
       _inputIndex++;
 
       if (_inputIndex >= _sequence.length) {
         // Sequence complete — this round was successful
         _score++;
+        _consecutiveErrors = 0; // Reset consecutive errors on success
+
+        // Complete the analytics round
+        analyticsCompleteRound(successful: true);
+        analyticsAddRoundData('sequence_completed', true);
+        analyticsAddRoundData('sequence_length', _sequence.length);
+
         if (_inputStartTime != null) {
           _totalResponseTimeMs +=
               DateTime.now().difference(_inputStartTime!).inMilliseconds;
@@ -150,12 +219,24 @@ class CopyMeGame extends FlameGame with TapCallbacks {
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
+          // Game complete
+          analyticsMarkCompleted();
+          analyticsCompleteSession();
+
+          // Add game-specific metrics
+          analyticsAddGameSpecificMetric('avg_response_time_ms',
+            _totalResponseTimeMs / (_score > 0 ? _score : 1));
+          analyticsAddGameSpecificMetric('total_retries', _retries);
+          analyticsAddGameSpecificMetric('max_sequence_length',
+            totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
+
           Future.delayed(const Duration(milliseconds: 600), () {
             onGameComplete(
               score: _score,
               totalItems: totalRounds,
               errorCount: _errorCount,
               totalResponseTimeMs: _totalResponseTimeMs,
+              analytics: analyticsSession,
             );
           });
         } else {
@@ -167,9 +248,119 @@ class CopyMeGame extends FlameGame with TapCallbacks {
       _shapes[index].showWrong();
       _errorCount++;
       _retries++;
+      _consecutiveErrors++; // Track consecutive errors
 
-      // Reset input — child retries this sequence
-      _inputIndex = 0;
+      // Record wrong response with details
+      analyticsRecordWrong(extraData: {
+        'tapped_shape': _shapeData[index].$3,
+        'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
+        'sequence_position': _inputIndex,
+        'consecutive_errors': _consecutiveErrors,
+      });
+
+      // Check if we should show visual guide after 3 consecutive errors
+      if (_consecutiveErrors >= 3) {
+        _showSequentialVisualGuide();
+        _consecutiveErrors = 0; // Reset after showing guide
+      } else {
+        // Record retry
+        analyticsRecordRetry();
+        
+        // Reset input — child retries this sequence
+        _inputIndex = 0;
+        _startNoResponseTimer();
+      }
+    }
+  }
+
+  void _startNoResponseTimer() {
+    _cancelNoResponseTimer();
+    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+      if (!isMounted || !_inputPhase) return;
+      _showSequentialVisualGuide();
+    });
+  }
+
+  void _cancelNoResponseTimer() {
+    _noResponseTimer?.cancel();
+    _noResponseTimer = null;
+    _hideVisualHint();
+  }
+  
+  /// Show visual hints for the entire sequence at once
+  void _showEntireSequenceHints() {
+    if (!isMounted || !_inputPhase) return;
+    
+    // Hide any existing hints first
+    _hideVisualHint();
+    
+    // Show hints for all shapes in the sequence
+    for (final idx in _sequence) {
+      _shapes[idx].showHint();
+    }
+    
+    // Record the full sequence hint prompt
+    analyticsRecordPrompt(promptType: 'visual_guide_full_sequence_hint');
+    analyticsRecordHint(hintType: 'full_sequence_visual');
+    
+    // Auto-hide hints after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (isMounted && _inputPhase) {
+        _hideVisualHint();
+      }
+    });
+  }
+  
+  /// Enhanced visual guide that highlights shapes in correct sequence
+  Future<void> _showSequentialVisualGuide() async {
+    if (!isMounted || !_inputPhase) return;
+    
+    // Temporarily disable input during visual guide
+    for (final s in _shapes) {
+      s.inputEnabled = false;
+    }
+    
+    // Hide any existing hints
+    _hideVisualHint();
+    
+    // Record the sequential visual guide prompt
+    analyticsRecordPrompt(promptType: 'visual_guide_sequential_highlight');
+    analyticsRecordHint(hintType: 'sequential_visual_guide');
+    
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Highlight each shape in the correct sequence with timing
+    for (int i = 0; i < _sequence.length; i++) {
+      if (!isMounted) return;
+      
+      final idx = _sequence[i];
+      
+      // Highlight the current shape in sequence
+      _shapes[idx].highlight();
+      
+      // Wait for highlight to complete before next one
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      // Brief pause between shapes
+      if (i < _sequence.length - 1) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    
+    if (!isMounted) return;
+    
+    // Re-enable input after visual guide
+    for (final s in _shapes) {
+      s.inputEnabled = true;
+    }
+    
+    // Restart no-response timer
+    _startNoResponseTimer();
+  }
+
+  void _hideVisualHint() {
+    for (final s in _shapes) {
+      s.hideHint();
     }
   }
 
@@ -206,5 +397,11 @@ class CopyMeGame extends FlameGame with TapCallbacks {
     }
 
     super.render(canvas);
+  }
+
+  @override
+  void onRemove() {
+    _cancelNoResponseTimer();
+    super.onRemove();
   }
 }

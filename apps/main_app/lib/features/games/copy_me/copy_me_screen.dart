@@ -1,9 +1,11 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../providers/child_provider.dart';
 import '../../home/home_screen.dart';
 
 /// Screen wrapper for the Copy Me game during pre-assessment.
@@ -15,8 +17,13 @@ class CopyMeScreen extends StatefulWidget {
   });
 
   final String assessmentContext;
-  final void Function(int score, int totalItems, int errorCount,
-      int totalResponseTimeMs)? onComplete;
+  final void Function(
+    int score,
+    int totalItems,
+    int errorCount,
+    int totalResponseTimeMs,
+  )?
+  onComplete;
 
   @override
   State<CopyMeScreen> createState() => _CopyMeScreenState();
@@ -32,19 +39,28 @@ class _CopyMeScreenState extends State<CopyMeScreen> {
   @override
   void initState() {
     super.initState();
+    final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     _game = CopyMeGame(
       totalRounds: _totalRounds,
-      onStepChanged: (step) => setState(() {
-        _currentStep = step;
-      }),
+      childId: childId,
+      onStepChanged:
+          (step) => setState(() {
+            _currentStep = step;
+          }),
       onGameComplete: ({
         required int score,
         required int totalItems,
         required int errorCount,
         required int totalResponseTimeMs,
+        GameSessionMetrics? analytics,
       }) {
         setState(() => _gameComplete = true);
-        widget.onComplete?.call(score, totalItems, errorCount, totalResponseTimeMs);
+        widget.onComplete?.call(
+          score,
+          totalItems,
+          errorCount,
+          totalResponseTimeMs,
+        );
         Future.delayed(const Duration(milliseconds: 2500), () {
           if (mounted) Navigator.of(context).pop();
         });
@@ -88,9 +104,10 @@ class _CopyMeScreenState extends State<CopyMeScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: VoiceOverPromptBubble(
-                    text: _isDemoPhase
-                        ? 'Watch carefully…'
-                        : 'Your turn! Tap the shapes!',
+                    text:
+                        _isDemoPhase
+                            ? 'Watch carefully…'
+                            : 'Your turn! Tap the shapes!',
                     isVisible: !_gameComplete,
                   ),
                 ),

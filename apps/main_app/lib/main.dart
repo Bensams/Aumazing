@@ -6,6 +6,7 @@ import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/offline_first_integration.dart';
 import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
@@ -20,10 +21,16 @@ Future<void> main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
+  // Enable fullscreen mode to hide mobile header/status bar
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
+
+  // Initialize offline-first services (guest mode, connectivity monitoring, sync)
+  await OfflineFirstIntegration.initialize();
 
   runApp(const MyApp());
 }
@@ -53,6 +60,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _audioService.pauseMusic();
     } else if (state == AppLifecycleState.resumed) {
       _audioService.resumeMusic();
+      // Re-enable fullscreen mode when app resumes
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
   }
 

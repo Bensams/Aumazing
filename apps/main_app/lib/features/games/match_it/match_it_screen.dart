@@ -16,10 +16,7 @@ import '../../home/home_screen.dart';
 /// - Flutter: ChildModeTopBar (progress dots + parent lock) and VoiceOverPromptBubble
 /// - Flame: GameWidget hosting MatchItGame for the interactive game area
 class MatchItScreen extends StatefulWidget {
-  const MatchItScreen({
-    super.key,
-    this.assessmentContext = 'practice',
-  });
+  const MatchItScreen({super.key, this.assessmentContext = 'practice'});
 
   /// 'pre_assessment', 'post_assessment', or 'practice'
   final String assessmentContext;
@@ -46,8 +43,10 @@ class _MatchItScreenState extends State<MatchItScreen> {
 
     _sessionStartTime = DateTime.now();
 
+    final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     _game = MatchItGame(
       totalRounds: _totalRounds,
+      childId: childId,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
     );
@@ -70,6 +69,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
+    GameSessionMetrics? analytics,
   }) {
     setState(() => _gameComplete = true);
 
@@ -99,43 +99,48 @@ class _MatchItScreenState extends State<MatchItScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🎉', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 12),
-            Text(
-              'Great Job!',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+      builder:
+          (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🎉', style: TextStyle(fontSize: 48)),
+                const SizedBox(height: 12),
+                Text(
+                  'Great Job!',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     color: const Color(0xFF9B82C4),
                     fontWeight: FontWeight.bold,
                   ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You matched $score out of $totalItems shapes!',
+                  textAlign: TextAlign.center,
+                ),
+                if (errorCount == 0)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Perfect — no mistakes! ⭐',
+                      style: TextStyle(color: Color(0xFFB8E8D4)),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'You matched $score out of $totalItems shapes!',
-              textAlign: TextAlign.center,
-            ),
-            if (errorCount == 0)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text('Perfect — no mistakes! ⭐',
-                    style: TextStyle(color: Color(0xFFB8E8D4))),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Return to previous screen
+                },
+                child: const Text('Continue'),
               ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(); // Return to previous screen
-            },
-            child: const Text('Continue'),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -175,9 +180,10 @@ class _MatchItScreenState extends State<MatchItScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: VoiceOverPromptBubble(
-                text: _gameComplete
-                    ? 'Well done! You finished the game!'
-                    : 'Tap the shapes that look the same!',
+                text:
+                    _gameComplete
+                        ? 'Well done! You finished the game!'
+                        : 'Tap the shapes that look the same!',
                 isVisible: _showPrompt || _gameComplete,
               ),
             ),

@@ -29,6 +29,7 @@ class SequenceShape extends PositionComponent with TapCallbacks {
   bool isHighlighted = false;
   bool isCorrect = false;
   bool isWrong = false;
+  bool isHint = false;
   bool inputEnabled = false;
 
   static const double _cornerRadius = 24.0;
@@ -79,6 +80,14 @@ class SequenceShape extends PositionComponent with TapCallbacks {
     });
   }
 
+  void showHint() {
+    isHint = true;
+  }
+
+  void hideHint() {
+    isHint = false;
+  }
+
   @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
@@ -88,6 +97,7 @@ class SequenceShape extends PositionComponent with TapCallbacks {
     if (isHighlighted) alpha = 160;
     if (isCorrect) alpha = 120;
     if (isWrong) alpha = 100;
+    if (isHint) alpha = 80;
 
     // Border
     Color? borderColor;
@@ -97,6 +107,23 @@ class SequenceShape extends PositionComponent with TapCallbacks {
       borderColor = AppColors.mint;
     } else if (isHighlighted) {
       borderColor = shapeColor;
+    } else if (isHint) {
+      borderColor = const Color(0xFFFFA726);
+    }
+
+    // Hint indicator - pulsing ring around the shape
+    if (isHint) {
+      final hintPaint = Paint()
+        ..color = const Color(0xFFFFA726).withOpacity(0.5 + 0.5 * (DateTime.now().millisecond % 1000) / 1000)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(-8, -8, size.x + 16, size.y + 16),
+          const Radius.circular(_cornerRadius + 4),
+        ),
+        hintPaint,
+      );
     }
 
     ShapePainter3D.drawCard3D(
@@ -105,7 +132,7 @@ class SequenceShape extends PositionComponent with TapCallbacks {
       color: shapeColor,
       cornerRadius: _cornerRadius,
       alpha: alpha,
-      showBorder: isHighlighted || isCorrect || isWrong,
+      showBorder: isHighlighted || isCorrect || isWrong || isHint,
       borderColor: borderColor,
     );
 

@@ -39,6 +39,34 @@ class _GameTestScreenState extends State<GameTestScreen>
   bool _showDebug = true;
   bool _musicMuted = false;
 
+  // Gameplay analytics debug data
+  double _avgResponseTimeMs = 0;
+  double _accuracy = 0;
+  int _retryCount = 0;
+  int _timeSpentMs = 0;
+  bool _isCompleted = false;
+  double _completionRate = 0;
+  int _completedSubTasks = 0;
+  int _totalSubTasks = 0;
+  String _interactionQuality = 'enhanced';
+  int _totalTaps = 0;
+  int _rapidTaps = 0;
+  double _rapidTapRatio = 0;
+  int _totalDragPoints = 0;
+  bool _hasSmoothDrags = false;
+  DateTime? _sessionStartTime;
+
+  // Enhanced analytics debug data
+  int _hintCount = 0;
+  int _promptCount = 0;
+  int _idleTimeSeconds = 0;
+  int _offTaskCount = 0;
+  double _improvementScore = 0;
+  double _consistencyScore = 0;
+  String _assistanceLevel = 'independent';
+  Map<String, dynamic> _gameSpecificMetrics = {};
+  List<GameRoundMetrics> _roundMetrics = [];
+
   @override
   void initState() {
     super.initState();
@@ -73,11 +101,17 @@ class _GameTestScreenState extends State<GameTestScreen>
       _score = 0;
       _totalItems = 0;
       _errors = 0;
+      _resetAnalytics();
     });
 
     _game = widget.entry.create(
       config: widget.config,
-      onStepChanged: (step) => setState(() => _currentStep = step),
+      onStepChanged: (step) {
+        setState(() {
+          _currentStep = step;
+          _updateAnalyticsFromGame();
+        });
+      },
       onGameComplete: ({
         required int score,
         required int totalItems,
@@ -89,11 +123,185 @@ class _GameTestScreenState extends State<GameTestScreen>
           _score = score;
           _totalItems = totalItems;
           _errors = errorCount;
+          _updateAnalyticsFromGame();
         });
         // Play a completion SFX
         _audioService.playSfx('complete.ogg');
       },
     );
+
+    // Start analytics timer
+    _sessionStartTime = DateTime.now();
+    _startAnalyticsTimer();
+  }
+
+  void _resetAnalytics() {
+    _avgResponseTimeMs = 0;
+    _accuracy = 0;
+    _retryCount = 0;
+    _timeSpentMs = 0;
+    _isCompleted = false;
+    _completionRate = 0;
+    _completedSubTasks = 0;
+    _totalSubTasks = 0;
+    _interactionQuality = 'mixed';
+    _totalTaps = 0;
+    _rapidTaps = 0;
+    _rapidTapRatio = 0;
+    _totalDragPoints = 0;
+    _hasSmoothDrags = false;
+    _sessionStartTime = null;
+  }
+
+  void _startAnalyticsTimer() {
+    // Update time spent every second while game is active
+    Future.doWhile(() async {
+      if (!mounted || _gameComplete) return false;
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted && !_gameComplete) {
+        setState(() {
+          _updateAnalyticsFromGame();
+          if (_sessionStartTime != null) {
+            _timeSpentMs = DateTime.now().difference(_sessionStartTime!).inMilliseconds;
+          }
+        });
+      }
+      return mounted && !_gameComplete;
+    });
+  }
+
+  void _updateAnalyticsFromGame() {
+    // Try to extract analytics from games using GameplayAnalyticsMixin
+    final game = _game;
+    if (game is MatchItGame) {
+      _extractMatchItAnalytics(game);
+    } else if (game is CopyMeGame) {
+      _extractCopyMeAnalytics(game);
+    } else if (game is DoWhatISayGame) {
+      _extractDoWhatISayAnalytics(game);
+    } else if (game is MyTurnYourTurnGame) {
+      _extractMyTurnYourTurnAnalytics(game);
+    }
+  }
+
+  void _extractMatchItAnalytics(MatchItGame game) {
+    final session = game.analyticsSession;
+    if (session == null) return;
+
+    _avgResponseTimeMs = session.avgResponseTime * 1000;
+    _accuracy = session.accuracy;
+    _retryCount = session.retryCount;
+    _isCompleted = session.isCompleted;
+    _completionRate = session.taskCompletionRate;
+    _completedSubTasks = session.completedRounds;
+    _totalSubTasks = session.totalRounds;
+    _interactionQuality = 'enhanced';
+    _totalTaps = game.analyticsTotalTouches;
+    _rapidTaps = 0;
+    _rapidTapRatio = 0.0;
+    _totalDragPoints = 0;
+    _hasSmoothDrags = false;
+
+    // Enhanced metrics
+    _hintCount = session.hintCount;
+    _promptCount = session.promptCount;
+    _idleTimeSeconds = session.idleTimeSeconds;
+    _offTaskCount = session.offTaskActionCount;
+    _improvementScore = session.improvementScore;
+    _consistencyScore = session.consistencyScore;
+    _assistanceLevel = session.assistanceLevel.name;
+    _gameSpecificMetrics = session.gameSpecificMetrics;
+    _roundMetrics = session.rounds;
+  }
+
+  void _extractCopyMeAnalytics(CopyMeGame game) {
+    final session = game.analyticsSession;
+    if (session == null) return;
+
+    _avgResponseTimeMs = session.avgResponseTime * 1000;
+    _accuracy = session.accuracy;
+    _retryCount = session.retryCount;
+    _isCompleted = session.isCompleted;
+    _completionRate = session.taskCompletionRate;
+    _completedSubTasks = session.completedRounds;
+    _totalSubTasks = session.totalRounds;
+    _interactionQuality = 'enhanced';
+    _totalTaps = game.analyticsTotalTouches;
+    _rapidTaps = 0;
+    _rapidTapRatio = 0.0;
+    _totalDragPoints = 0;
+    _hasSmoothDrags = false;
+
+    // Enhanced metrics
+    _hintCount = session.hintCount;
+    _promptCount = session.promptCount;
+    _idleTimeSeconds = session.idleTimeSeconds;
+    _offTaskCount = session.offTaskActionCount;
+    _improvementScore = session.improvementScore;
+    _consistencyScore = session.consistencyScore;
+    _assistanceLevel = session.assistanceLevel.name;
+    _gameSpecificMetrics = session.gameSpecificMetrics;
+    _roundMetrics = session.rounds;
+  }
+
+  void _extractDoWhatISayAnalytics(DoWhatISayGame game) {
+    final session = game.analyticsSession;
+    if (session == null) return;
+
+    _avgResponseTimeMs = session.avgResponseTime * 1000;
+    _accuracy = session.accuracy;
+    _retryCount = session.retryCount;
+    _isCompleted = session.isCompleted;
+    _completionRate = session.taskCompletionRate;
+    _completedSubTasks = session.completedRounds;
+    _totalSubTasks = session.totalRounds;
+    _interactionQuality = 'enhanced';
+    _totalTaps = game.analyticsTotalTouches;
+    _rapidTaps = 0;
+    _rapidTapRatio = 0.0;
+    _totalDragPoints = 0;
+    _hasSmoothDrags = false;
+
+    // Enhanced metrics
+    _hintCount = session.hintCount;
+    _promptCount = session.promptCount;
+    _idleTimeSeconds = session.idleTimeSeconds;
+    _offTaskCount = session.offTaskActionCount;
+    _improvementScore = session.improvementScore;
+    _consistencyScore = session.consistencyScore;
+    _assistanceLevel = session.assistanceLevel.name;
+    _gameSpecificMetrics = session.gameSpecificMetrics;
+    _roundMetrics = session.rounds;
+  }
+
+  void _extractMyTurnYourTurnAnalytics(MyTurnYourTurnGame game) {
+    final session = game.analyticsSession;
+    if (session == null) return;
+
+    _avgResponseTimeMs = session.avgResponseTime * 1000;
+    _accuracy = session.accuracy;
+    _retryCount = session.retryCount;
+    _isCompleted = session.isCompleted;
+    _completionRate = session.taskCompletionRate;
+    _completedSubTasks = session.completedRounds;
+    _totalSubTasks = session.totalRounds;
+    _interactionQuality = 'enhanced';
+    _totalTaps = game.analyticsTotalTouches;
+    _rapidTaps = 0;
+    _rapidTapRatio = 0.0;
+    _totalDragPoints = 0;
+    _hasSmoothDrags = false;
+
+    // Enhanced metrics
+    _hintCount = session.hintCount;
+    _promptCount = session.promptCount;
+    _idleTimeSeconds = session.idleTimeSeconds;
+    _offTaskCount = session.offTaskActionCount;
+    _improvementScore = session.improvementScore;
+    _consistencyScore = session.consistencyScore;
+    _assistanceLevel = session.assistanceLevel.name;
+    _gameSpecificMetrics = session.gameSpecificMetrics;
+    _roundMetrics = session.rounds;
   }
 
   /// Pause music when the app goes to background, resume when it returns.
@@ -121,6 +329,32 @@ class _GameTestScreenState extends State<GameTestScreen>
     } else {
       _audioService.resumeMusic();
     }
+  }
+
+  Widget _buildDebugRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -152,58 +386,160 @@ class _GameTestScreenState extends State<GameTestScreen>
                     backgroundBuilder: (_) => const SizedBox.shrink(),
                   ),
 
-                  // Debug overlay
+                  // Debug overlay with gameplay analytics
                   if (_showDebug)
                     Positioned(
                       top: 8,
                       right: 8,
+                      bottom: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
+                        width: 200,
+                        height: 300,
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _gameComplete
+                                ? Colors.greenAccent
+                                : Colors.white24,
+                            width: 1,
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.entry.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                            // Header
+                            Row(
+                              children: [
+                                const Icon(Icons.analytics_rounded,
+                                    color: Colors.white70, size: 14),
+                                const SizedBox(width: 6),
+                                Text(
+                                  widget.entry.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(color: Colors.white24, height: 12),
+
+                            // Progress
+                            _buildDebugRow('Step', '$_currentStep/${widget.config.totalRounds}'),
+                            _buildDebugRow('Score', '$_score/$_totalItems'),
+                            _buildDebugRow('Errors', '$_errors'),
+
+                            const Divider(color: Colors.white24, height: 12),
+
+                            // Analytics indicators
+                            _buildDebugRow(
+                              'Response Time',
+                              '${_avgResponseTimeMs.toStringAsFixed(0)}ms',
+                            ),
+                            _buildDebugRow(
+                              'Accuracy',
+                              '${(_accuracy * 100).toStringAsFixed(1)}%',
+                            ),
+                            _buildDebugRow('Retries', '$_retryCount'),
+                            _buildDebugRow(
+                              'Time Spent',
+                              '${(_timeSpentMs / 1000).toStringAsFixed(1)}s',
+                            ),
+                            _buildDebugRow(
+                              'Completed',
+                              _isCompleted ? 'Yes' : 'No',
+                            ),
+                            _buildDebugRow(
+                              'Completion Rate',
+                              '${(_completionRate * 100).toStringAsFixed(0)}% ($_completedSubTasks/$_totalSubTasks)',
+                            ),
+
+                            const Divider(color: Colors.white24, height: 12),
+
+                            // Interaction patterns
+                            _buildDebugRow(
+                              'Interaction',
+                              _interactionQuality,
+                            ),
+                            _buildDebugRow('Taps', '$_totalTaps'),
+                            _buildDebugRow(
+                              'Rapid Taps',
+                              '$_rapidTaps (${(_rapidTapRatio * 100).toStringAsFixed(0)}%)',
+                            ),
+                            _buildDebugRow('Drags', '$_totalDragPoints'),
+                            _buildDebugRow(
+                              'Smooth Drags',
+                              _hasSmoothDrags ? 'Yes' : 'No',
+                            ),
+
+                            const Divider(color: Colors.white24, height: 12),
+
+                            // Enhanced Analytics - Assistance
+                            _buildDebugRow(
+                              'Assistance Level',
+                              _assistanceLevel,
+                            ),
+                            _buildDebugRow('Hints', '$_hintCount'),
+                            _buildDebugRow('Prompts', '$_promptCount'),
+                            _buildDebugRow(
+                              'Idle Time',
+                              '${_idleTimeSeconds}s',
+                            ),
+                            _buildDebugRow('Off-Task', '$_offTaskCount'),
+
+                            const Divider(color: Colors.white24, height: 12),
+
+                            // Enhanced Analytics - Progress
+                            _buildDebugRow(
+                              'Improvement',
+                              '${(_improvementScore * 100).toStringAsFixed(0)}%',
+                            ),
+                            _buildDebugRow(
+                              'Consistency',
+                              '${(_consistencyScore * 100).toStringAsFixed(0)}%',
+                            ),
+
+                            // Game-specific metrics
+                            if (_gameSpecificMetrics.isNotEmpty) ...[
+                              const Divider(color: Colors.white24, height: 12),
+                              ..._gameSpecificMetrics.entries.take(4).map(
+                                (e) => _buildDebugRow(
+                                  e.key,
+                                  e.value.toString(),
+                                ),
                               ),
-                            ),
-                            Text(
-                              'Step: $_currentStep/${widget.config.totalRounds}',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 10),
-                            ),
-                            Text(
-                              'Difficulty: ${widget.config.difficulty}',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 10),
-                            ),
-                            Text(
-                              '🎵 ${_musicMuted ? "OFF" : "ON"} '
-                              '(${(widget.config.bgMusicVolume * 100).round()}%)',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 10),
-                            ),
-                            if (_gameComplete)
-                              Text(
-                                'Score: $_score/$_totalItems (${_errors}err)',
-                                style: const TextStyle(
-                                    color: Colors.greenAccent, fontSize: 10),
+                            ],
+
+                            // Round details
+                            if (_roundMetrics.isNotEmpty) ...[
+                              const Divider(color: Colors.white24, height: 12),
+                              _buildDebugRow(
+                                'Rounds Done',
+                                '${_roundMetrics.length}',
                               ),
+                            ],
+
+                            if (_gameComplete) ...[
+                              const Divider(color: Colors.greenAccent, height: 12),
+                              const Text(
+                                '✓ Game Complete',
+                                style: TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -229,6 +565,23 @@ class _GameTestScreenState extends State<GameTestScreen>
 
                   // Action buttons
                   const SizedBox(width: AppSpacing.sm),
+
+                  // Visual guide buttons for Copy Me Game
+                  if (_game is CopyMeGame && !_gameComplete) ...[
+                    IconButton(
+                      icon: const Icon(Icons.replay_rounded,
+                          color: AppColors.skyBlue),
+                      tooltip: 'Replay sequence',
+                      onPressed: () => (_game as CopyMeGame).replaySequenceAsVisualGuide(),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.lightbulb_rounded,
+                          color: AppColors.butterYellow),
+                      tooltip: 'Show hints',
+                      onPressed: () => (_game as CopyMeGame).showFullSequenceHints(),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
 
                   // Music toggle
                   IconButton(
