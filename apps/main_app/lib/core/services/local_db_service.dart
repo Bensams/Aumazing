@@ -22,7 +22,7 @@ import '../../model/module_progress.dart';
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 2; // Incremented for sync fields
+  static const _dbVersion = 3; // Incremented for child birth-date storage
 
   static Database? _database;
 
@@ -61,8 +61,8 @@ class LocalDbService {
       CREATE TABLE ${LocalTables.children} (
         id TEXT PRIMARY KEY,
         user_id TEXT,
-        name TEXT NOT NULL,
-        age INTEGER NOT NULL,
+        display_name TEXT NOT NULL,
+        birth_date TEXT NOT NULL,
         avatar TEXT NOT NULL,
         music_enabled INTEGER NOT NULL DEFAULT 1,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
@@ -327,6 +327,31 @@ class LocalDbService {
       // Migration from v1 to v2: Add sync columns to existing tables
       // Note: In production, you'd migrate existing data carefully
       debugPrint('[LocalDbService] Upgrading from v$oldVersion to v$newVersion');
+    }
+
+    if (oldVersion < 3) {
+      await db.execute('DROP TABLE IF EXISTS ${LocalTables.children}');
+      await db.execute('''
+        CREATE TABLE ${LocalTables.children} (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          display_name TEXT NOT NULL,
+          birth_date TEXT NOT NULL,
+          avatar TEXT NOT NULL,
+          music_enabled INTEGER NOT NULL DEFAULT 1,
+          vibration_enabled INTEGER NOT NULL DEFAULT 1,
+          comfort_settings TEXT,
+          $_syncColumns
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_children_user_id
+        ON ${LocalTables.children}(user_id)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_children_sync
+        ON ${LocalTables.children}(sync_status)
+      ''');
     }
   }
 

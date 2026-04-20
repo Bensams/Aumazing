@@ -400,15 +400,12 @@ class SyncService {
   Map<String, dynamic> _mapChildToSupabase(Map<String, dynamic> local) {
     return {
       'id': local['id'],
-      'user_id': local['user_id'],
-      'name': local['name'],
-      'age': local['age'],
-      'avatar': local['avatar'],
-      'music_enabled': local['music_enabled'] == 1,
-      'vibration_enabled': local['vibration_enabled'] == 1,
-      'comfort_settings': local['comfort_settings'] != null
-          ? local['comfort_settings'] as String
-          : null,
+      'parent_user_id': local['user_id'],
+      'display_name': local['display_name'],
+      'birth_date': DateTime.parse(local['birth_date'] as String)
+          .toIso8601String()
+          .split('T')
+          .first,
       'created_at': local['local_created_at'],
       'updated_at': local['updated_at'],
     };

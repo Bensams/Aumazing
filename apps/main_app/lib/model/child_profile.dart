@@ -1,10 +1,12 @@
+import '../core/child_profile_policy.dart';
+
 /// Represents a child's profile including learning preferences and
 /// gameplay comfort settings (music, vibration).
 class ChildProfile {
   final String id;
   final String userId;
-  final String name;
-  final int age;
+  final String displayName;
+  final DateTime birthDate;
   final String avatar;
   final bool musicEnabled;
   final bool vibrationEnabled;
@@ -14,8 +16,8 @@ class ChildProfile {
   const ChildProfile({
     required this.id,
     required this.userId,
-    required this.name,
-    required this.age,
+    required this.displayName,
+    required this.birthDate,
     required this.avatar,
     this.musicEnabled = true,
     this.vibrationEnabled = true,
@@ -23,9 +25,11 @@ class ChildProfile {
     required this.updatedAt,
   });
 
+  int ageYears({DateTime? today}) => calculateAgeYears(birthDate, today: today);
+
   ChildProfile copyWith({
-    String? name,
-    int? age,
+    String? displayName,
+    DateTime? birthDate,
     String? avatar,
     bool? musicEnabled,
     bool? vibrationEnabled,
@@ -33,8 +37,8 @@ class ChildProfile {
     return ChildProfile(
       id: id,
       userId: userId,
-      name: name ?? this.name,
-      age: age ?? this.age,
+      displayName: displayName ?? this.displayName,
+      birthDate: birthDate ?? this.birthDate,
       avatar: avatar ?? this.avatar,
       musicEnabled: musicEnabled ?? this.musicEnabled,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
@@ -46,8 +50,8 @@ class ChildProfile {
   Map<String, dynamic> toMap() => {
         'id': id,
         'user_id': userId,
-        'name': name,
-        'age': age,
+        'display_name': displayName,
+        'birth_date': birthDate.toIso8601String().split('T').first,
         'avatar': avatar,
         'music_enabled': musicEnabled ? 1 : 0,
         'vibration_enabled': vibrationEnabled ? 1 : 0,
@@ -58,8 +62,8 @@ class ChildProfile {
   factory ChildProfile.fromMap(Map<String, dynamic> map) => ChildProfile(
         id: map['id'] as String,
         userId: map['user_id'] as String,
-        name: map['name'] as String,
-        age: map['age'] as int,
+        displayName: map['display_name'] as String,
+        birthDate: DateTime.parse(map['birth_date'] as String),
         avatar: map['avatar'] as String,
         musicEnabled: (map['music_enabled'] ?? 1) == 1,
         vibrationEnabled: (map['vibration_enabled'] ?? 1) == 1,
@@ -70,9 +74,9 @@ class ChildProfile {
   /// Creates a ChildProfile from Supabase JSON (booleans, not ints).
   factory ChildProfile.fromSupabase(Map<String, dynamic> map) => ChildProfile(
         id: map['id'] as String,
-        userId: map['user_id'] as String,
-        name: map['name'] as String,
-        age: map['age'] as int,
+        userId: map['parent_user_id'] as String,
+        displayName: map['display_name'] as String,
+        birthDate: DateTime.parse(map['birth_date'] as String),
         avatar: map['avatar'] as String,
         musicEnabled: map['music_enabled'] as bool? ?? true,
         vibrationEnabled: map['vibration_enabled'] as bool? ?? true,
@@ -82,9 +86,9 @@ class ChildProfile {
 
   Map<String, dynamic> toSupabase() => {
         'id': id,
-        'user_id': userId,
-        'name': name,
-        'age': age,
+        'parent_user_id': userId,
+        'display_name': displayName,
+        'birth_date': birthDate.toIso8601String().split('T').first,
         'avatar': avatar,
         'music_enabled': musicEnabled,
         'vibration_enabled': vibrationEnabled,
