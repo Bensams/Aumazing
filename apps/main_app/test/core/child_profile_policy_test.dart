@@ -1,4 +1,5 @@
 import 'package:aumazing/core/child_profile_policy.dart';
+import 'package:aumazing/model/child_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -71,5 +72,19 @@ void main() {
       validateBirthDate(DateTime(2020, 4, 20), today: today),
       ChildBirthDateValidation.valid,
     );
+  });
+
+  test('child profile derives age from birth date', () {
+    final profile = ChildProfile(
+      id: 'child-1',
+      userId: 'user-1',
+      displayName: 'Mika',
+      birthDate: DateTime(2022, 4, 20),
+      avatar: 'bear',
+      createdAt: DateTime(2026, 4, 20),
+      updatedAt: DateTime(2026, 4, 20),
+    );
+
+    expect(profile.ageYears(today: DateTime(2026, 4, 20)), 4);
   });
 }

@@ -44,8 +44,8 @@ class ChildRepository {
   /// In guest mode, the child is created with a placeholder owner_id
   /// that will be backfilled when the user authenticates.
   Future<ChildProfile> createChild({
-    required String name,
-    required int age,
+    required String displayName,
+    required DateTime birthDate,
     required String avatar,
     bool musicEnabled = true,
     bool vibrationEnabled = true,
@@ -56,8 +56,8 @@ class ChildRepository {
     final child = ChildProfile(
       id: _uuid.v4(),
       userId: userId,
-      name: name,
-      age: age,
+      displayName: displayName,
+      birthDate: birthDate,
       avatar: avatar,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
@@ -97,15 +97,15 @@ class ChildRepository {
   /// Update child profile
   Future<ChildProfile> updateChild(
     ChildProfile child, {
-    String? name,
-    int? age,
+    String? displayName,
+    DateTime? birthDate,
     String? avatar,
     bool? musicEnabled,
     bool? vibrationEnabled,
   }) async {
     final updated = child.copyWith(
-      name: name,
-      age: age,
+      displayName: displayName,
+      birthDate: birthDate,
       avatar: avatar,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
