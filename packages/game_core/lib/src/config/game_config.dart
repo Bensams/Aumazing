@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 /// Shared game configuration used by all Aumazing mini-games.
 ///
@@ -22,12 +21,20 @@ class GameConfig {
   /// Sound-effect volume: 0.0 (muted) to 1.0 (full).
   final double sfxVolume;
 
+  /// Unique identifier for the child playing (for analytics).
+  final String childId;
+
+  /// Optional game version string (for analytics).
+  final String? gameVersion;
+
   const GameConfig({
     this.difficulty = 1,
     this.promptRepetition = 1,
     this.animationIntensity = 1.0,
     this.bgMusicVolume = 0.5,
     this.sfxVolume = 0.7,
+    this.childId = 'anonymous',
+    this.gameVersion,
   });
 
   /// Default config suitable for first-time players.
@@ -39,6 +46,8 @@ class GameConfig {
     double? animationIntensity,
     double? bgMusicVolume,
     double? sfxVolume,
+    String? childId,
+    String? gameVersion,
   }) {
     return GameConfig(
       difficulty: difficulty ?? this.difficulty,
@@ -46,6 +55,8 @@ class GameConfig {
       animationIntensity: animationIntensity ?? this.animationIntensity,
       bgMusicVolume: bgMusicVolume ?? this.bgMusicVolume,
       sfxVolume: sfxVolume ?? this.sfxVolume,
+      childId: childId ?? this.childId,
+      gameVersion: gameVersion ?? this.gameVersion,
     );
   }
 
@@ -83,5 +94,7 @@ class GameConfig {
       'promptRepetition: $promptRepetition, '
       'animationIntensity: ${animationIntensity.toStringAsFixed(1)}, '
       'bgMusic: ${bgMusicVolume.toStringAsFixed(1)}, '
-      'sfx: ${sfxVolume.toStringAsFixed(1)})';
+      'sfx: ${sfxVolume.toStringAsFixed(1)}, '
+      'childId: $childId, '
+      'gameVersion: $gameVersion)';
 }

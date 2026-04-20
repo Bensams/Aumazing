@@ -227,6 +227,12 @@ mixin GameplayAnalyticsMixin on FlameGame {
     return _analyticsCompletedSubTasks / _analyticsTotalSubTasks;
   }
 
+  /// Number of completed sub-tasks.
+  int get analyticsCompletedSubTasks => _analyticsCompletedSubTasks;
+
+  /// Total number of sub-tasks.
+  int get analyticsTotalSubTasks => _analyticsTotalSubTasks;
+
   // ── 8. Interaction Patterns ─────────────────────────────────────────────
 
   final List<_TapRecord> _analyticsTapRecords = [];
@@ -309,6 +315,21 @@ mixin GameplayAnalyticsMixin on FlameGame {
     // Default — a mix of both or insufficient data to classify.
     return InteractionQuality.mixed;
   }
+
+  /// Total number of tap events recorded.
+  int get analyticsTotalTaps => _analyticsTapRecords.length;
+
+  /// Number of "rapid tap" pairs (gap < 250ms).
+  int get analyticsRapidTaps => _rapidTapCount;
+
+  /// Ratio of rapid taps to total tap intervals.
+  double get analyticsRapidTapRatio => _rapidTapRatio;
+
+  /// Total number of drag update events recorded.
+  int get analyticsTotalDragPoints => _analyticsDragRecords.length;
+
+  /// Whether drag data suggests smooth, purposeful motion.
+  bool get analyticsHasSmoothDrags => _hasSmoothDrags;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Reset

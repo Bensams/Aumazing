@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
@@ -7,20 +6,27 @@ import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 import 'components/turn_slot.dart';
+import '../../analytics/enhanced_analytics_mixin.dart';
+import '../../analytics/models/models.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
 /// The app and child alternate placing shapes on a grid.
 /// Measures impulse control (early taps), waiting, and completion.
-class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
+/// Tracks comprehensive XGBoost-ready analytics.
+class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
   MyTurnYourTurnGame({
     required this.totalRounds,
     required this.onStepChanged,
     required this.onGameComplete,
     required this.onTurnChanged,
+    required this.childId,
+    this.gameVersion,
   });
 
   final int totalRounds;
+  final String childId;
+  final String? gameVersion;
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
@@ -28,6 +34,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     required int errorCount,
     required int totalResponseTimeMs,
     required Map<String, dynamic> extras,
+    GameSessionMetrics? analytics,
   }) onGameComplete;
 
   /// Notify Flutter layer: true = buddy's turn, false = child's turn
@@ -64,6 +71,16 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Initialize and start analytics session
+    analyticsInitialize(
+      gameId: 'my_turn_your_turn',
+      childId: childId,
+      totalRounds: totalRounds,
+      gameVersion: gameVersion ?? '1.0.0',
+    );
+    analyticsStartSession();
+
     _setupRound();
   }
 
@@ -73,6 +90,11 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     }
     _slots.clear();
     _turnsInRound = 0;
+
+    // Start analytics round
+    analyticsStartRound(roundNumber: _currentRound + 1);
+    analyticsAddRoundData('slots_per_round', _slotsPerRound);
+    analyticsAddRoundData('child_turns_per_round', _slotsPerRound ~/ 2);
 
     // Layout 3x2 responsive grid
     final gameW = size.x;
@@ -147,6 +169,10 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     onTurnChanged(false);
     _turnStartTime = DateTime.now();
 
+    // Child's turn is the stimulus
+    analyticsShowStimulus();
+    analyticsRecordPrompt(promptType: 'your_turn_indicator');
+
     for (final s in _slots) {
       s.inputEnabled = true; // allow tapping empty slots
     }
@@ -159,6 +185,16 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     if (_isBuddyTurn) {
       // Early tap during buddy's turn — impulse control issue
       _earlyTaps++;
+      _errorCount++;
+
+      // Record as off-task action (important for XGBoost)
+      analyticsRecordOffTaskAction(actionType: 'early_tap_during_buddy_turn');
+      analyticsRecordWrong(extraData: {
+        'error_type': 'impulse_control',
+        'turn_phase': 'buddy_turn',
+        'slot_index': index,
+      });
+
       slot.showEarlyTapWarning();
       return;
     }
@@ -169,6 +205,14 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     slot.fillByChild(color);
     _turnsInRound++;
     _score++;
+
+    // Record valid action and correct response
+    analyticsRecordValidAction();
+    analyticsRecordCorrect(extraData: {
+      'slot_index': index,
+      'turn_in_round': _turnsInRound,
+      'waited_for_turn': true,
+    });
 
     if (_turnStartTime != null) {
       _totalResponseTimeMs +=
@@ -196,7 +240,25 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
     _currentRound++;
     onStepChanged(_currentRound);
 
+    // Complete round
+    analyticsCompleteRound(successful: true);
+    analyticsAddRoundData('early_taps_in_round', _earlyTaps);
+    analyticsAddRoundData('turns_taken', _turnsInRound);
+
     if (_currentRound >= totalRounds) {
+      // Game complete
+      analyticsMarkCompleted();
+      analyticsCompleteSession();
+
+      // Add game-specific metrics for XGBoost
+      analyticsAddGameSpecificMetric('early_taps_total', _earlyTaps);
+      analyticsAddGameSpecificMetric('avg_response_time_ms',
+        _totalResponseTimeMs / (_score > 0 ? _score : 1));
+      analyticsAddGameSpecificMetric('impulse_control_score',
+        _earlyTaps == 0 ? 1.0 : 1.0 - (_earlyTaps / (_score + _earlyTaps)).clamp(0.0, 1.0));
+      analyticsAddGameSpecificMetric('turn_completion_rate',
+        _score / (totalRounds * (_slotsPerRound ~/ 2)));
+
       Future.delayed(const Duration(milliseconds: 600), () {
         onGameComplete(
           score: _score,
@@ -204,6 +266,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks {
           errorCount: _errorCount,
           totalResponseTimeMs: _totalResponseTimeMs,
           extras: {'early_taps': _earlyTaps},
+          analytics: analyticsSession,
         );
       });
     } else {

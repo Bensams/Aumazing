@@ -4,8 +4,9 @@ import 'dart:ui';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
-import 'package:shared_ui/shared_ui.dart';
 import 'components/matchable_shape.dart';
+import '../../analytics/enhanced_analytics_mixin.dart';
+import '../../analytics/models/models.dart';
 
 /// Data for a single match pair used in the Match It game.
 class MatchPairData {
@@ -25,11 +26,18 @@ class MatchPairData {
 /// Presents two columns of shapes — the child taps one on the left,
 /// then one on the right. If they match, it advances the step.
 /// Tracks score, errors, and response times for assessment.
-class MatchItGame extends FlameGame with TapCallbacks {
+/// The core Flame game for "Match It" with XGBoost-ready analytics.
+///
+/// Presents two columns of shapes — the child taps one on the left,
+/// then one on the right. If they match, it advances the step.
+/// Tracks comprehensive gameplay analytics for ML analysis.
+class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
   MatchItGame({
     required this.onStepChanged,
     required this.onGameComplete,
+    required this.childId,
     this.totalRounds = 5,
+    this.gameVersion,
   });
 
   final void Function(int currentStep) onStepChanged;
@@ -38,9 +46,12 @@ class MatchItGame extends FlameGame with TapCallbacks {
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
+    GameSessionMetrics? analytics,
   }) onGameComplete;
 
   final int totalRounds;
+  final String childId;
+  final String? gameVersion;
 
   // ── Game state ───────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -51,6 +62,7 @@ class MatchItGame extends FlameGame with TapCallbacks {
 
   int? _selectedLeftIndex;
   int? _selectedRightIndex;
+  bool _firstInputRecorded = false;
 
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
@@ -125,6 +137,16 @@ class MatchItGame extends FlameGame with TapCallbacks {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Initialize and start analytics session
+    analyticsInitialize(
+      gameId: 'match_it',
+      childId: childId,
+      totalRounds: totalRounds,
+      gameVersion: gameVersion ?? '1.0.0',
+    );
+    analyticsStartSession();
+
     _setupRound();
   }
 
@@ -140,6 +162,7 @@ class MatchItGame extends FlameGame with TapCallbacks {
     _rightShapes.clear();
     _selectedLeftIndex = null;
     _selectedRightIndex = null;
+    _firstInputRecorded = false;
 
     final rng = math.Random();
 
@@ -227,6 +250,14 @@ class MatchItGame extends FlameGame with TapCallbacks {
     }
 
     _roundStartTime = DateTime.now();
+
+    // Start round and show stimulus
+    analyticsStartRound(roundNumber: _currentRound + 1);
+    analyticsShowStimulus();
+
+    // Add round-specific data
+    analyticsAddRoundData('round_pairs_count', 3);
+    analyticsAddRoundData('shapes_available', _allPairs.length);
   }
 
   void _onLeftSelected(int index) {
@@ -254,6 +285,12 @@ class MatchItGame extends FlameGame with TapCallbacks {
   void _checkMatch() {
     if (_selectedLeftIndex == null || _selectedRightIndex == null) return;
 
+    // Record first touch and valid action
+    if (!_firstInputRecorded) {
+      analyticsRecordValidAction();
+      _firstInputRecorded = true;
+    }
+
     final responseTime = _roundStartTime != null
         ? DateTime.now().difference(_roundStartTime!).inMilliseconds
         : 0;
@@ -278,6 +315,13 @@ class MatchItGame extends FlameGame with TapCallbacks {
       _score++;
       _totalResponseTimeMs += responseTime;
 
+      // Record correct response with details
+      analyticsRecordCorrect(extraData: {
+        'left_shape': leftShape.shapeType.name,
+        'right_shape': rightShape.shapeType.name,
+        'response_time_ms': responseTime,
+      });
+
       leftShape.markMatched();
       rightShape.markMatched();
 
@@ -287,17 +331,31 @@ class MatchItGame extends FlameGame with TapCallbacks {
       // Check if all 3 pairs matched in this round
       final allMatched = _leftShapes.every((s) => s.isMatched);
       if (allMatched) {
+        // Round complete
+        analyticsCompleteRound(successful: true);
+        analyticsAddRoundData('matches_in_round', 3);
+
         _currentRound++;
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
           // Game complete
+          analyticsMarkCompleted();
+          analyticsCompleteSession();
+
+          // Add game-specific metrics
+          analyticsAddGameSpecificMetric('avg_match_time_ms',
+            _totalResponseTimeMs / (_score > 0 ? _score : 1));
+          analyticsAddGameSpecificMetric('shape_types_used',
+            _usedPairIndices.length);
+
           Future.delayed(const Duration(milliseconds: 600), () {
             onGameComplete(
               score: _score,
               totalItems: totalRounds * 3,
               errorCount: _errorCount,
               totalResponseTimeMs: _totalResponseTimeMs,
+              analytics: analyticsSession,
             );
           });
         } else {
@@ -305,11 +363,25 @@ class MatchItGame extends FlameGame with TapCallbacks {
           Future.delayed(const Duration(milliseconds: 800), _setupRound);
         }
       } else {
+        // Partial match - continue round
         _roundStartTime = DateTime.now();
+        _firstInputRecorded = false;
+        analyticsShowStimulus();
       }
     } else {
       // Wrong match
       _errorCount++;
+
+      // Record wrong response with details
+      analyticsRecordWrong(extraData: {
+        'left_shape': leftShape.shapeType.name,
+        'right_shape': rightShape.shapeType.name,
+        'color_mismatch': leftShape.shapeColor.value != rightShape.shapeColor.value,
+        'shape_mismatch': leftShape.shapeType != rightShape.shapeType,
+      });
+
+      // Record retry
+      analyticsRecordRetry();
 
       leftShape.showError();
       rightShape.showError();
@@ -318,6 +390,8 @@ class MatchItGame extends FlameGame with TapCallbacks {
         _selectedLeftIndex = null;
         _selectedRightIndex = null;
         _roundStartTime = DateTime.now();
+        _firstInputRecorded = false;
+        analyticsShowStimulus();
       });
     }
   }

@@ -5,21 +5,26 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/instruction_shape.dart';
+import '../../analytics/enhanced_analytics_mixin.dart';
+import '../../analytics/models/models.dart';
 
-/// Do What I Say — instruction-following game.
+/// Do What I Say — instruction-following game with XGBoost-ready analytics.
 ///
 /// Displays shapes and a text instruction like "Tap the RED circle".
-/// The child taps the correct shape. Tracks accuracy, response time,
-/// and preferred instruction mode.
-class DoWhatISayGame extends FlameGame with TapCallbacks {
+/// The child taps the correct shape. Tracks comprehensive analytics for ML analysis.
+class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
   DoWhatISayGame({
     required this.totalRounds,
     required this.onStepChanged,
     required this.onGameComplete,
     required this.onInstructionChanged,
+    required this.childId,
+    this.gameVersion,
   });
 
   final int totalRounds;
+  final String childId;
+  final String? gameVersion;
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
@@ -27,6 +32,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks {
     required int errorCount,
     required int totalResponseTimeMs,
     required Map<String, dynamic> extras,
+    GameSessionMetrics? analytics,
   }) onGameComplete;
 
   /// Called when the instruction text changes so the Flutter layer can display it.
@@ -64,6 +70,16 @@ class DoWhatISayGame extends FlameGame with TapCallbacks {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Initialize and start analytics session
+    analyticsInitialize(
+      gameId: 'do_what_i_say',
+      childId: childId,
+      totalRounds: totalRounds,
+      gameVersion: gameVersion ?? '1.0.0',
+    );
+    analyticsStartSession();
+
     _setupRound();
   }
 
@@ -127,12 +143,37 @@ class DoWhatISayGame extends FlameGame with TapCallbacks {
     onInstructionChanged(instruction);
 
     _roundStartTime = DateTime.now();
+
+    // Start round and show stimulus
+    analyticsStartRound(roundNumber: _currentRound + 1);
+    analyticsShowStimulus();
+
+    // Record instruction as a prompt
+    analyticsRecordPrompt(promptType: 'verbal_instruction');
+
+    // Add round-specific data
+    analyticsAddRoundData('shape_count', _shapes.length);
+    analyticsAddRoundData('target_shape', target.shapeType);
+    analyticsAddRoundData('target_color', target.colorName);
   }
 
   void _onShapeTapped(int index) {
+    final target = _shapes[_targetIndex];
+
     if (index == _targetIndex) {
       // Correct!
       _score++;
+
+      // Record valid action on first tap
+      analyticsRecordValidAction();
+
+      // Record correct response with details
+      analyticsRecordCorrect(extraData: {
+        'target_shape': target.shapeType,
+        'target_color': target.colorName,
+        'distractor_count': _shapes.length - 1,
+      });
+
       _shapes[index].showCorrect();
 
       // Track mode (simplified — always "combined" in v1)
@@ -150,34 +191,66 @@ class DoWhatISayGame extends FlameGame with TapCallbacks {
       _currentRound++;
       onStepChanged(_currentRound);
 
-      if (_currentRound >= totalRounds) {
-        Future.delayed(const Duration(milliseconds: 600), () {
-          final total = _visualCorrect + _verbalCorrect + _combinedCorrect;
-          String preferredMode = 'combined';
-          if (total > 0) {
-            if (_visualCorrect > _verbalCorrect &&
-                _visualCorrect > _combinedCorrect) {
-              preferredMode = 'visual';
-            } else if (_verbalCorrect > _visualCorrect &&
-                _verbalCorrect > _combinedCorrect) {
-              preferredMode = 'verbal';
-            }
-          }
+      // Complete round
+      analyticsCompleteRound(successful: true);
+      analyticsAddRoundData('instruction_followed', true);
 
+      if (_currentRound >= totalRounds) {
+        // Game complete
+        analyticsMarkCompleted();
+        analyticsCompleteSession();
+
+        // Add game-specific metrics
+        final total = _visualCorrect + _verbalCorrect + _combinedCorrect;
+        String preferredMode = 'combined';
+        if (total > 0) {
+          if (_visualCorrect > _verbalCorrect &&
+              _visualCorrect > _combinedCorrect) {
+            preferredMode = 'visual';
+          } else if (_verbalCorrect > _visualCorrect &&
+              _verbalCorrect > _combinedCorrect) {
+            preferredMode = 'verbal';
+          }
+        }
+
+        analyticsAddGameSpecificMetric('preferred_mode', preferredMode);
+        analyticsAddGameSpecificMetric('avg_response_time_ms',
+          _totalResponseTimeMs / (_score > 0 ? _score : 1));
+        analyticsAddGameSpecificMetric('max_shape_count',
+          4 + ((totalRounds - 1) ~/ 2).clamp(0, 2));
+
+        Future.delayed(const Duration(milliseconds: 600), () {
           onGameComplete(
             score: _score,
             totalItems: totalRounds,
             errorCount: _errorCount,
             totalResponseTimeMs: _totalResponseTimeMs,
             extras: {'preferred_mode': preferredMode},
+            analytics: analyticsSession,
           );
         });
       } else {
         Future.delayed(const Duration(milliseconds: 800), _setupRound);
       }
     } else {
-      // Wrong
+      // Wrong - tapped wrong shape
       _errorCount++;
+
+      final tappedShape = _shapes[index];
+
+      // Record wrong response with details
+      analyticsRecordWrong(extraData: {
+        'tapped_shape': tappedShape.shapeType,
+        'tapped_color': tappedShape.colorName,
+        'target_shape': target.shapeType,
+        'target_color': target.colorName,
+        'error_type': tappedShape.shapeType == target.shapeType
+          ? 'color_error'
+          : tappedShape.colorName == target.colorName
+            ? 'shape_error'
+            : 'both_error',
+      });
+
       _shapes[index].showWrong();
     }
   }

@@ -47,12 +47,6 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
 
     lockParentLandscape();
-    // Restore normal system overlays after the splash screen's
-    // immersiveSticky / edgeToEdge mode to prevent ghost touches.
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
 
     _logoAnimController = AnimationController(
       vsync: this,
@@ -194,6 +188,27 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _showError(String message) {
     if (!mounted) return;
+
+    // For configuration errors, show a dialog with more space
+    if (message.contains('configuration error') || message.length > 100) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Google Sign-In Error'),
+          content: SingleChildScrollView(
+            child: Text(message),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -276,6 +291,24 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _handleFacebookSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.signInWithFacebook();
+      await _navigateAfterAuth();
+    } on AuthException catch (e) {
+      debugPrint('Facebook Sign-In AuthException: ${e.message}');
+      _showError(e.message);
+    } catch (e, stackTrace) {
+      debugPrint('Facebook Sign-In error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      _showError('Facebook sign-in failed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _handleForgotPassword() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
@@ -289,6 +322,13 @@ class _LoginScreenState extends State<LoginScreen>
   <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
   <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
   <path fill="none" d="M0 0h48v48H0z"/>
+</svg>
+''';
+
+  static const _facebookLogoSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <path fill="#1877F2" d="M48 24C48 10.745 37.255 0 24 0S0 10.745 0 24c0 11.975 8.746 21.91 20.25 23.708v-16.77h-6.09V24h6.09v-5.286c0-6.018 3.582-9.338 9.066-9.338 2.626 0 5.37.469 5.37.469v5.91h-3.024c-2.978 0-3.908 1.85-3.908 3.748V24h6.66l-1.064 6.938H27.75v16.77C39.254 45.91 48 35.975 48 24z"/>
+  <path fill="#FFF" d="M33.346 30.938 34.41 24h-6.66v-4.497c0-1.898.93-3.748 3.908-3.748h3.024v-5.91s-2.744-.469-5.37-.469c-5.484 0-9.066 3.32-9.066 9.338V24h-6.09v6.938h6.09v16.77a24.13 24.13 0 0 0 7.5 0v-16.77h5.64z"/>
 </svg>
 ''';
 
@@ -537,6 +577,45 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(width: 8),
                                     Text(
                                       'Continue with Google',
+                                      style: AppTextStyles.labelLarge.copyWith(
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: AppSpacing.xs),
+
+                            // ── Facebook sign-in ───────────────────
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed:
+                                    _isLoading ? null : _handleFacebookSignIn,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  foregroundColor: const Color(0xFF1877F2),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: SvgPicture.string(
+                                        _facebookLogoSvg,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Continue with Facebook',
                                       style: AppTextStyles.labelLarge.copyWith(
                                         fontSize: 13,
                                       ),

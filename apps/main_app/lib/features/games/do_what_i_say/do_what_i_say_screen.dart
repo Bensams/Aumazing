@@ -1,9 +1,11 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../providers/child_provider.dart';
 import '../../home/home_screen.dart';
 
 /// Screen wrapper for the Do What I Say game during pre-assessment.
@@ -15,8 +17,14 @@ class DoWhatISayScreen extends StatefulWidget {
   });
 
   final String assessmentContext;
-  final void Function(int score, int totalItems, int errorCount,
-      int totalResponseTimeMs, Map<String, dynamic> extras)? onComplete;
+  final void Function(
+    int score,
+    int totalItems,
+    int errorCount,
+    int totalResponseTimeMs,
+    Map<String, dynamic> extras,
+  )?
+  onComplete;
 
   @override
   State<DoWhatISayScreen> createState() => _DoWhatISayScreenState();
@@ -32,8 +40,10 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen> {
   @override
   void initState() {
     super.initState();
+    final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     _game = DoWhatISayGame(
       totalRounds: _totalRounds,
+      childId: childId,
       onStepChanged: (step) => setState(() => _currentStep = step),
       onInstructionChanged: (text) {
         if (mounted) setState(() => _instruction = text);
@@ -44,10 +54,15 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen> {
         required int errorCount,
         required int totalResponseTimeMs,
         required Map<String, dynamic> extras,
+        GameSessionMetrics? analytics,
       }) {
         setState(() => _gameComplete = true);
         widget.onComplete?.call(
-          score, totalItems, errorCount, totalResponseTimeMs, extras,
+          score,
+          totalItems,
+          errorCount,
+          totalResponseTimeMs,
+          extras,
         );
         Future.delayed(const Duration(milliseconds: 2500), () {
           if (mounted) Navigator.of(context).pop();
