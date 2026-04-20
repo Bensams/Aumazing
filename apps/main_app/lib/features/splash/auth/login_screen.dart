@@ -315,6 +315,24 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Future<void> _handleGuestSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.signInAnonymously();
+      await _navigateAfterAuth();
+    } on AuthException catch (e) {
+      debugPrint('Guest Sign-In AuthException: ${e.message}');
+      _showError(e.message);
+    } catch (e, stackTrace) {
+      debugPrint('Guest Sign-In error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      _showError('Guest sign-in failed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   static const _googleLogoSvg = '''
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
   <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -616,6 +634,46 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(width: 8),
                                     Text(
                                       'Continue with Facebook',
+                                      style: AppTextStyles.labelLarge.copyWith(
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: AppSpacing.sm),
+
+                            // ── Continue as Guest ───────────────────
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed:
+                                    _isLoading ? null : _handleGuestSignIn,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  foregroundColor: AppColors.mutedForeground,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  side: BorderSide(
+                                    color: AppColors.border,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.person_outline,
+                                      size: 18,
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Continue as Guest',
                                       style: AppTextStyles.labelLarge.copyWith(
                                         fontSize: 13,
                                       ),
