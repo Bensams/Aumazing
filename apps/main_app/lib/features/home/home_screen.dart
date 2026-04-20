@@ -18,21 +18,28 @@ import '../splash/auth/login_screen.dart';
 /// Shows child summary, assessment status, progress, and action buttons
 /// for starting pre-assessment or entering child mode.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.authService});
+
+  final AuthService? authService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _authService = AuthService();
+  late final AuthService _authService;
   bool _isLeftPanelExpanded = true;
 
   @override
   void initState() {
     super.initState();
+    _authService = widget.authService ?? AuthService();
     lockParentLandscape();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadData();
+      }
+    });
   }
 
   @override
@@ -67,11 +74,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startPreAssessment() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const PreAssessmentIntroScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PreAssessmentIntroScreen()));
   }
 
   void _enterChildMode() {
@@ -88,12 +93,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _showSettingsModal() {
+    showDialog(
+      context: context,
+      builder: (context) => SettingsModal(authService: _authService),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration:
-            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        decoration: const BoxDecoration(
+          gradient: AppGradients.parentLavenderMint,
+        ),
         child: Row(
           children: [
             // ── Left Panel: Child Summary (no SafeArea, sticks to edge) ─────────────────────────
@@ -184,46 +197,65 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            // Email chip + Sign out
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (email.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.white.withAlpha(180),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.email_outlined,
-                          size: 16,
-                          color: AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          email,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.mutedForeground,
+            Flexible(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    if (email.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 240),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.white.withAlpha(180),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.email_outlined,
+                                size: 16,
+                                color: AppColors.mutedForeground,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  email,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_rounded),
+                      tooltip: 'Settings',
+                      onPressed: _showSettingsModal,
+                      color: AppColors.mutedForeground,
                     ),
-                  ),
-                const SizedBox(width: AppSpacing.sm),
-                IconButton(
-                  icon: const Icon(Icons.logout_rounded),
-                  tooltip: 'Sign Out',
-                  onPressed: _signOut,
-                  color: AppColors.mutedForeground,
+                    IconButton(
+                      icon: const Icon(Icons.logout_rounded),
+                      tooltip: 'Sign Out',
+                      onPressed: _signOut,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         );
@@ -274,7 +306,9 @@ class _HomeScreenState extends State<HomeScreen> {
               if (!_isLeftPanelExpanded)
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
                     child: Column(
                       children: [
                         Container(
@@ -285,7 +319,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: Center(
-                            child: Text(avatar, style: const TextStyle(fontSize: 20)),
+                            child: Text(
+                              avatar,
+                              style: const TextStyle(fontSize: 20),
+                            ),
                           ),
                         ),
                       ],
@@ -309,8 +346,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: Center(
-                            child: Text(avatar,
-                                style: const TextStyle(fontSize: 32)),
+                            child: Text(
+                              avatar,
+                              style: const TextStyle(fontSize: 32),
+                            ),
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
@@ -359,41 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-
-                // Pinned comfort settings at bottom
-                const Divider(indent: 24, endIndent: 24, height: 1),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: Column(
-                    children: [
-                      _buildToggle(
-                        Icons.music_note_rounded,
-                        'Music',
-                        childProv.musicEnabled,
-                        (val) {
-                          childProv.updateComfortSettings(musicEnabled: val);
-                          final audioService = context.read<AudioService>();
-                          if (val) {
-                            audioService.resumeMusic();
-                          } else {
-                            audioService.pauseMusic();
-                          }
-                        },
-                      ),
-                      _buildToggle(
-                        Icons.vibration_rounded,
-                        'Vibration',
-                        childProv.vibrationEnabled,
-                        (val) => childProv.updateComfortSettings(
-                          vibrationEnabled: val,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ],
           ),
@@ -412,9 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(icon, size: 20, color: AppColors.primaryPurple),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(label, style: AppTextStyles.bodyMedium),
-          ),
+          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
           Text(
             value,
             style: AppTextStyles.labelLarge.copyWith(
@@ -423,31 +425,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildToggle(
-    IconData icon,
-    String label,
-    bool value,
-    ValueChanged<bool> onChanged,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.mutedForeground),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, style: AppTextStyles.bodySmall),
-        ),
-        Transform.scale(
-          scale: 0.8,
-          child: Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.primaryPurple,
-          ),
-        ),
-      ],
     );
   }
 
@@ -460,9 +437,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Expanded(
               child: AppPrimaryButton(
-                label: assessProv.hasPreAssessment
-                    ? 'Retake Pre-Assessment'
-                    : 'Start Pre-Assessment',
+                label:
+                    assessProv.hasPreAssessment
+                        ? 'Retake Pre-Assessment'
+                        : 'Start Pre-Assessment',
                 onPressed: _startPreAssessment,
                 icon: Icons.play_circle_filled_rounded,
               ),
@@ -589,8 +567,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
-                    const Icon(Icons.trending_up_rounded,
-                        size: 18, color: AppColors.mint),
+                    const Icon(
+                      Icons.trending_up_rounded,
+                      size: 18,
+                      color: AppColors.mint,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Post-assessment completed — view progress below',
@@ -638,10 +619,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        final gameLabels = results
-            .take(4)
-            .map((r) => r.gameId.replaceAll('_', ' '))
-            .toList();
+        final gameLabels =
+            results.take(4).map((r) => r.gameId.replaceAll('_', ' ')).toList();
 
         return AppCard(
           child: Column(
@@ -689,8 +668,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 padding: const EdgeInsets.only(top: 6),
                                 child: Text(
                                   gameLabels[idx],
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(fontSize: 10),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    fontSize: 10,
+                                  ),
                                 ),
                               );
                             }
@@ -780,8 +760,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              gameName[0].toUpperCase() +
-                                  gameName.substring(1),
+                              gameName[0].toUpperCase() + gameName.substring(1),
                               style: AppTextStyles.labelLarge,
                             ),
                             Text(
@@ -888,6 +867,595 @@ class _ActionCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings modal with music/vibration controls and account binding option
+class SettingsModal extends StatelessWidget {
+  const SettingsModal({super.key, required this.authService});
+
+  final AuthService authService;
+
+  @override
+  Widget build(BuildContext context) {
+    final isGuest = authService.isGuestMode;
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight =
+        mediaQuery.size.height - mediaQuery.viewInsets.vertical;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 320,
+          maxHeight: availableHeight * 0.9,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.lavenderLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.settings_rounded,
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Flexible(
+                    child: Text(
+                      'Settings',
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+
+              Text(
+                'Comfort Settings',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+
+              Consumer<ChildProvider>(
+                builder: (context, childProv, _) {
+                  return Column(
+                    children: [
+                      _buildSettingToggle(
+                        Icons.music_note_rounded,
+                        'Music',
+                        childProv.musicEnabled,
+                        (val) {
+                          childProv.updateComfortSettings(musicEnabled: val);
+                          final audioService = context.read<AudioService>();
+                          if (val) {
+                            audioService.resumeMusic();
+                          } else {
+                            audioService.pauseMusic();
+                          }
+                        },
+                      ),
+                      _buildSettingToggle(
+                        Icons.vibration_rounded,
+                        'Vibration',
+                        childProv.vibrationEnabled,
+                        (val) => childProv.updateComfortSettings(
+                          vibrationEnabled: val,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+
+              if (isGuest) ...[
+                const SizedBox(height: AppSpacing.md),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Account',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildBindAccountButton(context),
+              ],
+
+              const SizedBox(height: AppSpacing.lg),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Close',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingToggle(
+    IconData icon,
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.mutedForeground),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: AppColors.primaryPurple,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBindAccountButton(BuildContext context) {
+    return Material(
+      color: AppColors.butterLight,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.of(context).pop();
+          showDialog(
+            context: context,
+            builder: (_) => BindAccountModal(authService: authService),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.butterYellow.withAlpha(60),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.link_rounded,
+                  color: Color(0xFFD4A017),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bind Account',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Save your progress permanently',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppColors.mutedForeground,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bind Account modal for guest users to link their progress
+class BindAccountModal extends StatefulWidget {
+  const BindAccountModal({super.key, required this.authService});
+
+  final AuthService authService;
+
+  @override
+  State<BindAccountModal> createState() => _BindAccountModalState();
+}
+
+enum _BindAccountStep { options, email }
+
+class _BindAccountModalState extends State<BindAccountModal> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+  _BindAccountStep _step = _BindAccountStep.options;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bindAccount() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please enter email and password');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Convert anonymous/guest to permanent account
+      await widget.authService.convertAnonymousToPermanent(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account bound successfully!'),
+            backgroundColor: AppColors.mint,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _errorMessage = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _bindWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.authService.bindAnonymousWithGoogle();
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google account linked successfully!'),
+            backgroundColor: AppColors.mint,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _errorMessage = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showEmailStep() {
+    setState(() {
+      _step = _BindAccountStep.email;
+      _errorMessage = null;
+    });
+  }
+
+  void _showOptionStep() {
+    setState(() {
+      _step = _BindAccountStep.options;
+      _errorMessage = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight =
+        mediaQuery.size.height - mediaQuery.viewInsets.vertical;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 340,
+          maxHeight: availableHeight * 0.9,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child:
+              _step == _BindAccountStep.options
+                  ? _buildOptionStep(context)
+                  : _buildEmailStep(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionStep(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader('Bind Account'),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Choose how you want to save this guest account permanently.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_errorMessage != null) ...[
+          _buildErrorBanner(),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        _buildBindOption(
+          icon: Icons.g_mobiledata_rounded,
+          title: 'Bind with Google',
+          subtitle: 'Link this guest account to your Google sign-in',
+          onTap: _isLoading ? null : _bindWithGoogle,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _buildBindOption(
+          icon: Icons.email_outlined,
+          title: 'Bind with Email',
+          subtitle: 'Create login details with email and password',
+          onTap: _isLoading ? null : _showEmailStep,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailStep(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader('Bind with Email'),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Create an email and password for this guest account.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_errorMessage != null) ...[
+          _buildErrorBanner(),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            labelText: 'Email',
+            prefixIcon: const Icon(Icons.email_outlined),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _passwordController,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline_rounded),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: _isLoading ? null : _showOptionStep,
+                child: const Text('Back'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _bindAccount,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child:
+                    _isLoading
+                        ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Text('Bind with Email'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.butterLight,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.link_rounded, color: Color(0xFFD4A017)),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            title,
+            style: AppTextStyles.headlineSmall.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: Colors.red.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBindOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.lavenderLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.primaryPurple),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isLoading && title == 'Bind with Google')
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: AppColors.mutedForeground,
+                ),
             ],
           ),
         ),
