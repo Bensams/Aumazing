@@ -2,6 +2,33 @@ import 'package:aumazing/core/child_profile_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'calculateAgeYears treats Feb 29 birthdays as Feb 28 in non-leap years at age 2',
+    () {
+      final today = DateTime(2026, 2, 28);
+      final birthDate = DateTime(2024, 2, 29);
+
+      expect(calculateAgeYears(birthDate, today: today), 2);
+    },
+  );
+
+  test(
+    'calculateAgeYears treats Feb 29 birthdays as Feb 28 in non-leap years at age 6',
+    () {
+      final today = DateTime(2026, 2, 28);
+      final birthDate = DateTime(2020, 2, 29);
+
+      expect(calculateAgeYears(birthDate, today: today), 6);
+    },
+  );
+
+  test('calculateAgeYears returns negative ages for future dates', () {
+    final today = DateTime(2026, 4, 20);
+    final birthDate = DateTime(2026, 4, 21);
+
+    expect(calculateAgeYears(birthDate, today: today), -1);
+  });
+
   test('calculateAgeYears returns 2 on the second birthday', () {
     final today = DateTime(2026, 4, 20);
     final birthDate = DateTime(2024, 4, 20);
