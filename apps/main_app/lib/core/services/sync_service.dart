@@ -41,9 +41,9 @@ class SyncService {
     LocalDbService? localDb,
     SupabaseService? supabase,
     ConnectivityService? connectivity,
-  })  : _localDb = localDb ?? localDbService,
-        _supabase = supabase ?? supabaseService,
-        _connectivity = connectivity ?? connectivityService;
+  }) : _localDb = localDb ?? localDbService,
+       _supabase = supabase ?? supabaseService,
+       _connectivity = connectivity ?? connectivityService;
 
   /// Stream of sync state changes
   Stream<SyncState> get onSyncStateChanged => _syncStateController.stream;
@@ -131,17 +131,18 @@ class SyncService {
       // Sync soft deletes last
       await _propagateDeletes();
 
-      _updateState(const SyncState(
-        status: SyncStatusEnum.completed,
-        lastSuccessfulSync: true,
-      ));
+      _updateState(
+        const SyncState(
+          status: SyncStatusEnum.completed,
+          lastSuccessfulSync: true,
+        ),
+      );
       debugPrint('[SyncService] Sync completed successfully');
     } catch (e) {
       debugPrint('[SyncService] Sync failed: $e');
-      _updateState(SyncState(
-        status: SyncStatusEnum.error,
-        error: e.toString(),
-      ));
+      _updateState(
+        SyncState(status: SyncStatusEnum.error, error: e.toString()),
+      );
     } finally {
       _isSyncing = false;
 
@@ -175,7 +176,7 @@ class SyncService {
   // ─── Entity-Specific Sync Methods ─────────────────────────────────────
 
   Future<void> _syncChildren() async {
-    final records = await _localDb.getPendingRecords(LocalTables.children);
+    final records = await _localDb.getPendingChildRecords();
     if (records.isEmpty) return;
 
     debugPrint('[SyncService] Syncing ${records.length} children');
@@ -192,13 +193,19 @@ class SyncService {
         await _localDb.markSynced(LocalTables.children, id);
       } catch (e) {
         debugPrint('[SyncService] Failed to sync child $id: $e');
-        await _localDb.markSyncFailed(LocalTables.children, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.children,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
 
   Future<void> _syncAssessmentRuns() async {
-    final records = await _localDb.getPendingRecords(LocalTables.assessmentRuns);
+    final records = await _localDb.getPendingRecords(
+      LocalTables.assessmentRuns,
+    );
     if (records.isEmpty) return;
 
     debugPrint('[SyncService] Syncing ${records.length} assessment runs');
@@ -211,7 +218,11 @@ class SyncService {
         await _supabase.upsertAssessmentRun(supabaseData, id);
         await _localDb.markSynced(LocalTables.assessmentRuns, id);
       } catch (e) {
-        await _localDb.markSyncFailed(LocalTables.assessmentRuns, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.assessmentRuns,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
@@ -241,7 +252,11 @@ class SyncService {
     } catch (e) {
       // Fall back to individual syncs on batch failure
       for (final id in ids) {
-        await _localDb.markSyncFailed(LocalTables.gameSessions, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.gameSessions,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
@@ -269,7 +284,11 @@ class SyncService {
       }
     } catch (e) {
       for (final id in ids) {
-        await _localDb.markSyncFailed(LocalTables.gameRounds, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.gameRounds,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
@@ -288,13 +307,19 @@ class SyncService {
         await _supabase.upsertSessionEvent(supabaseData, id);
         await _localDb.markSynced(LocalTables.sessionEvents, id);
       } catch (e) {
-        await _localDb.markSyncFailed(LocalTables.sessionEvents, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.sessionEvents,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
 
   Future<void> _syncCaregiverQuestionnaires() async {
-    final records = await _localDb.getPendingRecords(LocalTables.caregiverQuestionnaires);
+    final records = await _localDb.getPendingRecords(
+      LocalTables.caregiverQuestionnaires,
+    );
     if (records.isEmpty) return;
 
     for (final record in records) {
@@ -305,13 +330,19 @@ class SyncService {
         await _supabase.upsertCaregiverQuestionnaire(supabaseData, id);
         await _localDb.markSynced(LocalTables.caregiverQuestionnaires, id);
       } catch (e) {
-        await _localDb.markSyncFailed(LocalTables.caregiverQuestionnaires, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.caregiverQuestionnaires,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
 
   Future<void> _syncAssessmentResults() async {
-    final records = await _localDb.getPendingRecords(LocalTables.assessmentResults);
+    final records = await _localDb.getPendingRecords(
+      LocalTables.assessmentResults,
+    );
     if (records.isEmpty) return;
 
     debugPrint('[SyncService] Syncing ${records.length} assessment results');
@@ -333,13 +364,19 @@ class SyncService {
       }
     } catch (e) {
       for (final id in ids) {
-        await _localDb.markSyncFailed(LocalTables.assessmentResults, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.assessmentResults,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
 
   Future<void> _syncModuleRecommendations() async {
-    final records = await _localDb.getPendingRecords(LocalTables.moduleRecommendations);
+    final records = await _localDb.getPendingRecords(
+      LocalTables.moduleRecommendations,
+    );
     if (records.isEmpty) return;
 
     for (final record in records) {
@@ -350,13 +387,19 @@ class SyncService {
         await _supabase.upsertModuleRecommendation(supabaseData, id);
         await _localDb.markSynced(LocalTables.moduleRecommendations, id);
       } catch (e) {
-        await _localDb.markSyncFailed(LocalTables.moduleRecommendations, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.moduleRecommendations,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
 
   Future<void> _syncAssessmentComparisons() async {
-    final records = await _localDb.getPendingRecords(LocalTables.assessmentComparisons);
+    final records = await _localDb.getPendingRecords(
+      LocalTables.assessmentComparisons,
+    );
     if (records.isEmpty) return;
 
     for (final record in records) {
@@ -367,7 +410,11 @@ class SyncService {
         await _supabase.upsertAssessmentComparison(supabaseData, id);
         await _localDb.markSynced(LocalTables.assessmentComparisons, id);
       } catch (e) {
-        await _localDb.markSyncFailed(LocalTables.assessmentComparisons, id, error: e.toString());
+        await _localDb.markSyncFailed(
+          LocalTables.assessmentComparisons,
+          id,
+          error: e.toString(),
+        );
       }
     }
   }
@@ -378,7 +425,9 @@ class SyncService {
       final records = await _localDb.getDeletedRecords(table);
       if (records.isEmpty) continue;
 
-      debugPrint('[SyncService] Propagating ${records.length} deletions from $table');
+      debugPrint(
+        '[SyncService] Propagating ${records.length} deletions from $table',
+      );
 
       final remoteTable = SyncOrder.getRemoteTable(table);
       if (remoteTable == null) continue;
@@ -402,10 +451,10 @@ class SyncService {
       'id': local['id'],
       'parent_user_id': local['user_id'],
       'display_name': local['display_name'],
-      'birth_date': DateTime.parse(local['birth_date'] as String)
-          .toIso8601String()
-          .split('T')
-          .first,
+      'birth_date':
+          DateTime.parse(
+            local['birth_date'] as String,
+          ).toIso8601String().split('T').first,
       'created_at': local['local_created_at'],
       'updated_at': local['updated_at'],
     };
@@ -435,9 +484,10 @@ class SyncService {
       'total_response_time_ms': local['total_response_time_ms'],
       'started_at': local['started_at'],
       'ended_at': local['ended_at'],
-      'settings_snapshot': local['settings_snapshot'] != null
-          ? local['settings_snapshot'] as String
-          : null,
+      'settings_snapshot':
+          local['settings_snapshot'] != null
+              ? local['settings_snapshot'] as String
+              : null,
     };
   }
 
@@ -452,7 +502,8 @@ class SyncService {
       'response_time_ms': local['response_time_ms'],
       'started_at': local['started_at'],
       'ended_at': local['ended_at'],
-      'metadata': local['metadata'] != null ? local['metadata'] as String : null,
+      'metadata':
+          local['metadata'] != null ? local['metadata'] as String : null,
     };
   }
 
@@ -461,7 +512,8 @@ class SyncService {
       'id': local['id'],
       'session_id': local['session_id'],
       'event_type': local['event_type'],
-      'event_data': local['event_data'] != null ? local['event_data'] as String : null,
+      'event_data':
+          local['event_data'] != null ? local['event_data'] as String : null,
       'occurred_at': local['occurred_at'],
     };
   }
@@ -476,7 +528,9 @@ class SyncService {
     };
   }
 
-  Map<String, dynamic> _mapAssessmentResultToSupabase(Map<String, dynamic> local) {
+  Map<String, dynamic> _mapAssessmentResultToSupabase(
+    Map<String, dynamic> local,
+  ) {
     return {
       'id': local['id'],
       'child_id': local['child_id'],
@@ -487,11 +541,14 @@ class SyncService {
       'total_items': local['total_items'],
       'error_count': local['error_count'],
       'avg_response_time_ms': local['avg_response_time_ms'],
-      'raw_metrics': local['raw_metrics'] != null ? local['raw_metrics'] as String : null,
+      'raw_metrics':
+          local['raw_metrics'] != null ? local['raw_metrics'] as String : null,
     };
   }
 
-  Map<String, dynamic> _mapRecommendationToSupabase(Map<String, dynamic> local) {
+  Map<String, dynamic> _mapRecommendationToSupabase(
+    Map<String, dynamic> local,
+  ) {
     return {
       'id': local['id'],
       'child_id': local['child_id'],
@@ -581,10 +638,8 @@ class SyncState {
     this.timestamp,
   });
 
-  factory SyncState.idle() => SyncState(
-        status: SyncStatusEnum.idle,
-        timestamp: DateTime.now(),
-      );
+  factory SyncState.idle() =>
+      SyncState(status: SyncStatusEnum.idle, timestamp: DateTime.now());
 
   SyncState copyWith({
     SyncStatusEnum? status,
@@ -606,13 +661,7 @@ class SyncState {
   bool get hasError => status == SyncStatusEnum.error;
 }
 
-enum SyncStatusEnum {
-  idle,
-  syncing,
-  completed,
-  offline,
-  error,
-}
+enum SyncStatusEnum { idle, syncing, completed, offline, error }
 
 /// Global instance for app-wide access
 final syncService = SyncService();
