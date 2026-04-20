@@ -26,8 +26,7 @@ class ChildProvider extends ChangeNotifier {
   bool get musicEnabled => _profile?.musicEnabled ?? true;
   bool get vibrationEnabled => _profile?.vibrationEnabled ?? true;
 
-  /// Loads the child profile from SQLite cache, or falls back to
-  /// Supabase user metadata.
+  /// Loads the child profile from SQLite cache only.
   Future<void> loadProfile() async {
     _isLoading = true;
     notifyListeners();
@@ -36,26 +35,7 @@ class ChildProvider extends ChangeNotifier {
       final user = _authService.currentUser;
       if (user == null) return;
 
-      // Try local cache first
       _profile = await _localDb.getChildProfile(user.id);
-
-      // Fall back to Supabase user metadata
-      if (_profile == null) {
-        final meta = _authService.childProfile;
-        if (meta != null) {
-          _profile = ChildProfile(
-            id: user.id,
-            userId: user.id,
-            name: meta['name'] as String,
-            age: meta['age'] as int,
-            avatar: meta['avatar'] as String,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-          // Cache locally
-          await _localDb.upsertChildProfile(_profile!);
-        }
-      }
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
@@ -82,15 +62,15 @@ class ChildProvider extends ChangeNotifier {
 
   /// Updates child profile details.
   Future<void> updateProfile({
-    String? name,
-    int? age,
+    String? displayName,
+    DateTime? birthDate,
     String? avatar,
   }) async {
     if (_profile == null) return;
 
     _profile = _profile!.copyWith(
-      name: name,
-      age: age,
+      displayName: displayName,
+      birthDate: birthDate,
       avatar: avatar,
     );
 
