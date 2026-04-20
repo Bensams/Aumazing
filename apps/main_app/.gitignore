@@ -1,0 +1,21 @@
+# Environment variables - DO NOT COMMIT
+.env
+*.env
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Temporary files
+tmp_*.txt
+*.log
