@@ -2,6 +2,20 @@ import 'package:aumazing/core/child_profile_policy.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+ChildProfile _buildProfile({
+  DateTime? birthDate,
+}) {
+  return ChildProfile(
+    id: 'child-1',
+    userId: 'user-1',
+    displayName: 'Mika',
+    birthDate: birthDate ?? DateTime(2022, 4, 20),
+    avatar: 'bear',
+    createdAt: DateTime(2026, 4, 20),
+    updatedAt: DateTime(2026, 4, 20),
+  );
+}
+
 void main() {
   test(
     'calculateAgeYears treats Feb 29 birthdays as Feb 28 in non-leap years at age 2',
@@ -75,16 +89,15 @@ void main() {
   });
 
   test('child profile derives age from birth date', () {
-    final profile = ChildProfile(
-      id: 'child-1',
-      userId: 'user-1',
-      displayName: 'Mika',
-      birthDate: DateTime(2022, 4, 20),
-      avatar: 'bear',
-      createdAt: DateTime(2026, 4, 20),
-      updatedAt: DateTime(2026, 4, 20),
-    );
+    final profile = _buildProfile();
 
     expect(profile.ageYears(today: DateTime(2026, 4, 20)), 4);
+  });
+
+  test('child profile compatibility getters mirror canonical state', () {
+    final profile = _buildProfile(birthDate: DateTime(2022, 4, 20));
+
+    expect(profile.name, 'Mika');
+    expect(profile.age, 4);
   });
 }
