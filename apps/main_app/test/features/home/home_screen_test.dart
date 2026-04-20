@@ -15,8 +15,8 @@ void main() {
   final profile = ChildProfile(
     id: 'child-1',
     userId: 'user-1',
-    name: 'Test',
-    age: 5,
+    displayName: 'Test',
+    birthDate: DateTime(2019, 4, 20),
     avatar: '🐻',
     createdAt: DateTime(2024),
     updatedAt: DateTime(2024),
