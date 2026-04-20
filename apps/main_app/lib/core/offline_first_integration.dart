@@ -23,7 +23,6 @@
 ///
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -148,11 +147,15 @@ class OfflineFirstIntegration {
 ///
 /// ```dart
 /// class ChildCreationScreen extends StatelessWidget {
-///   Future<void> _createChild(String name, int age, String avatar) async {
+///   Future<void> _createChild(
+///     String displayName,
+///     DateTime birthDate,
+///     String avatar,
+///   ) async {
 ///     // This works whether online or offline!
 ///     final child = await childRepository.createChild(
-///       name: name,
-///       age: age,
+///       displayName: displayName,
+///       birthDate: birthDate,
 ///       avatar: avatar,
 ///     );
 ///
@@ -160,7 +163,7 @@ class OfflineFirstIntegration {
 ///     // If offline, data is queued and will sync when connectivity returns
 ///
 ///     ScaffoldMessenger.of(context).showSnackBar(
-///       SnackBar(content: Text('Created ${child.name}')),
+///       SnackBar(content: Text('Created ${child.displayName}')),
 ///     );
 ///   }
 /// }
@@ -169,8 +172,8 @@ class ExampleChildCreation {
   Future<void> createChildExample() async {
     // Works completely offline - child is saved locally
     final child = await childRepository.createChild(
-      name: 'Alex',
-      age: 5,
+      displayName: 'Alex',
+      birthDate: DateTime(2021, 4, 20),
       avatar: 'avatar_1',
       musicEnabled: true,
       vibrationEnabled: false,
@@ -263,8 +266,8 @@ class ExampleGuestMode {
 
     // Step 2: Create child while in guest mode
     final child = await childRepository.createChild(
-      name: 'Sam',
-      age: 6,
+      displayName: 'Sam',
+      birthDate: DateTime(2020, 4, 20),
       avatar: 'avatar_2',
     );
     debugPrint('Guest-created child: ${child.userId}'); // guest_xxx

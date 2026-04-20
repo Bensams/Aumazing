@@ -23,6 +23,7 @@ import '../../model/module_progress.dart';
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
   static const _dbVersion = 3; // Incremented for child birth-date storage
+  static const _validChildWhere = 'display_name IS NOT NULL AND birth_date IS NOT NULL';
 
   static Database? _database;
 
@@ -62,7 +63,7 @@ class LocalDbService {
         id TEXT PRIMARY KEY,
         user_id TEXT,
         display_name TEXT NOT NULL,
-        birth_date TEXT NOT NULL,
+        birth_date TEXT,
         avatar TEXT NOT NULL,
         music_enabled INTEGER NOT NULL DEFAULT 1,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
@@ -330,13 +331,15 @@ class LocalDbService {
     }
 
     if (oldVersion < 3) {
-      await db.execute('DROP TABLE IF EXISTS ${LocalTables.children}');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} RENAME TO ${LocalTables.children}_legacy_v2',
+      );
       await db.execute('''
         CREATE TABLE ${LocalTables.children} (
           id TEXT PRIMARY KEY,
           user_id TEXT,
           display_name TEXT NOT NULL,
-          birth_date TEXT NOT NULL,
+          birth_date TEXT,
           avatar TEXT NOT NULL,
           music_enabled INTEGER NOT NULL DEFAULT 1,
           vibration_enabled INTEGER NOT NULL DEFAULT 1,
@@ -344,6 +347,41 @@ class LocalDbService {
           $_syncColumns
         )
       ''');
+      await db.execute('''
+        INSERT INTO ${LocalTables.children} (
+          id,
+          user_id,
+          display_name,
+          birth_date,
+          avatar,
+          music_enabled,
+          vibration_enabled,
+          comfort_settings,
+          sync_status,
+          last_synced_at,
+          deleted_at,
+          updated_at,
+          local_created_at,
+          owner_id
+        )
+        SELECT
+          id,
+          user_id,
+          name,
+          NULL,
+          avatar,
+          music_enabled,
+          vibration_enabled,
+          comfort_settings,
+          sync_status,
+          last_synced_at,
+          deleted_at,
+          updated_at,
+          local_created_at,
+          owner_id
+        FROM ${LocalTables.children}_legacy_v2
+      ''');
+      await db.execute('DROP TABLE ${LocalTables.children}_legacy_v2');
       await db.execute('''
         CREATE INDEX IF NOT EXISTS idx_children_user_id
         ON ${LocalTables.children}(user_id)
@@ -360,9 +398,12 @@ class LocalDbService {
   /// Get all pending records for a table
   Future<List<Map<String, dynamic>>> getPendingRecords(String table) async {
     final db = await database;
+    final childValidityClause =
+        table == LocalTables.children ? ' AND $_validChildWhere' : '';
     return db.query(
       table,
-      where: "sync_status IN ('pending', 'failed') AND deleted_at IS NULL",
+      where:
+          "sync_status IN ('pending', 'failed') AND deleted_at IS NULL$childValidityClause",
       orderBy: 'local_created_at ASC',
     );
   }
@@ -471,9 +512,11 @@ class LocalDbService {
     final counts = <String, int>{};
 
     for (final table in SyncOrder.dependencyOrder) {
+      final childValidityClause =
+          table == LocalTables.children ? ' AND $_validChildWhere' : '';
       final result = await db.rawQuery('''
         SELECT COUNT(*) as count FROM $table
-        WHERE sync_status IN ('pending', 'failed') AND deleted_at IS NULL
+        WHERE sync_status IN ('pending', 'failed') AND deleted_at IS NULL$childValidityClause
       ''');
       counts[table] = Sqflite.firstIntValue(result) ?? 0;
     }
@@ -510,13 +553,15 @@ class LocalDbService {
     List<Object?>? whereArgs;
 
     if (userId != null) {
-      where = 'user_id = ?';
+      where = 'user_id = ? AND $_validChildWhere';
       whereArgs = [userId];
       if (!includeDeleted) {
         where += ' AND deleted_at IS NULL';
       }
     } else if (!includeDeleted) {
-      where = 'deleted_at IS NULL';
+      where = 'deleted_at IS NULL AND $_validChildWhere';
+    } else {
+      where = _validChildWhere;
     }
 
     final rows = await db.query(
@@ -533,7 +578,7 @@ class LocalDbService {
     final db = await database;
     final rows = await db.query(
       LocalTables.children,
-      where: 'id = ? AND deleted_at IS NULL',
+      where: 'id = ? AND deleted_at IS NULL AND $_validChildWhere',
       whereArgs: [id],
       limit: 1,
     );

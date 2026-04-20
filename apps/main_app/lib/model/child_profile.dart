@@ -27,6 +27,12 @@ class ChildProfile {
 
   int ageYears({DateTime? today}) => calculateAgeYears(birthDate, today: today);
 
+  @Deprecated('Use displayName instead.')
+  String get name => displayName;
+
+  @Deprecated('Use ageYears() instead.')
+  int get age => ageYears();
+
   ChildProfile copyWith({
     String? displayName,
     DateTime? birthDate,
