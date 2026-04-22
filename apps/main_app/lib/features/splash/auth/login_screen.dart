@@ -313,7 +313,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      await _authService.signInAnonymously();
+      // Only sign in anonymously if no existing session
+      if (_authService.currentUser == null) {
+        await _authService.signInAnonymously();
+      }
       await _navigateAfterAuth();
     } on AuthException catch (e) {
       debugPrint('Guest Sign-In AuthException: ${e.message}');
