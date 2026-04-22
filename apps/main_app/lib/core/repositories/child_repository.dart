@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../model/child_profile.dart';
+export '../../model/child_profile.dart' show ChildSex;
 import '../services/auth_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_service.dart';
@@ -47,6 +48,7 @@ class ChildRepository {
     required String displayName,
     required DateTime birthDate,
     required String avatar,
+    ChildSex? sex,
     bool musicEnabled = true,
     bool vibrationEnabled = true,
   }) async {
@@ -59,6 +61,7 @@ class ChildRepository {
       displayName: displayName,
       birthDate: birthDate,
       avatar: avatar,
+      sex: sex,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
       createdAt: now,
@@ -100,6 +103,7 @@ class ChildRepository {
     String? displayName,
     DateTime? birthDate,
     String? avatar,
+    ChildSex? sex,
     bool? musicEnabled,
     bool? vibrationEnabled,
   }) async {
@@ -107,6 +111,7 @@ class ChildRepository {
       displayName: displayName,
       birthDate: birthDate,
       avatar: avatar,
+      sex: sex,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
     );

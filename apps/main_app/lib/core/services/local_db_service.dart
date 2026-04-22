@@ -19,6 +19,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
       display_name TEXT NOT NULL,
       birth_date TEXT,
       avatar TEXT NOT NULL,
+      sex TEXT,
       music_enabled INTEGER NOT NULL DEFAULT 1,
       vibration_enabled INTEGER NOT NULL DEFAULT 1,
       comfort_settings TEXT,
@@ -89,7 +90,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 3; // Incremented for child birth-date storage
+  static const _dbVersion = 4; // Incremented for child sex/gender field
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
       'display_name IS NOT NULL AND birth_date IS NOT NULL';
@@ -134,6 +135,7 @@ class LocalDbService {
         display_name TEXT NOT NULL,
         birth_date TEXT,
         avatar TEXT NOT NULL,
+        sex TEXT,
         music_enabled INTEGER NOT NULL DEFAULT 1,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
         comfort_settings TEXT,
@@ -403,6 +405,14 @@ class LocalDbService {
 
     if (oldVersion < 3) {
       await migrateChildrenTableToBirthDateSchema(db);
+    }
+
+    if (oldVersion < 4) {
+      // Migration from v3 to v4: Add sex column to children table
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN sex TEXT',
+      );
+      debugPrint('[LocalDbService] Added sex column to children table');
     }
   }
 
