@@ -8,6 +8,73 @@ import '../../model/gameplay_session.dart';
 import '../../model/assessment_result.dart';
 import '../../model/module_progress.dart';
 
+Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
+  await db.execute(
+    'ALTER TABLE ${LocalTables.children} RENAME TO ${LocalTables.children}_legacy_v2',
+  );
+  await db.execute('''
+    CREATE TABLE ${LocalTables.children} (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      display_name TEXT NOT NULL,
+      birth_date TEXT,
+      avatar TEXT NOT NULL,
+      music_enabled INTEGER NOT NULL DEFAULT 1,
+      vibration_enabled INTEGER NOT NULL DEFAULT 1,
+      comfort_settings TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'pending',
+      last_synced_at TEXT,
+      deleted_at TEXT,
+      updated_at TEXT NOT NULL,
+      local_created_at TEXT NOT NULL,
+      owner_id TEXT
+    )
+  ''');
+  await db.execute('''
+    INSERT INTO ${LocalTables.children} (
+      id,
+      user_id,
+      display_name,
+      birth_date,
+      avatar,
+      music_enabled,
+      vibration_enabled,
+      comfort_settings,
+      sync_status,
+      last_synced_at,
+      deleted_at,
+      updated_at,
+      local_created_at,
+      owner_id
+    )
+    SELECT
+      id,
+      user_id,
+      name,
+      NULL,
+      avatar,
+      music_enabled,
+      vibration_enabled,
+      comfort_settings,
+      sync_status,
+      last_synced_at,
+      deleted_at,
+      updated_at,
+      local_created_at,
+      owner_id
+    FROM ${LocalTables.children}_legacy_v2
+  ''');
+  await db.execute('DROP TABLE ${LocalTables.children}_legacy_v2');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_children_user_id
+    ON ${LocalTables.children}(user_id)
+  ''');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_children_sync
+    ON ${LocalTables.children}(sync_status)
+  ''');
+}
+
 /// Enhanced SQLite database service for offline-first data.
 ///
 /// All tables include sync metadata fields:
@@ -335,65 +402,7 @@ class LocalDbService {
     }
 
     if (oldVersion < 3) {
-      await db.execute(
-        'ALTER TABLE ${LocalTables.children} RENAME TO ${LocalTables.children}_legacy_v2',
-      );
-      await db.execute('''
-        CREATE TABLE ${LocalTables.children} (
-          id TEXT PRIMARY KEY,
-          user_id TEXT,
-          display_name TEXT NOT NULL,
-          birth_date TEXT,
-          avatar TEXT NOT NULL,
-          music_enabled INTEGER NOT NULL DEFAULT 1,
-          vibration_enabled INTEGER NOT NULL DEFAULT 1,
-          comfort_settings TEXT,
-          $_syncColumns
-        )
-      ''');
-      await db.execute('''
-        INSERT INTO ${LocalTables.children} (
-          id,
-          user_id,
-          display_name,
-          birth_date,
-          avatar,
-          music_enabled,
-          vibration_enabled,
-          comfort_settings,
-          sync_status,
-          last_synced_at,
-          deleted_at,
-          updated_at,
-          local_created_at,
-          owner_id
-        )
-        SELECT
-          id,
-          user_id,
-          name,
-          NULL,
-          avatar,
-          music_enabled,
-          vibration_enabled,
-          comfort_settings,
-          sync_status,
-          last_synced_at,
-          deleted_at,
-          updated_at,
-          local_created_at,
-          owner_id
-        FROM ${LocalTables.children}_legacy_v2
-      ''');
-      await db.execute('DROP TABLE ${LocalTables.children}_legacy_v2');
-      await db.execute('''
-        CREATE INDEX IF NOT EXISTS idx_children_user_id
-        ON ${LocalTables.children}(user_id)
-      ''');
-      await db.execute('''
-        CREATE INDEX IF NOT EXISTS idx_children_sync
-        ON ${LocalTables.children}(sync_status)
-      ''');
+      await migrateChildrenTableToBirthDateSchema(db);
     }
   }
 
@@ -422,9 +431,12 @@ class LocalDbService {
   /// Get all soft-deleted records that need deletion propagated
   Future<List<Map<String, dynamic>>> getDeletedRecords(String table) async {
     final db = await database;
+    final childDeletionGuard =
+        table == LocalTables.children ? ' AND $_syncableChildWhere' : '';
     return db.query(
       table,
-      where: "deleted_at IS NOT NULL AND sync_status != 'synced'",
+      where:
+          "deleted_at IS NOT NULL AND sync_status != 'synced'$childDeletionGuard",
     );
   }
 

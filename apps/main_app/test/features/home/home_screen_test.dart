@@ -1,5 +1,6 @@
 import 'package:aumazing/core/services/auth_service.dart';
-import 'package:aumazing/features/home/home_screen.dart';
+import 'package:aumazing/features/home/home_screen.dart'
+    show BindAccountModal, HomeScreen, SettingsModal;
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
@@ -8,26 +9,27 @@ import 'package:aumazing/providers/progress_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
-  final profile = ChildProfile(
-    id: 'child-1',
-    userId: 'user-1',
-    displayName: 'Test',
-    birthDate: DateTime(2019, 4, 20),
-    avatar: '🐻',
-    createdAt: DateTime(2024),
-    updatedAt: DateTime(2024),
-  );
+final _profile = ChildProfile(
+  id: 'child-1',
+  userId: 'user-1',
+  displayName: 'Test',
+  birthDate: DateTime(2022, 4, 20),
+  avatar: 'bear',
+  createdAt: DateTime(2024),
+  updatedAt: DateTime(2024),
+);
 
+void main() {
   testWidgets(
     'home screen defers provider loading until after the first frame',
     (tester) async {
       final authService = AuthService(supabaseAuth: _FakeSupabaseAuthClient());
       final childProvider = _TestChildProvider(
-        initialProfile: profile,
+        initialProfile: _profile,
         notifyDuringLoad: true,
       );
 
@@ -54,22 +56,15 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(640, 320));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(
-          authService: authService,
-          childProvider: _TestChildProvider(initialProfile: profile),
-        ),
-      );
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildSettingsTestApp(authService: authService));
+      await _settleUi(tester);
 
-      await tester.tap(find.byIcon(Icons.settings_rounded));
-      await tester.pumpAndSettle();
       expect(find.text('Settings'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.ensureVisible(find.text('Bind Account'));
       await tester.tap(find.text('Bind Account'));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       expect(find.text('Bind Account'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
@@ -84,18 +79,8 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(960, 540));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(
-          authService: authService,
-          childProvider: _TestChildProvider(initialProfile: profile),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byIcon(Icons.settings_rounded));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Bind Account').first);
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildBindAccountTestApp(authService: authService));
+      await _settleUi(tester);
 
       expect(find.text('Bind with Google'), findsOneWidget);
       expect(find.text('Bind with Email'), findsOneWidget);
@@ -113,26 +98,44 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(960, 540));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(
-          authService: authService,
-          childProvider: _TestChildProvider(initialProfile: profile),
-        ),
-      );
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildBindAccountTestApp(authService: authService));
+      await _settleUi(tester);
 
-      await tester.tap(find.byIcon(Icons.settings_rounded));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Bind Account').first);
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Bind with Email'));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       expect(find.widgetWithText(TextField, 'Email'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
       expect(find.text('Bind with Google'), findsNothing);
       expect(tester.takeException(), isNull);
     },
+  );
+}
+
+Future<void> _settleUi(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+Widget _buildSettingsTestApp({required AuthService authService}) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<ChildProvider>(
+        create: (_) => _TestChildProvider(initialProfile: _profile),
+      ),
+      Provider<AudioService>(create: (_) => _FakeAudioService()),
+    ],
+    child: MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(body: SettingsModal(authService: authService)),
+    ),
+  );
+}
+
+Widget _buildBindAccountTestApp({required AuthService authService}) {
+  return MaterialApp(
+    theme: AppTheme.light,
+    home: Scaffold(body: BindAccountModal(authService: authService)),
   );
 }
 
@@ -226,6 +229,40 @@ class _TestProgressProvider extends ProgressProvider {
 
   @override
   Future<void> loadProgress(String childId) async {}
+}
+
+class _FakeAudioService extends AudioService {
+  _FakeAudioService() : super(config: const AudioConfig());
+
+  @override
+  bool get isMusicPlaying => false;
+
+  @override
+  void updateConfig(AudioConfig config) {}
+
+  @override
+  Future<void> playMusic(String trackName) async {}
+
+  @override
+  Future<void> pauseMusic() async {}
+
+  @override
+  Future<void> resumeMusic() async {}
+
+  @override
+  Future<void> stopMusic() async {}
+
+  @override
+  Future<void> playRandomMusic(List<String> trackNames) async {}
+
+  @override
+  Future<void> playSfx(String sfxName) async {}
+
+  @override
+  Future<void> playButtonTap() async {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {

@@ -1,7 +1,7 @@
 import 'package:aumazing/core/services/auth_service.dart';
+import 'package:aumazing/core/services/local_db_service.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/child_provider.dart';
-import 'package:aumazing/services/local_db_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,7 +35,10 @@ void main() {
 
 class _FakeLocalDbService extends LocalDbService {
   @override
-  Future<ChildProfile?> getChildProfile(String userId) async => null;
+  Future<List<ChildProfile>> getChildren({
+    String? userId,
+    bool includeDeleted = false,
+  }) async => const [];
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {
