@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
@@ -95,8 +97,19 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       );
 
       if (mounted) {
+        // Log audio state before navigation
+        final audioService = context.read<AudioService>();
+        debugPrint('[ChildProfileSetupScreen] Before navigation: isMusicPlaying=${audioService.isMusicPlaying}');
+
+        // Use PageRouteBuilder for smoother transition that won't interrupt audio
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const HomeScreen(),
+            transitionsBuilder: (_, animation, __, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
           (_) => false,
         );
       }
@@ -108,7 +121,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   }
 
   Future<void> _pickBirthDate() async {
-    _nameFocusNode.unfocus();
+    // Hide keyboard to prevent overflow issues
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 100));
+
     final today = DateTime.now();
     final initialDate =
         _selectedBirthDate ?? DateTime(today.year - 4, today.month, today.day);
@@ -119,6 +135,14 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       firstDate: firstDate,
       lastDate: today,
       helpText: 'Select birth date',
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: MediaQuery.of(context).padding.copyWith(bottom: 0),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (pickedDate != null && mounted) {

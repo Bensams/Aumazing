@@ -19,6 +19,34 @@ enum ChildSex {
   }
 }
 
+/// Avatar identifier to emoji mapping.
+/// Maps stored avatar strings (e.g., 'avatar_1') to display emojis.
+class AvatarMapper {
+  static const _avatarMap = {
+    'avatar_1': '🐻',
+    'avatar_2': '🐼',
+    'avatar_3': '🦊',
+    'avatar_4': '🐨',
+    'avatar_5': '🐸',
+    'avatar_6': '🦄',
+    'avatar_7': '🐙',
+    'avatar_8': '🐰',
+    '🐻': '🐻',
+    '🐼': '🐼',
+    '🦊': '🦊',
+    '🐨': '🐨',
+    '🐸': '🐸',
+    '🦄': '🦄',
+    '🐙': '🐙',
+    '🐰': '🐰',
+  };
+
+  static String toEmoji(String? avatarId) {
+    if (avatarId == null) return '🐻';
+    return _avatarMap[avatarId] ?? '🐻';
+  }
+}
+
 /// Represents a child's profile including learning preferences and
 /// gameplay comfort settings (music, vibration).
 class ChildProfile {
@@ -64,6 +92,9 @@ class ChildProfile {
 
   @Deprecated('Use displayName instead.')
   String get name => displayName;
+
+  /// Get the avatar as an emoji for display.
+  String get avatarEmoji => AvatarMapper.toEmoji(avatar);
 
   @Deprecated('Use ageYears() instead.')
   int get age => ageYears();
