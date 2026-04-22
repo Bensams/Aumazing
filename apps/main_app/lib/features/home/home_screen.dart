@@ -485,10 +485,12 @@ class _HomeScreenState extends State<HomeScreen> {
               child: AppPrimaryButton(
                 label:
                     assessProv.hasPreAssessment
-                        ? 'Retake Pre-Assessment'
+                        ? 'Assessment'
                         : 'Start Pre-Assessment',
                 onPressed: _startPreAssessment,
-                icon: Icons.play_circle_filled_rounded,
+                icon: assessProv.hasPreAssessment
+                    ? Icons.assessment_rounded
+                    : Icons.play_circle_filled_rounded,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -921,7 +923,8 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-/// Settings modal with music/vibration controls and account binding option
+/// Settings modal with music/vibration controls, sensory preferences,
+/// and account binding option.
 class SettingsModal extends StatelessWidget {
   const SettingsModal({super.key, required this.authService});
 
@@ -938,7 +941,7 @@ class SettingsModal extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: 320,
+          maxWidth: 360,
           maxHeight: availableHeight * 0.9,
         ),
         child: SingleChildScrollView(
@@ -977,7 +980,7 @@ class SettingsModal extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
 
               Text(
-                'Comfort Settings',
+                'Sensory & Comfort Settings',
                 style: AppTextStyles.labelLarge.copyWith(
                   color: AppColors.mutedForeground,
                 ),
@@ -988,6 +991,7 @@ class SettingsModal extends StatelessWidget {
                 builder: (context, childProv, _) {
                   return Column(
                     children: [
+                      // Music toggle
                       _buildSettingToggle(
                         Icons.music_note_rounded,
                         'Music',
@@ -1002,12 +1006,46 @@ class SettingsModal extends StatelessWidget {
                           }
                         },
                       ),
+                      // Music volume slider (only when music is enabled)
+                      if (childProv.musicEnabled)
+                        _buildSettingSlider(
+                          'Music Volume',
+                          childProv.musicVolume,
+                          (val) => childProv.updateComfortSettings(
+                            musicVolume: val,
+                          ),
+                        ),
+                      // SFX volume slider
+                      _buildSettingSlider(
+                        'Sound Effects',
+                        childProv.sfxVolume,
+                        (val) => childProv.updateComfortSettings(
+                          sfxVolume: val,
+                        ),
+                      ),
+                      // Vibration toggle
                       _buildSettingToggle(
                         Icons.vibration_rounded,
                         'Vibration',
                         childProv.vibrationEnabled,
                         (val) => childProv.updateComfortSettings(
                           vibrationEnabled: val,
+                        ),
+                      ),
+                      // Animation intensity slider
+                      _buildSettingSlider(
+                        'Animation Intensity',
+                        childProv.animationIntensity,
+                        (val) => childProv.updateComfortSettings(
+                          animationIntensity: val,
+                        ),
+                      ),
+                      // Prompt speed slider
+                      _buildSettingSlider(
+                        'Prompt Speed',
+                        childProv.promptSpeed,
+                        (val) => childProv.updateComfortSettings(
+                          promptSpeed: val,
                         ),
                       ),
                     ],
@@ -1066,6 +1104,39 @@ class SettingsModal extends StatelessWidget {
             value: value,
             onChanged: onChanged,
             activeTrackColor: AppColors.primaryPurple,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingSlider(
+    String label,
+    double value,
+    ValueChanged<double> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label, style: AppTextStyles.bodySmall),
+          ),
+          Expanded(
+            child: Slider(
+              value: value,
+              onChanged: onChanged,
+              activeColor: AppColors.primaryPurple,
+              inactiveColor: AppColors.lavenderLight,
+            ),
+          ),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '${(value * 100).round()}%',
+              style: AppTextStyles.bodySmall,
+            ),
           ),
         ],
       ),

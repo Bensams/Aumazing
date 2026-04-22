@@ -193,7 +193,12 @@ class _TestChildProvider extends ChildProvider {
   @override
   Future<void> updateComfortSettings({
     bool? musicEnabled,
+    double? musicVolume,
+    double? sfxVolume,
     bool? vibrationEnabled,
+    double? animationIntensity,
+    double? promptSpeed,
+    bool? sensoryPreferencesSet,
   }) async {
     _musicEnabled = musicEnabled ?? _musicEnabled;
     _vibrationEnabled = vibrationEnabled ?? _vibrationEnabled;

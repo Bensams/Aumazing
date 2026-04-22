@@ -1,12 +1,8 @@
 {
-  "mcpServers": {
+  "servers": {
     "supabase": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://mcp.supabase.com/mcp?project_ref=lzvvjlcfoyczikaszrbp"
-      ]
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=vxubfkhkmshtebnsnqqc"
     }
   }
 }
