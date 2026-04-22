@@ -7,6 +7,9 @@ import '../../model/support_profile.dart';
 
 /// Displays the pre-assessment results with a developmental profile
 /// and recommended settings.
+///
+/// Designed to fit on a single screen without scrolling, using a
+/// landscape-friendly two-column layout.
 class PreAssessmentResultScreen extends StatefulWidget {
   const PreAssessmentResultScreen({
     super.key,
@@ -45,68 +48,85 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             decoration:
                 const BoxDecoration(gradient: AppGradients.parentLavenderMint),
             child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-                  child: Column(
-                    children: [
-                      const Text('🎉', style: TextStyle(fontSize: 56)),
-                      const SizedBox(height: 8),
-
-                      Text(
-                        'Assessment Complete!',
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.primaryPurple,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Here\'s what we observed during the games.',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-
-                      _buildProfileCard(),
-                      const SizedBox(height: 16),
-                      _buildRecommendationsCard(),
-                      const SizedBox(height: 16),
-                      _buildGameScoresCard(),
-                      const SizedBox(height: 24),
-
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.butterLight.withAlpha(120),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '⚠️ This is not a clinical diagnosis. These observations '
-                          'are meant to help customize the learning experience.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.mutedForeground,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Column(
+                  children: [
+                    // ── Header row ──────────────────────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('🎉', style: TextStyle(fontSize: 28)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Assessment Complete!',
+                          style: AppTextStyles.headlineMedium.copyWith(
+                            color: AppColors.primaryPurple,
                           ),
-                          textAlign: TextAlign.center,
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Here\'s what we observed during the games.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
                       ),
-                      const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 8),
 
-                      SizedBox(
-                        width: 260,
-                        child: AppPrimaryButton(
-                          label: 'Continue to Home',
-                          icon: Icons.home_rounded,
-                          onPressed: () {
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
-                          },
-                        ),
+                    // ── Main content: two columns ──────────────────
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left column: Profile + Game Scores
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildProfileCard(),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildGameScoresCard(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Right column: Recommendations + Disclaimer + Button
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildRecommendationsCard(),
+                                ),
+                                const SizedBox(height: 6),
+                                _buildDisclaimer(),
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: AppPrimaryButton(
+                                    label: 'Continue to Home',
+                                    icon: Icons.home_rounded,
+                                    onPressed: () {
+                                      Navigator.of(context)
+                                          .popUntil((route) => route.isFirst);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -148,15 +168,15 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
         _recRow(Icons.record_voice_over_rounded, 'Prompt Style',
             profile.recommendedPromptStyle),
         _recRow(Icons.timer_rounded, 'Session Length',
-            '${profile.recommendedSessionMinutes} minutes'),
+            '${profile.recommendedSessionMinutes} min'),
         _recRow(Icons.repeat_rounded, 'Prompt Repetition',
             '${profile.promptRepetition}x'),
         if (profile.lowStimulationMode)
           _recRow(Icons.visibility_off_rounded, 'Mode',
-              'Low-stimulation recommended'),
+              'Low-stimulation'),
         if (profile.turnTakingPractice)
           _recRow(Icons.people_rounded, 'Practice',
-              'Extra turn-taking recommended'),
+              'Extra turn-taking'),
       ],
     );
   }
@@ -168,25 +188,30 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       children: results.map((r) {
         final pct = (r.accuracy * 100).round();
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
             children: [
+              Text(
+                _gameEmoji(r.gameId),
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   _gameName(r.gameId),
-                  style: AppTextStyles.bodyMedium,
+                  style: AppTextStyles.bodySmall,
                 ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: _scoreColor(r.accuracy).withAlpha(40),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   '$pct%',
-                  style: AppTextStyles.titleMedium.copyWith(
+                  style: AppTextStyles.labelLarge.copyWith(
                     color: _scoreColor(r.accuracy),
                   ),
                 ),
@@ -198,6 +223,24 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     );
   }
 
+  Widget _buildDisclaimer() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.butterLight.withAlpha(120),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '⚠️ Not a clinical diagnosis. Observations help customize learning.',
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.mutedForeground,
+          fontSize: 10,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
   Widget _card({
     required String title,
     required String emoji,
@@ -205,10 +248,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,12 +259,15 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
         children: [
           Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 20)),
-              const SizedBox(width: 8),
-              Text(title, style: AppTextStyles.titleLarge),
+              Text(emoji, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: AppTextStyles.titleMedium.copyWith(fontSize: 14),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           ...children,
         ],
       ),
@@ -230,24 +276,25 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
 
   Widget _profileRow(String area, String level) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           Expanded(
-            child: Text(area, style: AppTextStyles.bodyMedium),
+            child: Text(area, style: AppTextStyles.bodySmall),
           ),
           Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: _levelColor(level).withAlpha(40),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               level,
               style: AppTextStyles.bodySmall.copyWith(
                 color: _levelColor(level),
                 fontWeight: FontWeight.w600,
+                fontSize: 11,
               ),
             ),
           ),
@@ -258,18 +305,22 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
 
   Widget _recRow(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppColors.lavender),
-          const SizedBox(width: 8),
+          Icon(icon, size: 14, color: AppColors.lavender),
+          const SizedBox(width: 6),
           Expanded(
-            child: Text(label, style: AppTextStyles.bodySmall),
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+            ),
           ),
           Text(
             value,
             style: AppTextStyles.bodySmall.copyWith(
               fontWeight: FontWeight.w600,
+              fontSize: 11,
             ),
           ),
         ],
@@ -310,6 +361,21 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
         return 'Match It';
       default:
         return gameId;
+    }
+  }
+
+  String _gameEmoji(String gameId) {
+    switch (gameId) {
+      case 'copy_me':
+        return '🪞';
+      case 'do_what_i_say':
+        return '🗣️';
+      case 'my_turn_your_turn':
+        return '🔄';
+      case 'match_it':
+        return '🧩';
+      default:
+        return '🎮';
     }
   }
 }
