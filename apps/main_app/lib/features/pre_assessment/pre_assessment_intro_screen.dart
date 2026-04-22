@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../providers/child_provider.dart';
+import 'pre_assessment_progress_screen.dart';
 import 'sensory_preferences_screen.dart';
 
 /// Welcome screen for the pre-assessment flow.
 ///
 /// Uses a landscape-friendly two-column layout.
+/// If sensory preferences have already been set, the "Set up preferences"
+/// step is shown as completed and tapping "Let's Start!" skips directly
+/// to the assessment games.
 class PreAssessmentIntroScreen extends StatelessWidget {
   const PreAssessmentIntroScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final prefsAlreadySet = context.watch<ChildProvider>().sensoryPreferencesSet;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppGradients.parentLavenderMint),
@@ -69,7 +77,13 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _stepRow(Icons.settings_rounded, 'Set up preferences'),
+                            _stepRow(
+                              prefsAlreadySet
+                                  ? Icons.check_circle_rounded
+                                  : Icons.settings_rounded,
+                              'Set up preferences',
+                              completed: prefsAlreadySet,
+                            ),
                             const SizedBox(height: 6),
                             _stepRow(Icons.content_copy_rounded, 'Copy Me'),
                             const SizedBox(height: 6),
@@ -88,11 +102,23 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                           label: 'Let\'s Start!',
                           icon: Icons.play_arrow_rounded,
                           onPressed: () {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) => const SensoryPreferencesScreen(),
-                              ),
-                            );
+                            if (prefsAlreadySet) {
+                              // Skip sensory preferences — go straight to games
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const PreAssessmentProgressScreen(),
+                                ),
+                              );
+                            } else {
+                              // First time — show sensory preferences setup
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const SensoryPreferencesScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
                       ),
@@ -107,12 +133,30 @@ class PreAssessmentIntroScreen extends StatelessWidget {
     );
   }
 
-  Widget _stepRow(IconData icon, String text) {
+  Widget _stepRow(IconData icon, String text, {bool completed = false}) {
     return Row(
       children: [
-        Icon(icon, color: AppColors.lavender, size: 18),
+        Icon(
+          icon,
+          color: completed ? AppColors.mint : AppColors.lavender,
+          size: 18,
+        ),
         const SizedBox(width: 10),
-        Text(text, style: AppTextStyles.bodyMedium),
+        Text(
+          text,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: completed ? AppColors.mint : null,
+          ),
+        ),
+        if (completed) ...[
+          const SizedBox(width: 6),
+          Text(
+            '(saved)',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
       ],
     );
   }

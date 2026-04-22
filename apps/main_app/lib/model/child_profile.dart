@@ -58,7 +58,12 @@ class ChildProfile {
   final String avatar;
   final ChildSex? sex;
   final bool musicEnabled;
+  final double musicVolume;
+  final double sfxVolume;
   final bool vibrationEnabled;
+  final double animationIntensity;
+  final double promptSpeed;
+  final bool sensoryPreferencesSet;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -71,7 +76,12 @@ class ChildProfile {
     required this.avatar,
     this.sex,
     this.musicEnabled = true,
+    this.musicVolume = 0.5,
+    this.sfxVolume = 0.7,
     this.vibrationEnabled = true,
+    this.animationIntensity = 1.0,
+    this.promptSpeed = 1.0,
+    this.sensoryPreferencesSet = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -99,6 +109,16 @@ class ChildProfile {
   @Deprecated('Use ageYears() instead.')
   int get age => ageYears();
 
+  /// Returns sensory settings as a map (used by scoring/assessment).
+  Map<String, dynamic> get sensorySettingsMap => {
+        'music_enabled': musicEnabled,
+        'music_volume': musicVolume,
+        'sfx_volume': sfxVolume,
+        'vibration_enabled': vibrationEnabled,
+        'animation_intensity': animationIntensity,
+        'prompt_speed': promptSpeed,
+      };
+
   ChildProfile copyWith({
     String? displayName,
     DateTime? birthDate,
@@ -107,7 +127,12 @@ class ChildProfile {
     ChildSex? sex,
     bool clearSex = false,
     bool? musicEnabled,
+    double? musicVolume,
+    double? sfxVolume,
     bool? vibrationEnabled,
+    double? animationIntensity,
+    double? promptSpeed,
+    bool? sensoryPreferencesSet,
   }) {
     return ChildProfile(
       id: id,
@@ -123,7 +148,12 @@ class ChildProfile {
       avatar: avatar ?? this.avatar,
       sex: clearSex ? null : sex ?? this.sex,
       musicEnabled: musicEnabled ?? this.musicEnabled,
+      musicVolume: musicVolume ?? this.musicVolume,
+      sfxVolume: sfxVolume ?? this.sfxVolume,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
+      animationIntensity: animationIntensity ?? this.animationIntensity,
+      promptSpeed: promptSpeed ?? this.promptSpeed,
+      sensoryPreferencesSet: sensoryPreferencesSet ?? this.sensoryPreferencesSet,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
@@ -137,7 +167,12 @@ class ChildProfile {
     'avatar': avatar,
     'sex': sex?.value,
     'music_enabled': musicEnabled ? 1 : 0,
+    'music_volume': musicVolume,
+    'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled ? 1 : 0,
+    'animation_intensity': animationIntensity,
+    'prompt_speed': promptSpeed,
+    'sensory_preferences_set': sensoryPreferencesSet ? 1 : 0,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -169,7 +204,12 @@ class ChildProfile {
       avatar: (map['avatar'] as String?) ?? 'avatar_1',
       sex: ChildSex.fromString(map['sex'] as String?),
       musicEnabled: (map['music_enabled'] ?? 1) == 1,
+      musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
+      sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
       vibrationEnabled: (map['vibration_enabled'] ?? 1) == 1,
+      animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
+      promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
+      sensoryPreferencesSet: (map['sensory_preferences_set'] ?? 0) == 1,
       createdAt: DateTime.parse(
         (map['created_at'] ?? map['local_created_at']) as String,
       ),
@@ -193,7 +233,12 @@ class ChildProfile {
     avatar: (map['avatar'] as String?) ?? 'avatar_1',
     sex: ChildSex.fromString(map['sex'] as String?),
     musicEnabled: map['music_enabled'] as bool? ?? true,
+    musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
+    sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
     vibrationEnabled: map['vibration_enabled'] as bool? ?? true,
+    animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
+    promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
+    sensoryPreferencesSet: map['sensory_preferences_set'] as bool? ?? false,
     createdAt: DateTime.parse(map['created_at'] as String),
     updatedAt: DateTime.parse(map['updated_at'] as String),
   );
@@ -206,7 +251,12 @@ class ChildProfile {
     'avatar': avatar,
     'sex': sex?.value,
     'music_enabled': musicEnabled,
+    'music_volume': musicVolume,
+    'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled,
+    'animation_intensity': animationIntensity,
+    'prompt_speed': promptSpeed,
+    'sensory_preferences_set': sensoryPreferencesSet,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };

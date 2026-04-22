@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../providers/child_provider.dart';
 import 'pre_assessment_progress_screen.dart';
 
 /// Sensory preferences setup screen.
 ///
 /// Lets the caregiver/child configure music, vibration, and animation
-/// preferences before the assessment games begin.
+/// preferences. Settings are persisted to the child profile so they
+/// only need to be configured once (unless manually changed later).
 class SensoryPreferencesScreen extends StatefulWidget {
   const SensoryPreferencesScreen({super.key});
 
@@ -24,14 +27,43 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
   double _animationIntensity = 1.0;
   double _promptSpeed = 1.0; // 1.0 = normal
 
-  Map<String, dynamic> get _settings => {
-        'music_enabled': _musicEnabled,
-        'music_volume': _musicVolume,
-        'sfx_volume': _sfxVolume,
-        'vibration_enabled': _vibrationEnabled,
-        'animation_intensity': _animationIntensity,
-        'prompt_speed': _promptSpeed,
-      };
+  @override
+  void initState() {
+    super.initState();
+    // Load existing settings from the child profile if available
+    final childProv = context.read<ChildProvider>();
+    if (childProv.hasProfile) {
+      _musicEnabled = childProv.musicEnabled;
+      _musicVolume = childProv.musicVolume;
+      _sfxVolume = childProv.sfxVolume;
+      _vibrationEnabled = childProv.vibrationEnabled;
+      _animationIntensity = childProv.animationIntensity;
+      _promptSpeed = childProv.promptSpeed;
+    }
+  }
+
+  Future<void> _saveAndContinue() async {
+    // Persist settings to the child profile
+    final childProv = context.read<ChildProvider>();
+    await childProv.updateComfortSettings(
+      musicEnabled: _musicEnabled,
+      musicVolume: _musicVolume,
+      sfxVolume: _sfxVolume,
+      vibrationEnabled: _vibrationEnabled,
+      animationIntensity: _animationIntensity,
+      promptSpeed: _promptSpeed,
+      sensoryPreferencesSet: true,
+    );
+
+    if (!mounted) return;
+
+    // Navigate to the assessment games using the saved settings
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const PreAssessmentProgressScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,15 +104,7 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
                     child: AppPrimaryButton(
                       label: 'Start Games',
                       icon: Icons.play_arrow_rounded,
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => PreAssessmentProgressScreen(
-                              sensorySettings: _settings,
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: _saveAndContinue,
                     ),
                   ),
                 ],

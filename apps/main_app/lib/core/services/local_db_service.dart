@@ -90,7 +90,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 4; // Incremented for child sex/gender field
+  static const _dbVersion = 5; // Incremented for extended sensory settings
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
       'display_name IS NOT NULL AND birth_date IS NOT NULL';
@@ -137,7 +137,12 @@ class LocalDbService {
         avatar TEXT NOT NULL,
         sex TEXT,
         music_enabled INTEGER NOT NULL DEFAULT 1,
+        music_volume REAL NOT NULL DEFAULT 0.5,
+        sfx_volume REAL NOT NULL DEFAULT 0.7,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
+        animation_intensity REAL NOT NULL DEFAULT 1.0,
+        prompt_speed REAL NOT NULL DEFAULT 1.0,
+        sensory_preferences_set INTEGER NOT NULL DEFAULT 0,
         comfort_settings TEXT,
         $_syncColumns
       )
@@ -413,6 +418,26 @@ class LocalDbService {
         'ALTER TABLE ${LocalTables.children} ADD COLUMN sex TEXT',
       );
       debugPrint('[LocalDbService] Added sex column to children table');
+    }
+
+    if (oldVersion < 5) {
+      // Migration from v4 to v5: Add extended sensory settings columns
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN music_volume REAL NOT NULL DEFAULT 0.5',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN sfx_volume REAL NOT NULL DEFAULT 0.7',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN animation_intensity REAL NOT NULL DEFAULT 1.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN prompt_speed REAL NOT NULL DEFAULT 1.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN sensory_preferences_set INTEGER NOT NULL DEFAULT 0',
+      );
+      debugPrint('[LocalDbService] Added extended sensory settings columns to children table');
     }
   }
 

@@ -13,19 +13,18 @@ import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 
-import 'pre_assessment_result_screen.dart';
+import 'waiting_for_parent_screen.dart';
 
 /// Orchestrates the sequential pre-assessment game flow.
 ///
 /// Runs each game one-by-one, collects metrics, then navigates
-/// to the results screen with the generated support profile.
+/// to the waiting-for-parent screen where the parent can review
+/// the summary and proceed to the results.
+///
+/// Sensory settings are read from [ChildProvider] (persisted profile)
+/// rather than passed as a constructor parameter.
 class PreAssessmentProgressScreen extends StatefulWidget {
-  const PreAssessmentProgressScreen({
-    super.key,
-    required this.sensorySettings,
-  });
-
-  final Map<String, dynamic> sensorySettings;
+  const PreAssessmentProgressScreen({super.key});
 
   @override
   State<PreAssessmentProgressScreen> createState() =>
@@ -66,7 +65,7 @@ class _PreAssessmentProgressScreenState
     int totalResponseTimeMs, [
     Map<String, dynamic> extras = const {},
   ]) {
-    // Record session
+    // Record session in assessment provider (persists to local DB + syncs)
     context.read<AssessmentProvider>().recordGameSession(
           childId: _childId,
           gameId: gameId,
@@ -80,7 +79,7 @@ class _PreAssessmentProgressScreenState
           ),
         );
 
-    // Store result locally
+    // Store result locally for the summary
     _results.add(AssessmentResult(
       id: '${gameId}_${DateTime.now().millisecondsSinceEpoch}',
       childId: _childId,
@@ -103,18 +102,63 @@ class _PreAssessmentProgressScreenState
     }
   }
 
-  void _finishAssessment() {
+  /// Called when Match It completes (it records its own session).
+  /// We just need to store the result for the summary and advance.
+  void _onMatchItReturned() {
+    // Match It already recorded its session via AssessmentProvider.
+    // Check if match_it result already exists (avoid duplicates)
+    final hasMatchIt = _results.any((r) => r.gameId == 'match_it');
+    if (hasMatchIt) return;
+
+    // Match It records its own session, so we create a placeholder result.
+    // The actual data is in the assessment provider's sessions.
+    // We'll use default values since the real data is already persisted.
+    _results.add(AssessmentResult(
+      id: 'match_it_${DateTime.now().millisecondsSinceEpoch}',
+      childId: _childId,
+      type: 'pre',
+      gameId: 'match_it',
+      score: 0, // Will be overridden by finalize
+      totalItems: 0,
+      errorCount: 0,
+      avgResponseTimeMs: 0,
+      completedAt: DateTime.now(),
+    ));
+
+    // Now finish the assessment
+    _finishAssessment();
+  }
+
+  Future<void> _finishAssessment() async {
+    // Finalize the pre-assessment: creates assessment results in local DB
+    // and triggers Supabase sync via the sync service
+    final assessProv = context.read<AssessmentProvider>();
+    await assessProv.finalizePreAssessment(_childId);
+
+    // Reload to get the finalized results
+    await assessProv.loadAssessments(_childId);
+
+    if (!mounted) return;
+
     const scorer = ScoringService();
+
+    // Read sensory settings from the persisted child profile
+    final sensorySettings = context.read<ChildProvider>().sensorySettingsMap;
+
+    // Use the finalized results from the provider (which have proper data)
+    final finalResults = assessProv.preResults;
+
     final profile = scorer.generateProfile(
-      results: _results,
-      sensorySettings: widget.sensorySettings,
+      results: finalResults.isNotEmpty ? finalResults : _results,
+      sensorySettings: sensorySettings,
     );
 
+    // Navigate to the waiting-for-parent screen
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => PreAssessmentResultScreen(
+        builder: (_) => WaitingForParentScreen(
+          results: finalResults.isNotEmpty ? finalResults : _results,
           profile: profile,
-          results: _results,
         ),
       ),
     );
@@ -224,40 +268,29 @@ class _PreAssessmentProgressScreenState
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
       case 'match_it':
-        screen = MatchItScreen(
-          assessmentContext: 'pre_assessment',
-        );
-        // Match It uses its own recording, so we listen via a wrapper
-        screen = _MatchItWrapper(
-          onComplete: (score, total, errors, time) =>
-              _onGameComplete(gameId, score, total, errors, time),
-        );
+        // Match It handles its own session recording and completion dialog.
+        // We push it and listen for when it pops back.
+        Navigator.of(context)
+            .push(
+          MaterialPageRoute(
+            builder: (_) => const MatchItScreen(
+              assessmentContext: 'pre_assessment',
+            ),
+          ),
+        )
+            .then((_) {
+          // Match It has popped back — it already recorded its session
+          if (mounted) {
+            _onMatchItReturned();
+          }
+        });
+        return; // Don't fall through to the generic push below
       default:
         return;
     }
 
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => screen),
-    );
-  }
-}
-
-/// Wrapper for Match It that hooks into its completion callback.
-class _MatchItWrapper extends StatefulWidget {
-  const _MatchItWrapper({required this.onComplete});
-
-  final void Function(int score, int totalItems, int errorCount,
-      int totalResponseTimeMs) onComplete;
-
-  @override
-  State<_MatchItWrapper> createState() => _MatchItWrapperState();
-}
-
-class _MatchItWrapperState extends State<_MatchItWrapper> {
-  @override
-  Widget build(BuildContext context) {
-    return MatchItScreen(
-      assessmentContext: 'pre_assessment',
     );
   }
 }
