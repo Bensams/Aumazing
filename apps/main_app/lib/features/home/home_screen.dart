@@ -1144,6 +1144,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
+      // Ensure we have a valid Supabase session before binding.
+      // If user only has local guest mode (no Supabase session), sign in anonymously first.
+      if (widget.authService.currentUser == null) {
+        await widget.authService.signInAnonymously();
+      }
+
       // Convert anonymous/guest to permanent account
       await widget.authService.convertAnonymousToPermanent(
         email: _emailController.text.trim(),
@@ -1175,6 +1181,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
+      // Ensure we have a valid Supabase session before binding.
+      // If user only has local guest mode (no Supabase session), sign in anonymously first.
+      if (widget.authService.currentUser == null) {
+        await widget.authService.signInAnonymously();
+      }
+
       await widget.authService.bindAnonymousWithGoogle();
 
       if (mounted) {

@@ -276,8 +276,8 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   Stream<AuthState> get onAuthStateChange => const Stream.empty();
 
   @override
-  Future<AuthResponse> signInAnonymously() {
-    throw UnimplementedError();
+  Future<AuthResponse> signInAnonymously() async {
+    return AuthResponse(); // Return mock response for testing
   }
 
   @override

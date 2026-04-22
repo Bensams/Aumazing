@@ -54,17 +54,72 @@ import '../services/auth_service.dart';
 
 ## Architecture Patterns
 
+### Offline-First Data Pattern (MANDATORY)
+
+**All data operations MUST follow this flow:**
+
+```
+Local SQLite (always) → Sync to Supabase (when online + authenticated)
+```
+
+**Rules:**
+1. **Always write local first** - Never block UI on network calls
+2. **Mark as pending** - Use `markPending: true` for sync tracking
+3. **Sync only when:** Online AND authenticated (not guest mode)
+4. **Guest data** - Stored locally only until account is bound
+
+**Template for Repository Methods:**
+```dart
+Future<Entity> createEntity(EntityData data) async {
+  final now = DateTime.now();
+  final userId = _effectiveUserId; // guest or authenticated
+  
+  final entity = Entity(
+    id: _uuid.v4(),
+    userId: userId,
+    // ... other fields
+    createdAt: now,
+    updatedAt: now,
+  );
+  
+  // 1. ALWAYS save locally first
+  await _localDb.upsertEntity(
+    entity,
+    ownerId: userId,
+    markPending: true, // Critical: marks for sync
+  );
+  
+  // 2. Sync to cloud only if online AND authenticated
+  if (!_isGuestMode) {
+    _syncService.syncNow();
+  }
+  
+  return entity;
+}
+```
+
 ### Repository Pattern
 ```dart
 class ChildRepository {
   final LocalDbService _local;
   final SupabaseService _remote;
+  final SyncService _sync;
+  final AuthService _auth;
+  
+  String get _effectiveUserId => 
+      _auth.currentUser?.id ?? _auth.currentGuestId ?? 'guest';
+  
+  bool get _isGuestMode => _auth.currentUser == null;
   
   // Always write local first
   Future<Child> create(Child data) async {
     final withId = data.copyWith(id: generateUuid());
-    await _local.insert(withId);
-    await _sync.queueForSync(withId);
+    await _local.insert(withId, markPending: true);
+    
+    // Sync only if authenticated
+    if (!_isGuestMode) {
+      _sync.syncNow();
+    }
     return withId;
   }
 }

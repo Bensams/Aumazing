@@ -1,5 +1,24 @@
 import '../core/child_profile_policy.dart';
 
+/// Child's sex/gender selection.
+/// Values: male, female, preferNotToSay
+enum ChildSex {
+  male('male'),
+  female('female'),
+  preferNotToSay('prefer_not_to_say');
+
+  final String value;
+  const ChildSex(this.value);
+
+  static ChildSex? fromString(String? value) {
+    if (value == null) return null;
+    return ChildSex.values.firstWhere(
+      (e) => e.value == value,
+      orElse: () => ChildSex.preferNotToSay,
+    );
+  }
+}
+
 /// Represents a child's profile including learning preferences and
 /// gameplay comfort settings (music, vibration).
 class ChildProfile {
@@ -9,6 +28,7 @@ class ChildProfile {
   final DateTime? birthDate;
   final int? legacyAgeYears;
   final String avatar;
+  final ChildSex? sex;
   final bool musicEnabled;
   final bool vibrationEnabled;
   final DateTime createdAt;
@@ -21,6 +41,7 @@ class ChildProfile {
     required this.birthDate,
     this.legacyAgeYears,
     required this.avatar,
+    this.sex,
     this.musicEnabled = true,
     this.vibrationEnabled = true,
     required this.createdAt,
@@ -52,6 +73,8 @@ class ChildProfile {
     DateTime? birthDate,
     bool clearBirthDate = false,
     String? avatar,
+    ChildSex? sex,
+    bool clearSex = false,
     bool? musicEnabled,
     bool? vibrationEnabled,
   }) {
@@ -67,6 +90,7 @@ class ChildProfile {
               ? null
               : legacyAgeYears,
       avatar: avatar ?? this.avatar,
+      sex: clearSex ? null : sex ?? this.sex,
       musicEnabled: musicEnabled ?? this.musicEnabled,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
       createdAt: createdAt,
@@ -80,6 +104,7 @@ class ChildProfile {
     'display_name': displayName,
     'birth_date': birthDate?.toIso8601String().split('T').first,
     'avatar': avatar,
+    'sex': sex?.value,
     'music_enabled': musicEnabled ? 1 : 0,
     'vibration_enabled': vibrationEnabled ? 1 : 0,
     'created_at': createdAt.toIso8601String(),
@@ -111,6 +136,7 @@ class ChildProfile {
       birthDate: parsedBirthDate,
       legacyAgeYears: parsedLegacyAge,
       avatar: (map['avatar'] as String?) ?? 'avatar_1',
+      sex: ChildSex.fromString(map['sex'] as String?),
       musicEnabled: (map['music_enabled'] ?? 1) == 1,
       vibrationEnabled: (map['vibration_enabled'] ?? 1) == 1,
       createdAt: DateTime.parse(
@@ -134,6 +160,7 @@ class ChildProfile {
             : null,
     legacyAgeYears: null,
     avatar: (map['avatar'] as String?) ?? 'avatar_1',
+    sex: ChildSex.fromString(map['sex'] as String?),
     musicEnabled: map['music_enabled'] as bool? ?? true,
     vibrationEnabled: map['vibration_enabled'] as bool? ?? true,
     createdAt: DateTime.parse(map['created_at'] as String),
@@ -145,6 +172,10 @@ class ChildProfile {
     'parent_user_id': userId,
     'display_name': displayName,
     'birth_date': birthDate?.toIso8601String().split('T').first,
+    'avatar': avatar,
+    'sex': sex?.value,
+    'music_enabled': musicEnabled,
+    'vibration_enabled': vibrationEnabled,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
