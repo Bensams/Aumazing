@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/services/local_db_service.dart';
 import '../model/child_profile.dart';
-import '../services/local_db_service.dart';
 import '../core/services/auth_service.dart';
 
 /// Manages the current child profile and comfort settings.
@@ -32,10 +32,14 @@ class ChildProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final user = _authService.currentUser;
-      if (user == null) return;
+      final userId = _authService.effectiveUserId;
+      if (userId == null) {
+        _profile = null;
+        return;
+      }
 
-      _profile = await _localDb.getChildProfile(user.id);
+      final children = await _localDb.getChildren(userId: userId);
+      _profile = children.isEmpty ? null : children.first;
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
@@ -56,7 +60,7 @@ class ChildProvider extends ChangeNotifier {
       vibrationEnabled: vibrationEnabled,
     );
 
-    await _localDb.upsertChildProfile(_profile!);
+    await _localDb.upsertChild(_profile!);
     notifyListeners();
   }
 
@@ -74,7 +78,7 @@ class ChildProvider extends ChangeNotifier {
       avatar: avatar,
     );
 
-    await _localDb.upsertChildProfile(_profile!);
+    await _localDb.upsertChild(_profile!);
     notifyListeners();
   }
 

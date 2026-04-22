@@ -35,7 +35,8 @@ class SupabaseService {
       final response = await _client
           .from(RemoteTables.children)
           .select()
-          .eq('parent_user_id', userId);
+          .eq('parent_user_id', userId)
+          .order('updated_at', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[SupabaseService] getChildren error: $e');

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
@@ -9,8 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
-import '../../home/home_screen.dart';
-import 'child_profile_setup_screen.dart';
+import '../loading_screen.dart';
 import 'forgot_password_screen.dart';
 import 'otp_verification_screen.dart';
 
@@ -176,12 +174,8 @@ class _LoginScreenState extends State<LoginScreen>
     await _authService.refreshSession();
     if (!mounted) return;
 
-    final destination = _authService.hasChildProfile
-        ? const HomeScreen()
-        : const ChildProfileSetupScreen();
-
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => destination),
+      MaterialPageRoute(builder: (_) => const LoadingScreen()),
       (_) => false,
     );
   }
