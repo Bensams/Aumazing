@@ -11,6 +11,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../games/match_it/match_it_screen.dart';
+import '../pre_assessment/assessment_dashboard_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
 import '../splash/auth/login_screen.dart';
@@ -124,9 +125,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startPreAssessment() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const PreAssessmentIntroScreen()));
+    final hasAssessment = context.read<AssessmentProvider>().hasPreAssessment;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => hasAssessment
+            ? const AssessmentDashboardScreen()
+            : const PreAssessmentIntroScreen(),
+      ),
+    );
   }
 
   void _enterChildMode() {
