@@ -5,12 +5,14 @@ import 'package:shared_audio/shared_audio.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../core/child_profile_policy.dart';
 import '../../core/services/auth_service.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
+import '../splash/auth/child_profile_setup_screen.dart';
 import '../splash/auth/login_screen.dart';
 
 /// Parent Dashboard — the main hub after login.
@@ -53,8 +55,24 @@ class _HomeScreenState extends State<HomeScreen> {
     await childProvider.loadProfile();
 
     if (!mounted) return;
-    final childId = childProvider.profile?.id;
-    if (childId == null) return;
+    final profile = childProvider.profile;
+    if (profile == null ||
+        validateBirthDate(profile.birthDate) !=
+            ChildBirthDateValidation.valid) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder:
+              (_) => const ChildProfileSetupScreen(
+                initialErrorMessage:
+                    'Aumazing currently supports children ages 2 to 6.',
+              ),
+        ),
+        (_) => false,
+      );
+      return;
+    }
+
+    final childId = profile.id;
 
     context.read<AssessmentProvider>().loadAssessments(childId);
     context.read<ProgressProvider>().loadProgress(childId);
@@ -155,11 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<ChildProvider>(
       builder: (context, childProv, _) {
         final profile = childProv.profile;
-        final meta = _authService.childProfile;
-
-        final name = profile?.name ?? meta?['name'] ?? 'Child';
-        final age = profile?.age ?? meta?['age'] ?? '?';
-        final avatar = profile?.avatar ?? meta?['avatar'] ?? '🐻';
+        final name = profile?.displayName ?? 'Child';
+        final age = profile?.birthDate != null ? profile!.ageYears() : '?';
+        final avatar = profile?.avatar ?? '🐻';
         final email = _authService.currentUser?.email ?? '';
 
         return Row(
@@ -269,11 +285,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<ChildProvider>(
       builder: (context, childProv, _) {
         final profile = childProv.profile;
-        final meta = _authService.childProfile;
-
-        final name = profile?.name ?? meta?['name'] ?? 'Child';
-        final age = profile?.age ?? meta?['age'] ?? '?';
-        final avatar = profile?.avatar ?? meta?['avatar'] ?? '🐻';
+        final name = profile?.displayName ?? 'Child';
+        final age = profile?.birthDate != null ? profile!.ageYears() : '?';
+        final avatar = profile?.avatar ?? '🐻';
 
         return Container(
           decoration: BoxDecoration(

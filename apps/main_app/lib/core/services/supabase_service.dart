@@ -21,12 +21,7 @@ class SupabaseService {
   /// Upsert a child record to Supabase
   Future<void> upsertChild(Map<String, dynamic> data, String id) async {
     try {
-      await _client
-          .from(RemoteTables.children)
-          .upsert(
-            data,
-            onConflict: 'id',
-          );
+      await _client.from(RemoteTables.children).upsert(data, onConflict: 'id');
       debugPrint('[SupabaseService] Child upserted: $id');
     } catch (e) {
       debugPrint('[SupabaseService] upsertChild error: $e');
@@ -40,7 +35,8 @@ class SupabaseService {
       final response = await _client
           .from(RemoteTables.children)
           .select()
-          .eq('user_id', userId);
+          .eq('parent_user_id', userId)
+          .order('updated_at', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[SupabaseService] getChildren error: $e');
@@ -103,9 +99,7 @@ class SupabaseService {
     }
   }
 
-  Future<void> upsertGameRoundsBatch(
-    List<Map<String, dynamic>> records,
-  ) async {
+  Future<void> upsertGameRoundsBatch(List<Map<String, dynamic>> records) async {
     if (records.isEmpty) return;
     try {
       await _client
@@ -213,9 +207,8 @@ class SupabaseService {
   /// Fetch all learning modules for caching
   Future<List<Map<String, dynamic>>> fetchLearningModules() async {
     try {
-      final response = await _client
-          .from(RemoteTables.learningModules)
-          .select();
+      final response =
+          await _client.from(RemoteTables.learningModules).select();
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[SupabaseService] fetchLearningModules error: $e');
@@ -226,9 +219,7 @@ class SupabaseService {
   /// Fetch all module paths for caching
   Future<List<Map<String, dynamic>>> fetchModulePaths() async {
     try {
-      final response = await _client
-          .from(RemoteTables.modulePaths)
-          .select();
+      final response = await _client.from(RemoteTables.modulePaths).select();
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[SupabaseService] fetchModulePaths error: $e');
@@ -239,9 +230,8 @@ class SupabaseService {
   /// Fetch all module path items for caching
   Future<List<Map<String, dynamic>>> fetchModulePathItems() async {
     try {
-      final response = await _client
-          .from(RemoteTables.modulePathItems)
-          .select();
+      final response =
+          await _client.from(RemoteTables.modulePathItems).select();
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[SupabaseService] fetchModulePathItems error: $e');
@@ -252,16 +242,14 @@ class SupabaseService {
   // ─── Conflict Resolution Helpers ───────────────────────────────────────
 
   /// Get remote record timestamp for conflict resolution
-  Future<DateTime?> getRemoteUpdatedAt(
-    String table,
-    String id,
-  ) async {
+  Future<DateTime?> getRemoteUpdatedAt(String table, String id) async {
     try {
-      final response = await _client
-          .from(table)
-          .select('updated_at')
-          .eq('id', id)
-          .maybeSingle();
+      final response =
+          await _client
+              .from(table)
+              .select('updated_at')
+              .eq('id', id)
+              .maybeSingle();
       if (response == null) return null;
       return DateTime.parse(response['updated_at'] as String);
     } catch (e) {
@@ -277,9 +265,7 @@ class SupabaseService {
     try {
       await _client
           .from(table)
-          .update({
-            'deleted_at': DateTime.now().toIso8601String(),
-          })
+          .update({'deleted_at': DateTime.now().toIso8601String()})
           .eq('id', id);
       debugPrint('[SupabaseService] Soft deleted $table:$id');
     } catch (e) {

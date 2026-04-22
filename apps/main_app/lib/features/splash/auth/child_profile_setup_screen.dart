@@ -3,11 +3,19 @@ import 'package:flutter/services.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../../core/services/auth_service.dart';
+import '../../../core/child_profile_policy.dart';
+import '../../../core/repositories/child_repository.dart';
 import '../../home/home_screen.dart';
 
 class ChildProfileSetupScreen extends StatefulWidget {
-  const ChildProfileSetupScreen({super.key});
+  const ChildProfileSetupScreen({
+    super.key,
+    this.initialErrorMessage,
+    ChildRepository? childRepository,
+  }) : _childRepository = childRepository;
+
+  final String? initialErrorMessage;
+  final ChildRepository? _childRepository;
 
   @override
   State<ChildProfileSetupScreen> createState() =>
@@ -15,12 +23,10 @@ class ChildProfileSetupScreen extends StatefulWidget {
 }
 
 class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
-  final _authService = AuthService();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _nameFocusNode = FocusNode();
-
-  int? _selectedAge;
+  DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
   bool _isLoading = false;
 
@@ -46,6 +52,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final message = widget.initialErrorMessage;
+      if (message != null && message.isNotEmpty) {
+        _showError(message);
+      }
+    });
   }
 
   @override
@@ -58,17 +70,27 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedAge == null) {
-      _showError('Please select your child\'s age.');
+    final validation = validateBirthDate(_selectedBirthDate);
+    if (validation == ChildBirthDateValidation.missing) {
+      _showError('Please select your child\'s birth date.');
+      return;
+    }
+    if (validation == ChildBirthDateValidation.futureDate) {
+      _showError('Birth date cannot be in the future.');
+      return;
+    }
+    if (validation != ChildBirthDateValidation.valid) {
+      _showError('Aumazing currently supports children ages 2 to 6.');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      await _authService.saveChildProfile(
-        name: _nameController.text.trim(),
-        age: _selectedAge!,
+      final repository = widget._childRepository ?? childRepository;
+      await repository.createChild(
+        displayName: _nameController.text.trim(),
+        birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
       );
 
@@ -82,6 +104,25 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       _showError('Failed to save profile. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickBirthDate() async {
+    _nameFocusNode.unfocus();
+    final today = DateTime.now();
+    final initialDate =
+        _selectedBirthDate ?? DateTime(today.year - 4, today.month, today.day);
+    final firstDate = DateTime(today.year - 10, today.month, today.day);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isAfter(today) ? today : initialDate,
+      firstDate: firstDate,
+      lastDate: today,
+      helpText: 'Select birth date',
+    );
+
+    if (pickedDate != null && mounted) {
+      setState(() => _selectedBirthDate = pickedDate);
     }
   }
 
@@ -152,7 +193,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               const SizedBox(height: AppSpacing.lg),
               _buildForm(),
               const SizedBox(height: AppSpacing.xl),
-              _buildAgeSelector(),
+              _buildBirthDateSelector(),
             ],
           ),
         ),
@@ -187,7 +228,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         const SizedBox(height: AppSpacing.xl),
         _buildForm(),
         const SizedBox(height: AppSpacing.xl),
-        _buildAgeSelector(),
+        _buildBirthDateSelector(),
         const SizedBox(height: AppSpacing.xl),
         _buildAvatarPicker(),
         const SizedBox(height: AppSpacing.xl),
@@ -308,65 +349,84 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     );
   }
 
-  Widget _buildAgeSelector() {
+  Widget _buildBirthDateSelector() {
+    final selectedBirthDate = _selectedBirthDate;
+    final validation = validateBirthDate(selectedBirthDate);
+    final ageLabel =
+        selectedBirthDate == null
+            ? 'Select birth date'
+            : 'Age ${calculateAgeYears(selectedBirthDate)}';
+    final helperText =
+        validation == ChildBirthDateValidation.futureDate
+            ? 'Birth date cannot be in the future.'
+            : validation == ChildBirthDateValidation.tooYoung ||
+                validation == ChildBirthDateValidation.tooOld
+            ? 'Aumazing currently supports children ages 2 to 6.'
+            : selectedBirthDate != null
+            ? '${selectedBirthDate.month}/${selectedBirthDate.day}/${selectedBirthDate.year}'
+            : 'Choose a date between ages 2 and 6.';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Age',
+          'Birth Date',
           style: AppTextStyles.titleMedium.copyWith(
             color: AppColors.foreground,
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: List.generate(5, (index) {
-            final age = index + 2;
-            final isSelected = _selectedAge == age;
-
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: index < 4 ? 8 : 0),
-                child: Material(
-                  color: isSelected
-                      ? AppColors.primaryPurple
-                      : AppColors.inputFill,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: _isLoading
-                        ? null
-                        : () {
-                            _nameFocusNode.unfocus();
-                            setState(() => _selectedAge = age);
-                          },
-                    child: Container(
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primaryPurple
-                              : AppColors.border,
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        '$age',
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: isSelected
-                              ? AppColors.white
-                              : AppColors.foreground,
-                          fontWeight: FontWeight.w700,
-                        ),
+        Material(
+          color: AppColors.inputFill,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            key: const Key('birth-date-button'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: _isLoading ? null : _pickBirthDate,
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    color: AppColors.mutedForeground,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      ageLabel,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color:
+                            selectedBirthDate == null
+                                ? AppColors.mutedForeground
+                                : AppColors.foreground,
                       ),
                     ),
                   ),
-                ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.mutedForeground,
+                  ),
+                ],
               ),
-            );
-          }),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          helperText,
+          style: AppTextStyles.bodySmall.copyWith(
+            color:
+                validation == ChildBirthDateValidation.valid ||
+                        validation == ChildBirthDateValidation.missing
+                    ? AppColors.mutedForeground
+                    : AppColors.destructiveSoftRed,
+          ),
         ),
       ],
     );

@@ -7,6 +7,10 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/child_bootstrap_service.dart';
+import '../../core/services/connectivity_service.dart';
+import '../../core/services/local_db_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../home/home_screen.dart';
 import 'auth/child_profile_setup_screen.dart';
 import 'auth/login_screen.dart';
@@ -18,13 +22,23 @@ import 'auth/login_screen.dart';
 /// - Audio files (bg_music.ogg, bg_music1.ogg, ui_tap.wav)
 /// - Other critical assets
 class LoadingScreen extends StatefulWidget {
-  const LoadingScreen({super.key});
+  const LoadingScreen({
+    super.key,
+    ChildBootstrapService? bootstrapService,
+    AuthService? authService,
+  }) : _bootstrapService = bootstrapService,
+       _authService = authService;
+
+  final ChildBootstrapService? _bootstrapService;
+  final AuthService? _authService;
 
   @override
   State<LoadingScreen> createState() => _LoadingScreenState();
 }
 
 class _LoadingScreenState extends State<LoadingScreen> {
+  late final AuthService _authService;
+  late final ChildBootstrapService _bootstrapService;
   VideoPlayerController? _videoController;
   bool _videoInitialized = false;
 
@@ -40,6 +54,15 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   void initState() {
     super.initState();
+    _authService = widget._authService ?? AuthService();
+    _bootstrapService =
+        widget._bootstrapService ??
+        ChildBootstrapService(
+          authService: _authService,
+          connectivityService: connectivityService,
+          supabaseService: supabaseService,
+          localDbService: localDbService,
+        );
 
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -167,18 +190,16 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _navigateBasedOnAuth() async {
-    final authService = AuthService();
+    final result = await _bootstrapService.bootstrap();
+    if (!mounted) return;
 
-    Widget destination;
-    if (!authService.isLoggedIn) {
-      destination = const LoginScreen();
-    } else {
-      await authService.refreshSession();
-      if (!mounted) return;
-      destination = authService.hasChildProfile
-          ? const HomeScreen()
-          : const ChildProfileSetupScreen();
-    }
+    final destination = switch (result.destination) {
+      BootstrapDestination.login => const LoginScreen(),
+      BootstrapDestination.childProfileSetup => ChildProfileSetupScreen(
+        initialErrorMessage: result.errorMessage,
+      ),
+      BootstrapDestination.home => const HomeScreen(),
+    };
 
     // Use fade transition to avoid audio/video interruptions
     Navigator.of(context).pushReplacement(
