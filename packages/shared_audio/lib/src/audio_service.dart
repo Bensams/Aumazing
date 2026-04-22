@@ -5,6 +5,32 @@ import 'package:flutter/foundation.dart';
 
 import 'audio_config.dart';
 
+/// Audio context for SFX that doesn't request audio focus (allows mixing with music)
+final _sfxAudioContext = AudioContext(
+  android: AudioContextAndroid(
+    audioFocus: AndroidAudioFocus.none,
+    contentType: AndroidContentType.sonification,
+    usageType: AndroidUsageType.game,
+  ),
+  iOS: AudioContextIOS(
+    category: AVAudioSessionCategory.playback,
+    options: {AVAudioSessionOptions.mixWithOthers},
+  ),
+);
+
+/// Audio context for background music
+final _musicAudioContext = AudioContext(
+  android: AudioContextAndroid(
+    audioFocus: AndroidAudioFocus.gain,
+    contentType: AndroidContentType.music,
+    usageType: AndroidUsageType.game,
+  ),
+  iOS: AudioContextIOS(
+    category: AVAudioSessionCategory.playback,
+    options: {AVAudioSessionOptions.mixWithOthers},
+  ),
+);
+
 /// Centralized audio service for music and sound-effect playback.
 ///
 /// Uses [audioplayers] under the hood. Supports looping background music
@@ -30,7 +56,7 @@ class AudioService {
 
   AudioService({AudioConfig? config})
       : _config = config ?? AudioConfig.defaults {
-    _musicPlayer = AudioPlayer();
+    _musicPlayer = AudioPlayer()..setAudioContext(_musicAudioContext);
     // Override the default 'assets/' prefix so we can supply the full
     // Flutter asset-bundle path for package-based assets.
     _musicPlayer.audioCache = AudioCache(prefix: '');
@@ -170,7 +196,7 @@ class AudioService {
     }
     // Create a new one (pool grows as needed, capped at 8)
     if (_sfxPlayers.length < 8) {
-      final player = AudioPlayer();
+      final player = AudioPlayer()..setAudioContext(_sfxAudioContext);
       // Use empty prefix so we can supply full package asset paths.
       player.audioCache = AudioCache(prefix: '');
       _sfxPlayers.add(player);

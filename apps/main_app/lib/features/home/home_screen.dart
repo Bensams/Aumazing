@@ -37,11 +37,43 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _authService = widget.authService ?? AuthService();
     lockParentLandscape();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        _loadData();
+        await _loadData();
+        if (mounted) {
+          await _verifyMusicPlaying();
+        }
       }
     });
+  }
+
+  Future<void> _verifyMusicPlaying() async {
+    try {
+      // Longer delay to ensure navigation transition is fully complete
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+
+      final audioService = context.read<AudioService>();
+      final childProvider = context.read<ChildProvider>();
+      debugPrint('[HomeScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}, musicEnabled=${childProvider.musicEnabled}');
+
+      if (!audioService.isMusicPlaying && childProvider.musicEnabled) {
+        debugPrint('[HomeScreen] Music not playing, trying to resume...');
+        await audioService.resumeMusic();
+
+        // Double-check if music is playing after resume attempt
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (!audioService.isMusicPlaying) {
+          debugPrint('[HomeScreen] Resume failed, starting fresh track...');
+          await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
+        }
+      } else {
+        debugPrint('[HomeScreen] Music already playing or disabled');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[HomeScreen] Error checking music: $e');
+      debugPrint('[HomeScreen] Stack trace: $stackTrace');
+    }
   }
 
   @override
@@ -175,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final profile = childProv.profile;
         final name = profile?.displayName ?? 'Child';
         final age = profile?.birthDate != null ? profile!.ageYears() : '?';
-        final avatar = profile?.avatar ?? '🐻';
+        final avatar = profile?.avatarEmoji ?? '🐻';
         final email = _authService.currentUser?.email ?? '';
 
         return Row(
@@ -287,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final profile = childProv.profile;
         final name = profile?.displayName ?? 'Child';
         final age = profile?.birthDate != null ? profile!.ageYears() : '?';
-        final avatar = profile?.avatar ?? '🐻';
+        final avatar = profile?.avatarEmoji ?? '🐻';
 
         return Container(
           decoration: BoxDecoration(
