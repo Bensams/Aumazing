@@ -7,8 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
-import '../../home/home_screen.dart';
-import 'child_profile_setup_screen.dart';
+import '../loading_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String email;
@@ -99,16 +98,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       await _authService.verifyOTP(email: widget.email, token: code);
       if (mounted) {
-        // Refresh so that userMetadata is up-to-date before checking.
         await _authService.refreshSession();
         if (!mounted) return;
 
-        final destination = _authService.hasChildProfile
-            ? const HomeScreen()
-            : const ChildProfileSetupScreen();
-
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => destination),
+          MaterialPageRoute(builder: (_) => const LoadingScreen()),
           (_) => false,
         );
       }

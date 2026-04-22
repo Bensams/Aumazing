@@ -254,8 +254,6 @@ class _MatchItWrapper extends StatefulWidget {
 }
 
 class _MatchItWrapperState extends State<_MatchItWrapper> {
-  final bool _reported = false;
-
   @override
   Widget build(BuildContext context) {
     return MatchItScreen(

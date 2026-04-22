@@ -8,6 +8,73 @@ import '../../model/gameplay_session.dart';
 import '../../model/assessment_result.dart';
 import '../../model/module_progress.dart';
 
+Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
+  await db.execute(
+    'ALTER TABLE ${LocalTables.children} RENAME TO ${LocalTables.children}_legacy_v2',
+  );
+  await db.execute('''
+    CREATE TABLE ${LocalTables.children} (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      display_name TEXT NOT NULL,
+      birth_date TEXT,
+      avatar TEXT NOT NULL,
+      music_enabled INTEGER NOT NULL DEFAULT 1,
+      vibration_enabled INTEGER NOT NULL DEFAULT 1,
+      comfort_settings TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'pending',
+      last_synced_at TEXT,
+      deleted_at TEXT,
+      updated_at TEXT NOT NULL,
+      local_created_at TEXT NOT NULL,
+      owner_id TEXT
+    )
+  ''');
+  await db.execute('''
+    INSERT INTO ${LocalTables.children} (
+      id,
+      user_id,
+      display_name,
+      birth_date,
+      avatar,
+      music_enabled,
+      vibration_enabled,
+      comfort_settings,
+      sync_status,
+      last_synced_at,
+      deleted_at,
+      updated_at,
+      local_created_at,
+      owner_id
+    )
+    SELECT
+      id,
+      user_id,
+      name,
+      NULL,
+      avatar,
+      music_enabled,
+      vibration_enabled,
+      comfort_settings,
+      sync_status,
+      last_synced_at,
+      deleted_at,
+      updated_at,
+      local_created_at,
+      owner_id
+    FROM ${LocalTables.children}_legacy_v2
+  ''');
+  await db.execute('DROP TABLE ${LocalTables.children}_legacy_v2');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_children_user_id
+    ON ${LocalTables.children}(user_id)
+  ''');
+  await db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_children_sync
+    ON ${LocalTables.children}(sync_status)
+  ''');
+}
+
 /// Enhanced SQLite database service for offline-first data.
 ///
 /// All tables include sync metadata fields:
@@ -22,7 +89,10 @@ import '../../model/module_progress.dart';
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 2; // Incremented for sync fields
+  static const _dbVersion = 3; // Incremented for child birth-date storage
+  static const _readableChildWhere = 'display_name IS NOT NULL';
+  static const _syncableChildWhere =
+      'display_name IS NOT NULL AND birth_date IS NOT NULL';
 
   static Database? _database;
 
@@ -61,8 +131,8 @@ class LocalDbService {
       CREATE TABLE ${LocalTables.children} (
         id TEXT PRIMARY KEY,
         user_id TEXT,
-        name TEXT NOT NULL,
-        age INTEGER NOT NULL,
+        display_name TEXT NOT NULL,
+        birth_date TEXT,
         avatar TEXT NOT NULL,
         music_enabled INTEGER NOT NULL DEFAULT 1,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
@@ -326,7 +396,13 @@ class LocalDbService {
     if (oldVersion < 2) {
       // Migration from v1 to v2: Add sync columns to existing tables
       // Note: In production, you'd migrate existing data carefully
-      debugPrint('[LocalDbService] Upgrading from v$oldVersion to v$newVersion');
+      debugPrint(
+        '[LocalDbService] Upgrading from v$oldVersion to v$newVersion',
+      );
+    }
+
+    if (oldVersion < 3) {
+      await migrateChildrenTableToBirthDateSchema(db);
     }
   }
 
@@ -342,12 +418,25 @@ class LocalDbService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getPendingChildRecords() async {
+    final db = await database;
+    return db.query(
+      LocalTables.children,
+      where:
+          "sync_status IN ('pending', 'failed') AND deleted_at IS NULL AND $_syncableChildWhere",
+      orderBy: 'local_created_at ASC',
+    );
+  }
+
   /// Get all soft-deleted records that need deletion propagated
   Future<List<Map<String, dynamic>>> getDeletedRecords(String table) async {
     final db = await database;
+    final childDeletionGuard =
+        table == LocalTables.children ? ' AND $_syncableChildWhere' : '';
     return db.query(
       table,
-      where: "deleted_at IS NOT NULL AND sync_status != 'synced'",
+      where:
+          "deleted_at IS NOT NULL AND sync_status != 'synced'$childDeletionGuard",
     );
   }
 
@@ -363,11 +452,7 @@ class LocalDbService {
   }
 
   /// Mark a record as synced
-  Future<void> markSynced(
-    String table,
-    String id, {
-    DateTime? syncedAt,
-  }) async {
+  Future<void> markSynced(String table, String id, {DateTime? syncedAt}) async {
     final db = await database;
     await db.update(
       table,
@@ -381,11 +466,7 @@ class LocalDbService {
   }
 
   /// Mark a record as failed
-  Future<void> markSyncFailed(
-    String table,
-    String id, {
-    String? error,
-  }) async {
+  Future<void> markSyncFailed(String table, String id, {String? error}) async {
     final db = await database;
     await db.update(
       table,
@@ -416,15 +497,15 @@ class LocalDbService {
   /// Hard delete a record after successful remote deletion
   Future<void> hardDelete(String table, String id) async {
     final db = await database;
-    await db.delete(
-      table,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete(table, where: 'id = ?', whereArgs: [id]);
   }
 
   /// Update owner_id for guest-created records after auth
-  Future<void> updateOwnerId(String table, String oldOwnerId, String newOwnerId) async {
+  Future<void> updateOwnerId(
+    String table,
+    String oldOwnerId,
+    String newOwnerId,
+  ) async {
     final db = await database;
     await db.update(
       table,
@@ -437,7 +518,9 @@ class LocalDbService {
       where: 'owner_id = ? OR user_id = ?',
       whereArgs: [oldOwnerId, oldOwnerId],
     );
-    debugPrint('[LocalDbService] Updated owner_id in $table: $oldOwnerId -> $newOwnerId');
+    debugPrint(
+      '[LocalDbService] Updated owner_id in $table: $oldOwnerId -> $newOwnerId',
+    );
   }
 
   /// Get count of pending records across all tables
@@ -449,6 +532,7 @@ class LocalDbService {
       final result = await db.rawQuery('''
         SELECT COUNT(*) as count FROM $table
         WHERE sync_status IN ('pending', 'failed') AND deleted_at IS NULL
+        ${table == LocalTables.children ? 'AND $_syncableChildWhere' : ''}
       ''');
       counts[table] = Sqflite.firstIntValue(result) ?? 0;
     }
@@ -467,9 +551,11 @@ class LocalDbService {
     final now = DateTime.now();
 
     final map = profile.toMap();
+    map.remove('created_at');
     map['local_created_at'] = profile.createdAt.toIso8601String();
     map['updated_at'] = now.toIso8601String();
-    map['sync_status'] = markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
+    map['sync_status'] =
+        markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId ?? profile.userId;
 
     await db.insert(
@@ -479,19 +565,24 @@ class LocalDbService {
     );
   }
 
-  Future<List<ChildProfile>> getChildren({String? userId, bool includeDeleted = false}) async {
+  Future<List<ChildProfile>> getChildren({
+    String? userId,
+    bool includeDeleted = false,
+  }) async {
     final db = await database;
     String? where;
     List<Object?>? whereArgs;
 
     if (userId != null) {
-      where = 'user_id = ?';
+      where = 'user_id = ? AND $_readableChildWhere';
       whereArgs = [userId];
       if (!includeDeleted) {
         where += ' AND deleted_at IS NULL';
       }
     } else if (!includeDeleted) {
-      where = 'deleted_at IS NULL';
+      where = 'deleted_at IS NULL AND $_readableChildWhere';
+    } else {
+      where = _readableChildWhere;
     }
 
     final rows = await db.query(
@@ -508,7 +599,7 @@ class LocalDbService {
     final db = await database;
     final rows = await db.query(
       LocalTables.children,
-      where: 'id = ? AND deleted_at IS NULL',
+      where: 'id = ? AND deleted_at IS NULL AND $_readableChildWhere',
       whereArgs: [id],
       limit: 1,
     );
@@ -535,7 +626,8 @@ class LocalDbService {
     map.remove('synced');
     map['local_created_at'] = session.startedAt.toIso8601String();
     map['updated_at'] = now.toIso8601String();
-    map['sync_status'] = markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
+    map['sync_status'] =
+        markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
     await db.insert(
@@ -601,7 +693,8 @@ class LocalDbService {
     final map = result.toMap();
     map['local_created_at'] = result.completedAt.toIso8601String();
     map['updated_at'] = now.toIso8601String();
-    map['sync_status'] = markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
+    map['sync_status'] =
+        markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
     await db.insert(
@@ -651,7 +744,8 @@ class LocalDbService {
     // Ensure we have the required sync fields
     map['local_created_at'] = (progress.startedAt ?? now).toIso8601String();
     map['updated_at'] = now.toIso8601String();
-    map['sync_status'] = markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
+    map['sync_status'] =
+        markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
 
     await db.insert(
       'module_progress',
@@ -765,19 +859,48 @@ class LocalDbService {
   // ─── Guest Mode: Backfill Owner IDs ───────────────────────────────────
 
   /// Update all records created as guest to associate with authenticated user
-  Future<void> backfillGuestData(String guestId, String authenticatedUserId) async {
-    debugPrint('[LocalDbService] Backfilling guest data: $guestId -> $authenticatedUserId');
+  Future<void> backfillGuestData(
+    String guestId,
+    String authenticatedUserId,
+  ) async {
+    debugPrint(
+      '[LocalDbService] Backfilling guest data: $guestId -> $authenticatedUserId',
+    );
 
     // Update all tables that have owner_id
     await updateOwnerId(LocalTables.children, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.assessmentRuns, guestId, authenticatedUserId);
+    await updateOwnerId(
+      LocalTables.assessmentRuns,
+      guestId,
+      authenticatedUserId,
+    );
     await updateOwnerId(LocalTables.gameSessions, guestId, authenticatedUserId);
     await updateOwnerId(LocalTables.gameRounds, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.sessionEvents, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.caregiverQuestionnaires, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.assessmentResults, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.moduleRecommendations, guestId, authenticatedUserId);
-    await updateOwnerId(LocalTables.assessmentComparisons, guestId, authenticatedUserId);
+    await updateOwnerId(
+      LocalTables.sessionEvents,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.caregiverQuestionnaires,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.assessmentResults,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.moduleRecommendations,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.assessmentComparisons,
+      guestId,
+      authenticatedUserId,
+    );
 
     debugPrint('[LocalDbService] Guest data backfill complete');
   }
