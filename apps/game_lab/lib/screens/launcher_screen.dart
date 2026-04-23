@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import 'game_flow_screen.dart';
 import 'game_test_screen.dart';
+import 'reward_tester_screen.dart';
 
 /// The launcher screen for Game Lab.
 ///
@@ -61,6 +63,28 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               color: AppColors.mutedForeground,
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: _launchGameFlow,
+                            icon: const Icon(Icons.playlist_play, size: 18),
+                            label: const Text('Test Game Flow with Rewards'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF9B82C4),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: _launchRewardTester,
+                            icon: const Icon(Icons.card_giftcard, size: 18),
+                            label: const Text('Test Rewards'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6B8BC4),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -90,6 +114,25 @@ class _LauncherScreenState extends State<LauncherScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _launchGameFlow() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GameFlowScreen(
+          config: _config,
+          gameIds: ['copy_me', 'do_what_i_say', 'my_turn_your_turn'],
+        ),
+      ),
+    );
+  }
+
+  void _launchRewardTester() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const RewardTesterScreen(),
       ),
     );
   }

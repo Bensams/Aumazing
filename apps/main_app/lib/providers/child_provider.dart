@@ -31,6 +31,10 @@ class ChildProvider extends ChangeNotifier {
   double get promptSpeed => _profile?.promptSpeed ?? 1.0;
   bool get sensoryPreferencesSet => _profile?.sensoryPreferencesSet ?? false;
 
+  // Reward preference shortcuts
+  RewardPreference get rewardPreference => _profile?.rewardPreference ?? RewardPreference.bubbles;
+  bool get useRandomReward => _profile?.useRandomReward ?? false;
+
   /// Returns the sensory settings as a map for use in scoring/assessment.
   Map<String, dynamic> get sensorySettingsMap =>
       _profile?.sensorySettingsMap ??
@@ -106,6 +110,22 @@ class ChildProvider extends ChangeNotifier {
     );
 
     await _localDb.upsertChild(_profile!);
+    notifyListeners();
+  }
+
+  /// Updates reward preferences and persists them.
+  Future<void> updateRewardPreferences({
+    RewardPreference? rewardPreference,
+    bool? useRandomReward,
+  }) async {
+    if (_profile == null) return;
+
+    _profile = _profile!.copyWith(
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
+    );
+
+    await _localDb.upsertChild(_profile!, markPending: true);
     notifyListeners();
   }
 

@@ -90,7 +90,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 5; // Incremented for extended sensory settings
+  static const _dbVersion = 6; // Incremented for reward preferences
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
       'display_name IS NOT NULL AND birth_date IS NOT NULL';
@@ -143,6 +143,8 @@ class LocalDbService {
         animation_intensity REAL NOT NULL DEFAULT 1.0,
         prompt_speed REAL NOT NULL DEFAULT 1.0,
         sensory_preferences_set INTEGER NOT NULL DEFAULT 0,
+        reward_preference TEXT NOT NULL DEFAULT 'bubbles',
+        use_random_reward INTEGER NOT NULL DEFAULT 0,
         comfort_settings TEXT,
         $_syncColumns
       )
@@ -438,6 +440,17 @@ class LocalDbService {
         'ALTER TABLE ${LocalTables.children} ADD COLUMN sensory_preferences_set INTEGER NOT NULL DEFAULT 0',
       );
       debugPrint('[LocalDbService] Added extended sensory settings columns to children table');
+    }
+
+    if (oldVersion < 6) {
+      // Migration from v5 to v6: Add reward preference columns
+      await db.execute(
+        "ALTER TABLE ${LocalTables.children} ADD COLUMN reward_preference TEXT NOT NULL DEFAULT 'bubbles'",
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.children} ADD COLUMN use_random_reward INTEGER NOT NULL DEFAULT 0',
+      );
+      debugPrint('[LocalDbService] Added reward preference columns to children table');
     }
   }
 

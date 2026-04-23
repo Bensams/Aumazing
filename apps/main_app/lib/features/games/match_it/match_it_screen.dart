@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../home/home_screen.dart';
 
 /// Child game screen: "Match It"
@@ -16,10 +17,20 @@ import '../../home/home_screen.dart';
 /// - Flutter: ChildModeTopBar (progress dots + parent lock) and VoiceOverPromptBubble
 /// - Flame: GameWidget hosting MatchItGame for the interactive game area
 class MatchItScreen extends StatefulWidget {
-  const MatchItScreen({super.key, this.assessmentContext = 'practice'});
+  const MatchItScreen({
+    super.key,
+    this.assessmentContext = 'practice',
+    this.onComplete,
+  });
 
   /// 'pre_assessment', 'post_assessment', or 'practice'
   final String assessmentContext;
+  final void Function(
+    int score,
+    int totalItems,
+    int errorCount,
+    int totalResponseTimeMs,
+  )? onComplete;
 
   @override
   State<MatchItScreen> createState() => _MatchItScreenState();
@@ -89,10 +100,36 @@ class _MatchItScreenState extends State<MatchItScreen> {
       startedAt: _sessionStartTime,
     );
 
-    // Show completion feedback
-    if (mounted) {
-      _showCompletionDialog(score, totalItems, errorCount);
+    // If onComplete callback is provided (game flow mode), call it instead of showing built-in reward
+    if (widget.onComplete != null) {
+      widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
+      return;
     }
+
+    // Show reward effect first, then completion dialog (normal mode)
+    if (mounted) {
+      _showRewardThenCompletion(score, totalItems, errorCount);
+    }
+  }
+
+  void _showRewardThenCompletion(int score, int totalItems, int errorCount) {
+    final childProvider = context.read<ChildProvider>();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: RewardOverlay.forChild(
+          profile: childProvider.profile!,
+          onComplete: () {
+            Navigator.of(dialogContext).pop(); // Close reward overlay
+            _showCompletionDialog(score, totalItems, errorCount);
+          },
+        ),
+      ),
+    );
   }
 
   void _showCompletionDialog(int score, int totalItems, int errorCount) {

@@ -9,6 +9,8 @@
 
 **Milestone**: M1 - Foundation & UI System (In Progress)
 
+**Active Phase**: 01.0 - Reward Preferences System
+
 ### Completed
 - [x] Flutter project setup (multi-platform)
 - [x] Monorepo structure with shared packages
@@ -21,11 +23,20 @@
 - [x] Supabase integration
 - [x] SQLite local database
 - [x] Sync service for offline-first
+- [x] Phase 01.0 PLAN.md created
 
 ### In Progress
+- [x] Phase 01.0: Reward Preferences System (completed - testing pending)
 - [ ] Parent dashboard
 - [ ] AI-driven assessment personalization
 - [ ] Progress tracking analytics
+
+### Recently Completed
+- [x] Reward Preferences System with 4 interactive reward types (balloons, fireworks, bubbles, candy)
+- [x] Child profile setup with reward selection
+- [x] Parent settings with reward preference controls
+- [x] Reward effects integrated into all game completion flows
+- [x] Flutter analyze issues resolved
 
 ### Not Started
 - [ ] AI/ML integration

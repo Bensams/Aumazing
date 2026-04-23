@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../model/child_profile.dart';
-export '../../model/child_profile.dart' show ChildSex;
+export '../../model/child_profile.dart' show ChildSex, RewardPreference;
 import '../services/auth_service.dart';
 import '../services/local_db_service.dart';
 import '../services/sync_service.dart';
@@ -51,6 +51,8 @@ class ChildRepository {
     ChildSex? sex,
     bool musicEnabled = true,
     bool vibrationEnabled = true,
+    RewardPreference rewardPreference = RewardPreference.bubbles,
+    bool useRandomReward = false,
   }) async {
     final now = DateTime.now();
     final userId = _effectiveUserId;
@@ -64,6 +66,8 @@ class ChildRepository {
       sex: sex,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
       createdAt: now,
       updatedAt: now,
     );
@@ -106,6 +110,8 @@ class ChildRepository {
     ChildSex? sex,
     bool? musicEnabled,
     bool? vibrationEnabled,
+    RewardPreference? rewardPreference,
+    bool? useRandomReward,
   }) async {
     final updated = child.copyWith(
       displayName: displayName,
@@ -114,6 +120,8 @@ class ChildRepository {
       sex: sex,
       musicEnabled: musicEnabled,
       vibrationEnabled: vibrationEnabled,
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
     );
 
     await _localDb.upsertChild(
@@ -122,6 +130,32 @@ class ChildRepository {
     );
 
     debugPrint('[ChildRepository] Child updated: ${child.id}');
+
+    if (!_isGuestMode) {
+      _syncService.syncNow();
+    }
+
+    return updated;
+  }
+
+  /// Update reward preference for a child
+  Future<ChildProfile> updateRewardPreference(
+    ChildProfile child, {
+    required RewardPreference rewardPreference,
+    required bool useRandomReward,
+  }) async {
+    final updated = child.copyWith(
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
+    );
+
+    await _localDb.upsertChild(
+      updated,
+      markPending: true,
+    );
+
+    debugPrint('[ChildRepository] Reward preference updated for child: ${child.id} '
+        '(preference: ${rewardPreference.value}, random: $useRandomReward)');
 
     if (!_isGuestMode) {
       _syncService.syncNow();

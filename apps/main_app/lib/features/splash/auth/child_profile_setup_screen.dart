@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../../core/child_profile_policy.dart';
 import '../../../core/repositories/child_repository.dart';
 import '../../home/home_screen.dart';
+import '../../rewards/widgets/reward_preference_selector.dart';
 
 class ChildProfileSetupScreen extends StatefulWidget {
   const ChildProfileSetupScreen({
@@ -31,6 +32,13 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
   bool _isLoading = false;
+
+  // Setup step tracking
+  int _currentStep = 0; // 0: basic info, 1: reward preference
+  
+  // Reward preference state
+  RewardPreference _selectedRewardPreference = RewardPreference.bubbles;
+  bool _useRandomReward = false;
 
   static const _avatars = [
     _AvatarOption('🐻', 'Bear', Color(0xFFE8DEFA)),
@@ -71,7 +79,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Only validate form if we're still on step 0 (form is mounted)
+    // On step 1, validation already happened in _goToNextStep()
+    if (_currentStep == 0 && !(_formKey.currentState?.validate() ?? false)) return;
+    
     final validation = validateBirthDate(_selectedBirthDate);
     if (validation == ChildBirthDateValidation.missing) {
       _showError('Please select your child\'s birth date.');
@@ -94,6 +105,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         displayName: _nameController.text.trim(),
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
+        rewardPreference: _selectedRewardPreference,
+        useRandomReward: _useRandomReward,
       );
 
       if (mounted) {
@@ -122,15 +135,17 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
   Future<void> _pickBirthDate() async {
     // Hide keyboard to prevent overflow issues
-    FocusScope.of(context).unfocus();
+    final currentContext = context;
+    FocusScope.of(currentContext).unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
 
     final today = DateTime.now();
     final initialDate =
         _selectedBirthDate ?? DateTime(today.year - 4, today.month, today.day);
     final firstDate = DateTime(today.year - 10, today.month, today.day);
+    if (!mounted) return;
     final pickedDate = await showDatePicker(
-      context: context,
+      context: currentContext,
       initialDate: initialDate.isAfter(today) ? today : initialDate,
       firstDate: firstDate,
       lastDate: today,
@@ -205,6 +220,58 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   /// Side-by-side in landscape: name + age on the left, avatars + CTA on the
   /// right so taps are not stacked in a short vertical band.
   Widget _buildLandscapeTwoColumn() {
+    if (_currentStep == 1) {
+      // Reward step in landscape
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildRewardStepHeader(),
+                const SizedBox(height: AppSpacing.md),
+                TextButton(
+                  onPressed: () => setState(() => _currentStep = 0),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            flex: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RewardPreferenceSelector(
+                  selectedPreference: _selectedRewardPreference,
+                  useRandomReward: _useRandomReward,
+                  onPreferenceChanged: (preference) {
+                    setState(() => _selectedRewardPreference = preference);
+                  },
+                  onRandomChanged: (useRandom) {
+                    setState(() => _useRandomReward = useRandom);
+                  },
+                  showSkipOption: true,
+                  onSkip: _skipRewardPreference,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppPrimaryButton(
+                  label: 'Continue to Dashboard',
+                  onPressed: _isLoading ? null : _saveProfile,
+                  isLoading: _isLoading,
+                  autofocus: false,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -231,8 +298,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               _buildAvatarPicker(),
               const SizedBox(height: AppSpacing.xl),
               AppPrimaryButton(
-                label: 'Continue to Dashboard',
-                onPressed: _isLoading ? null : _saveProfile,
+                label: 'Continue',
+                onPressed: _isLoading ? null : _goToNextStep,
                 isLoading: _isLoading,
                 autofocus: false,
               ),
@@ -243,26 +310,114 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     );
   }
 
+  void _goToNextStep() {
+    if (!_formKey.currentState!.validate()) return;
+    final validation = validateBirthDate(_selectedBirthDate);
+    if (validation == ChildBirthDateValidation.missing) {
+      _showError('Please select your child\'s birth date.');
+      return;
+    }
+    if (validation == ChildBirthDateValidation.futureDate) {
+      _showError('Birth date cannot be in the future.');
+      return;
+    }
+    if (validation != ChildBirthDateValidation.valid) {
+      _showError('Aumazing currently supports children ages 2 to 6.');
+      return;
+    }
+
+    setState(() => _currentStep = 1);
+  }
+
+  void _skipRewardPreference() {
+    // Use default (bubbles) and save
+    _saveProfile();
+  }
+
   Widget _buildPortraitColumn() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.md),
-        _buildHeader(compact: false),
-        const SizedBox(height: AppSpacing.xl),
-        _buildForm(),
-        const SizedBox(height: AppSpacing.xl),
-        _buildBirthDateSelector(),
-        const SizedBox(height: AppSpacing.xl),
-        _buildAvatarPicker(),
-        const SizedBox(height: AppSpacing.xl),
-        AppPrimaryButton(
-          label: 'Continue to Dashboard',
-          onPressed: _isLoading ? null : _saveProfile,
-          isLoading: _isLoading,
-          autofocus: false,
-        ),
+        if (_currentStep == 0) ...[
+          _buildHeader(compact: false),
+          const SizedBox(height: AppSpacing.xl),
+          _buildForm(),
+          const SizedBox(height: AppSpacing.xl),
+          _buildBirthDateSelector(),
+          const SizedBox(height: AppSpacing.xl),
+          _buildAvatarPicker(),
+          const SizedBox(height: AppSpacing.xl),
+          AppPrimaryButton(
+            label: 'Continue',
+            onPressed: _isLoading ? null : _goToNextStep,
+            isLoading: _isLoading,
+            autofocus: false,
+          ),
+        ] else ...[
+          _buildRewardStepHeader(),
+          const SizedBox(height: AppSpacing.lg),
+          RewardPreferenceSelector(
+            selectedPreference: _selectedRewardPreference,
+            useRandomReward: _useRandomReward,
+            onPreferenceChanged: (preference) {
+              setState(() => _selectedRewardPreference = preference);
+            },
+            onRandomChanged: (useRandom) {
+              setState(() => _useRandomReward = useRandom);
+            },
+            showSkipOption: true,
+            onSkip: _skipRewardPreference,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppPrimaryButton(
+            label: 'Continue to Dashboard',
+            onPressed: _isLoading ? null : _saveProfile,
+            isLoading: _isLoading,
+            autofocus: false,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton(
+            onPressed: () => setState(() => _currentStep = 0),
+            child: const Text('Go Back'),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxl),
+      ],
+    );
+  }
+
+  Widget _buildRewardStepHeader() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: AppColors.lavenderLight,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.celebration_rounded,
+            size: 48,
+            color: AppColors.primaryPurple,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Almost Done!',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.headlineLarge.copyWith(
+            color: AppColors.primaryPurple,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Choose how to celebrate when your child completes games',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
       ],
     );
   }
