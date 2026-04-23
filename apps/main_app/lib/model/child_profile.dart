@@ -1,5 +1,32 @@
 import '../core/child_profile_policy.dart';
 
+/// Reward preference options for celebration effects.
+/// Values: balloons, fireworks, bubbles, candy, random
+enum RewardPreference {
+  balloons('balloons'),
+  fireworks('fireworks'),
+  bubbles('bubbles'),
+  candy('candy'),
+  random('random');
+
+  final String value;
+  const RewardPreference(this.value);
+
+  static RewardPreference fromString(String? value) {
+    if (value == null) return bubbles;
+    return RewardPreference.values.firstWhere(
+      (e) => e.value == value,
+      orElse: () => bubbles,
+    );
+  }
+
+  /// Get a random reward type (excluding 'random' itself)
+  static RewardPreference get randomType {
+    final values = [balloons, fireworks, bubbles, candy];
+    return values[DateTime.now().millisecond % values.length];
+  }
+}
+
 /// Child's sex/gender selection.
 /// Values: male, female, preferNotToSay
 enum ChildSex {
@@ -64,6 +91,8 @@ class ChildProfile {
   final double animationIntensity;
   final double promptSpeed;
   final bool sensoryPreferencesSet;
+  final RewardPreference rewardPreference;
+  final bool useRandomReward;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -82,6 +111,8 @@ class ChildProfile {
     this.animationIntensity = 1.0,
     this.promptSpeed = 1.0,
     this.sensoryPreferencesSet = false,
+    this.rewardPreference = RewardPreference.bubbles,
+    this.useRandomReward = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -133,6 +164,8 @@ class ChildProfile {
     double? animationIntensity,
     double? promptSpeed,
     bool? sensoryPreferencesSet,
+    RewardPreference? rewardPreference,
+    bool? useRandomReward,
   }) {
     return ChildProfile(
       id: id,
@@ -154,6 +187,8 @@ class ChildProfile {
       animationIntensity: animationIntensity ?? this.animationIntensity,
       promptSpeed: promptSpeed ?? this.promptSpeed,
       sensoryPreferencesSet: sensoryPreferencesSet ?? this.sensoryPreferencesSet,
+      rewardPreference: rewardPreference ?? this.rewardPreference,
+      useRandomReward: useRandomReward ?? this.useRandomReward,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
@@ -173,6 +208,8 @@ class ChildProfile {
     'animation_intensity': animationIntensity,
     'prompt_speed': promptSpeed,
     'sensory_preferences_set': sensoryPreferencesSet ? 1 : 0,
+    'reward_preference': rewardPreference.value,
+    'use_random_reward': useRandomReward ? 1 : 0,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -210,6 +247,8 @@ class ChildProfile {
       animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
       promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
       sensoryPreferencesSet: (map['sensory_preferences_set'] ?? 0) == 1,
+      rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
+      useRandomReward: (map['use_random_reward'] ?? 0) == 1,
       createdAt: DateTime.parse(
         (map['created_at'] ?? map['local_created_at']) as String,
       ),
@@ -239,6 +278,8 @@ class ChildProfile {
     animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
     promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
     sensoryPreferencesSet: map['sensory_preferences_set'] as bool? ?? false,
+    rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
+    useRandomReward: map['use_random_reward'] as bool? ?? false,
     createdAt: DateTime.parse(map['created_at'] as String),
     updatedAt: DateTime.parse(map['updated_at'] as String),
   );
@@ -257,6 +298,8 @@ class ChildProfile {
     'animation_intensity': animationIntensity,
     'prompt_speed': promptSpeed,
     'sensory_preferences_set': sensoryPreferencesSet,
+    'reward_preference': rewardPreference.value,
+    'use_random_reward': useRandomReward,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };

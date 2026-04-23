@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,6 +14,7 @@ import '../games/copy_me/copy_me_screen.dart';
 import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/match_it/match_it_screen.dart';
+import '../rewards/widgets/reward_overlay.dart';
 
 import 'waiting_for_parent_screen.dart';
 
@@ -94,39 +97,43 @@ class _PreAssessmentProgressScreenState
       rawMetrics: extras,
     ));
 
-    // Advance or finish
+    // Show reward overlay before advancing to next game
+    _showRewardThenAdvance();
+  }
+
+  void _showRewardThenAdvance() {
+    final childProvider = context.read<ChildProvider>();
+    if (childProvider.profile == null) {
+      // No profile, just advance without reward
+      _advanceToNextGame();
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: RewardOverlay.forChild(
+          profile: childProvider.profile!,
+          onComplete: () {
+            Navigator.of(dialogContext).pop(); // Close reward overlay
+            Navigator.of(context).pop(); // Pop the game screen underneath
+            _advanceToNextGame(); // Move to next game lobby
+          },
+          showContinueButton: false, // Auto-proceed after 8 seconds, no button needed
+        ),
+      ),
+    );
+  }
+
+  void _advanceToNextGame() {
     if (_currentGameIndex < _gameOrder.length - 1) {
       setState(() => _currentGameIndex++);
     } else {
       _finishAssessment();
     }
-  }
-
-  /// Called when Match It completes (it records its own session).
-  /// We just need to store the result for the summary and advance.
-  void _onMatchItReturned() {
-    // Match It already recorded its session via AssessmentProvider.
-    // Check if match_it result already exists (avoid duplicates)
-    final hasMatchIt = _results.any((r) => r.gameId == 'match_it');
-    if (hasMatchIt) return;
-
-    // Match It records its own session, so we create a placeholder result.
-    // The actual data is in the assessment provider's sessions.
-    // We'll use default values since the real data is already persisted.
-    _results.add(AssessmentResult(
-      id: 'match_it_${DateTime.now().millisecondsSinceEpoch}',
-      childId: _childId,
-      type: 'pre',
-      gameId: 'match_it',
-      score: 0, // Will be overridden by finalize
-      totalItems: 0,
-      errorCount: 0,
-      avgResponseTimeMs: 0,
-      completedAt: DateTime.now(),
-    ));
-
-    // Now finish the assessment
-    _finishAssessment();
   }
 
   Future<void> _finishAssessment() async {
@@ -170,6 +177,7 @@ class _PreAssessmentProgressScreenState
   }
 
   /// Shows a brief transition screen before launching each game.
+  /// Auto-starts after 7 seconds if user doesn't press Play.
   Widget _buildTransitionScreen() {
     final gameName = _gameNames[_currentGameIndex];
     final emoji = _gameEmojis[_currentGameIndex];
@@ -181,67 +189,97 @@ class _PreAssessmentProgressScreenState
             const BoxDecoration(gradient: AppGradients.parentLavenderMint),
         child: SafeArea(
           child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Progress
-                Text(
-                  'Game ${_currentGameIndex + 1} of ${_gameOrder.length}',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: 8),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                int countdown = 7;
 
-                // Progress dots
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(_gameOrder.length, (i) {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: i < _currentGameIndex
-                            ? AppColors.mint
-                            : i == _currentGameIndex
-                                ? AppColors.primaryPurple
-                                : AppColors.lavenderLight,
+                // Countdown timer - updates every second
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+                  if (!mounted || ModalRoute.of(context)?.isCurrent != true) {
+                    timer.cancel();
+                    return;
+                  }
+                  if (countdown > 1) {
+                    setState(() => countdown--);
+                  } else {
+                    timer.cancel();
+                    _launchGame(gameId);
+                  }
+                });
+
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                    // Progress
+                    Text(
+                      'Game ${_currentGameIndex + 1} of ${_gameOrder.length}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
                       ),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 8),
 
-                Text(emoji, style: const TextStyle(fontSize: 56)),
-                const SizedBox(height: 12),
+                    // Progress dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_gameOrder.length, (i) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i < _currentGameIndex
+                                ? AppColors.mint
+                                : i == _currentGameIndex
+                                    ? AppColors.primaryPurple
+                                    : AppColors.lavenderLight,
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 24),
 
-                Text(
-                  gameName,
-                  style: AppTextStyles.headlineLarge.copyWith(
-                    color: AppColors.primaryPurple,
-                  ),
-                ),
-                const SizedBox(height: 8),
+                    Text(emoji, style: const TextStyle(fontSize: 56)),
+                    const SizedBox(height: 12),
 
-                Text(
-                  'Ready to play?',
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: 32),
+                    Text(
+                      gameName,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: AppColors.primaryPurple,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
-                SizedBox(
-                  width: 220,
-                  child: AppPrimaryButton(
-                    label: 'Play!',
-                    icon: Icons.play_arrow_rounded,
-                    onPressed: () => _launchGame(gameId),
-                  ),
+                    Text(
+                      'Ready to play?',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    SizedBox(
+                      width: 220,
+                      child: AppPrimaryButton(
+                        label: 'Play!',
+                        icon: Icons.play_arrow_rounded,
+                        onPressed: () => _launchGame(gameId),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Starting in $countdown...',
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.primaryPurple,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              );
+              },
             ),
           ),
         ),
@@ -268,23 +306,21 @@ class _PreAssessmentProgressScreenState
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
       case 'match_it':
-        // Match It handles its own session recording and completion dialog.
-        // We push it and listen for when it pops back.
+        // Match It handles its own session recording.
+        // Pass onComplete to prevent it from showing built-in reward (pre-assessment handles rewards).
         Navigator.of(context)
             .push(
           MaterialPageRoute(
-            builder: (_) => const MatchItScreen(
+            builder: (_) => MatchItScreen(
               assessmentContext: 'pre_assessment',
+              onComplete: (score, total, errors, time) {
+                // Call _onGameComplete to handle reward and advancement
+                _onGameComplete(gameId, score, total, errors, time);
+              },
             ),
           ),
-        )
-            .then((_) {
-          // Match It has popped back — it already recorded its session
-          if (mounted) {
-            _onMatchItReturned();
-          }
-        });
-        return; // Don't fall through to the generic push below
+        );
+        return; // Match It handles its own navigation, don't fall through
       default:
         return;
     }

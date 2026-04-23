@@ -10,6 +10,7 @@ import '../../core/services/auth_service.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../rewards/widgets/reward_preference_selector.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../pre_assessment/assessment_dashboard_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
@@ -1052,6 +1053,65 @@ class SettingsModal extends StatelessWidget {
                         childProv.promptSpeed,
                         (val) => childProv.updateComfortSettings(
                           promptSpeed: val,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+
+              // Reward Preferences Section
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Reward Celebration',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+
+              Consumer<ChildProvider>(
+                builder: (context, childProv, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Reward type dropdown
+                      RewardPreferenceDropdown(
+                        selectedPreference: childProv.rewardPreference,
+                        useRandomReward: childProv.useRandomReward,
+                        onPreferenceChanged: (preference) {
+                          childProv.updateRewardPreferences(
+                            rewardPreference: preference,
+                            useRandomReward: false,
+                          );
+                        },
+                        onRandomChanged: (useRandom) {
+                          childProv.updateRewardPreferences(
+                            useRandomReward: useRandom,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      // Random toggle
+                      _buildSettingToggle(
+                        Icons.shuffle_rounded,
+                        'Use Random Rewards',
+                        childProv.useRandomReward,
+                        (val) => childProv.updateRewardPreferences(
+                          useRandomReward: val,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32),
+                        child: Text(
+                          'A different celebration every time!',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ),
                     ],

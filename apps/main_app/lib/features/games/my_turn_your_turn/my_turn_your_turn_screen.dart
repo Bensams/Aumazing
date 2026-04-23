@@ -6,6 +6,7 @@ import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../providers/child_provider.dart';
+import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../home/home_screen.dart';
 
 /// Screen wrapper for the My Turn Your Turn game during pre-assessment.
@@ -35,6 +36,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
   int _currentStep = 0;
   bool _gameComplete = false;
   bool _isBuddyTurn = true;
+  String _voiceOverText = 'Wait for Buddy… 🐻';
   late final MyTurnYourTurnGame _game;
 
   @override
@@ -46,8 +48,18 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       childId: childId,
       onStepChanged: (step) => setState(() => _currentStep = step),
       onTurnChanged: (isBuddy) {
-        if (mounted) setState(() => _isBuddyTurn = isBuddy);
+        if (mounted) {
+          setState(() {
+            _isBuddyTurn = isBuddy;
+            // Update voice over text based on whose turn it is
+            _voiceOverText = isBuddy 
+                ? 'Wait for Buddy… 🐻' 
+                : 'Your turn! Tap a spot! ⭐';
+          });
+        }
       },
+      // TODO: Add onBuddyTurnError callback to game_core MyTurnYourTurnGame
+      // for error detection when child taps during buddy's turn
       onGameComplete: ({
         required int score,
         required int totalItems,
@@ -57,17 +69,43 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         GameSessionMetrics? analytics,
       }) {
         setState(() => _gameComplete = true);
-        widget.onComplete?.call(
-          score,
-          totalItems,
-          errorCount,
-          totalResponseTimeMs,
-          extras,
-        );
-        Future.delayed(const Duration(milliseconds: 2500), () {
-          if (mounted) Navigator.of(context).pop();
-        });
+        
+        // If onComplete is provided (pre-assessment mode), call it directly
+        // Reward overlay will show on top of this game screen
+        if (widget.onComplete != null) {
+          widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs, extras);
+          return;
+        }
+        
+        // Normal mode: Show reward for practice mode, just delay for assessment
+        if (widget.assessmentContext == 'practice') {
+          _showRewardThenPop();
+        } else {
+          Future.delayed(const Duration(milliseconds: 2500), () {
+            if (mounted) Navigator.of(context).pop();
+          });
+        }
       },
+    );
+  }
+
+  void _showRewardThenPop() {
+    final childProvider = context.read<ChildProvider>();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: RewardOverlay.forChild(
+          profile: childProvider.profile!,
+          onComplete: () {
+            Navigator.of(dialogContext).pop(); // Close reward overlay
+            Navigator.of(dialogContext).pop(); // Return to previous screen
+          },
+        ),
+      ),
     );
   }
 
@@ -103,25 +141,18 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
                     backgroundBuilder: (_) => const SizedBox.shrink(),
                   ),
                 ),
+                // Voice over prompt with dynamic text based on turn
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: VoiceOverPromptBubble(
-                    text:
-                        _isBuddyTurn
-                            ? 'Wait for Buddy… 🐻'
-                            : 'Your turn! Tap a spot! ⭐',
+                    text: _voiceOverText,
                     isVisible: !_gameComplete,
                   ),
                 ),
               ],
             ),
           ),
-          if (_gameComplete)
-            const GameCelebrationOverlay(
-              emoji: '🤝',
-              message: 'Great Teamwork!',
-              subMessage: 'You and Buddy took turns perfectly!',
-            ),
+          // Note: GameCelebrationOverlay removed - reward overlay now handles completion celebration
         ],
       ),
     );
