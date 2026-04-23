@@ -15,3 +15,4 @@ export 'section_title.dart';
 export 'voice_over_prompt_bubble.dart';
 export 'game_celebration_overlay.dart';
 export 'ui_tap_sfx_provider.dart';
+export 'rewards/rewards.dart';

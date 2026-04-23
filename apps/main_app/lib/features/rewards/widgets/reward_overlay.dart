@@ -211,7 +211,7 @@ class _RewardOverlayState extends State<RewardOverlay>
               if (_showReward)
                 FadeTransition(
                   opacity: _fadeAnimation,
-                  child: Positioned.fill(
+                  child: SizedBox.expand(
                     child: _buildRewardEffect(),
                   ),
                 ),

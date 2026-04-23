@@ -5,6 +5,7 @@ import 'package:game_lab/main.dart';
 void main() {
   testWidgets('GameLabApp launches', (WidgetTester tester) async {
     await tester.pumpWidget(const GameLabApp());
-    expect(find.text('Game Lab'), findsOneWidget);
+    // The launcher screen title includes an emoji prefix
+    expect(find.textContaining('Game Lab'), findsOneWidget);
   });
 }
