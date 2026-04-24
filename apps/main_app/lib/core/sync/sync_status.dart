@@ -150,6 +150,9 @@ class LocalTables {
   static const String assessmentResults = 'assessment_results_local';
   static const String moduleRecommendations = 'module_recommendations_local';
   static const String assessmentComparisons = 'assessment_comparisons_local';
+  static const String sensoryConsent = 'sensory_consent_local';
+  static const String sensoryRoundMetrics = 'sensory_round_metrics_local';
+  static const String sensoryPreferences = 'sensory_preferences_local';
   static const String learningModulesCache = 'learning_modules_cache';
   static const String modulePathsCache = 'module_paths_cache';
   static const String modulePathItemsCache = 'module_path_items_cache';
@@ -186,6 +189,9 @@ class SyncOrder {
     LocalTables.assessmentResults,
     LocalTables.moduleRecommendations,
     LocalTables.assessmentComparisons,
+    LocalTables.sensoryConsent,
+    LocalTables.sensoryRoundMetrics,
+    LocalTables.sensoryPreferences,
   ];
 
   /// Get the remote table name for a local table

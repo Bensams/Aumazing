@@ -36,6 +36,10 @@ final _musicAudioContext = AudioContext(
 /// Uses [audioplayers] under the hood. Supports looping background music
 /// and one-shot sound effects. Both main_app and game_lab share this
 /// service via the shared_audio package.
+///
+/// All playback uses [AssetSource] which works reliably on both Android
+/// and iOS. The previous [BytesSource] approach caused Android's
+/// MediaPlayer to reset during preparation, producing no sound.
 class AudioService {
   AudioConfig _config;
 
@@ -72,10 +76,6 @@ class AudioService {
   /// Update the audio configuration (e.g. from a settings screen).
   void updateConfig(AudioConfig config) {
     _config = config;
-    debugPrint('[AudioService] Config updated: '
-        'music=${_config.effectiveMusicVolume.toStringAsFixed(1)}, '
-        'sfx=${_config.effectiveSfxVolume.toStringAsFixed(1)}');
-
     // Apply volume change immediately to the playing music
     _musicPlayer.setVolume(_config.effectiveMusicVolume);
   }
@@ -89,47 +89,27 @@ class AudioService {
   ///
   /// Music loops indefinitely until [stopMusic] is called.
   Future<void> playMusic(String trackName) async {
-    debugPrint('[AudioService] playMusic() called with: $trackName');
-    debugPrint('[AudioService] Current state: musicEnabled=$_config.musicEnabled, isMusicPlaying=$isMusicPlaying, currentTrack=$_currentTrack');
-
-    if (!_config.musicEnabled) {
-      debugPrint('[AudioService] Music disabled, skipping: $trackName');
-      return;
-    }
+    if (!_config.musicEnabled) return;
 
     // Don't restart the same track
-    if (_currentTrack == trackName && isMusicPlaying) {
-      debugPrint('[AudioService] Already playing: $trackName');
-      return;
-    }
+    if (_currentTrack == trackName && isMusicPlaying) return;
 
     final assetPath = '$_assetPrefix/$trackName';
-    debugPrint('[AudioService] Loading music from: $assetPath');
 
-    try { 
-      debugPrint('[AudioService] Stopping current player...');
+    try {
       await _musicPlayer.stop();
-      debugPrint('[AudioService] Setting loop mode...');
       _musicPlayer.setReleaseMode(ReleaseMode.loop);
-      debugPrint('[AudioService] Setting volume: ${_config.effectiveMusicVolume}');
       await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-      debugPrint('[AudioService] Setting source...');
-      await _musicPlayer.setSource(AssetSource(assetPath));
-      debugPrint('[AudioService] Resuming playback...');
-      await _musicPlayer.resume();
+      await _musicPlayer.play(AssetSource(assetPath));
       _currentTrack = trackName;
-      debugPrint('[AudioService] ▶ Playing music: $trackName '
-          '(vol=${_config.effectiveMusicVolume.toStringAsFixed(1)})');
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('[AudioService] ✖ Error playing music "$trackName": $e');
-      debugPrint('[AudioService] Stack: $stackTrace');
     }
   }
 
   /// Pause background music (can be resumed with [resumeMusic]).
   Future<void> pauseMusic() async {
     await _musicPlayer.pause();
-    debugPrint('[AudioService] ⏸ Music paused');
   }
 
   /// Resume previously paused music.
@@ -137,14 +117,12 @@ class AudioService {
     if (!_config.musicEnabled) return;
     await _musicPlayer.setVolume(_config.effectiveMusicVolume);
     await _musicPlayer.resume();
-    debugPrint('[AudioService] ▶ Music resumed');
   }
 
   /// Stop background music entirely.
   Future<void> stopMusic() async {
     await _musicPlayer.stop();
     _currentTrack = null;
-    debugPrint('[AudioService] ⏹ Music stopped');
   }
 
   /// Play a random track from the provided list.
@@ -155,7 +133,6 @@ class AudioService {
     if (trackNames.isEmpty) return;
     final random = Random();
     final selectedTrack = trackNames[random.nextInt(trackNames.length)];
-    debugPrint('[AudioService] 🎲 Randomly selected: $selectedTrack');
     await playMusic(selectedTrack);
   }
 
@@ -163,25 +140,20 @@ class AudioService {
 
   /// Play a one-shot sound effect from the shared_audio assets.
   ///
-  /// [sfxName] is just the filename, e.g. `'correct.ogg'`.
+  /// [sfxName] is just the filename, e.g. `'correct.wav'`.
+  ///
+  /// Uses [AssetSource] for reliable playback on both Android and iOS.
   Future<void> playSfx(String sfxName) async {
-    if (!_config.sfxEnabled) {
-      debugPrint('[AudioService] SFX disabled, skipping: $sfxName');
-      return;
-    }
+    if (!_config.sfxEnabled) return;
 
     final assetPath = '$_assetPrefix/$sfxName';
-    debugPrint('[AudioService] Loading SFX from: $assetPath');
 
     try {
       final player = _getAvailableSfxPlayer();
       await player.setVolume(_config.effectiveSfxVolume);
-      await player.setSource(AssetSource(assetPath));
-      await player.resume();
-      debugPrint('[AudioService] 🔊 SFX: $sfxName (vol=${_config.effectiveSfxVolume.toStringAsFixed(1)})');
-    } catch (e, stackTrace) {
+      await player.play(AssetSource(assetPath));
+    } catch (e) {
       debugPrint('[AudioService] ✖ Error playing SFX "$sfxName": $e');
-      debugPrint('[AudioService] Stack: $stackTrace');
     }
   }
 
@@ -216,6 +188,99 @@ class AudioService {
   /// This is intended for Flutter widget buttons only (not in-game / Flame).
   Future<void> playButtonTap() => playSfx(_uiTapSfx);
 
+  // ── Game Sound Effects ────────────────────────────────────────────
+
+  /// SFX file for correct answer feedback (3-star sparkle).
+  static const String _correctSfx = 'sfx/3_star.ogg';
+
+  /// SFX file for wrong answer feedback.
+  static const String _wrongSfx = 'sfx/wrong.wav';
+
+  /// SFX file for in-game taps (distinct from UI button tap).
+  static const String _gameTapSfx = 'sfx/game_tap.wav';
+
+  /// SFX file for level completion (satisfying pop).
+  static const String _levelCompleteSfx = 'sfx/level_complete.wav';
+
+  /// SFX file for game completion / celebration.
+  static const String _gameCompleteSfx = 'sfx/game_complete.wav';
+
+  /// SFX file for drag start.
+  static const String _dragSfx = 'sfx/drag.wav';
+
+  /// SFX file for drop / release.
+  static const String _dropSfx = 'sfx/drop.wav';
+
+  // ── Sequence Shimmer Sound Effects ────────────────────────────────
+
+  /// SFX files for sequence position shimmer sounds (Copy Me demo phase).
+  static const List<String> _shimmerSfxFiles = [
+    'sfx/shimmer_1.wav',
+    'sfx/shimmer_2.wav',
+    'sfx/shimmer_3.wav',
+    'sfx/shimmer_4.wav',
+    'sfx/shimmer_5.wav',
+  ];
+
+  /// Play a shimmer SFX based on the 0-based sequence position.
+  ///
+  /// Position 0 → shimmer_1.wav, position 1 → shimmer_2.wav, etc.
+  /// If position exceeds 4, wraps around using modulo.
+  Future<void> playSequenceShimmerSfx(int sequencePosition) {
+    final index = sequencePosition % _shimmerSfxFiles.length;
+    return playSfx(_shimmerSfxFiles[index]);
+  }
+
+  // ── Reward Sound Effects ──────────────────────────────────────────
+
+  /// SFX file for balloon pop.
+  static const String _balloonPopSfx = 'sfx/rewards/balloon_pop.ogg';
+
+  /// SFX file for bubble pop.
+  static const String _bubblePopSfx = 'sfx/rewards/bubble.ogg';
+
+  /// SFX file for firework explosion.
+  static const String _fireworkPopSfx = 'sfx/rewards/firework_popped.ogg';
+
+  /// SFX file for candy collection.
+  static const String _candyPopSfx = 'sfx/rewards/candy_popped.ogg';
+
+  /// Play the "correct answer" sound effect.
+  Future<void> playCorrectSfx() => playSfx(_correctSfx);
+
+  /// Play the "wrong answer" sound effect (gentle, non-punishing).
+  Future<void> playWrongSfx() => playSfx(_wrongSfx);
+
+  /// Play the in-game tap sound effect.
+  ///
+  /// This is a different sound from [playButtonTap] and is intended for
+  /// in-game interactions (e.g. tapping a card, selecting an option).
+  Future<void> playGameTapSfx() => playSfx(_gameTapSfx);
+
+  /// Play the level-complete sound effect.
+  Future<void> playLevelCompleteSfx() => playSfx(_levelCompleteSfx);
+
+  /// Play the game-complete / celebration sound effect.
+  Future<void> playGameCompleteSfx() => playSfx(_gameCompleteSfx);
+
+  /// Play the drag-start sound effect.
+  Future<void> playDragSfx() => playSfx(_dragSfx);
+
+  /// Play the drop / release sound effect.
+  Future<void> playDropSfx() => playSfx(_dropSfx);
+
+  /// Play the balloon pop sound effect.
+  Future<void> playBalloonPopSfx() => playSfx(_balloonPopSfx);
+
+  /// Play the bubble pop sound effect.
+  Future<void> playBubblePopSfx() => playSfx(_bubblePopSfx);
+
+  /// Play the firework explosion sound effect.
+  Future<void> playFireworkPopSfx() => playSfx(_fireworkPopSfx);
+
+  /// Play the candy collection sound effect.
+  Future<void> playCandyPopSfx() => playSfx(_candyPopSfx);
+
   // ── Lifecycle ──────────────────────────────────────────────────────
 
   /// Release all audio resources. Call when the app/screen is disposed.
@@ -226,6 +291,5 @@ class AudioService {
     }
     _sfxPlayers.clear();
     _currentTrack = null;
-    debugPrint('[AudioService] Disposed');
   }
 }

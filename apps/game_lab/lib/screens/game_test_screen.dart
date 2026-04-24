@@ -2,17 +2,19 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:game_core/game_core.dart';
-import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
+
+import '../services/game_factory.dart' show GameLabGameFactory;
+import '../services/game_lab_services.dart';
 
 /// Generic game runner screen for Game Lab.
 ///
 /// Hosts any Flame game from the registry, wraps it with the same
 /// [ChildModeTopBar] and [VoiceOverPromptBubble] that main_app uses,
-/// and adds a debug overlay (FPS, score, game state).
+/// and adds a debug overlay (FPS, score, game state, audio status).
 ///
-/// Automatically starts background music when the game launches
-/// and stops it when leaving the screen.
+/// Uses the shared [GameLabServices] singleton for audio instead of
+/// creating a new [AudioService] per screen.
 class GameTestScreen extends StatefulWidget {
   const GameTestScreen({
     super.key,
@@ -30,7 +32,8 @@ class GameTestScreen extends StatefulWidget {
 class _GameTestScreenState extends State<GameTestScreen>
     with WidgetsBindingObserver {
   late FlameGame _game;
-  late AudioService _audioService;
+  final _services = GameLabServices.instance;
+
   int _currentStep = 0;
   bool _gameComplete = false;
   int _score = 0;
@@ -38,6 +41,8 @@ class _GameTestScreenState extends State<GameTestScreen>
   int _errors = 0;
   bool _showDebug = true;
   bool _musicMuted = false;
+  Offset? _lastTapPosition;
+  bool _showStarSparkle = false;
 
   // Gameplay analytics debug data
   double _avgResponseTimeMs = 0;
@@ -76,21 +81,11 @@ class _GameTestScreenState extends State<GameTestScreen>
       DeviceOrientation.landscapeRight,
     ]);
 
-    // Initialize audio with config volumes
-    _audioService = AudioService(
-      config: AudioConfig(
-        musicVolume: widget.config.bgMusicVolume,
-        sfxVolume: widget.config.sfxVolume,
-        musicEnabled: widget.config.bgMusicVolume > 0,
-        sfxEnabled: widget.config.sfxVolume > 0,
-      ),
-    );
-
     _createGame();
 
     // Start background music after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _audioService.playMusic('bg_music.ogg');
+      _services.audioService.playMusic('bg_music.ogg');
     });
   }
 
@@ -104,11 +99,19 @@ class _GameTestScreenState extends State<GameTestScreen>
       _resetAnalytics();
     });
 
-    _game = widget.entry.create(
+    // Create game with all audio callbacks wired via GameFactory
+    _game = GameLabGameFactory.createWithAudio(
+      gameId: widget.entry.id,
       config: widget.config,
+      onCorrectMatch: () {
+        // Haptic feedback only (wired in GameLabGameFactory.wrappedOnCorrectMatch)
+        // Star sparkle is triggered on round completion via onStepChanged
+      },
       onStepChanged: (step) {
         setState(() {
           _currentStep = step;
+          // Show star sparkle when a round is fully completed
+          _showStarSparkle = true;
           _updateAnalyticsFromGame();
         });
       },
@@ -125,8 +128,9 @@ class _GameTestScreenState extends State<GameTestScreen>
           _errors = errorCount;
           _updateAnalyticsFromGame();
         });
-        // Play a completion SFX
-        _audioService.playSfx('complete.ogg');
+        // Play game complete SFX (already wired via callbacks, but also
+        // update the services tracker for the debug panel)
+        _services.lastPlayedSfx = 'game_complete (onGameComplete)';
       },
     );
 
@@ -162,7 +166,8 @@ class _GameTestScreenState extends State<GameTestScreen>
         setState(() {
           _updateAnalyticsFromGame();
           if (_sessionStartTime != null) {
-            _timeSpentMs = DateTime.now().difference(_sessionStartTime!).inMilliseconds;
+            _timeSpentMs =
+                DateTime.now().difference(_sessionStartTime!).inMilliseconds;
           }
         });
       }
@@ -308,16 +313,16 @@ class _GameTestScreenState extends State<GameTestScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      _audioService.pauseMusic();
+      _services.audioService.pauseMusic();
     } else if (state == AppLifecycleState.resumed) {
-      _audioService.resumeMusic();
+      _services.audioService.resumeMusic();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _audioService.dispose();
+    _services.audioService.stopMusic();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
@@ -325,9 +330,9 @@ class _GameTestScreenState extends State<GameTestScreen>
   void _toggleMusic() {
     setState(() => _musicMuted = !_musicMuted);
     if (_musicMuted) {
-      _audioService.pauseMusic();
+      _services.audioService.pauseMusic();
     } else {
-      _audioService.resumeMusic();
+      _services.audioService.resumeMusic();
     }
   }
 
@@ -344,12 +349,15 @@ class _GameTestScreenState extends State<GameTestScreen>
               fontSize: 10,
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -381,19 +389,37 @@ class _GameTestScreenState extends State<GameTestScreen>
             Expanded(
               child: Stack(
                 children: [
-                  GameWidget(
-                    game: _game,
-                    backgroundBuilder: (_) => const SizedBox.shrink(),
+                  Listener(
+                    onPointerDown: (event) {
+                      setState(() {
+                        _lastTapPosition = event.localPosition;
+                      });
+                    },
+                    child: GameWidget(
+                      game: _game,
+                      backgroundBuilder: (_) => const SizedBox.shrink(),
+                    ),
                   ),
 
-                  // Debug overlay with gameplay analytics
+                  // Three-star sparkle overlay on correct match
+                  if (_showStarSparkle && _lastTapPosition != null)
+                    ThreeStarSparkle(
+                      position: _lastTapPosition!,
+                      onComplete: () {
+                        setState(() {
+                          _showStarSparkle = false;
+                        });
+                      },
+                    ),
+
+                  // Debug overlay with gameplay analytics + audio status
                   if (_showDebug)
                     Positioned(
                       top: 8,
                       right: 8,
                       bottom: 10,
                       child: Container(
-                        width: 200,
+                        width: 210,
                         height: 300,
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -411,135 +437,201 @@ class _GameTestScreenState extends State<GameTestScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                            // Header
-                            Row(
-                              children: [
-                                const Icon(Icons.analytics_rounded,
-                                    color: Colors.white70, size: 14),
-                                const SizedBox(width: 6),
-                                Text(
-                                  widget.entry.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                              // Header
+                              Row(
+                                children: [
+                                  const Icon(Icons.analytics_rounded,
+                                      color: Colors.white70, size: 14),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      widget.entry.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
+                                ],
+                              ),
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // Progress
+                              _buildDebugRow('Step',
+                                  '$_currentStep/${widget.config.totalRounds}'),
+                              _buildDebugRow(
+                                  'Score', '$_score/$_totalItems'),
+                              _buildDebugRow('Errors', '$_errors'),
+
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // Analytics indicators
+                              _buildDebugRow(
+                                'Response Time',
+                                '${_avgResponseTimeMs.toStringAsFixed(0)}ms',
+                              ),
+                              _buildDebugRow(
+                                'Accuracy',
+                                '${(_accuracy * 100).toStringAsFixed(1)}%',
+                              ),
+                              _buildDebugRow('Retries', '$_retryCount'),
+                              _buildDebugRow(
+                                'Time Spent',
+                                '${(_timeSpentMs / 1000).toStringAsFixed(1)}s',
+                              ),
+                              _buildDebugRow(
+                                'Completed',
+                                _isCompleted ? 'Yes' : 'No',
+                              ),
+                              _buildDebugRow(
+                                'Completion Rate',
+                                '${(_completionRate * 100).toStringAsFixed(0)}% ($_completedSubTasks/$_totalSubTasks)',
+                              ),
+
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // Interaction patterns
+                              _buildDebugRow(
+                                'Interaction',
+                                _interactionQuality,
+                              ),
+                              _buildDebugRow('Taps', '$_totalTaps'),
+                              _buildDebugRow(
+                                'Rapid Taps',
+                                '$_rapidTaps (${(_rapidTapRatio * 100).toStringAsFixed(0)}%)',
+                              ),
+                              _buildDebugRow(
+                                  'Drags', '$_totalDragPoints'),
+                              _buildDebugRow(
+                                'Smooth Drags',
+                                _hasSmoothDrags ? 'Yes' : 'No',
+                              ),
+
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // Enhanced Analytics - Assistance
+                              _buildDebugRow(
+                                'Assistance Level',
+                                _assistanceLevel,
+                              ),
+                              _buildDebugRow('Hints', '$_hintCount'),
+                              _buildDebugRow('Prompts', '$_promptCount'),
+                              _buildDebugRow(
+                                'Idle Time',
+                                '${_idleTimeSeconds}s',
+                              ),
+                              _buildDebugRow(
+                                  'Off-Task', '$_offTaskCount'),
+
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // Enhanced Analytics - Progress
+                              _buildDebugRow(
+                                'Improvement',
+                                '${(_improvementScore * 100).toStringAsFixed(0)}%',
+                              ),
+                              _buildDebugRow(
+                                'Consistency',
+                                '${(_consistencyScore * 100).toStringAsFixed(0)}%',
+                              ),
+
+                              // Game-specific metrics
+                              if (_gameSpecificMetrics.isNotEmpty) ...[
+                                const Divider(
+                                    color: Colors.white24, height: 12),
+                                ..._gameSpecificMetrics.entries
+                                    .take(4)
+                                    .map(
+                                      (e) => _buildDebugRow(
+                                        e.key,
+                                        e.value.toString(),
+                                      ),
+                                    ),
+                              ],
+
+                              // Round details
+                              if (_roundMetrics.isNotEmpty) ...[
+                                const Divider(
+                                    color: Colors.white24, height: 12),
+                                _buildDebugRow(
+                                  'Rounds Done',
+                                  '${_roundMetrics.length}',
                                 ),
                               ],
-                            ),
-                            const Divider(color: Colors.white24, height: 12),
 
-                            // Progress
-                            _buildDebugRow('Step', '$_currentStep/${widget.config.totalRounds}'),
-                            _buildDebugRow('Score', '$_score/$_totalItems'),
-                            _buildDebugRow('Errors', '$_errors'),
-
-                            const Divider(color: Colors.white24, height: 12),
-
-                            // Analytics indicators
-                            _buildDebugRow(
-                              'Response Time',
-                              '${_avgResponseTimeMs.toStringAsFixed(0)}ms',
-                            ),
-                            _buildDebugRow(
-                              'Accuracy',
-                              '${(_accuracy * 100).toStringAsFixed(1)}%',
-                            ),
-                            _buildDebugRow('Retries', '$_retryCount'),
-                            _buildDebugRow(
-                              'Time Spent',
-                              '${(_timeSpentMs / 1000).toStringAsFixed(1)}s',
-                            ),
-                            _buildDebugRow(
-                              'Completed',
-                              _isCompleted ? 'Yes' : 'No',
-                            ),
-                            _buildDebugRow(
-                              'Completion Rate',
-                              '${(_completionRate * 100).toStringAsFixed(0)}% ($_completedSubTasks/$_totalSubTasks)',
-                            ),
-
-                            const Divider(color: Colors.white24, height: 12),
-
-                            // Interaction patterns
-                            _buildDebugRow(
-                              'Interaction',
-                              _interactionQuality,
-                            ),
-                            _buildDebugRow('Taps', '$_totalTaps'),
-                            _buildDebugRow(
-                              'Rapid Taps',
-                              '$_rapidTaps (${(_rapidTapRatio * 100).toStringAsFixed(0)}%)',
-                            ),
-                            _buildDebugRow('Drags', '$_totalDragPoints'),
-                            _buildDebugRow(
-                              'Smooth Drags',
-                              _hasSmoothDrags ? 'Yes' : 'No',
-                            ),
-
-                            const Divider(color: Colors.white24, height: 12),
-
-                            // Enhanced Analytics - Assistance
-                            _buildDebugRow(
-                              'Assistance Level',
-                              _assistanceLevel,
-                            ),
-                            _buildDebugRow('Hints', '$_hintCount'),
-                            _buildDebugRow('Prompts', '$_promptCount'),
-                            _buildDebugRow(
-                              'Idle Time',
-                              '${_idleTimeSeconds}s',
-                            ),
-                            _buildDebugRow('Off-Task', '$_offTaskCount'),
-
-                            const Divider(color: Colors.white24, height: 12),
-
-                            // Enhanced Analytics - Progress
-                            _buildDebugRow(
-                              'Improvement',
-                              '${(_improvementScore * 100).toStringAsFixed(0)}%',
-                            ),
-                            _buildDebugRow(
-                              'Consistency',
-                              '${(_consistencyScore * 100).toStringAsFixed(0)}%',
-                            ),
-
-                            // Game-specific metrics
-                            if (_gameSpecificMetrics.isNotEmpty) ...[
-                              const Divider(color: Colors.white24, height: 12),
-                              ..._gameSpecificMetrics.entries.take(4).map(
-                                (e) => _buildDebugRow(
-                                  e.key,
-                                  e.value.toString(),
-                                ),
-                              ),
-                            ],
-
-                            // Round details
-                            if (_roundMetrics.isNotEmpty) ...[
-                              const Divider(color: Colors.white24, height: 12),
-                              _buildDebugRow(
-                                'Rounds Done',
-                                '${_roundMetrics.length}',
-                              ),
-                            ],
-
-                            if (_gameComplete) ...[
-                              const Divider(color: Colors.greenAccent, height: 12),
+                              // ── Audio Status Section ──────────────
+                              const Divider(
+                                  color: Colors.cyanAccent, height: 12),
                               const Text(
-                                '✓ Game Complete',
+                                '🔊 Audio Status',
                                 style: TextStyle(
-                                  color: Colors.greenAccent,
+                                  color: Colors.cyanAccent,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
+                              const SizedBox(height: 4),
+                              _buildDebugRow(
+                                'SFX',
+                                _services.audioService.config.sfxEnabled
+                                    ? 'ON'
+                                    : 'OFF',
+                              ),
+                              _buildDebugRow(
+                                'Music',
+                                _services.audioService.config.musicEnabled
+                                    ? 'ON'
+                                    : 'OFF',
+                              ),
+                              _buildDebugRow(
+                                'VO',
+                                _services.voiceOverService.isEnabled
+                                    ? 'ON'
+                                    : 'OFF',
+                              ),
+                              _buildDebugRow(
+                                'VO Playing',
+                                _services.voiceOverService.isPlaying
+                                    ? 'Yes'
+                                    : 'No',
+                              ),
+                              _buildDebugRow(
+                                'Last SFX',
+                                _services.lastPlayedSfx.isEmpty
+                                    ? '—'
+                                    : _services.lastPlayedSfx,
+                              ),
+                              _buildDebugRow(
+                                'Last VO',
+                                _services.lastPlayedVo.isEmpty
+                                    ? '—'
+                                    : _services.lastPlayedVo,
+                              ),
+
+                              if (_gameComplete) ...[
+                                const Divider(
+                                    color: Colors.greenAccent,
+                                    height: 12),
+                                const Text(
+                                  '✓ Game Complete',
+                                  style: TextStyle(
+                                    color: Colors.greenAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -572,13 +664,15 @@ class _GameTestScreenState extends State<GameTestScreen>
                       icon: const Icon(Icons.replay_rounded,
                           color: AppColors.skyBlue),
                       tooltip: 'Replay sequence',
-                      onPressed: () => (_game as CopyMeGame).replaySequenceAsVisualGuide(),
+                      onPressed: () =>
+                          (_game as CopyMeGame).replaySequenceAsVisualGuide(),
                     ),
                     IconButton(
                       icon: const Icon(Icons.lightbulb_rounded,
                           color: AppColors.butterYellow),
                       tooltip: 'Show hints',
-                      onPressed: () => (_game as CopyMeGame).showFullSequenceHints(),
+                      onPressed: () =>
+                          (_game as CopyMeGame).showFullSequenceHints(),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                   ],

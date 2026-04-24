@@ -1,18 +1,19 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../reward_sfx_provider.dart';
 import 'sine_curve.dart';
 
-/// Bubble iridescent colors (subtle shimmer effect)
+/// Bubble iridescent colors (medium-light for visibility on pastel backgrounds)
 final _bubbleColors = [
-  const Color(0xFFE3F2FD), // Lightest blue
-  const Color(0xFFE8F5E9), // Lightest green
-  const Color(0xFFFFF3E0), // Lightest orange
-  const Color(0xFFF3E5F5), // Lightest purple
-  const Color(0xFFE0F7FA), // Lightest cyan
-  const Color(0xFFFCE4EC), // Lightest pink
-  const Color(0xFFF1F8E9), // Lightest lime
-  const Color(0xFFE8EAF6), // Lightest indigo
+  const Color(0xFF90CAF9), // Medium blue
+  const Color(0xFFA5D6A7), // Medium green
+  const Color(0xFFFFCC80), // Medium orange
+  const Color(0xFFCE93D8), // Medium purple
+  const Color(0xFF80DEEA), // Medium cyan
+  const Color(0xFFF48FB1), // Medium pink
+  const Color(0xFFC5E1A5), // Medium lime
+  const Color(0xFF9FA8DA), // Medium indigo
 ];
 
 /// Individual bubble that floats up and can be popped
@@ -162,14 +163,20 @@ class _BubblePainter extends CustomPainter {
     // Create iridescent gradient that shifts with animation
     final shimmerOffset = sin(animationValue * 2 * pi) * 0.2;
 
+    // --- Glow layer: soft colored halo behind the bubble ---
+    final glowPaint = Paint()
+      ..color = baseColor.withAlpha(90)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    canvas.drawCircle(center, radius * 1.05, glowPaint);
+
     final gradient = RadialGradient(
       center: Alignment(-0.3 + shimmerOffset, -0.3),
       radius: 0.8,
       colors: [
-        Colors.white.withAlpha(200),
-        baseColor.withAlpha(100),
-        baseColor.withAlpha(60),
-        baseColor.withAlpha(30),
+        Colors.white.withAlpha(230),
+        baseColor.withAlpha(160),
+        baseColor.withAlpha(120),
+        baseColor.withAlpha(80),
       ],
       stops: const [0.0, 0.3, 0.7, 1.0],
     );
@@ -183,9 +190,9 @@ class _BubblePainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, bubblePaint);
 
-    // Bubble border (subtle outline)
+    // Bubble border (colored outline for definition)
     final borderPaint = Paint()
-      ..color = Colors.white.withAlpha(80)
+      ..color = baseColor.withAlpha(140)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
@@ -193,7 +200,7 @@ class _BubblePainter extends CustomPainter {
 
     // Highlight (shiny reflection)
     final highlightPaint = Paint()
-      ..color = Colors.white.withAlpha(180)
+      ..color = Colors.white.withAlpha(210)
       ..style = PaintingStyle.fill;
 
     // Main highlight
@@ -212,7 +219,7 @@ class _BubblePainter extends CustomPainter {
       Offset(radius * 0.7, radius * 0.6),
       radius * 0.08,
       Paint()
-        ..color = Colors.white.withAlpha(100)
+        ..color = Colors.white.withAlpha(140)
         ..style = PaintingStyle.fill,
     );
 
@@ -220,11 +227,11 @@ class _BubblePainter extends CustomPainter {
     final rimGradient = SweepGradient(
       center: Alignment.center,
       colors: [
-        Colors.white.withAlpha(0),
-        Colors.white.withAlpha(40),
-        Colors.white.withAlpha(0),
-        Colors.white.withAlpha(30),
-        Colors.white.withAlpha(0),
+        baseColor.withAlpha(0),
+        baseColor.withAlpha(80),
+        baseColor.withAlpha(0),
+        baseColor.withAlpha(60),
+        baseColor.withAlpha(0),
       ],
     );
 
@@ -233,7 +240,7 @@ class _BubblePainter extends CustomPainter {
         Rect.fromCircle(center: center, radius: radius),
       )
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 2.5;
 
     canvas.drawCircle(center, radius * 0.85, rimPaint);
   }
@@ -419,6 +426,7 @@ class _BubblesRewardState extends State<BubblesReward> {
   }
 
   void _onBubblePopped() {
+    RewardSfxProvider.playBubblePop(context);
     _poppedCount++;
     if (_poppedCount >= widget.bubbleCount && widget.onAllPopped != null) {
       widget.onAllPopped!();

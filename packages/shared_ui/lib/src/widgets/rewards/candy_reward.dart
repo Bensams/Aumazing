@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../reward_sfx_provider.dart';
 import 'sine_curve.dart';
 
 /// Candy colors
@@ -669,6 +670,7 @@ class _CandyRewardState extends State<CandyReward> {
   }
 
   void _onCandyCollected() {
+    RewardSfxProvider.playCandyPop(context);
     _collectedCount++;
     if (_collectedCount >= widget.candyCount && widget.onAllCollected != null) {
       widget.onAllCollected!();

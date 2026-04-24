@@ -21,6 +21,25 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     required this.onGameComplete,
     required this.childId,
     this.gameVersion,
+    this.onCorrectMatch,
+    // Audio event callbacks (optional, wired by screen wrappers)
+    this.onPlayCorrectSfx,
+    this.onPlayWrongSfx,
+    this.onPlayTapSfx,
+    this.onPlayDragSfx,
+    this.onPlayDropSfx,
+    this.onPlayLevelCompleteSfx,
+    this.onPlayGameCompleteSfx,
+    this.onPlayCorrectVo,
+    this.onPlayWrongVo,
+    this.onPlayInstructionVo,
+    this.onPlayTransitionVo,
+    this.onPlayCelebrationVo,
+    // Game-specific: Copy Me turn phase voice-overs
+    this.onPlayMyTurnVo,
+    this.onPlayYourTurnVo,
+    // Game-specific: Copy Me sequence highlight SFX
+    this.onPlaySequenceHighlightSfx,
   });
 
   final int totalRounds;
@@ -34,6 +53,31 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
   }) onGameComplete;
+
+  /// Optional callback fired on each individual correct tap in the sequence.
+  /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
+  final void Function()? onCorrectMatch;
+
+  // ── Audio event callbacks ────────────────────────────────────────────
+  final VoidCallback? onPlayCorrectSfx;
+  final VoidCallback? onPlayWrongSfx;
+  final VoidCallback? onPlayTapSfx;
+  final VoidCallback? onPlayDragSfx;
+  final VoidCallback? onPlayDropSfx;
+  final VoidCallback? onPlayLevelCompleteSfx;
+  final VoidCallback? onPlayGameCompleteSfx;
+  final VoidCallback? onPlayCorrectVo;
+  final VoidCallback? onPlayWrongVo;
+  final VoidCallback? onPlayInstructionVo;
+  final VoidCallback? onPlayTransitionVo;
+  final VoidCallback? onPlayCelebrationVo;
+  /// Voice-over for demo/watch phase ("Watch me first" / "My turn")
+  final VoidCallback? onPlayMyTurnVo;
+  /// Voice-over for child input phase ("Your turn" / "Now you try")
+  final VoidCallback? onPlayYourTurnVo;
+  /// SFX callback for each sequence highlight during demo phase.
+  /// Receives the 0-based position in the sequence.
+  final void Function(int sequencePosition)? onPlaySequenceHighlightSfx;
 
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -91,8 +135,17 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     );
     analyticsStartSession();
 
+    // Play instruction voice-over when game loads
+    onPlayInstructionVo?.call();
+
     _layoutShapes();
-    _startRound();
+
+    // Wait for instruction VO ("Copy Me") to finish before starting first round
+    // Use non-blocking delay so Flame's rendering pipeline isn't blocked
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (!isMounted) return;
+      _startRound();
+    });
   }
 
   void _layoutShapes() {
@@ -140,19 +193,24 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
     _demonstrating = true;
     onPhaseChanged?.call(true);
+    // Play "my turn" / "watch me" voice-over for demo phase
+    onPlayMyTurnVo?.call();
     _playDemoSequence();
   }
 
   Future<void> _playDemoSequence() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Wait for "Watch me first" / "My turn" VO to finish before starting demo
+    await Future.delayed(const Duration(milliseconds: 2000));
 
     // Record stimulus when sequence demonstration starts
     analyticsShowStimulus();
     analyticsRecordPrompt(promptType: 'sequence_demonstration');
 
-    for (final idx in _sequence) {
+    for (var i = 0; i < _sequence.length; i++) {
       if (!isMounted) return;
+      final idx = _sequence[i];
       _shapes[idx].highlight();
+      onPlaySequenceHighlightSfx?.call(i);
       await Future.delayed(const Duration(milliseconds: 700));
     }
 
@@ -161,6 +219,12 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     _inputPhase = true;
     _inputStartTime = DateTime.now();
     onPhaseChanged?.call(false);
+
+    // Brief pause before "your turn" VO so it doesn't overlap with last highlight
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!isMounted) return;
+    // Play "your turn" voice-over for child input phase
+    onPlayYourTurnVo?.call();
 
     // New stimulus for child's input phase
     analyticsShowStimulus();
@@ -186,6 +250,12 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
       // Correct
       _shapes[index].showCorrect();
 
+      // Play position-based shimmer SFX for this correct tap
+      onPlaySequenceHighlightSfx?.call(_inputIndex);
+
+      // Notify Flutter layer of individual correct tap (for haptic feedback)
+      onCorrectMatch?.call();
+
       // Record correct response with details
       analyticsRecordCorrect(extraData: {
         'shape_index': index,
@@ -197,6 +267,8 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
       if (_inputIndex >= _sequence.length) {
         // Sequence complete — this round was successful
+        // Play praise voice-over only when the full sequence is completed
+        onPlayCorrectVo?.call();
         _score++;
         _consecutiveErrors = 0; // Reset consecutive errors on success
 
@@ -219,7 +291,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
-          // Game complete
+          // Game complete — wait for praise VO to finish, then play celebration
           analyticsMarkCompleted();
           analyticsCompleteSession();
 
@@ -230,22 +302,43 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
           analyticsAddGameSpecificMetric('max_sequence_length',
             totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
 
-          Future.delayed(const Duration(milliseconds: 600), () {
-            onGameComplete(
-              score: _score,
-              totalItems: totalRounds,
-              errorCount: _errorCount,
-              totalResponseTimeMs: _totalResponseTimeMs,
-              analytics: analyticsSession,
-            );
+          // Wait for praise VO to finish before playing celebration VO
+          Future.delayed(const Duration(milliseconds: 2000), () {
+            if (!isMounted) return;
+            onPlayGameCompleteSfx?.call();
+            onPlayCelebrationVo?.call();
+
+            Future.delayed(const Duration(milliseconds: 600), () {
+              onGameComplete(
+                score: _score,
+                totalItems: totalRounds,
+                errorCount: _errorCount,
+                totalResponseTimeMs: _totalResponseTimeMs,
+                analytics: analyticsSession,
+              );
+            });
           });
         } else {
-          Future.delayed(const Duration(milliseconds: 800), _startRound);
+          // Level/round complete — wait for praise VO to finish, then play transition
+          Future.delayed(const Duration(milliseconds: 2000), () {
+            if (!isMounted) return;
+            onPlayLevelCompleteSfx?.call();
+            onPlayTransitionVo?.call();
+
+            // Wait for transition VO to finish before starting next round
+            Future.delayed(const Duration(milliseconds: 2000), () {
+              if (!isMounted) return;
+              _startRound();
+            });
+          });
         }
       }
     } else {
-      // Wrong
+      // Wrong — play wrong SFX and voice-over
       _shapes[index].showWrong();
+      onPlayWrongSfx?.call();
+      onPlayWrongVo?.call();
+
       _errorCount++;
       _retries++;
       _consecutiveErrors++; // Track consecutive errors

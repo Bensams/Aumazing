@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 import '../../../model/child_profile.dart';
 import '../reward_type.dart';
-import 'balloons_reward.dart';
-import 'bubbles_reward.dart';
-import 'candy_reward.dart';
-import 'fireworks_reward.dart';
 
 /// Full-screen reward overlay that displays the celebration effect
 /// and waits for user interaction before completing

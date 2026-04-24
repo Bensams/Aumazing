@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../services/game_lab_services.dart';
+import 'audio_tester_screen.dart';
+import 'haptic_tester_screen.dart';
 import 'game_flow_screen.dart';
 import 'game_test_screen.dart';
 import 'reward_tester_screen.dart';
@@ -9,7 +13,8 @@ import 'reward_tester_screen.dart';
 /// The launcher screen for Game Lab.
 ///
 /// Displays a grid of all registered games from [GameRegistry] along with
-/// a config panel for adjusting difficulty, animation intensity, and volume.
+/// a config panel for adjusting difficulty, animation intensity, volume,
+/// haptic feedback, and voice-over settings.
 class LauncherScreen extends StatefulWidget {
   const LauncherScreen({super.key});
 
@@ -19,6 +24,43 @@ class LauncherScreen extends StatefulWidget {
 
 class _LauncherScreenState extends State<LauncherScreen> {
   GameConfig _config = GameConfig.defaults;
+
+  // Audio toggles (separate from volume sliders)
+  bool _sfxEnabled = true;
+  bool _musicEnabled = true;
+  bool _voEnabled = true;
+  double _voVolume = 1.0;
+  bool _hapticEnabled = true;
+
+  GameLabServices get _services => GameLabServices.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync initial state from services
+    _hapticEnabled = _services.hapticEnabled;
+    _voEnabled = _services.voiceOverService.isEnabled;
+    _voVolume = _services.voiceOverService.volume;
+    _sfxEnabled = _services.audioService.config.sfxEnabled;
+    _musicEnabled = _services.audioService.config.musicEnabled;
+  }
+
+  /// Push updated audio config to the shared services.
+  void _syncAudioConfig() {
+    _services.updateAudioConfig(
+      AudioConfig(
+        musicVolume: _config.bgMusicVolume,
+        sfxVolume: _config.sfxVolume,
+        musicEnabled: _musicEnabled,
+        sfxEnabled: _sfxEnabled,
+      ),
+    );
+    _services.updateVoiceOverSettings(
+      volume: _voVolume,
+      enabled: _voEnabled,
+    );
+    _services.hapticEnabled = _hapticEnabled;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,26 +106,56 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: _launchGameFlow,
-                            icon: const Icon(Icons.playlist_play, size: 18),
-                            label: const Text('Test Game Flow with Rewards'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF9B82C4),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _launchRewardTester,
-                            icon: const Icon(Icons.card_giftcard, size: 18),
-                            label: const Text('Test Rewards'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF6B8BC4),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _launchGameFlow,
+                                icon: const Icon(Icons.playlist_play, size: 18),
+                                label: const Text('Test Game Flow'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF9B82C4),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: _launchRewardTester,
+                                icon:
+                                    const Icon(Icons.card_giftcard, size: 18),
+                                label: const Text('Test Rewards'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6B8BC4),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: _launchAudioTester,
+                                icon: const Icon(Icons.headphones, size: 18),
+                                label: const Text('Test Audio'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4CAF50),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: _launchHapticTester,
+                                icon: const Icon(Icons.vibration, size: 18),
+                                label: const Text('Test Haptics'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF43A047),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -119,6 +191,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   void _launchGameFlow() {
+    _syncAudioConfig();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GameFlowScreen(
@@ -137,7 +210,24 @@ class _LauncherScreenState extends State<LauncherScreen> {
     );
   }
 
+  void _launchAudioTester() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const AudioTesterScreen(),
+      ),
+    );
+  }
+
+  void _launchHapticTester() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const HapticTesterScreen(),
+      ),
+    );
+  }
+
   void _launchGame(GameEntry entry) {
+    _syncAudioConfig();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GameTestScreen(
@@ -217,6 +307,30 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
             const Divider(height: 32),
 
+            // ── Audio Section ──────────────────────────────────────
+            Row(
+              children: [
+                const Icon(Icons.volume_up_rounded,
+                    color: AppColors.primaryPurple, size: 18),
+                const SizedBox(width: 6),
+                Text('Audio',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.primaryPurple)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Music enabled toggle
+            _buildToggleRow(
+              label: 'Music',
+              icon: Icons.music_note_rounded,
+              value: _musicEnabled,
+              onChanged: (v) => setState(() {
+                _musicEnabled = v;
+                _syncAudioConfig();
+              }),
+            ),
+
             // BG Music Volume
             _buildSliderSection(
               label: 'Music Volume',
@@ -226,9 +340,21 @@ class _LauncherScreenState extends State<LauncherScreen> {
               divisions: 10,
               displayValue: '${(_config.bgMusicVolume * 100).round()}%',
               icon: Icons.music_note_rounded,
-              onChanged: (v) => setState(
-                () => _config = _config.copyWith(bgMusicVolume: v),
-              ),
+              onChanged: (v) => setState(() {
+                _config = _config.copyWith(bgMusicVolume: v);
+                _syncAudioConfig();
+              }),
+            ),
+
+            // SFX enabled toggle
+            _buildToggleRow(
+              label: 'SFX',
+              icon: Icons.volume_up_rounded,
+              value: _sfxEnabled,
+              onChanged: (v) => setState(() {
+                _sfxEnabled = v;
+                _syncAudioConfig();
+              }),
             ),
 
             // SFX Volume
@@ -240,9 +366,64 @@ class _LauncherScreenState extends State<LauncherScreen> {
               divisions: 10,
               displayValue: '${(_config.sfxVolume * 100).round()}%',
               icon: Icons.volume_up_rounded,
-              onChanged: (v) => setState(
-                () => _config = _config.copyWith(sfxVolume: v),
-              ),
+              onChanged: (v) => setState(() {
+                _config = _config.copyWith(sfxVolume: v);
+                _syncAudioConfig();
+              }),
+            ),
+
+            const Divider(height: 24),
+
+            // ── Voice-Over Section ─────────────────────────────────
+            Row(
+              children: [
+                const Icon(Icons.record_voice_over_rounded,
+                    color: AppColors.primaryPurple, size: 18),
+                const SizedBox(width: 6),
+                Text('Voice-Over',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.primaryPurple)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // VO enabled toggle
+            _buildToggleRow(
+              label: 'Voice-Over',
+              icon: Icons.record_voice_over_rounded,
+              value: _voEnabled,
+              onChanged: (v) => setState(() {
+                _voEnabled = v;
+                _syncAudioConfig();
+              }),
+            ),
+
+            // VO Volume
+            _buildSliderSection(
+              label: 'VO Volume',
+              value: _voVolume,
+              min: 0.0,
+              max: 1.0,
+              divisions: 10,
+              displayValue: '${(_voVolume * 100).round()}%',
+              icon: Icons.record_voice_over_rounded,
+              onChanged: (v) => setState(() {
+                _voVolume = v;
+                _syncAudioConfig();
+              }),
+            ),
+
+            const Divider(height: 24),
+
+            // ── Haptic Section ─────────────────────────────────────
+            _buildToggleRow(
+              label: 'Haptic Feedback',
+              icon: Icons.vibration_rounded,
+              value: _hapticEnabled,
+              onChanged: (v) => setState(() {
+                _hapticEnabled = v;
+                _services.hapticEnabled = v;
+              }),
             ),
 
             const SizedBox(height: AppSpacing.md),
@@ -250,14 +431,50 @@ class _LauncherScreenState extends State<LauncherScreen> {
             // Reset button
             Center(
               child: TextButton.icon(
-                onPressed: () =>
-                    setState(() => _config = GameConfig.defaults),
+                onPressed: () => setState(() {
+                  _config = GameConfig.defaults;
+                  _sfxEnabled = true;
+                  _musicEnabled = true;
+                  _voEnabled = true;
+                  _voVolume = 1.0;
+                  _hapticEnabled = true;
+                  _syncAudioConfig();
+                }),
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Reset to Defaults'),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildToggleRow({
+    required String label,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.mutedForeground),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(label, style: AppTextStyles.labelLarge),
+          ),
+          SizedBox(
+            height: 28,
+            child: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.primaryPurple,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
       ),
     );
   }

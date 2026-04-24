@@ -59,8 +59,17 @@ class _HomeScreenState extends State<HomeScreen> {
       final childProvider = context.read<ChildProvider>();
       debugPrint('[HomeScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}, musicEnabled=${childProvider.musicEnabled}');
 
-      if (!audioService.isMusicPlaying && childProvider.musicEnabled) {
-        debugPrint('[HomeScreen] Music not playing, trying to resume...');
+      if (!childProvider.musicEnabled) {
+        // User has music disabled — stop any music that may have started
+        // during LoadingScreen before the profile was loaded.
+        if (audioService.isMusicPlaying) {
+          debugPrint('[HomeScreen] Music disabled but playing — stopping...');
+          await audioService.stopMusic();
+        } else {
+          debugPrint('[HomeScreen] Music disabled and not playing — OK');
+        }
+      } else if (!audioService.isMusicPlaying) {
+        debugPrint('[HomeScreen] Music enabled but not playing, trying to resume...');
         await audioService.resumeMusic();
 
         // Double-check if music is playing after resume attempt
@@ -70,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
         }
       } else {
-        debugPrint('[HomeScreen] Music already playing or disabled');
+        debugPrint('[HomeScreen] Music already playing and enabled — OK');
       }
     } catch (e, stackTrace) {
       debugPrint('[HomeScreen] Error checking music: $e');
@@ -89,6 +98,22 @@ class _HomeScreenState extends State<HomeScreen> {
     await childProvider.loadProfile();
 
     if (!mounted) return;
+
+    // Sync AudioConfig from the child's persisted settings so that
+    // lifecycle callbacks (pause/resume) and playMusic() respect them.
+    if (childProvider.hasProfile) {
+      final audioService = context.read<AudioService>();
+      audioService.updateConfig(AudioConfig(
+        musicEnabled: childProvider.musicEnabled,
+        musicVolume: childProvider.musicVolume,
+        sfxEnabled: true,
+        sfxVolume: childProvider.sfxVolume,
+      ));
+      debugPrint('[HomeScreen] Synced AudioConfig from profile: '
+          'musicEnabled=${childProvider.musicEnabled}, '
+          'musicVolume=${childProvider.musicVolume}');
+    }
+
     final profile = childProvider.profile;
     if (profile == null ||
         validateBirthDate(profile.birthDate) !=
@@ -1006,10 +1031,14 @@ class SettingsModal extends StatelessWidget {
                         (val) {
                           childProv.updateComfortSettings(musicEnabled: val);
                           final audioService = context.read<AudioService>();
+                          // Sync AudioConfig so lifecycle callbacks respect the setting
+                          audioService.updateConfig(audioService.config.copyWith(
+                            musicEnabled: val,
+                          ));
                           if (val) {
-                            audioService.resumeMusic();
+                            audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
                           } else {
-                            audioService.pauseMusic();
+                            audioService.stopMusic();
                           }
                         },
                       ),
@@ -1018,17 +1047,25 @@ class SettingsModal extends StatelessWidget {
                         _buildSettingSlider(
                           'Music Volume',
                           childProv.musicVolume,
-                          (val) => childProv.updateComfortSettings(
-                            musicVolume: val,
-                          ),
+                          (val) {
+                            childProv.updateComfortSettings(musicVolume: val);
+                            final audioService = context.read<AudioService>();
+                            audioService.updateConfig(audioService.config.copyWith(
+                              musicVolume: val,
+                            ));
+                          },
                         ),
                       // SFX volume slider
                       _buildSettingSlider(
                         'Sound Effects',
                         childProv.sfxVolume,
-                        (val) => childProv.updateComfortSettings(
-                          sfxVolume: val,
-                        ),
+                        (val) {
+                          childProv.updateComfortSettings(sfxVolume: val);
+                          final audioService = context.read<AudioService>();
+                          audioService.updateConfig(audioService.config.copyWith(
+                            sfxVolume: val,
+                          ));
+                        },
                       ),
                       // Vibration toggle
                       _buildSettingToggle(

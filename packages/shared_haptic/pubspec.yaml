@@ -1,0 +1,12 @@
+name: shared_haptic
+description: Haptic feedback service and configuration for Aumazing.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.7.2
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter

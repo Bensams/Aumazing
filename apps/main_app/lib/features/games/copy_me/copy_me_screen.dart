@@ -1,11 +1,16 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../home/home_screen.dart';
 
@@ -15,6 +20,7 @@ class CopyMeScreen extends StatefulWidget {
     super.key,
     this.assessmentContext = 'pre_assessment',
     this.onComplete,
+    this.sensoryController,
   });
 
   final String assessmentContext;
@@ -25,6 +31,9 @@ class CopyMeScreen extends StatefulWidget {
     int totalResponseTimeMs,
   )?
   onComplete;
+
+  /// Optional sensory controller for per-round music/haptic during pre-assessment.
+  final SensoryRoundController? sensoryController;
 
   @override
   State<CopyMeScreen> createState() => _CopyMeScreenState();
@@ -37,13 +46,18 @@ class _CopyMeScreenState extends State<CopyMeScreen>
   bool _gameComplete = false;
   bool _isDemoPhase = true;
   bool _showCelebration = false;
+  Offset? _lastTapPosition;
+  bool _showStarSparkle = false;
   late AnimationController _celebrationFadeController;
   late Animation<double> _celebrationFadeAnimation;
   late final CopyMeGame _game;
+  late final DateTime _sessionStartTime;
+  late final VoiceOverService _voiceOverService;
 
   @override
   void initState() {
     super.initState();
+    _sessionStartTime = DateTime.now();
     _celebrationFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -55,14 +69,53 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       parent: _celebrationFadeController,
       curve: Curves.easeOut,
     ));
+    // Apply sensory config for round 1 at game initialization (pre-assessment only)
+    widget.sensoryController?.applyRoundConfig(1);
+
+    _voiceOverService = VoiceOverService();
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
+    final audioService = context.read<AudioService>();
     _game = CopyMeGame(
       totalRounds: _totalRounds,
       childId: childId,
-      onStepChanged:
-          (step) => setState(() {
-            _currentStep = step;
-          }),
+      // Audio SFX callbacks
+      onPlayCorrectSfx: () => audioService.playCorrectSfx(),
+      onPlayWrongSfx: () => audioService.playWrongSfx(),
+      onPlayTapSfx: () => audioService.playGameTapSfx(),
+      onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      // Voice-over callbacks
+      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
+      onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.copyMe),
+      onPlayTransitionVo: () => _voiceOverService.playTransition(),
+      onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
+      // Game-specific voice-overs
+      onPlayMyTurnVo: () => _voiceOverService.play(VoiceOverCue.watchMeFirst),
+      onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.nowYouTry),
+      // Sequence highlight shimmer SFX
+      onPlaySequenceHighlightSfx: (position) => audioService.playSequenceShimmerSfx(position),
+      onCorrectMatch: () {
+        // Trigger haptic on each correct tap (but NOT star sparkle):
+        // - Pre-assessment: use sensory controller's per-round config
+        // - Other modes: fall back to child's vibration preference
+        if (widget.sensoryController != null) {
+          widget.sensoryController!.triggerHapticOnCorrect();
+        } else if (context.read<ChildProvider>().vibrationEnabled) {
+          context.read<HapticService>().correctFeedback();
+        }
+      },
+      onStepChanged: (step) {
+        setState(() {
+          _currentStep = step;
+          // Show star sparkle when a round/sequence is fully completed
+          _showStarSparkle = true;
+        });
+
+        // Apply sensory config for the new round (pre-assessment only)
+        // step is 0-based, applyRoundConfig expects 1-based
+        widget.sensoryController?.applyRoundConfig(step + 1);
+      },
       onGameComplete: ({
         required int score,
         required int totalItems,
@@ -74,6 +127,22 @@ class _CopyMeScreenState extends State<CopyMeScreen>
           _gameComplete = true;
           _showCelebration = true;
         });
+
+        // Record the session in the assessment provider
+        final childProvider = context.read<ChildProvider>();
+        final assessmentProvider = context.read<AssessmentProvider>();
+        final childId = childProvider.profile?.id ?? 'unknown';
+
+        assessmentProvider.recordGameSession(
+          childId: childId,
+          gameId: 'copy_me',
+          context: widget.assessmentContext,
+          score: score,
+          totalItems: totalItems,
+          errorCount: errorCount,
+          totalResponseTimeMs: totalResponseTimeMs,
+          startedAt: _sessionStartTime,
+        );
         
         // If onComplete is provided (pre-assessment mode), show celebration then call it
         // If onComplete is null (practice mode), show celebration then show built-in reward
@@ -151,6 +220,7 @@ class _CopyMeScreenState extends State<CopyMeScreen>
   @override
   void dispose() {
     _celebrationFadeController.dispose();
+    _voiceOverService.dispose();
     super.dispose();
   }
 
@@ -169,34 +239,52 @@ class _CopyMeScreenState extends State<CopyMeScreen>
     return Scaffold(
       body: Stack(
         children: [
-          Container(
-            decoration: const BoxDecoration(gradient: AppGradients.copyMe),
-            child: Column(
-              children: [
-                ChildModeTopBar(
-                  totalSteps: _totalRounds,
-                  currentStep: _currentStep,
-                  onParentTap: _handleParentTap,
-                ),
-                Expanded(
-                  child: GameWidget(
-                    game: _game,
-                    backgroundBuilder: (_) => const SizedBox.shrink(),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: VoiceOverPromptBubble(
-                    text:
-                        _isDemoPhase
-                            ? 'Watch carefully…'
-                            : 'Your turn! Tap the shapes!',
-                    isVisible: !_gameComplete,
-                  ),
-                ),
-              ],
+          // Flame: Game area (full screen with gradient)
+          Listener(
+            onPointerDown: (event) {
+              setState(() {
+                _lastTapPosition = event.localPosition;
+              });
+            },
+            child: Container(
+              decoration: const BoxDecoration(gradient: AppGradients.copyMe),
+              child: GameWidget(game: _game),
             ),
           ),
+
+          // Three-star sparkle overlay on correct match
+          if (_showStarSparkle && _lastTapPosition != null)
+            ThreeStarSparkle(
+              position: _lastTapPosition!,
+              onComplete: () {
+                setState(() {
+                  _showStarSparkle = false;
+                });
+              },
+            ),
+
+          // Flutter: Top bar with progress + parent lock (overlay)
+          ChildModeTopBar(
+            totalSteps: _totalRounds,
+            currentStep: _currentStep,
+            onParentTap: _handleParentTap,
+          ),
+
+          // Flutter: Voice-over prompt (overlay)
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: VoiceOverPromptBubble(
+              text:
+                  _isDemoPhase
+                      ? 'Watch carefully…'
+                      : 'Your turn! Tap the shapes!',
+              isVisible: !_gameComplete,
+            ),
+          ),
+
+          // Celebration overlay
           if (_gameComplete && _showCelebration)
             FadeTransition(
               opacity: _celebrationFadeAnimation,

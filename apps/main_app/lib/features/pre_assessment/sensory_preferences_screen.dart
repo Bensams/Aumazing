@@ -5,6 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/child_provider.dart';
 import 'pre_assessment_progress_screen.dart';
+import 'sensory/sensory.dart';
 
 /// Sensory preferences setup screen.
 ///
@@ -57,10 +58,14 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
 
     if (!mounted) return;
 
-    // Navigate to the assessment games using the saved settings
+    // Navigate to the assessment games using the saved settings.
+    // Since the parent manually configured preferences, treat as declined
+    // (use their chosen settings for all rounds, no sensory toggling).
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => const PreAssessmentProgressScreen(),
+        builder: (_) => const PreAssessmentProgressScreen(
+          sensoryConsentResult: SensoryConsentResult.declined,
+        ),
       ),
     );
   }

@@ -20,6 +20,24 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     required this.onInstructionChanged,
     required this.childId,
     this.gameVersion,
+    this.onCorrectMatch,
+    // Audio event callbacks (optional, wired by screen wrappers)
+    this.onPlayCorrectSfx,
+    this.onPlayWrongSfx,
+    this.onPlayTapSfx,
+    this.onPlayDragSfx,
+    this.onPlayDropSfx,
+    this.onPlayLevelCompleteSfx,
+    this.onPlayGameCompleteSfx,
+    this.onPlayCorrectVo,
+    this.onPlayWrongVo,
+    this.onPlayInstructionVo,
+    this.onPlayTransitionVo,
+    this.onPlayCelebrationVo,
+    // Game-specific: listening instruction phase voice-over
+    this.onPlayListenVo,
+    // Composite voice-over: (action, colorName, shapeType)
+    this.onPlayInstructionVoiceOver,
   });
 
   final int totalRounds;
@@ -37,6 +55,29 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
   /// Called when the instruction text changes so the Flutter layer can display it.
   final void Function(String instruction) onInstructionChanged;
+
+  /// Optional callback fired on each correct tap.
+  /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
+  final void Function()? onCorrectMatch;
+
+  // ── Audio event callbacks ────────────────────────────────────────────
+  final VoidCallback? onPlayCorrectSfx;
+  final VoidCallback? onPlayWrongSfx;
+  final VoidCallback? onPlayTapSfx;
+  final VoidCallback? onPlayDragSfx;
+  final VoidCallback? onPlayDropSfx;
+  final VoidCallback? onPlayLevelCompleteSfx;
+  final VoidCallback? onPlayGameCompleteSfx;
+  final VoidCallback? onPlayCorrectVo;
+  final VoidCallback? onPlayWrongVo;
+  final VoidCallback? onPlayInstructionVo;
+  final VoidCallback? onPlayTransitionVo;
+  final VoidCallback? onPlayCelebrationVo;
+  /// Voice-over for the listening instruction phase ("Listen carefully")
+  final VoidCallback? onPlayListenVo;
+
+  /// Callback for composite voice over: (action, colorName, shapeType)
+  final void Function(String action, String colorName, String shapeType)? onPlayInstructionVoiceOver;
 
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -79,6 +120,9 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       gameVersion: gameVersion ?? '1.0.0',
     );
     analyticsStartSession();
+
+    // Play instruction voice-over when game loads
+    onPlayInstructionVo?.call();
 
     _setupRound();
   }
@@ -142,6 +186,14 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     final instruction = 'Tap the ${target.colorName} ${target.shapeType}';
     onInstructionChanged(instruction);
 
+    // Play composite voice-over for the instruction (e.g. "Tap the" + "Red" + "Circle")
+    onPlayInstructionVoiceOver?.call('tap', target.colorName, target.shapeType);
+
+    // Play listen voice-over when new instruction is shown (fallback if no composite VO)
+    if (onPlayInstructionVoiceOver == null) {
+      onPlayListenVo?.call();
+    }
+
     _roundStartTime = DateTime.now();
 
     // Start round and show stimulus
@@ -160,6 +212,9 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   void _onShapeTapped(int index) {
     final target = _shapes[_targetIndex];
 
+    // Play tap SFX on any shape tap
+    onPlayTapSfx?.call();
+
     if (index == _targetIndex) {
       // Correct!
       _score++;
@@ -173,6 +228,13 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
         'target_color': target.colorName,
         'distractor_count': _shapes.length - 1,
       });
+
+      // Play correct SFX and voice-over
+      onPlayCorrectSfx?.call();
+      onPlayCorrectVo?.call();
+
+      // Notify Flutter layer of correct tap (for haptic feedback)
+      onCorrectMatch?.call();
 
       _shapes[index].showCorrect();
 
@@ -196,7 +258,10 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       analyticsAddRoundData('instruction_followed', true);
 
       if (_currentRound >= totalRounds) {
-        // Game complete
+        // Game complete — play game complete SFX and celebration VO
+        onPlayGameCompleteSfx?.call();
+        onPlayCelebrationVo?.call();
+
         analyticsMarkCompleted();
         analyticsCompleteSession();
 
@@ -230,11 +295,19 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
           );
         });
       } else {
+        // Level/round complete — play level complete SFX and transition VO
+        onPlayLevelCompleteSfx?.call();
+        onPlayTransitionVo?.call();
+
         Future.delayed(const Duration(milliseconds: 800), _setupRound);
       }
     } else {
       // Wrong - tapped wrong shape
       _errorCount++;
+
+      // Play wrong SFX and voice-over
+      onPlayWrongSfx?.call();
+      onPlayWrongVo?.call();
 
       final tappedShape = _shapes[index];
 

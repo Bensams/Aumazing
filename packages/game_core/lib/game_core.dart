@@ -28,3 +28,4 @@ export 'src/analytics/analytics.dart';
 
 // Registry
 export 'src/registry/game_registry.dart';
+export 'src/registry/skill_category.dart';
