@@ -1362,6 +1362,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
         password: _passwordController.text,
       );
 
+      // Clear stored guest session so a new guest account will be created
+      // on the next guest sign-in (this account is now bound).
+      await widget.authService.clearStoredGuestSession();
+
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1394,6 +1398,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
       }
 
       await widget.authService.bindAnonymousWithGoogle();
+
+      // Clear stored guest session so a new guest account will be created
+      // on the next guest sign-in (this account is now bound).
+      await widget.authService.clearStoredGuestSession();
 
       if (mounted) {
         Navigator.of(context).pop();

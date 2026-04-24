@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
@@ -15,7 +16,8 @@ import 'pre_assessment_intro_screen.dart';
 ///
 /// Displays a compact, landscape-friendly summary of the pre-assessment
 /// results without requiring scrolling. Includes a "Retake Assessment"
-/// option.
+/// option. When AI prediction data is available, shows the AI profile
+/// and confidence alongside the rule-based profile.
 class AssessmentDashboardScreen extends StatelessWidget {
   const AssessmentDashboardScreen({super.key});
 
@@ -24,6 +26,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
     return Consumer2<AssessmentProvider, ChildProvider>(
       builder: (context, assessProv, childProv, _) {
         final results = assessProv.preResults;
+        final aiPrediction = assessProv.aiPrediction;
 
         if (results.isEmpty) {
           // Shouldn't happen, but fallback
@@ -42,6 +45,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
         return _DashboardBody(
           results: results,
           profile: profile,
+          aiPrediction: aiPrediction,
           onRetake: () {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -60,11 +64,13 @@ class _DashboardBody extends StatelessWidget {
     required this.results,
     required this.profile,
     required this.onRetake,
+    this.aiPrediction,
   });
 
   final List<AssessmentResult> results;
   final SupportProfile profile;
   final VoidCallback onRetake;
+  final AiAssessmentResponse? aiPrediction;
 
   int get _totalCorrect => results.fold(0, (sum, r) => sum + r.score);
   int get _totalItems => results.fold(0, (sum, r) => sum + r.totalItems);
@@ -100,6 +106,8 @@ class _DashboardBody extends StatelessWidget {
                         color: AppColors.primaryPurple,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _buildSourceBadge(),
                     const Spacer(),
                     _OverallBadge(pct: _overallPct),
                   ],
@@ -117,7 +125,7 @@ class _DashboardBody extends StatelessWidget {
                         child: _buildGameScoresCard(),
                       ),
                       const SizedBox(width: 10),
-                      // Center: Profile
+                      // Center: Profile (with AI info if available)
                       Expanded(
                         flex: 3,
                         child: _buildProfileCard(),
@@ -140,6 +148,33 @@ class _DashboardBody extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Badge showing whether results are AI-powered or rule-based.
+  Widget _buildSourceBadge() {
+    final isAi = aiPrediction != null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isAi
+            ? AppColors.mint.withAlpha(40)
+            : AppColors.butterYellow.withAlpha(40),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAi
+              ? AppColors.mint.withAlpha(100)
+              : AppColors.butterYellow.withAlpha(100),
+        ),
+      ),
+      child: Text(
+        isAi ? '🤖 AI-Powered' : '📊 Rule-Based',
+        style: AppTextStyles.bodySmall.copyWith(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: isAi ? AppColors.mint : AppColors.butterYellow,
         ),
       ),
     );
@@ -177,6 +212,13 @@ class _DashboardBody extends StatelessWidget {
       title: 'Developmental Profile',
       emoji: '📋',
       children: [
+        // AI Profile header (when available)
+        if (aiPrediction != null) ...[
+          _buildAiProfileHeader(),
+          const SizedBox(height: 6),
+          const Divider(height: 1),
+          const SizedBox(height: 6),
+        ],
         _ProfileRow('Communication', profile.communication),
         _ProfileRow('Social Interaction', profile.socialInteraction),
         _ProfileRow('Play Skills', profile.playSkills),
@@ -184,6 +226,76 @@ class _DashboardBody extends StatelessWidget {
         if (profile.sensoryNotes.isNotEmpty)
           _ProfileRow('Sensory', profile.sensoryNotes.join(', ')),
       ],
+    );
+  }
+
+  /// AI profile header showing predicted profile and confidence.
+  Widget _buildAiProfileHeader() {
+    final ai = aiPrediction!;
+    final confidencePct = (ai.confidence * 100).round();
+    final confidenceColor = ai.confidence >= 0.8
+        ? AppColors.mint
+        : ai.confidence >= 0.6
+            ? AppColors.butterYellow
+            : AppColors.peach;
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppColors.lavenderLight.withAlpha(50),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Text('🤖', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  ai.profileDisplayName,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryPurple,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: confidenceColor.withAlpha(40),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$confidencePct%',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: confidenceColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (ai.summary.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              ai.summary,
+              style: AppTextStyles.bodySmall.copyWith(
+                fontSize: 10,
+                color: AppColors.mutedForeground,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -204,6 +316,60 @@ class _DashboardBody extends StatelessWidget {
           _RecRow(Icons.visibility_off_rounded, 'Mode', 'Low-stim'),
         if (profile.turnTakingPractice)
           _RecRow(Icons.people_rounded, 'Practice', 'Turn-taking'),
+        // Show AI recommended modules if available
+        if (aiPrediction != null &&
+            aiPrediction!.moduleDetails.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          const Divider(height: 1),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded,
+                  size: 13, color: AppColors.lavender),
+              const SizedBox(width: 4),
+              Text(
+                'AI Recommended Activities',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ...aiPrediction!.moduleDetails.map((mod) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(
+                  children: [
+                    Icon(Icons.play_circle_outline_rounded,
+                        size: 12, color: AppColors.mint),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        mod.name,
+                        style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.lavenderLight.withAlpha(80),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Lvl ${mod.startingLevel}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryPurple,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
       ],
     );
   }

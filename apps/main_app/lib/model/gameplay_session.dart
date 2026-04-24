@@ -17,6 +17,18 @@ class GameplaySession {
   /// Total response time in milliseconds across all items.
   final int totalResponseTimeMs;
 
+  /// Number of retries the child used during the session.
+  final int retryCount;
+
+  /// Number of hints the child requested or was given.
+  final int hintCount;
+
+  /// Total idle time in seconds (no interaction detected).
+  final double idleTimeSeconds;
+
+  /// Number of random/off-target touches during the session.
+  final int randomTouchCount;
+
   final DateTime startedAt;
   final DateTime endedAt;
 
@@ -32,6 +44,10 @@ class GameplaySession {
     required this.totalItems,
     required this.errorCount,
     required this.totalResponseTimeMs,
+    this.retryCount = 0,
+    this.hintCount = 0,
+    this.idleTimeSeconds = 0.0,
+    this.randomTouchCount = 0,
     required this.startedAt,
     required this.endedAt,
     this.synced = false,
@@ -51,6 +67,10 @@ class GameplaySession {
         totalItems: totalItems,
         errorCount: errorCount,
         totalResponseTimeMs: totalResponseTimeMs,
+        retryCount: retryCount,
+        hintCount: hintCount,
+        idleTimeSeconds: idleTimeSeconds,
+        randomTouchCount: randomTouchCount,
         startedAt: startedAt,
         endedAt: endedAt,
         synced: true,
@@ -65,6 +85,10 @@ class GameplaySession {
         'total_items': totalItems,
         'error_count': errorCount,
         'total_response_time_ms': totalResponseTimeMs,
+        'retry_count': retryCount,
+        'hint_count': hintCount,
+        'idle_time_seconds': idleTimeSeconds,
+        'random_touch_count': randomTouchCount,
         'started_at': startedAt.toIso8601String(),
         'ended_at': endedAt.toIso8601String(),
         'synced': synced ? 1 : 0,
@@ -79,6 +103,10 @@ class GameplaySession {
         totalItems: map['total_items'] as int,
         errorCount: map['error_count'] as int,
         totalResponseTimeMs: map['total_response_time_ms'] as int,
+        retryCount: (map['retry_count'] as int?) ?? 0,
+        hintCount: (map['hint_count'] as int?) ?? 0,
+        idleTimeSeconds: (map['idle_time_seconds'] as num?)?.toDouble() ?? 0.0,
+        randomTouchCount: (map['random_touch_count'] as int?) ?? 0,
         startedAt: DateTime.parse(map['started_at'] as String),
         endedAt: DateTime.parse(map['ended_at'] as String),
         synced: (map['synced'] ?? 0) == 1,
@@ -93,6 +121,10 @@ class GameplaySession {
         'total_items': totalItems,
         'error_count': errorCount,
         'total_response_time_ms': totalResponseTimeMs,
+        'retry_count': retryCount,
+        'hint_count': hintCount,
+        'idle_time_seconds': idleTimeSeconds,
+        'random_touch_count': randomTouchCount,
         'started_at': startedAt.toIso8601String(),
         'ended_at': endedAt.toIso8601String(),
       };

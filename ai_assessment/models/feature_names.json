@@ -1,0 +1,14 @@
+[
+  "overall_accuracy",
+  "overall_avg_response_time",
+  "overall_task_completion_rate",
+  "overall_retry_count",
+  "overall_hint_count",
+  "overall_prompt_dependency_score",
+  "overall_idle_time_seconds",
+  "overall_invalid_touch_count",
+  "copy_me_accuracy",
+  "match_it_accuracy",
+  "my_turn_your_turn_accuracy",
+  "do_what_i_say_accuracy"
+]

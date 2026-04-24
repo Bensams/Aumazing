@@ -45,3 +45,10 @@ app.*.map.json
 
 # Gemini
 .gemini/
+
+# AI Assessment (Python)
+ai_assessment/.env
+ai_assessment/__pycache__/
+ai_assessment/app/__pycache__/
+ai_assessment/training/__pycache__/
+ai_assessment/.venv/

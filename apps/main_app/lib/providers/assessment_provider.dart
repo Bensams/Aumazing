@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+import '../model/ai_assessment_response.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
+import '../services/ai_assessment_service.dart';
 import '../services/assessment_service.dart';
 import '../services/local_db_service.dart';
 
@@ -19,6 +21,9 @@ class AssessmentProvider extends ChangeNotifier {
   /// The currently active pre-assessment sessions being collected.
   final List<GameplaySession> _currentSessions = [];
 
+  /// AI-based prediction result (null if API unavailable or not yet called).
+  AiAssessmentResponse? _aiPrediction;
+
   AssessmentProvider({
     AssessmentService? assessmentService,
     LocalDbService? localDb,
@@ -32,6 +37,13 @@ class AssessmentProvider extends ChangeNotifier {
   bool get hasPreAssessment => _preResults.isNotEmpty;
   bool get hasPostAssessment => _postResults.isNotEmpty;
   bool get hasRecommendation => _recommendation != null;
+
+  /// The latest AI prediction result, or null if unavailable.
+  AiAssessmentResponse? get aiPrediction => _aiPrediction;
+
+  /// The sessions collected during the current assessment round.
+  List<GameplaySession> get currentSessions =>
+      List.unmodifiable(_currentSessions);
 
   String? get recommendedModuleId =>
       _recommendation?['module_id'] as String?;
@@ -110,7 +122,9 @@ class AssessmentProvider extends ChangeNotifier {
       }
 
       _recommendation = _assessmentService.recommendModule(_preResults);
-      _currentSessions.clear();
+      // Note: _currentSessions are NOT cleared here so they remain
+      // available for the AI prediction call (predictWithAI).
+      // They are cleared in clear() or after AI prediction.
 
       debugPrint('[AssessmentProvider] Pre-assessment finalized. '
           'Recommended: ${_recommendation?['module_name']} '
@@ -158,11 +172,51 @@ class AssessmentProvider extends ChangeNotifier {
     }
   }
 
+  /// Predict developmental profile using the AI Assessment API.
+  ///
+  /// Sends the collected [_currentSessions] to the XGBoost model and
+  /// stores the result in [_aiPrediction]. Returns null if the API is
+  /// unreachable, allowing the caller to fall back to rule-based scoring.
+  Future<AiAssessmentResponse?> predictWithAI(String childId) async {
+    debugPrint('[AssessmentProvider] 🔮 predictWithAI called for '
+        'child=$childId with ${_currentSessions.length} sessions');
+    final service = AiAssessmentService();
+    try {
+      final prediction = await service.predictFromSessions(
+        childId: childId,
+        sessions: _currentSessions,
+      );
+      _aiPrediction = prediction;
+      notifyListeners();
+      if (prediction != null) {
+        debugPrint('[AssessmentProvider] ✅ AI prediction SUCCESS: '
+            '${prediction.profileDisplayName} '
+            '(${prediction.confidencePercent}), '
+            'support_level=${prediction.supportLevel}, '
+            'modules=${prediction.recommendedModules}, '
+            'moduleDetails=${prediction.moduleDetails}, '
+            'skillAreas=${prediction.skillAreas}');
+      } else {
+        debugPrint('[AssessmentProvider] ⚠️ AI prediction returned null, '
+            'will use rule-based fallback');
+      }
+      return prediction;
+    } catch (e) {
+      debugPrint('[AssessmentProvider] ❌ predictWithAI error: $e');
+      return null;
+    } finally {
+      service.dispose();
+      // Clear sessions now that both finalization and AI prediction are done
+      _currentSessions.clear();
+    }
+  }
+
   void clear() {
     _preResults.clear();
     _postResults.clear();
     _recommendation = null;
     _currentSessions.clear();
+    _aiPrediction = null;
     notifyListeners();
   }
 }
