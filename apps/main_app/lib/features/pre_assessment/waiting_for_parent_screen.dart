@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import 'game_summary_dialog.dart';
@@ -17,10 +18,14 @@ class WaitingForParentScreen extends StatelessWidget {
     super.key,
     required this.results,
     required this.profile,
+    this.aiResponse,
   });
 
   final List<AssessmentResult> results;
   final SupportProfile profile;
+
+  /// AI prediction data, or null if AI was unavailable (rule-based fallback).
+  final AiAssessmentResponse? aiResponse;
 
   void _showParentVerification(BuildContext context) {
     showDialog(
@@ -40,6 +45,7 @@ class WaitingForParentScreen extends StatelessWidget {
       barrierDismissible: false,
       builder: (dialogContext) => GameSummaryDialog(
         results: results,
+        aiResponse: aiResponse,
         onContinue: () {
           Navigator.of(dialogContext).pop();
           // Navigate to the full results screen
@@ -48,6 +54,7 @@ class WaitingForParentScreen extends StatelessWidget {
               builder: (_) => PreAssessmentResultScreen(
                 profile: profile,
                 results: results,
+                aiResponse: aiResponse,
               ),
             ),
           );

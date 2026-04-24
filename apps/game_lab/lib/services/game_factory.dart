@@ -239,6 +239,15 @@ class GameLabGameFactory {
             vo.play(VoiceOverCue.listenCarefully);
             services.lastPlayedVo = 'listenCarefully';
           },
+          onPlayInstructionVoiceOver: (action, color, shape) {
+            final cues = VoiceOverService.composeInstruction(
+              action: action,
+              color: color,
+              shape: shape,
+            );
+            vo.playSequence(cues);
+            services.lastPlayedVo = 'composite: $action $color $shape';
+          },
         );
 
       case 'my_turn_your_turn':

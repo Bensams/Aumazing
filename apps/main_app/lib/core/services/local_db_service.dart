@@ -1347,6 +1347,67 @@ class LocalDbService {
     debugPrint('[LocalDbService] Guest data backfill complete');
   }
 
+  // ─── Guest User ID Migration ──────────────────────────────────────────
+
+  /// Migrate child profiles (and related data) from an old guest user ID to a
+  /// new one. This is used when the stored guest refresh token fails to restore
+  /// and a brand-new anonymous account is created. Without this migration the
+  /// child profiles keyed to the old user ID would be orphaned.
+  Future<void> migrateGuestUserId(
+    String oldUserId,
+    String newUserId,
+  ) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+
+    // Update user_id (and owner_id where applicable) in the children table
+    final updatedRows = await db.update(
+      LocalTables.children,
+      {
+        'user_id': newUserId,
+        'owner_id': newUserId,
+        'updated_at': now,
+        'sync_status': SyncStatus.pending.value,
+      },
+      where: 'user_id = ?',
+      whereArgs: [oldUserId],
+    );
+
+    debugPrint(
+      '[LocalDbService] migrateGuestUserId: $oldUserId -> $newUserId '
+      '($updatedRows children rows updated)',
+    );
+
+    // Also migrate owner_id references in related tables so that sync and
+    // backfill logic can still find them.
+    for (final table in [
+      LocalTables.assessmentRuns,
+      LocalTables.gameSessions,
+      LocalTables.gameRounds,
+      LocalTables.sessionEvents,
+      LocalTables.caregiverQuestionnaires,
+      LocalTables.assessmentResults,
+      LocalTables.moduleRecommendations,
+      LocalTables.assessmentComparisons,
+      LocalTables.sensoryConsent,
+      LocalTables.sensoryRoundMetrics,
+      LocalTables.sensoryPreferences,
+    ]) {
+      await db.update(
+        table,
+        {
+          'owner_id': newUserId,
+          'updated_at': now,
+          'sync_status': SyncStatus.pending.value,
+        },
+        where: 'owner_id = ?',
+        whereArgs: [oldUserId],
+      );
+    }
+
+    debugPrint('[LocalDbService] Guest user ID migration complete');
+  }
+
   // ─── Utility ──────────────────────────────────────────────────────────
 
   Future<void> clearAll() async {

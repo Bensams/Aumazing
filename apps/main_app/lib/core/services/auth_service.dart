@@ -3,10 +3,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../config/supabase_config.dart';
+import 'local_db_service.dart';
 
 class GoogleAuthTokens {
   const GoogleAuthTokens({required this.idToken, this.accessToken});
@@ -317,15 +319,26 @@ class AuthService {
   // Guest mode support
   static String? _guestId;
 
+  // SharedPreferences keys for guest session persistence
+  static const _guestRefreshTokenKey = 'guest_refresh_token';
+  static const _guestUserIdKey = 'guest_user_id';
+
+  // Stores the previous guest user ID when a migration occurred
+  String? _previousGuestUserId;
+
+  final LocalDbService _localDb;
+
   AuthService({
     SupabaseAuthClient? supabaseAuth,
     GoogleAuthClient? googleAuth,
     FacebookAuthClient? facebookAuth,
+    LocalDbService? localDb,
   }) : _supabaseAuth =
            supabaseAuth ??
            DefaultSupabaseAuthClient(Supabase.instance.client.auth),
        _googleAuth = googleAuth ?? DefaultGoogleAuthClient(),
-       _facebookAuth = facebookAuth ?? DefaultFacebookAuthClient();
+       _facebookAuth = facebookAuth ?? DefaultFacebookAuthClient(),
+       _localDb = localDb ?? localDbService;
 
   User? get currentUser => _supabaseAuth.currentUser;
   bool get isLoggedIn => currentUser != null;
@@ -373,6 +386,112 @@ class AuthService {
       rethrow;
     }
   }
+
+  /// Sign in anonymously, reusing an existing unbound guest account if one
+  /// exists locally. Only creates a new anonymous account when no reusable
+  /// guest session is found.
+  ///
+  /// A guest account is considered "unbound" when [User.isAnonymous] is true
+  /// (i.e., it has not been linked to Google/Facebook/email).
+  ///
+  /// When token restore fails and a new anonymous account is created, child
+  /// profiles keyed to the old guest user ID are automatically migrated to
+  /// the new user ID in the local SQLite database.
+  Future<AuthResponse> signInAnonymouslyOrReuse() async {
+    // 1. Try to restore a previously stored guest session
+    final prefs = await SharedPreferences.getInstance();
+    final storedRefreshToken = prefs.getString(_guestRefreshTokenKey);
+    final oldGuestUserId = prefs.getString(_guestUserIdKey);
+
+    if (storedRefreshToken != null) {
+      try {
+        debugPrint('[AuthService] Found stored guest refresh token, attempting restore...');
+        final restored = await _supabaseAuth.refreshSession(storedRefreshToken);
+
+        if (restored.user != null && restored.user!.isAnonymous) {
+          debugPrint('[AuthService] Reusing existing guest account: ${restored.user!.id}');
+          // Update the stored refresh token in case it was rotated
+          final newRefreshToken = restored.session?.refreshToken;
+          if (newRefreshToken != null) {
+            await prefs.setString(_guestRefreshTokenKey, newRefreshToken);
+          }
+          // Persist the user ID (may already match, but ensure it's stored)
+          await prefs.setString(_guestUserIdKey, restored.user!.id);
+          debugPrint('[AuthService] Stored guest user ID: ${restored.user!.id}');
+          return restored;
+        }
+
+        // User exists but is no longer anonymous (was bound to a provider).
+        // Clear the stored token and create a new guest account.
+        debugPrint('[AuthService] Stored guest account is bound, creating new guest...');
+        await prefs.remove(_guestRefreshTokenKey);
+      } catch (e) {
+        // Refresh failed (token expired, revoked, etc.) — create a new guest.
+        debugPrint('[AuthService] Guest session restore failed: $e');
+        await prefs.remove(_guestRefreshTokenKey);
+      }
+    }
+
+    // 2. No reusable guest session — create a new anonymous account
+    debugPrint('[AuthService] Creating new anonymous account...');
+    final response = await signInAnonymously();
+    final newUserId = response.user?.id;
+
+    // 3. Migrate child profiles if the old guest user ID differs from the new one
+    if (oldGuestUserId != null &&
+        newUserId != null &&
+        oldGuestUserId != newUserId) {
+      debugPrint(
+        '[AuthService] Guest user ID changed: $oldGuestUserId -> $newUserId. '
+        'Migrating child profiles...',
+      );
+      _previousGuestUserId = oldGuestUserId;
+      try {
+        await _localDb.migrateGuestUserId(oldGuestUserId, newUserId);
+        debugPrint('[AuthService] Child profile migration complete');
+      } catch (e) {
+        debugPrint('[AuthService] Child profile migration failed: $e');
+      }
+    }
+
+    // 4. Persist the new guest session's refresh token and user ID for future reuse
+    final refreshToken = response.session?.refreshToken;
+    if (refreshToken != null) {
+      await prefs.setString(_guestRefreshTokenKey, refreshToken);
+      debugPrint('[AuthService] Stored guest refresh token for reuse');
+    }
+    if (newUserId != null) {
+      await prefs.setString(_guestUserIdKey, newUserId);
+      debugPrint('[AuthService] Stored guest user ID: $newUserId');
+    }
+
+    return response;
+  }
+
+  /// Clear the stored guest refresh token and user ID.
+  ///
+  /// Call this when the guest account is bound to a provider (Google,
+  /// Facebook, email) so that a fresh guest account will be created on
+  /// the next guest sign-in.
+  Future<void> clearStoredGuestSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_guestRefreshTokenKey);
+    await prefs.remove(_guestUserIdKey);
+    _previousGuestUserId = null;
+    debugPrint('[AuthService] Cleared stored guest session and user ID');
+  }
+
+  /// Returns the stored guest user ID from SharedPreferences, or null if
+  /// no guest session has been persisted yet.
+  Future<String?> getStoredGuestUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_guestUserIdKey);
+  }
+
+  /// Returns the previous guest user ID when a migration occurred during
+  /// [signInAnonymouslyOrReuse]. This is non-null only when the token
+  /// restore failed and child profiles were migrated to a new user ID.
+  String? get previousGuestUserId => _previousGuestUserId;
 
   /// Convert anonymous user to permanent account.
   ///
@@ -654,6 +773,8 @@ class AuthService {
   // --- Sign Out ---
 
   Future<void> signOut() async {
+    final isAnonymous = currentUser?.isAnonymous == true;
+
     try {
       await GoogleSignIn.instance.disconnect();
     } catch (e) {
@@ -664,9 +785,19 @@ class AuthService {
     } catch (e) {
       debugPrint('Facebook sign-out cleanup: $e');
     }
-    await _supabaseAuth.signOut();
 
-    // Re-initialize guest mode for continued offline usage
-    initializeGuestMode();
+    if (isAnonymous) {
+      // Use local scope to preserve the refresh token on the server so the
+      // same anonymous account can be restored on the next guest sign-in.
+      await _supabaseAuth.signOut(scope: SignOutScope.local);
+      debugPrint('[AuthService] Anonymous user signed out with local scope');
+    } else {
+      // Fully revoke the session for bound (non-anonymous) accounts and
+      // clear the stored guest token so a fresh guest account is created
+      // next time.
+      await _supabaseAuth.signOut(scope: SignOutScope.global);
+      await clearStoredGuestSession();
+      debugPrint('[AuthService] Bound user signed out with global scope');
+    }
   }
 }

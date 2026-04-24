@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
@@ -28,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _musicOn = true;
+  bool _hasExistingGuestAccount = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -61,10 +63,22 @@ class _LoginScreenState extends State<LoginScreen>
     _logoAnimController.forward();
 
     _initVideoPlayer();
+    _checkForExistingGuestAccount();
     // Music already started by LoadingScreen, just verify it's playing
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verifyMusicPlaying();
     });
+  }
+
+  /// Check SharedPreferences for a stored guest refresh token.
+  /// If one exists, an unbound guest account was previously created,
+  /// so we show "Continue to previous account" instead of "Continue as Guest".
+  Future<void> _checkForExistingGuestAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasToken = prefs.getString('guest_refresh_token') != null;
+    if (mounted && hasToken != _hasExistingGuestAccount) {
+      setState(() => _hasExistingGuestAccount = hasToken);
+    }
   }
 
   void _verifyMusicPlaying() async {
@@ -313,9 +327,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Only sign in anonymously if no existing session
+      // Reuse an existing unbound guest account if available,
+      // otherwise create a new anonymous account.
       if (_authService.currentUser == null) {
-        await _authService.signInAnonymously();
+        await _authService.signInAnonymouslyOrReuse();
       }
       await _navigateAfterAuth();
     } on AuthException catch (e) {
@@ -664,15 +679,24 @@ class _LoginScreenState extends State<LoginScreen>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      Icons.person_outline,
+                                      _hasExistingGuestAccount
+                                          ? Icons.restore
+                                          : Icons.person_outline,
                                       size: 18,
-                                      color: AppColors.mutedForeground,
+                                      color: _hasExistingGuestAccount
+                                          ? AppColors.primaryPurple
+                                          : AppColors.mutedForeground,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Continue as Guest',
+                                      _hasExistingGuestAccount
+                                          ? 'Continue to previous account'
+                                          : 'Continue as Guest',
                                       style: AppTextStyles.labelLarge.copyWith(
                                         fontSize: 13,
+                                        color: _hasExistingGuestAccount
+                                            ? AppColors.primaryPurple
+                                            : null,
                                       ),
                                     ),
                                   ],

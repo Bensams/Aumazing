@@ -7,7 +7,9 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/local_db_service.dart';
+import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
+import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/scoring_service.dart';
@@ -313,18 +315,17 @@ class _PreAssessmentProgressScreenState
 
     if (!mounted) return;
 
-    const scorer = ScoringService();
+    // Call AI Assessment API for XGBoost-based prediction
+    debugPrint('[PreAssessment] Calling AI Assessment API...');
+    final aiResponse = await assessProv.predictWithAI(_childId);
 
-    // Read sensory settings from the persisted child profile
-    final sensorySettings = context.read<ChildProvider>().sensorySettingsMap;
+    if (!mounted) return;
 
     // Use the finalized results from the provider (which have proper data)
     final finalResults = assessProv.preResults;
 
-    final profile = scorer.generateProfile(
-      results: finalResults.isNotEmpty ? finalResults : _results,
-      sensorySettings: sensorySettings,
-    );
+    // Generate profile — use AI if available, otherwise rule-based fallback
+    final profile = _buildSupportProfile(aiResponse, finalResults);
 
     // Navigate to the waiting-for-parent screen
     Navigator.of(context).pushReplacement(
@@ -332,9 +333,106 @@ class _PreAssessmentProgressScreenState
         builder: (_) => WaitingForParentScreen(
           results: finalResults.isNotEmpty ? finalResults : _results,
           profile: profile,
+          aiResponse: aiResponse,
         ),
       ),
     );
+  }
+
+  /// Build a [SupportProfile] from the AI response or rule-based fallback.
+  ///
+  /// When AI is available, uses [AiAssessmentResponse.supportLevel] to set
+  /// nuanced levels across all developmental areas, with the primary area
+  /// (matching the predicted profile) set lower than the others.
+  SupportProfile _buildSupportProfile(
+    AiAssessmentResponse? aiResponse,
+    List<AssessmentResult> finalResults,
+  ) {
+    if (aiResponse != null) {
+      debugPrint('[PreAssessment] ✅ Using AI-based profile: '
+          '${aiResponse.profileDisplayName} '
+          '(${aiResponse.confidencePercent}), '
+          'support_level=${aiResponse.supportLevel}');
+
+      // Map support_level to nuanced developmental levels
+      // high → primary area 'emerging', others 'developing'
+      // moderate → primary area 'developing', others 'developing'
+      // low → primary area 'developing', others 'strong'
+      final String primaryLevel;
+      final String secondaryLevel;
+      final String attentionPrimary;
+      final String attentionSecondary;
+
+      switch (aiResponse.supportLevel) {
+        case 'high':
+          primaryLevel = 'emerging';
+          secondaryLevel = 'developing';
+          attentionPrimary = 'short attention';
+          attentionSecondary = 'moderate';
+        case 'moderate':
+          primaryLevel = 'developing';
+          secondaryLevel = 'developing';
+          attentionPrimary = 'moderate';
+          attentionSecondary = 'moderate';
+        case 'low':
+        default:
+          primaryLevel = 'developing';
+          secondaryLevel = 'strong';
+          attentionPrimary = 'moderate';
+          attentionSecondary = 'sustained';
+      }
+
+      final profile = aiResponse.predictedProfile;
+
+      return SupportProfile(
+        communication: profile == 'communication_support'
+            ? primaryLevel
+            : secondaryLevel,
+        socialInteraction: profile == 'social_support'
+            ? primaryLevel
+            : secondaryLevel,
+        playSkills: profile == 'play_support'
+            ? primaryLevel
+            : secondaryLevel,
+        attention: profile == 'attention_support'
+            ? attentionPrimary
+            : attentionSecondary,
+        sensoryNotes: const [], // Don't stuff AI info into sensoryNotes
+        recommendedDifficulty: aiResponse.supportLevel == 'high'
+            ? 'beginner'
+            : aiResponse.supportLevel == 'moderate'
+                ? 'intermediate'
+                : 'advanced',
+        recommendedPromptStyle: aiResponse.supportLevel == 'high'
+            ? 'visual'
+            : aiResponse.supportLevel == 'moderate'
+                ? 'combined'
+                : 'verbal',
+        recommendedSessionMinutes: aiResponse.supportLevel == 'high'
+            ? 3
+            : aiResponse.supportLevel == 'moderate'
+                ? 5
+                : 7,
+        lowStimulationMode: profile == 'attention_support',
+        turnTakingPractice: profile == 'social_support',
+        promptRepetition: aiResponse.supportLevel == 'high'
+            ? 3
+            : aiResponse.supportLevel == 'moderate'
+                ? 2
+                : 1,
+      );
+    } else {
+      // Fallback: existing rule-based scoring
+      debugPrint('[PreAssessment] ⚠️ Using rule-based profile '
+          '(AI unavailable)');
+      const scorer = ScoringService();
+      final sensorySettings =
+          context.read<ChildProvider>().sensorySettingsMap;
+      return scorer.generateProfile(
+        results: finalResults.isNotEmpty ? finalResults : _results,
+        sensorySettings: sensorySettings,
+      );
+    }
   }
 
   @override

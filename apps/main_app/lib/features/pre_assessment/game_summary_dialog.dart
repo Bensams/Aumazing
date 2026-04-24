@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 
 /// Summary dialog shown after ALL pre-assessment games complete.
@@ -13,10 +14,14 @@ class GameSummaryDialog extends StatelessWidget {
     super.key,
     required this.results,
     required this.onContinue,
+    this.aiResponse,
   });
 
   final List<AssessmentResult> results;
   final VoidCallback onContinue;
+
+  /// AI prediction data, or null if AI was unavailable (rule-based fallback).
+  final AiAssessmentResponse? aiResponse;
 
   static const _gameNames = {
     'copy_me': 'Copy Me',
