@@ -1,3 +1,5 @@
+import 'package:game_core/game_core.dart';
+
 import '../model/assessment_result.dart';
 import '../model/support_profile.dart';
 
@@ -10,43 +12,52 @@ class ScoringService {
     required List<AssessmentResult> results,
     required Map<String, dynamic> sensorySettings,
   }) {
-    final copyMe = _findResult(results, 'copy_me');
-    final doWhat = _findResult(results, 'do_what_i_say');
-    final turnTaking = _findResult(results, 'my_turn_your_turn');
-    final matchIt = _findResult(results, 'match_it');
+    // Get games for each category dynamically
+    final commGameIds = GameRegistry.gamesForCategory(SkillCategory.communication)
+        .map((g) => g.id)
+        .toList();
+    final playGameIds = GameRegistry.gamesForCategory(SkillCategory.playSkills)
+        .map((g) => g.id)
+        .toList();
+    final socialGameIds = GameRegistry.gamesForCategory(SkillCategory.socialInteraction)
+        .map((g) => g.id)
+        .toList();
 
-    // ── Communication (Copy Me + Do What I Say) ─────────────────────
-    final commScores = <double>[
-      if (copyMe != null) copyMe.accuracy,
-      if (doWhat != null) doWhat.accuracy,
-    ];
-    final communication = _level(
-      commScores.isEmpty ? 0.0 : _avg(commScores),
-    );
+    // ── Communication ───────────────────────────────────────────────
+    final commScores = results
+        .where((r) => commGameIds.contains(r.gameId))
+        .map((r) => r.accuracy)
+        .toList();
+    final communication = _level(commScores.isEmpty ? 0.0 : _avg(commScores));
 
-    // ── Social Interaction (My Turn Your Turn) ──────────────────────
+    // ── Social Interaction ──────────────────────────────────────────
     String socialInteraction;
-    if (turnTaking == null) {
+    final socialResults = results
+        .where((r) => socialGameIds.contains(r.gameId))
+        .toList();
+    if (socialResults.isEmpty) {
       socialInteraction = 'emerging';
     } else {
-      final earlyTaps = turnTaking.rawMetrics['early_taps'] as int? ?? 0;
-      if (earlyTaps <= 1 && turnTaking.accuracy >= 0.8) {
+      // Apply early_taps logic to social interaction games
+      final earlyTaps = socialResults
+          .map((r) => r.rawMetrics['early_taps'] as int? ?? 0)
+          .reduce((a, b) => a + b);
+      final socialAccuracy = _avg(socialResults.map((r) => r.accuracy).toList());
+      if (earlyTaps <= 1 && socialAccuracy >= 0.8) {
         socialInteraction = 'good';
-      } else if (turnTaking.accuracy >= 0.5) {
+      } else if (socialAccuracy >= 0.5) {
         socialInteraction = 'improving';
       } else {
         socialInteraction = 'needs guided turn-taking';
       }
     }
 
-    // ── Play Skills (Match It + Copy Me) ────────────────────────────
-    final playScores = <double>[
-      if (matchIt != null) matchIt.accuracy,
-      if (copyMe != null) copyMe.accuracy,
-    ];
-    final playSkills = _level(
-      playScores.isEmpty ? 0.0 : _avg(playScores),
-    );
+    // ── Play Skills ─────────────────────────────────────────────────
+    final playScores = results
+        .where((r) => playGameIds.contains(r.gameId))
+        .map((r) => r.accuracy)
+        .toList();
+    final playSkills = _level(playScores.isEmpty ? 0.0 : _avg(playScores));
 
     // ── Attention (all games: avg response time) ────────────────────
     final allTimes = results.map((r) => r.avgResponseTimeMs).toList();
@@ -91,9 +102,11 @@ class ScoringService {
       difficulty = 'beginner';
     }
 
-    final needsTurnPractice = turnTaking != null &&
-        ((turnTaking.rawMetrics['early_taps'] as int? ?? 0) > 2 ||
-            turnTaking.accuracy < 0.5);
+    final needsTurnPractice = socialResults.isNotEmpty &&
+        (socialResults
+                .map((r) => r.rawMetrics['early_taps'] as int? ?? 0)
+                .reduce((a, b) => a + b) > 2 ||
+            _avg(socialResults.map((r) => r.accuracy).toList()) < 0.5);
 
     final lowStim = sensoryNotes.length >= 2;
 
@@ -106,6 +119,7 @@ class ScoringService {
     final sessionMin = attention == 'short attention' ? 3 : 5;
 
     // Do What I Say may report preferred mode
+    final doWhat = _findResult(results, 'do_what_i_say');
     final promptStyle =
         doWhat?.rawMetrics['preferred_mode'] as String? ?? 'combined';
 

@@ -17,6 +17,8 @@ dependencies:
     path: ../../packages/shared_ui
   shared_audio:
     path: ../../packages/shared_audio
+  shared_haptic:
+    path: ../../packages/shared_haptic
   # ── App dependencies ─────────────────────────────────────────────────
   flame: ^1.30.1
 

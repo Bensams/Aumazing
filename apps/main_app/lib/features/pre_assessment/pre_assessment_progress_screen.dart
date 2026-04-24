@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../core/services/local_db_service.dart';
 import '../../model/assessment_result.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
@@ -16,6 +18,7 @@ import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
 
+import 'sensory/sensory.dart';
 import 'waiting_for_parent_screen.dart';
 
 /// Orchestrates the sequential pre-assessment game flow.
@@ -24,10 +27,18 @@ import 'waiting_for_parent_screen.dart';
 /// to the waiting-for-parent screen where the parent can review
 /// the summary and proceed to the results.
 ///
-/// Sensory settings are read from [ChildProvider] (persisted profile)
-/// rather than passed as a constructor parameter.
+/// Accepts a [sensoryConsentResult] from the consent dialog shown
+/// on the intro screen. When accepted, a [SensoryRoundController]
+/// manages per-round music/haptic toggling. When declined, the
+/// parent's existing [ChildProvider] settings are used for all rounds.
 class PreAssessmentProgressScreen extends StatefulWidget {
-  const PreAssessmentProgressScreen({super.key});
+  /// The parent's consent decision from [SensoryConsentDialog].
+  final SensoryConsentResult sensoryConsentResult;
+
+  const PreAssessmentProgressScreen({
+    super.key,
+    required this.sensoryConsentResult,
+  });
 
   @override
   State<PreAssessmentProgressScreen> createState() =>
@@ -38,6 +49,66 @@ class _PreAssessmentProgressScreenState
     extends State<PreAssessmentProgressScreen> {
   int _currentGameIndex = 0;
   final List<AssessmentResult> _results = [];
+
+  /// Controls per-round sensory settings (music/haptic toggling).
+  late final SensoryRoundController _sensoryController;
+
+  /// Collected sensory round metrics across all games.
+  final List<SensoryRoundMetrics> _sensoryMetrics = [];
+
+  /// The analyzed sensory preference result (populated after all games).
+  SensoryPreferenceResult? _sensoryPreferenceResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _initSensoryController();
+    _saveSensoryConsent();
+  }
+
+  /// Persist the parent's sensory consent decision to the local database.
+  void _saveSensoryConsent() {
+    final consentGiven =
+        widget.sensoryConsentResult == SensoryConsentResult.accepted;
+    localDbService.insertSensoryConsent(
+      childId: _childId,
+      consentGiven: consentGiven,
+    );
+    debugPrint(
+      '[PreAssessment] Saved sensory consent: $consentGiven for $_childId',
+    );
+  }
+
+  void _initSensoryController() {
+    final childProvider = context.read<ChildProvider>();
+    final audioService = context.read<AudioService>();
+
+    final consentAccepted =
+        widget.sensoryConsentResult == SensoryConsentResult.accepted;
+
+    // Build the round list based on consent
+    final rounds = consentAccepted
+        ? SensoryRoundConfig.preAssessmentRounds
+        : SensoryRoundConfig.parentDeclinedRounds(
+            musicEnabled: childProvider.musicEnabled,
+            hapticEnabled: childProvider.vibrationEnabled,
+          );
+
+    _sensoryController = SensoryRoundController(
+      audioService: audioService,
+      rounds: rounds,
+      consentGiven: consentAccepted,
+      originalAudioConfig: audioService.config,
+      originalVibrationEnabled: childProvider.vibrationEnabled,
+    );
+  }
+
+  @override
+  void dispose() {
+    // Restore original audio/haptic settings before disposing
+    _sensoryController.dispose();
+    super.dispose();
+  }
 
   static const _gameOrder = [
     'copy_me',
@@ -97,8 +168,68 @@ class _PreAssessmentProgressScreenState
       rawMetrics: extras,
     ));
 
+    // Collect sensory round metrics from aggregate game data
+    _collectSensoryMetrics(
+      gameId: gameId,
+      score: score,
+      totalItems: totalItems,
+      errorCount: errorCount,
+      totalResponseTimeMs: totalResponseTimeMs,
+    );
+
     // Show reward overlay before advancing to next game
     _showRewardThenAdvance();
+  }
+
+  /// Create sensory round metrics from aggregate game completion data.
+  ///
+  /// Since [_onGameComplete] receives aggregate data (not per-round), we
+  /// distribute the totals evenly across the [SensoryRoundController]'s
+  /// round configurations so the [SensoryPreferenceAnalyzer] can compare
+  /// performance under each sensory condition.
+  void _collectSensoryMetrics({
+    required String gameId,
+    required int score,
+    required int totalItems,
+    required int errorCount,
+    required int totalResponseTimeMs,
+  }) {
+    final rounds = _sensoryController.rounds;
+    if (rounds.isEmpty) return;
+
+    final itemsPerRound =
+        totalItems > 0 ? (totalItems / rounds.length).ceil() : 1;
+    final correctPerRound = score > 0 ? (score / rounds.length) : 0.0;
+    final wrongPerRound = errorCount > 0 ? (errorCount / rounds.length) : 0.0;
+    final timePerRound = totalResponseTimeMs > 0
+        ? (totalResponseTimeMs / rounds.length)
+        : 0.0;
+
+    for (final round in rounds) {
+      final accuracy = itemsPerRound > 0
+          ? (correctPerRound / itemsPerRound).clamp(0.0, 1.0)
+          : 0.0;
+
+      _sensoryMetrics.add(SensoryRoundMetrics(
+        gameId: gameId,
+        roundNumber: round.roundNumber,
+        sensoryConfig: round,
+        correctCount: correctPerRound.round(),
+        wrongCount: wrongPerRound.round(),
+        accuracy: accuracy,
+        totalResponseTimeMs: timePerRound.round(),
+        avgResponseTimeMs:
+            itemsPerRound > 0 ? timePerRound / itemsPerRound : 0.0,
+        tapCount: correctPerRound.round() + wrongPerRound.round(),
+        idleTimeSeconds: 0.0, // Not available from aggregate data
+        randomTouchCount: 0, // Not available from aggregate data
+        timeToFirstTouchMs: 0.0, // Not available from aggregate data
+        timeToCompletionMs: timePerRound,
+        hintCount: 0,
+        promptCount: 0,
+        retryCount: 0,
+      ));
+    }
   }
 
   void _showRewardThenAdvance() {
@@ -137,6 +268,41 @@ class _PreAssessmentProgressScreenState
   }
 
   Future<void> _finishAssessment() async {
+    // ── Sensory preference analysis ──────────────────────────────────────
+    if (_sensoryController.consentGiven && _sensoryMetrics.isNotEmpty) {
+      final analyzer = SensoryPreferenceAnalyzer();
+      _sensoryPreferenceResult = analyzer.analyze(_sensoryMetrics);
+      debugPrint(
+        '[PreAssessment] Sensory analysis complete: '
+        'music=${_sensoryPreferenceResult!.recommendedMusicEnabled}, '
+        'haptic=${_sensoryPreferenceResult!.recommendedHapticEnabled}, '
+        'confidence=${_sensoryPreferenceResult!.confidence}',
+      );
+
+      // Save sensory round metrics to local DB
+      final metricsMapList =
+          _sensoryMetrics.map((m) => m.toMap()).toList();
+      await localDbService.insertSensoryRoundMetrics(
+        childId: _childId,
+        metricsMapList: metricsMapList,
+      );
+      debugPrint(
+        '[PreAssessment] Saved ${metricsMapList.length} sensory round metrics',
+      );
+
+      // Save sensory preference result to local DB
+      await localDbService.insertSensoryPreference(
+        childId: _childId,
+        preferenceMap: _sensoryPreferenceResult!.toMap(),
+      );
+      debugPrint('[PreAssessment] Saved sensory preference result');
+    }
+
+    // Restore original audio/haptic settings now that testing is done
+    await _sensoryController.restoreOriginalSettings();
+
+    if (!mounted) return;
+
     // Finalize the pre-assessment: creates assessment results in local DB
     // and triggers Supabase sync via the sync service
     final assessProv = context.read<AssessmentProvider>();
@@ -292,16 +458,19 @@ class _PreAssessmentProgressScreenState
     switch (gameId) {
       case 'copy_me':
         screen = CopyMeScreen(
+          sensoryController: _sensoryController,
           onComplete: (score, total, errors, time) =>
               _onGameComplete(gameId, score, total, errors, time),
         );
       case 'do_what_i_say':
         screen = DoWhatISayScreen(
+          sensoryController: _sensoryController,
           onComplete: (score, total, errors, time, extras) =>
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
       case 'my_turn_your_turn':
         screen = MyTurnYourTurnScreen(
+          sensoryController: _sensoryController,
           onComplete: (score, total, errors, time, extras) =>
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
@@ -313,6 +482,7 @@ class _PreAssessmentProgressScreenState
           MaterialPageRoute(
             builder: (_) => MatchItScreen(
               assessmentContext: 'pre_assessment',
+              sensoryController: _sensoryController,
               onComplete: (score, total, errors, time) {
                 // Call _onGameComplete to handle reward and advancement
                 _onGameComplete(gameId, score, total, errors, time);

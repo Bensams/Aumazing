@@ -38,6 +38,20 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     required this.childId,
     this.totalRounds = 5,
     this.gameVersion,
+    this.onCorrectMatch,
+    // Audio event callbacks (optional, wired by screen wrappers)
+    this.onPlayCorrectSfx,
+    this.onPlayWrongSfx,
+    this.onPlayTapSfx,
+    this.onPlayDragSfx,
+    this.onPlayDropSfx,
+    this.onPlayLevelCompleteSfx,
+    this.onPlayGameCompleteSfx,
+    this.onPlayCorrectVo,
+    this.onPlayWrongVo,
+    this.onPlayInstructionVo,
+    this.onPlayTransitionVo,
+    this.onPlayCelebrationVo,
   });
 
   final void Function(int currentStep) onStepChanged;
@@ -48,6 +62,24 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
   }) onGameComplete;
+
+  /// Optional callback fired on each individual correct match (not just round completion).
+  /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
+  final void Function()? onCorrectMatch;
+
+  // ── Audio event callbacks ────────────────────────────────────────────
+  final VoidCallback? onPlayCorrectSfx;
+  final VoidCallback? onPlayWrongSfx;
+  final VoidCallback? onPlayTapSfx;
+  final VoidCallback? onPlayDragSfx;
+  final VoidCallback? onPlayDropSfx;
+  final VoidCallback? onPlayLevelCompleteSfx;
+  final VoidCallback? onPlayGameCompleteSfx;
+  final VoidCallback? onPlayCorrectVo;
+  final VoidCallback? onPlayWrongVo;
+  final VoidCallback? onPlayInstructionVo;
+  final VoidCallback? onPlayTransitionVo;
+  final VoidCallback? onPlayCelebrationVo;
 
   final int totalRounds;
   final String childId;
@@ -146,6 +178,9 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
       gameVersion: gameVersion ?? '1.0.0',
     );
     analyticsStartSession();
+
+    // Play instruction voice-over when game loads
+    onPlayInstructionVo?.call();
 
     _setupRound();
   }
@@ -267,6 +302,7 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     }
     _selectedLeftIndex = index;
     _leftShapes[index].select();
+    onPlayTapSfx?.call();
     _checkMatch();
   }
 
@@ -279,6 +315,7 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     for (final s in _rightShapes) {
       if (s.index == index) s.select();
     }
+    onPlayTapSfx?.call();
     _checkMatch();
   }
 
@@ -322,6 +359,13 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
         'response_time_ms': responseTime,
       });
 
+      // Notify Flutter layer of individual correct match (for haptic feedback)
+      onCorrectMatch?.call();
+
+      // Play correct SFX and voice-over
+      onPlayCorrectSfx?.call();
+      onPlayCorrectVo?.call();
+
       leftShape.markMatched();
       rightShape.markMatched();
 
@@ -339,7 +383,10 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
-          // Game complete
+          // Game complete — play game complete SFX and celebration VO
+          onPlayGameCompleteSfx?.call();
+          onPlayCelebrationVo?.call();
+
           analyticsMarkCompleted();
           analyticsCompleteSession();
 
@@ -359,6 +406,10 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
             );
           });
         } else {
+          // Level/round complete — play level complete SFX and transition VO
+          onPlayLevelCompleteSfx?.call();
+          onPlayTransitionVo?.call();
+
           // Next round after a brief pause
           Future.delayed(const Duration(milliseconds: 800), _setupRound);
         }
@@ -371,6 +422,10 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     } else {
       // Wrong match
       _errorCount++;
+
+      // Play wrong SFX and voice-over
+      onPlayWrongSfx?.call();
+      onPlayWrongVo?.call();
 
       // Record wrong response with details
       analyticsRecordWrong(extraData: {

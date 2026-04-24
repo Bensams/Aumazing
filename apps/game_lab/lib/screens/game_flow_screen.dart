@@ -2,12 +2,16 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:game_core/game_core.dart';
-import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
+
+import '../services/game_factory.dart' show GameLabGameFactory;
+import '../services/game_lab_services.dart';
 
 /// A screen that runs multiple games in sequence with rewards between them.
 ///
 /// This is useful for testing the reward system between games in game_lab.
+/// Uses the shared [GameLabServices] singleton for audio instead of
+/// creating a new [AudioService] per screen.
 class GameFlowScreen extends StatefulWidget {
   const GameFlowScreen({
     super.key,
@@ -25,7 +29,7 @@ class GameFlowScreen extends StatefulWidget {
 class _GameFlowScreenState extends State<GameFlowScreen> {
   int _currentGameIndex = 0;
   bool _showingReward = false;
-  late AudioService _audioService;
+  final _services = GameLabServices.instance;
 
   List<GameEntry> get _games =>
       widget.gameIds.map((id) => GameRegistry.find(id)).whereType<GameEntry>().toList();
@@ -36,7 +40,6 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
   @override
   void initState() {
     super.initState();
-    _audioService = AudioService();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
@@ -45,7 +48,7 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
 
   @override
   void dispose() {
-    _audioService.stopMusic();
+    _services.audioService.stopMusic();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -405,7 +408,10 @@ class _RewardScreenState extends State<_RewardScreen>
   }
 }
 
-/// Individual game test screen used within the flow
+/// Individual game test screen used within the flow.
+///
+/// Uses [GameLabGameFactory] to create games with all audio callbacks wired,
+/// and the shared [GameLabServices] singleton for audio.
 class _GameTestScreen extends StatefulWidget {
   final GameEntry entry;
   final GameConfig config;
@@ -427,18 +433,30 @@ class _GameTestScreen extends StatefulWidget {
 
 class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObserver {
   late FlameGame _game;
-  late AudioService _audioService;
   int _currentStep = 0;
+  Offset? _lastTapPosition;
+  bool _showStarSparkle = false;
 
   @override
   void initState() {
     super.initState();
-    _audioService = AudioService();
     WidgetsBinding.instance.addObserver(this);
 
-    _game = widget.entry.create(
+    // Create game with all audio callbacks wired via GameLabGameFactory
+    _game = GameLabGameFactory.createWithAudio(
+      gameId: widget.entry.id,
       config: widget.config,
-      onStepChanged: (step) => setState(() => _currentStep = step),
+      onCorrectMatch: () {
+        // Haptic feedback only (wired in GameLabGameFactory.wrappedOnCorrectMatch)
+        // Star sparkle is triggered on round completion via onStepChanged
+      },
+      onStepChanged: (step) {
+        setState(() {
+          _currentStep = step;
+          // Show star sparkle when a round is fully completed
+          _showStarSparkle = true;
+        });
+      },
       onGameComplete: ({
         required int score,
         required int totalItems,
@@ -453,7 +471,6 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _audioService.stopMusic();
     super.dispose();
   }
 
@@ -462,7 +479,24 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
     return Scaffold(
       body: Stack(
         children: [
-          GameWidget(game: _game),
+          Listener(
+            onPointerDown: (event) {
+              setState(() {
+                _lastTapPosition = event.localPosition;
+              });
+            },
+            child: GameWidget(game: _game),
+          ),
+          // Three-star sparkle overlay on correct match
+          if (_showStarSparkle && _lastTapPosition != null)
+            ThreeStarSparkle(
+              position: _lastTapPosition!,
+              onComplete: () {
+                setState(() {
+                  _showStarSparkle = false;
+                });
+              },
+            ),
           ChildModeTopBar(
             totalSteps: widget.config.totalRounds,
             currentStep: _currentStep,

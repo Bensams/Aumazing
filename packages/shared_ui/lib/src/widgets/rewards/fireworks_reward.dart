@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../reward_sfx_provider.dart';
+
 /// Firework colors
 final _fireworkColors = [
   const Color(0xFFFF6B6B), // Red
@@ -486,6 +488,7 @@ class _FireworksRewardState extends State<FireworksReward> {
   }
 
   void _onRocketExploded() {
+    RewardSfxProvider.playFireworkPop(context);
     _explodedCount++;
     if (_explodedCount >= widget.rocketCount && widget.onAllExploded != null) {
       widget.onAllExploded!();

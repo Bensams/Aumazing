@@ -5,7 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/child_provider.dart';
 import 'pre_assessment_progress_screen.dart';
-import 'sensory_preferences_screen.dart';
+import 'sensory/sensory.dart';
 
 /// Welcome screen for the pre-assessment flow.
 ///
@@ -101,24 +101,19 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                         child: AppPrimaryButton(
                           label: 'Let\'s Start!',
                           icon: Icons.play_arrow_rounded,
-                          onPressed: () {
-                            if (prefsAlreadySet) {
-                              // Skip sensory preferences — go straight to games
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const PreAssessmentProgressScreen(),
+                          onPressed: () async {
+                            // Show sensory consent dialog before starting
+                            final consent =
+                                await SensoryConsentDialog.show(context);
+                            if (!context.mounted) return;
+
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) => PreAssessmentProgressScreen(
+                                  sensoryConsentResult: consent,
                                 ),
-                              );
-                            } else {
-                              // First time — show sensory preferences setup
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const SensoryPreferencesScreen(),
-                                ),
-                              );
-                            }
+                              ),
+                            );
                           },
                         ),
                       ),

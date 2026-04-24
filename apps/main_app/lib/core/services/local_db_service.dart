@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:uuid/uuid.dart';
 
 import '../sync/sync_status.dart';
 import '../../model/child_profile.dart';
@@ -90,7 +93,8 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 6; // Incremented for reward preferences
+  static const _dbVersion = 7; // Incremented for sensory persistence tables
+  static const _uuid = Uuid();
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
       'display_name IS NOT NULL AND birth_date IS NOT NULL';
@@ -344,6 +348,88 @@ class LocalDbService {
       CREATE INDEX idx_comparisons_sync ON ${LocalTables.assessmentComparisons}(sync_status)
     ''');
 
+    // Sensory consent records
+    await db.execute('''
+      CREATE TABLE ${LocalTables.sensoryConsent} (
+        id TEXT PRIMARY KEY,
+        child_id TEXT NOT NULL,
+        assessment_run_id TEXT,
+        consent_given INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        $_syncColumns,
+        FOREIGN KEY (child_id) REFERENCES ${LocalTables.children}(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_sensory_consent_child ON ${LocalTables.sensoryConsent}(child_id)
+    ''');
+    await db.execute('''
+      CREATE INDEX idx_sensory_consent_sync ON ${LocalTables.sensoryConsent}(sync_status)
+    ''');
+
+    // Per-round sensory metrics
+    await db.execute('''
+      CREATE TABLE ${LocalTables.sensoryRoundMetrics} (
+        id TEXT PRIMARY KEY,
+        child_id TEXT NOT NULL,
+        assessment_run_id TEXT,
+        game_id TEXT NOT NULL,
+        round_number INTEGER NOT NULL,
+        music_enabled INTEGER NOT NULL DEFAULT 0,
+        haptic_enabled INTEGER NOT NULL DEFAULT 0,
+        sensory_purpose TEXT NOT NULL,
+        correct_count INTEGER NOT NULL DEFAULT 0,
+        wrong_count INTEGER NOT NULL DEFAULT 0,
+        accuracy REAL NOT NULL DEFAULT 0.0,
+        total_response_time_ms INTEGER NOT NULL DEFAULT 0,
+        avg_response_time_ms REAL NOT NULL DEFAULT 0.0,
+        tap_count INTEGER NOT NULL DEFAULT 0,
+        idle_time_seconds REAL NOT NULL DEFAULT 0.0,
+        random_touch_count INTEGER NOT NULL DEFAULT 0,
+        time_to_first_touch_ms REAL NOT NULL DEFAULT 0.0,
+        time_to_completion_ms REAL NOT NULL DEFAULT 0.0,
+        hint_count INTEGER NOT NULL DEFAULT 0,
+        prompt_count INTEGER NOT NULL DEFAULT 0,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        $_syncColumns,
+        FOREIGN KEY (child_id) REFERENCES ${LocalTables.children}(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_sensory_round_metrics_child ON ${LocalTables.sensoryRoundMetrics}(child_id)
+    ''');
+    await db.execute('''
+      CREATE INDEX idx_sensory_round_metrics_sync ON ${LocalTables.sensoryRoundMetrics}(sync_status)
+    ''');
+
+    // Analyzed sensory preference results
+    await db.execute('''
+      CREATE TABLE ${LocalTables.sensoryPreferences} (
+        id TEXT PRIMARY KEY,
+        child_id TEXT NOT NULL,
+        assessment_run_id TEXT,
+        recommended_music_enabled INTEGER NOT NULL DEFAULT 0,
+        recommended_haptic_enabled INTEGER NOT NULL DEFAULT 0,
+        best_config TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        config_scores TEXT NOT NULL,
+        attention_summary TEXT,
+        analyzed_at TEXT NOT NULL,
+        $_syncColumns,
+        FOREIGN KEY (child_id) REFERENCES ${LocalTables.children}(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_sensory_preferences_child ON ${LocalTables.sensoryPreferences}(child_id)
+    ''');
+    await db.execute('''
+      CREATE INDEX idx_sensory_preferences_sync ON ${LocalTables.sensoryPreferences}(sync_status)
+    ''');
+
     // Cached reference tables (from Supabase)
     await db.execute('''
       CREATE TABLE ${LocalTables.learningModulesCache} (
@@ -451,6 +537,105 @@ class LocalDbService {
         'ALTER TABLE ${LocalTables.children} ADD COLUMN use_random_reward INTEGER NOT NULL DEFAULT 0',
       );
       debugPrint('[LocalDbService] Added reward preference columns to children table');
+    }
+
+    if (oldVersion < 7) {
+      // Migration from v6 to v7: Add sensory persistence tables
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${LocalTables.sensoryConsent} (
+          id TEXT PRIMARY KEY,
+          child_id TEXT NOT NULL,
+          assessment_run_id TEXT,
+          consent_given INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          last_synced_at TEXT,
+          deleted_at TEXT,
+          updated_at TEXT NOT NULL,
+          local_created_at TEXT NOT NULL,
+          owner_id TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_consent_child
+        ON ${LocalTables.sensoryConsent}(child_id)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_consent_sync
+        ON ${LocalTables.sensoryConsent}(sync_status)
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${LocalTables.sensoryRoundMetrics} (
+          id TEXT PRIMARY KEY,
+          child_id TEXT NOT NULL,
+          assessment_run_id TEXT,
+          game_id TEXT NOT NULL,
+          round_number INTEGER NOT NULL,
+          music_enabled INTEGER NOT NULL DEFAULT 0,
+          haptic_enabled INTEGER NOT NULL DEFAULT 0,
+          sensory_purpose TEXT NOT NULL,
+          correct_count INTEGER NOT NULL DEFAULT 0,
+          wrong_count INTEGER NOT NULL DEFAULT 0,
+          accuracy REAL NOT NULL DEFAULT 0.0,
+          total_response_time_ms INTEGER NOT NULL DEFAULT 0,
+          avg_response_time_ms REAL NOT NULL DEFAULT 0.0,
+          tap_count INTEGER NOT NULL DEFAULT 0,
+          idle_time_seconds REAL NOT NULL DEFAULT 0.0,
+          random_touch_count INTEGER NOT NULL DEFAULT 0,
+          time_to_first_touch_ms REAL NOT NULL DEFAULT 0.0,
+          time_to_completion_ms REAL NOT NULL DEFAULT 0.0,
+          hint_count INTEGER NOT NULL DEFAULT 0,
+          prompt_count INTEGER NOT NULL DEFAULT 0,
+          retry_count INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          last_synced_at TEXT,
+          deleted_at TEXT,
+          updated_at TEXT NOT NULL,
+          local_created_at TEXT NOT NULL,
+          owner_id TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_round_metrics_child
+        ON ${LocalTables.sensoryRoundMetrics}(child_id)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_round_metrics_sync
+        ON ${LocalTables.sensoryRoundMetrics}(sync_status)
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${LocalTables.sensoryPreferences} (
+          id TEXT PRIMARY KEY,
+          child_id TEXT NOT NULL,
+          assessment_run_id TEXT,
+          recommended_music_enabled INTEGER NOT NULL DEFAULT 0,
+          recommended_haptic_enabled INTEGER NOT NULL DEFAULT 0,
+          best_config TEXT NOT NULL,
+          confidence TEXT NOT NULL,
+          config_scores TEXT NOT NULL,
+          attention_summary TEXT,
+          analyzed_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          last_synced_at TEXT,
+          deleted_at TEXT,
+          updated_at TEXT NOT NULL,
+          local_created_at TEXT NOT NULL,
+          owner_id TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_preferences_child
+        ON ${LocalTables.sensoryPreferences}(child_id)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sensory_preferences_sync
+        ON ${LocalTables.sensoryPreferences}(sync_status)
+      ''');
+
+      debugPrint('[LocalDbService] Added sensory persistence tables (v7)');
     }
   }
 
@@ -813,6 +998,200 @@ class LocalDbService {
     return rows.map((r) => ModuleProgress.fromMap(r)).toList();
   }
 
+  // ─── Sensory Consent ───────────────────────────────────────────────────
+
+  /// Insert a sensory consent record for a child.
+  Future<void> insertSensoryConsent({
+    required String childId,
+    String? assessmentRunId,
+    required bool consentGiven,
+    String? ownerId,
+  }) async {
+    final db = await database;
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    await db.insert(
+      LocalTables.sensoryConsent,
+      {
+        'id': id,
+        'child_id': childId,
+        'assessment_run_id': assessmentRunId,
+        'consent_given': consentGiven ? 1 : 0,
+        'created_at': now.toIso8601String(),
+        'sync_status': SyncStatus.pending.value,
+        'updated_at': now.toIso8601String(),
+        'local_created_at': now.toIso8601String(),
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Get the latest sensory consent record for a child.
+  Future<Map<String, dynamic>?> getLatestSensoryConsent(
+    String childId,
+  ) async {
+    final db = await database;
+    final rows = await db.query(
+      LocalTables.sensoryConsent,
+      where: 'child_id = ? AND deleted_at IS NULL',
+      whereArgs: [childId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    return rows.isNotEmpty ? rows.first : null;
+  }
+
+  // ─── Sensory Round Metrics ─────────────────────────────────────────────
+
+  /// Insert a batch of sensory round metrics for a child.
+  Future<void> insertSensoryRoundMetrics({
+    required String childId,
+    String? assessmentRunId,
+    required List<Map<String, dynamic>> metricsMapList,
+    String? ownerId,
+  }) async {
+    final db = await database;
+    final now = DateTime.now();
+
+    await db.transaction((txn) async {
+      for (final metricsMap in metricsMapList) {
+        final id = _uuid.v4();
+        await txn.insert(
+          LocalTables.sensoryRoundMetrics,
+          {
+            'id': id,
+            'child_id': childId,
+            'assessment_run_id': assessmentRunId,
+            'game_id': metricsMap['game_id'],
+            'round_number': metricsMap['round_number'],
+            'music_enabled': metricsMap['music_enabled'],
+            'haptic_enabled': metricsMap['haptic_enabled'],
+            'sensory_purpose': metricsMap['sensory_purpose'],
+            'correct_count': metricsMap['correct_count'] ?? 0,
+            'wrong_count': metricsMap['wrong_count'] ?? 0,
+            'accuracy': metricsMap['accuracy'] ?? 0.0,
+            'total_response_time_ms':
+                metricsMap['total_response_time_ms'] ?? 0,
+            'avg_response_time_ms':
+                metricsMap['avg_response_time_ms'] ?? 0.0,
+            'tap_count': metricsMap['tap_count'] ?? 0,
+            'idle_time_seconds': metricsMap['idle_time_seconds'] ?? 0.0,
+            'random_touch_count': metricsMap['random_touch_count'] ?? 0,
+            'time_to_first_touch_ms':
+                metricsMap['time_to_first_touch_ms'] ?? 0.0,
+            'time_to_completion_ms':
+                metricsMap['time_to_completion_ms'] ?? 0.0,
+            'hint_count': metricsMap['hint_count'] ?? 0,
+            'prompt_count': metricsMap['prompt_count'] ?? 0,
+            'retry_count': metricsMap['retry_count'] ?? 0,
+            'created_at': now.toIso8601String(),
+            'sync_status': SyncStatus.pending.value,
+            'updated_at': now.toIso8601String(),
+            'local_created_at': now.toIso8601String(),
+            'owner_id': ownerId,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  /// Get sensory round metrics for a child, optionally filtered by run.
+  Future<List<Map<String, dynamic>>> getSensoryRoundMetrics({
+    required String childId,
+    String? assessmentRunId,
+  }) async {
+    final db = await database;
+    final conditions = ['child_id = ?', 'deleted_at IS NULL'];
+    final args = <Object?>[childId];
+
+    if (assessmentRunId != null) {
+      conditions.add('assessment_run_id = ?');
+      args.add(assessmentRunId);
+    }
+
+    return db.query(
+      LocalTables.sensoryRoundMetrics,
+      where: conditions.join(' AND '),
+      whereArgs: args,
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  // ─── Sensory Preferences ──────────────────────────────────────────────
+
+  /// Insert an analyzed sensory preference result for a child.
+  Future<void> insertSensoryPreference({
+    required String childId,
+    String? assessmentRunId,
+    required Map<String, dynamic> preferenceMap,
+    String? ownerId,
+  }) async {
+    final db = await database;
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    // Serialize complex fields as JSON strings
+    final configScores = preferenceMap['config_scores'];
+    final attentionSummary = preferenceMap['attention_summary'];
+
+    await db.insert(
+      LocalTables.sensoryPreferences,
+      {
+        'id': id,
+        'child_id': childId,
+        'assessment_run_id': assessmentRunId,
+        'recommended_music_enabled':
+            preferenceMap['recommended_music_enabled'] ?? 0,
+        'recommended_haptic_enabled':
+            preferenceMap['recommended_haptic_enabled'] ?? 0,
+        'best_config': preferenceMap['best_config'] ?? '',
+        'confidence': preferenceMap['confidence'] ?? '',
+        'config_scores':
+            configScores is String ? configScores : jsonEncode(configScores),
+        'attention_summary': attentionSummary is String
+            ? attentionSummary
+            : (attentionSummary != null
+                ? jsonEncode(attentionSummary)
+                : null),
+        'analyzed_at': preferenceMap['analyzed_at'] ?? now.toIso8601String(),
+        'sync_status': SyncStatus.pending.value,
+        'updated_at': now.toIso8601String(),
+        'local_created_at': now.toIso8601String(),
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Get the latest sensory preference result for a child.
+  Future<Map<String, dynamic>?> getLatestSensoryPreference(
+    String childId,
+  ) async {
+    final db = await database;
+    final rows = await db.query(
+      LocalTables.sensoryPreferences,
+      where: 'child_id = ? AND deleted_at IS NULL',
+      whereArgs: [childId],
+      orderBy: 'analyzed_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+
+    // Deserialize JSON strings back to maps
+    final row = Map<String, dynamic>.from(rows.first);
+    if (row['config_scores'] is String) {
+      row['config_scores'] = jsonDecode(row['config_scores'] as String);
+    }
+    if (row['attention_summary'] is String) {
+      row['attention_summary'] =
+          jsonDecode(row['attention_summary'] as String);
+    }
+    return row;
+  }
+
   // ─── Cached Reference Data ───────────────────────────────────────────
 
   Future<void> cacheLearningModules(List<Map<String, dynamic>> modules) async {
@@ -946,6 +1325,21 @@ class LocalDbService {
     );
     await updateOwnerId(
       LocalTables.assessmentComparisons,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.sensoryConsent,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.sensoryRoundMetrics,
+      guestId,
+      authenticatedUserId,
+    );
+    await updateOwnerId(
+      LocalTables.sensoryPreferences,
       guestId,
       authenticatedUserId,
     );

@@ -6,6 +6,7 @@ import '../games/match_it/match_it_game.dart';
 import '../games/copy_me/copy_me_game.dart';
 import '../games/do_what_i_say/do_what_i_say_game.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_game.dart';
+import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
 class GameEntry {
@@ -23,6 +24,10 @@ class GameEntry {
 
   /// Background gradient colors for the game card.
   final List<Color> gradientColors;
+
+  /// Developmental skill categories this game targets.
+  /// A game can belong to multiple categories.
+  final List<SkillCategory> categories;
 
   /// Factory that creates a new instance of the Flame game.
   final FlameGame Function({
@@ -42,6 +47,7 @@ class GameEntry {
     required this.description,
     required this.icon,
     required this.gradientColors,
+    required this.categories,
     required this.create,
   });
 }
@@ -59,6 +65,7 @@ class GameRegistry {
       name: 'Match It',
       description: 'Tap shapes that look the same to make a match.',
       icon: Icons.extension_rounded,
+      categories: [SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFD4F4E8),
         const Color(0xFFD4E8FA),
@@ -101,6 +108,7 @@ class GameRegistry {
       name: 'Copy Me',
       description: 'Watch the sequence, then copy it!',
       icon: Icons.content_copy_rounded,
+      categories: [SkillCategory.communication, SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFFFF3D4),
         const Color(0xFFFFDDD4),
@@ -143,6 +151,7 @@ class GameRegistry {
       name: 'Do What I Say',
       description: 'Follow the instructions to tap the right shape!',
       icon: Icons.record_voice_over_rounded,
+      categories: [SkillCategory.communication],
       gradientColors: [
         const Color(0xFFE8DEFA),
         const Color(0xFFD4F4E8),
@@ -187,6 +196,7 @@ class GameRegistry {
       name: 'My Turn, Your Turn',
       description: 'Take turns placing shapes with your buddy!',
       icon: Icons.people_rounded,
+      categories: [SkillCategory.socialInteraction],
       gradientColors: [
         const Color(0xFFD4E8FA),
         const Color(0xFFE8DEFA),
@@ -235,6 +245,17 @@ class GameRegistry {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Returns all games that belong to the given category.
+  static List<GameEntry> gamesForCategory(SkillCategory category) {
+    return games.where((g) => g.categories.contains(category)).toList();
+  }
+
+  /// Returns all categories that a given game belongs to.
+  static List<SkillCategory> categoriesForGame(String gameId) {
+    final game = find(gameId);
+    return game?.categories ?? [];
   }
 
   /// The 4 assessment game IDs in play order.

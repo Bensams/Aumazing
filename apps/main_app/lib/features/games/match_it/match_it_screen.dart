@@ -4,10 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../home/home_screen.dart';
 
@@ -21,6 +24,7 @@ class MatchItScreen extends StatefulWidget {
     super.key,
     this.assessmentContext = 'practice',
     this.onComplete,
+    this.sensoryController,
   });
 
   /// 'pre_assessment', 'post_assessment', or 'practice'
@@ -32,6 +36,9 @@ class MatchItScreen extends StatefulWidget {
     int totalResponseTimeMs,
   )? onComplete;
 
+  /// Optional sensory controller for per-round music/haptic during pre-assessment.
+  final SensoryRoundController? sensoryController;
+
   @override
   State<MatchItScreen> createState() => _MatchItScreenState();
 }
@@ -41,8 +48,11 @@ class _MatchItScreenState extends State<MatchItScreen> {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
+  Offset? _lastTapPosition;
+  bool _showStarSparkle = false;
   late final MatchItGame _game;
   late final DateTime _sessionStartTime;
+  late final VoiceOverService _voiceOverService;
 
   @override
   void initState() {
@@ -53,18 +63,37 @@ class _MatchItScreenState extends State<MatchItScreen> {
     ]);
 
     _sessionStartTime = DateTime.now();
+    _voiceOverService = VoiceOverService();
+
+    // Apply sensory config for round 1 at game initialization (pre-assessment only)
+    widget.sensoryController?.applyRoundConfig(1);
 
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
+    final audioService = context.read<AudioService>();
     _game = MatchItGame(
       totalRounds: _totalRounds,
       childId: childId,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
+      onCorrectMatch: _onCorrectMatch,
+      // Audio SFX callbacks
+      onPlayCorrectSfx: () => audioService.playCorrectSfx(),
+      onPlayWrongSfx: () => audioService.playWrongSfx(),
+      onPlayTapSfx: () => audioService.playGameTapSfx(),
+      onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      // Voice-over callbacks
+      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
+      onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.matchIt),
+      onPlayTransitionVo: () => _voiceOverService.playTransition(),
+      onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
   }
 
   @override
   void dispose() {
+    _voiceOverService.dispose();
     super.dispose();
   }
 
@@ -72,7 +101,25 @@ class _MatchItScreenState extends State<MatchItScreen> {
     setState(() {
       _currentStep = step;
       _showPrompt = false;
+      // Show star sparkle when a round is fully completed
+      _showStarSparkle = true;
     });
+
+    // Apply sensory config for the new round (pre-assessment only)
+    // step is 0-based, applyRoundConfig expects 1-based
+    widget.sensoryController?.applyRoundConfig(step + 1);
+  }
+
+  /// Called on each individual correct match (not just round completion).
+  /// Triggers haptic feedback only (star sparkle moved to onStepChanged):
+  /// - Pre-assessment: use sensory controller's per-round config
+  /// - Other modes: fall back to child's vibration preference
+  void _onCorrectMatch() {
+    if (widget.sensoryController != null) {
+      widget.sensoryController!.triggerHapticOnCorrect();
+    } else if (context.read<ChildProvider>().vibrationEnabled) {
+      context.read<HapticService>().correctFeedback();
+    }
   }
 
   void _onGameComplete({
@@ -194,38 +241,53 @@ class _MatchItScreenState extends State<MatchItScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.matchIt),
-        child: Column(
-          children: [
-            // Flutter: Top bar with progress + parent lock
-            ChildModeTopBar(
-              totalSteps: _totalRounds,
-              currentStep: _currentStep,
-              onParentTap: _handleParentTap,
+      body: Stack(
+        children: [
+          // Flame: Game area (full screen)
+          Listener(
+            onPointerDown: (event) {
+              setState(() {
+                _lastTapPosition = event.localPosition;
+              });
+            },
+            child: Container(
+              decoration: const BoxDecoration(gradient: AppGradients.matchIt),
+              child: GameWidget(game: _game),
+            ),
+          ),
+
+          // Three-star sparkle overlay on correct match
+          if (_showStarSparkle && _lastTapPosition != null)
+            ThreeStarSparkle(
+              position: _lastTapPosition!,
+              onComplete: () {
+                setState(() {
+                  _showStarSparkle = false;
+                });
+              },
             ),
 
-            // Flame: Game area
-            Expanded(
-              child: GameWidget(
-                game: _game,
-                backgroundBuilder: (_) => const SizedBox.shrink(),
-              ),
-            ),
+          // Flutter: Top bar with progress + parent lock (overlay)
+          ChildModeTopBar(
+            totalSteps: _totalRounds,
+            currentStep: _currentStep,
+            onParentTap: _handleParentTap,
+          ),
 
-            // Flutter: Voice-over prompt
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: VoiceOverPromptBubble(
-                text:
-                    _gameComplete
-                        ? 'Well done! You finished the game!'
-                        : 'Tap the shapes that look the same!',
-                isVisible: _showPrompt || _gameComplete,
-              ),
+          // Flutter: Voice-over prompt (overlay)
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: VoiceOverPromptBubble(
+              text:
+                  _gameComplete
+                      ? 'Well done! You finished the game!'
+                      : 'Tap the shapes that look the same!',
+              isVisible: _showPrompt || _gameComplete,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

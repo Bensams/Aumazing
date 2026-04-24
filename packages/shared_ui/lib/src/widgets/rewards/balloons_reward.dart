@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../reward_sfx_provider.dart';
 import 'sine_curve.dart';
 
 /// Balloon colors with various shades
@@ -216,15 +217,25 @@ class _BalloonPainter extends CustomPainter {
       balloonWidth * 0.05, balloonHeight * 0.15,
       balloonWidth / 2, 0,
     );
+    bodyPath.close();
 
-    // Base balloon gradient
+    // Use saveLayer to isolate the balloon body + pattern rendering.
+    // This prevents semi-transparent pattern paint from compositing
+    // through the balloon body and creating visible bands on the background.
+    final layerBounds = Rect.fromLTWH(0, 0, size.width, size.height);
+    canvas.saveLayer(layerBounds, Paint());
+
+    // Clip everything in this layer to the balloon shape
+    canvas.clipPath(bodyPath);
+
+    // Base balloon gradient — use fully opaque colors inside the layer
     final gradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        color.withAlpha(230),
         color,
-        color.withAlpha(200),
+        color,
+        color,
       ],
     );
 
@@ -236,7 +247,7 @@ class _BalloonPainter extends CustomPainter {
 
     canvas.drawPath(bodyPath, paint);
 
-    // Draw pattern
+    // Draw pattern — already clipped to bodyPath by the layer clip above
     _drawPattern(canvas, size, balloonWidth, balloonHeight);
 
     // Draw highlight (shiny reflection) - on the round top part
@@ -254,7 +265,10 @@ class _BalloonPainter extends CustomPainter {
       highlightPaint,
     );
 
-    // Small knot at bottom of balloon body
+    // End the isolated layer — composites balloon onto the main canvas
+    canvas.restore();
+
+    // Small knot at bottom of balloon body (drawn outside clip/layer)
     final knotPaint = Paint()
       ..color = color.withAlpha(180)
       ..style = PaintingStyle.fill;
@@ -446,6 +460,7 @@ class _BalloonsRewardState extends State<BalloonsReward> {
   }
 
   void _onBalloonPopped() {
+    RewardSfxProvider.playBalloonPop(context);
     _poppedCount++;
     if (_poppedCount >= widget.balloonCount) {
       if (!_isComplete) {

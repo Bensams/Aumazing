@@ -22,6 +22,24 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     required this.onTurnChanged,
     required this.childId,
     this.gameVersion,
+    this.onCorrectMatch,
+    // Audio event callbacks (optional, wired by screen wrappers)
+    this.onPlayCorrectSfx,
+    this.onPlayWrongSfx,
+    this.onPlayTapSfx,
+    this.onPlayDragSfx,
+    this.onPlayDropSfx,
+    this.onPlayLevelCompleteSfx,
+    this.onPlayGameCompleteSfx,
+    this.onPlayCorrectVo,
+    this.onPlayWrongVo,
+    this.onPlayInstructionVo,
+    this.onPlayTransitionVo,
+    this.onPlayCelebrationVo,
+    // Game-specific: turn-taking phase voice-overs
+    this.onPlayMyTurnVo,
+    this.onPlayYourTurnVo,
+    this.onPlayWaitVo,
   });
 
   final int totalRounds;
@@ -39,6 +57,30 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
 
   /// Notify Flutter layer: true = buddy's turn, false = child's turn
   final void Function(bool isBuddyTurn) onTurnChanged;
+
+  /// Optional callback fired on each correct child turn.
+  /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
+  final void Function()? onCorrectMatch;
+
+  // ── Audio event callbacks ────────────────────────────────────────────
+  final VoidCallback? onPlayCorrectSfx;
+  final VoidCallback? onPlayWrongSfx;
+  final VoidCallback? onPlayTapSfx;
+  final VoidCallback? onPlayDragSfx;
+  final VoidCallback? onPlayDropSfx;
+  final VoidCallback? onPlayLevelCompleteSfx;
+  final VoidCallback? onPlayGameCompleteSfx;
+  final VoidCallback? onPlayCorrectVo;
+  final VoidCallback? onPlayWrongVo;
+  final VoidCallback? onPlayInstructionVo;
+  final VoidCallback? onPlayTransitionVo;
+  final VoidCallback? onPlayCelebrationVo;
+  /// Voice-over for buddy's turn ("My turn")
+  final VoidCallback? onPlayMyTurnVo;
+  /// Voice-over for child's turn ("Your turn")
+  final VoidCallback? onPlayYourTurnVo;
+  /// Voice-over for waiting phase ("Wait")
+  final VoidCallback? onPlayWaitVo;
 
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -80,6 +122,9 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       gameVersion: gameVersion ?? '1.0.0',
     );
     analyticsStartSession();
+
+    // Play instruction voice-over when game loads
+    onPlayInstructionVo?.call();
 
     _setupRound();
   }
@@ -131,6 +176,9 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   void _startBuddyTurn() {
     _isBuddyTurn = true;
     onTurnChanged(true);
+    // Play "my turn" and "wait" voice-overs for buddy's turn
+    onPlayMyTurnVo?.call();
+    onPlayWaitVo?.call();
 
     for (final s in _slots) {
       s.inputEnabled = false;
@@ -167,6 +215,8 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   void _startChildTurn() {
     _isBuddyTurn = false;
     onTurnChanged(false);
+    // Play "your turn" voice-over for child's turn
+    onPlayYourTurnVo?.call();
     _turnStartTime = DateTime.now();
 
     // Child's turn is the stimulus
@@ -187,6 +237,10 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       _earlyTaps++;
       _errorCount++;
 
+      // Play wrong SFX and voice-over for early tap
+      onPlayWrongSfx?.call();
+      onPlayWrongVo?.call();
+
       // Record as off-task action (important for XGBoost)
       analyticsRecordOffTaskAction(actionType: 'early_tap_during_buddy_turn');
       analyticsRecordWrong(extraData: {
@@ -200,11 +254,18 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     }
 
     // Child's turn — fill the slot
+    // Play tap SFX
+    onPlayTapSfx?.call();
+
     final rng = math.Random();
     final color = _childColors[rng.nextInt(_childColors.length)];
     slot.fillByChild(color);
     _turnsInRound++;
     _score++;
+
+    // Play correct SFX and voice-over
+    onPlayCorrectSfx?.call();
+    onPlayCorrectVo?.call();
 
     // Record valid action and correct response
     analyticsRecordValidAction();
@@ -213,6 +274,9 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       'turn_in_round': _turnsInRound,
       'waited_for_turn': true,
     });
+
+    // Notify Flutter layer of correct child turn (for haptic feedback)
+    onCorrectMatch?.call();
 
     if (_turnStartTime != null) {
       _totalResponseTimeMs +=
@@ -246,7 +310,10 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     analyticsAddRoundData('turns_taken', _turnsInRound);
 
     if (_currentRound >= totalRounds) {
-      // Game complete
+      // Game complete — play game complete SFX and celebration VO
+      onPlayGameCompleteSfx?.call();
+      onPlayCelebrationVo?.call();
+
       analyticsMarkCompleted();
       analyticsCompleteSession();
 
@@ -270,6 +337,10 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
         );
       });
     } else {
+      // Level/round complete — play level complete SFX and transition VO
+      onPlayLevelCompleteSfx?.call();
+      onPlayTransitionVo?.call();
+
       Future.delayed(const Duration(milliseconds: 800), _setupRound);
     }
     return true;
