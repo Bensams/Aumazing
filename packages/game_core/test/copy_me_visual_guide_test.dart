@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flame/game.dart';
 import 'package:game_core/src/games/copy_me/copy_me_game.dart';
 import 'package:game_core/src/analytics/models/game_session_metrics.dart';
 

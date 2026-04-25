@@ -466,7 +466,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       title: 'Game Scores',
       emoji: '🎮',
       children: results.map((r) {
-        final pct = (r.accuracy * 100).round();
+        final pct = (r.adjustedAccuracy * 100).round();
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
@@ -486,13 +486,13 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _scoreColor(r.accuracy).withAlpha(40),
+                  color: _scoreColor(r.adjustedAccuracy).withAlpha(40),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   '$pct%',
                   style: AppTextStyles.labelLarge.copyWith(
-                    color: _scoreColor(r.accuracy),
+                    color: _scoreColor(r.adjustedAccuracy),
                   ),
                 ),
               ),
@@ -535,7 +535,6 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -548,7 +547,14 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          ...children,
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
+            ),
+          ),
         ],
       ),
     );

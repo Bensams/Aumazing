@@ -7,14 +7,18 @@ import '../model/gameplay_session.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../services/ai_assessment_service.dart';
 import '../services/assessment_service.dart';
-import '../services/local_db_service.dart';
+import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
 
 /// Manages assessment state: collecting gameplay metrics, storing results,
 /// and providing recommendation data.
+///
+/// Uses the offline-first [core_db.LocalDbService] so that all assessment
+/// data is written with `sync_status = 'pending'` and automatically synced
+/// to Supabase by the [SyncService].
 class AssessmentProvider extends ChangeNotifier {
   final AssessmentService _assessmentService;
-  final LocalDbService _localDb;
+  final core_db.LocalDbService _localDb;
 
   List<AssessmentResult> _preResults = [];
   List<AssessmentResult> _postResults = [];
@@ -23,6 +27,9 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// The currently active pre-assessment sessions being collected.
   final List<GameplaySession> _currentSessions = [];
+
+  /// The ID of the current assessment run (created at the start of pre/post assessment).
+  String? _currentAssessmentRunId;
 
   /// AI-based prediction result (null if API unavailable or not yet called).
   AiAssessmentResponse? _aiPrediction;
@@ -35,9 +42,9 @@ class AssessmentProvider extends ChangeNotifier {
 
   AssessmentProvider({
     AssessmentService? assessmentService,
-    LocalDbService? localDb,
+    core_db.LocalDbService? localDb,
   })  : _assessmentService = assessmentService ?? AssessmentService(),
-        _localDb = localDb ?? LocalDbService();
+        _localDb = localDb ?? core_db.localDbService;
 
   List<AssessmentResult> get preResults => _preResults;
   List<AssessmentResult> get postResults => _postResults;
@@ -57,6 +64,9 @@ class AssessmentProvider extends ChangeNotifier {
   List<GameplaySession> get currentSessions =>
       List.unmodifiable(_currentSessions);
 
+  /// The current assessment run ID (available after [startAssessmentRun]).
+  String? get currentAssessmentRunId => _currentAssessmentRunId;
+
   String? get recommendedModuleId =>
       _recommendation?['module_id'] as String?;
   String? get recommendedModuleName =>
@@ -71,9 +81,9 @@ class AssessmentProvider extends ChangeNotifier {
 
     try {
       _preResults =
-          await _localDb.getAssessmentResults(childId, type: 'pre');
+          await _localDb.getAssessmentResults(childId: childId, type: 'pre');
       _postResults =
-          await _localDb.getAssessmentResults(childId, type: 'post');
+          await _localDb.getAssessmentResults(childId: childId, type: 'post');
 
       if (_preResults.isNotEmpty) {
         _recommendation = _assessmentService.recommendModule(_preResults);
@@ -84,6 +94,24 @@ class AssessmentProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Starts a new assessment run and stores the run ID.
+  ///
+  /// Must be called before [recordGameSession] during pre/post assessment
+  /// so that all sessions and results are linked to this run.
+  Future<String> startAssessmentRun({
+    required String childId,
+    required String type,
+  }) async {
+    _currentAssessmentRunId = await _assessmentService.startAssessmentRun(
+      childId: childId,
+      type: type,
+    );
+    debugPrint('[AssessmentProvider] Assessment run started: '
+        '$_currentAssessmentRunId (type: $type)');
+    notifyListeners();
+    return _currentAssessmentRunId!;
   }
 
   /// Records a single mini-game session during pre/post assessment.
@@ -109,6 +137,7 @@ class AssessmentProvider extends ChangeNotifier {
       errorCount: errorCount,
       totalResponseTimeMs: totalResponseTimeMs,
       startedAt: startedAt,
+      assessmentRunId: _currentAssessmentRunId,
       analytics: analytics,
       bgMusicEnabled: bgMusicEnabled,
       hapticFeedbackEnabled: hapticFeedbackEnabled,
@@ -143,6 +172,7 @@ class AssessmentProvider extends ChangeNotifier {
           type: 'pre',
           gameId: gameId,
           sessions: gameSessions,
+          assessmentRunId: _currentAssessmentRunId,
         );
         _preResults.add(result);
       }
@@ -231,6 +261,13 @@ class AssessmentProvider extends ChangeNotifier {
       // available for the AI prediction call (predictWithAI).
       // They are cleared in clear() or after AI prediction.
 
+      // Mark the assessment run as completed
+      if (_currentAssessmentRunId != null) {
+        await _assessmentService.completeAssessmentRun(
+          _currentAssessmentRunId!,
+        );
+      }
+
       debugPrint('[AssessmentProvider] Pre-assessment finalized. '
           'Recommended: ${_recommendation?['module_name']} '
           'Level ${_recommendation?['starting_level']}');
@@ -258,8 +295,16 @@ class AssessmentProvider extends ChangeNotifier {
           type: 'post',
           gameId: gameId,
           sessions: gameSessions,
+          assessmentRunId: _currentAssessmentRunId,
         );
         _postResults.add(result);
+      }
+
+      // Mark the assessment run as completed
+      if (_currentAssessmentRunId != null) {
+        await _assessmentService.completeAssessmentRun(
+          _currentAssessmentRunId!,
+        );
       }
 
       _currentSessions.clear();
@@ -292,8 +337,13 @@ class AssessmentProvider extends ChangeNotifier {
         sessions: _currentSessions,
       );
       _aiPrediction = prediction;
-      notifyListeners();
       if (prediction != null) {
+        // Mark all pre-assessment results as AI-assessed so they can be
+        // distinguished from rubric-only results.
+        _preResults = _preResults
+            .map((r) => r.copyWithRubric(modelSource: 'xgboost'))
+            .toList();
+
         debugPrint('[AssessmentProvider] ✅ AI prediction SUCCESS: '
             '${prediction.profileDisplayName} '
             '(${prediction.confidencePercent}), '
@@ -305,6 +355,7 @@ class AssessmentProvider extends ChangeNotifier {
         debugPrint('[AssessmentProvider] ⚠️ AI prediction returned null, '
             'will use rule-based fallback');
       }
+      notifyListeners();
       return prediction;
     } catch (e) {
       debugPrint('[AssessmentProvider] ❌ predictWithAI error: $e');
@@ -335,6 +386,7 @@ class AssessmentProvider extends ChangeNotifier {
     _postResults.clear();
     _recommendation = null;
     _currentSessions.clear();
+    _currentAssessmentRunId = null;
     _aiPrediction = null;
     _rubricResult = null;
     _sensoryMetrics = null;

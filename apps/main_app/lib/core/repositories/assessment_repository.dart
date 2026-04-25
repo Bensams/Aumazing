@@ -26,10 +26,10 @@ class AssessmentRepository {
   AssessmentRepository({
     LocalDbService? localDb,
     AuthService? authService,
-    SyncService? syncService,
+    SyncService? overrideSyncService,
   })  : _localDb = localDb ?? localDbService,
         _authService = authService ?? AuthService(),
-        _syncService = syncService ?? SyncService();
+        _syncService = overrideSyncService ?? syncService;
 
   String get _effectiveUserId {
     return _authService.currentUser?.id ??
@@ -37,26 +37,41 @@ class AssessmentRepository {
            'guest';
   }
 
-  bool get _isGuestMode => _authService.currentUser == null;
 
   // ─── Assessment Run Operations ──────────────────────────────────────
 
-  /// Start a new assessment run (pre or post)
+  /// Start a new assessment run (pre or post).
+  ///
+  /// Creates a proper record in `assessment_runs_local` so that
+  /// child sessions and results can reference it via foreign key.
   Future<String> startAssessmentRun({
     required String childId,
     required String type, // 'pre' or 'post'
   }) async {
     final id = _uuid.v4();
+    final now = DateTime.now();
+    final db = await _localDb.database;
 
-    // Store assessment run metadata
-    await _localDb.addToSyncQueue(
-      table: 'assessment_runs_local',
-      recordId: id,
-      operation: 'insert',
-      priority: 10,
+    await db.insert(
+      'assessment_runs_local',
+      {
+        'id': id,
+        'child_id': childId,
+        'type': type,
+        'started_at': now.toIso8601String(),
+        'status': 'in_progress',
+        'sync_status': 'pending',
+        'updated_at': now.toIso8601String(),
+        'local_created_at': now.toIso8601String(),
+        'owner_id': _effectiveUserId,
+      },
     );
 
     debugPrint('[AssessmentRepository] Assessment run started: $id (type: $type)');
+
+    // Trigger background sync
+    _syncService.syncNow();
+
     return id;
   }
 
@@ -130,10 +145,8 @@ class AssessmentRepository {
     debugPrint('[AssessmentRepository] Game session recorded: ${session.id} '
         '($accuracy% accuracy)');
 
-    // Background sync if authenticated
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
 
     return session;
   }
@@ -173,6 +186,7 @@ class AssessmentRepository {
     required int score,
     required int totalItems,
     required int errorCount,
+    int randomTouchCount = 0,
     required int avgResponseTimeMs,
     Map<String, dynamic>? rawMetrics,
   }) async {
@@ -184,6 +198,7 @@ class AssessmentRepository {
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
+      randomTouchCount: randomTouchCount,
       avgResponseTimeMs: avgResponseTimeMs,
       completedAt: DateTime.now(),
       rawMetrics: rawMetrics ?? {},
@@ -197,9 +212,8 @@ class AssessmentRepository {
 
     debugPrint('[AssessmentRepository] Assessment result saved: ${result.id}');
 
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
 
     return result;
   }
@@ -249,7 +263,7 @@ class AssessmentRepository {
 
     // Calculate composite scores
     final avgAccuracy = preResults
-            .map((r) => r.accuracy)
+            .map((r) => r.adjustedAccuracy)
             .reduce((a, b) => a + b) /
         preResults.length;
     final totalErrors = preResults.fold<int>(0, (sum, r) => sum + r.errorCount);
@@ -307,11 +321,11 @@ class AssessmentRepository {
     }
 
     final preAvgAccuracy = preResults
-            .map((r) => r.accuracy)
+            .map((r) => r.adjustedAccuracy)
             .reduce((a, b) => a + b) /
         preResults.length;
     final postAvgAccuracy = postResults
-            .map((r) => r.accuracy)
+            .map((r) => r.adjustedAccuracy)
             .reduce((a, b) => a + b) /
         postResults.length;
 
@@ -344,7 +358,6 @@ class AssessmentRepository {
 
   /// Force sync of pending assessment records
   Future<void> syncPending() async {
-    if (_isGuestMode) return;
     await _syncService.syncNow();
   }
 

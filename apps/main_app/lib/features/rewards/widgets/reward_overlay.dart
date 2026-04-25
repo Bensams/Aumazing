@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../model/child_profile.dart';
+import '../../../providers/child_provider.dart';
 import '../reward_type.dart';
 
 /// Full-screen reward overlay that displays the celebration effect
@@ -98,6 +101,11 @@ class _RewardOverlayState extends State<RewardOverlay>
   }
 
   void _startRewardFlow() {
+    // Trigger celebration haptic feedback when reward flow starts
+    if (context.read<ChildProvider>().vibrationEnabled) {
+      context.read<HapticService>().celebrationFeedback();
+    }
+
     // Phase 1: Show dialogue for 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;

@@ -131,6 +131,11 @@ class _MatchItScreenState extends State<MatchItScreen> {
   }) {
     setState(() => _gameComplete = true);
 
+    // Trigger game-complete haptic feedback
+    if (context.read<ChildProvider>().vibrationEnabled) {
+      context.read<HapticService>().gameCompleteFeedback();
+    }
+
     // Record the session in the assessment provider
     final childProvider = context.read<ChildProvider>();
     final assessmentProvider = context.read<AssessmentProvider>();

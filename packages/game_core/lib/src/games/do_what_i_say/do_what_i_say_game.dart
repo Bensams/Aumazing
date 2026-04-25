@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -94,6 +95,11 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   int _verbalCorrect = 0;
   int _combinedCorrect = 0;
 
+  // ── Hint / idle timer state ─────────────────────────────────────────
+  Timer? _noResponseTimer;
+  int _hintCount = 0;
+  int _consecutiveErrors = 0;
+
   static const _colorOptions = [
     (Color(0xFFE88888), 'red'),
     (Color(0xFF88B8E8), 'blue'),
@@ -128,22 +134,35 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   }
 
   void _setupRound() {
+    // Cancel any existing timer from previous round
+    _cancelNoResponseTimer();
+
     // Remove old shapes
     for (final s in _shapes) {
       s.removeFromParent();
     }
     _shapes.clear();
 
+    // Reset per-round counters
+    _hintCount = 0;
+    _consecutiveErrors = 0;
+
     final rng = math.Random();
     final count = 4 + (_currentRound ~/ 2).clamp(0, 2); // 4-6 shapes
 
-    // Pick random shapes
-    final items = <(String, Color, String)>[];
-    for (var i = 0; i < count; i++) {
-      final shapeType = _shapeTypes[rng.nextInt(_shapeTypes.length)];
-      final colorData = _colorOptions[rng.nextInt(_colorOptions.length)];
-      items.add((shapeType, colorData.$1, colorData.$2));
+    // Build all unique shape+color combos (4 shapes × 6 colors = 24 combos)
+    // This guarantees every shape on screen has a unique shape+color combination,
+    // so the instruction is always unambiguous.
+    final allCombos = <(String, Color, String)>[];
+    for (final shapeType in _shapeTypes) {
+      for (final colorData in _colorOptions) {
+        allCombos.add((shapeType, colorData.$1, colorData.$2));
+      }
     }
+    allCombos.shuffle(rng);
+
+    // Take first `count` — guaranteed unique since we drew from a set
+    final items = allCombos.take(count).toList();
 
     // Layout shapes in a responsive grid
     final gameW = size.x;
@@ -207,9 +226,78 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     analyticsAddRoundData('shape_count', _shapes.length);
     analyticsAddRoundData('target_shape', target.shapeType);
     analyticsAddRoundData('target_color', target.colorName);
+
+    // Start idle timer after instruction is set up
+    _startNoResponseTimer();
   }
 
+  // ── No-response timer ───────────────────────────────────────────────
+
+  void _startNoResponseTimer() {
+    _cancelNoResponseTimer();
+    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+      if (!isMounted) return;
+      _onIdleTimeout();
+    });
+  }
+
+  void _cancelNoResponseTimer() {
+    _noResponseTimer?.cancel();
+    _noResponseTimer = null;
+  }
+
+  void _onIdleTimeout() {
+    // Repeat the instruction voice-over
+    if (_targetIndex >= 0 && _targetIndex < _shapes.length) {
+      final target = _shapes[_targetIndex];
+      onPlayInstructionVoiceOver?.call('tap', target.colorName, target.shapeType);
+    }
+
+    _hintCount++;
+    analyticsRecordHint(hintType: 'idle_voice_over_repeat');
+    analyticsRecordPrompt(promptType: 'voice_over_repeat_idle');
+
+    // If hint count >= 3, also show visual guide
+    if (_hintCount >= 3) {
+      _showVisualGuide();
+    }
+
+    // Restart timer for further repeats
+    _startNoResponseTimer();
+  }
+
+  // ── Visual guide ────────────────────────────────────────────────────
+
+  void _showVisualGuide() {
+    if (_targetIndex < 0 || _targetIndex >= _shapes.length) return;
+
+    // Show pulsing hint on the correct target shape
+    _shapes[_targetIndex].isHint = true;
+
+    analyticsRecordHint(hintType: 'visual_guide');
+    analyticsRecordPrompt(promptType: 'visual_guide_target_highlight');
+
+    // Auto-hide after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (isMounted && _targetIndex >= 0 && _targetIndex < _shapes.length) {
+        _shapes[_targetIndex].isHint = false;
+      }
+    });
+  }
+
+  void _hideVisualHints() {
+    for (final s in _shapes) {
+      s.isHint = false;
+    }
+  }
+
+  // ── Shape tap handler ───────────────────────────────────────────────
+
   void _onShapeTapped(int index) {
+    // Cancel idle timer on any tap
+    _cancelNoResponseTimer();
+    _hideVisualHints();
+
     final target = _shapes[_targetIndex];
 
     // Play tap SFX on any shape tap
@@ -218,6 +306,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     if (index == _targetIndex) {
       // Correct!
       _score++;
+      _consecutiveErrors = 0; // Reset on correct
 
       // Record valid action on first tap
       analyticsRecordValidAction();
@@ -259,6 +348,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
       if (_currentRound >= totalRounds) {
         // Game complete — play game complete SFX and celebration VO
+        _cancelNoResponseTimer();
         onPlayGameCompleteSfx?.call();
         onPlayCelebrationVo?.call();
 
@@ -283,6 +373,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
           _totalResponseTimeMs / (_score > 0 ? _score : 1));
         analyticsAddGameSpecificMetric('max_shape_count',
           4 + ((totalRounds - 1) ~/ 2).clamp(0, 2));
+        analyticsAddGameSpecificMetric('hint_count', _hintCount);
 
         Future.delayed(const Duration(milliseconds: 600), () {
           onGameComplete(
@@ -304,6 +395,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     } else {
       // Wrong - tapped wrong shape
       _errorCount++;
+      _consecutiveErrors++;
 
       // Play wrong SFX and voice-over
       onPlayWrongSfx?.call();
@@ -317,6 +409,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
         'tapped_color': tappedShape.colorName,
         'target_shape': target.shapeType,
         'target_color': target.colorName,
+        'consecutive_errors': _consecutiveErrors,
         'error_type': tappedShape.shapeType == target.shapeType
           ? 'color_error'
           : tappedShape.colorName == target.colorName
@@ -325,6 +418,25 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       });
 
       _shapes[index].showWrong();
+
+      // After 3 consecutive errors, replay voice-over and escalate hints
+      if (_consecutiveErrors >= 3) {
+        _consecutiveErrors = 0; // Reset counter
+        _hintCount++;
+        analyticsRecordHint(hintType: 'error_voice_over_repeat');
+        analyticsRecordPrompt(promptType: 'voice_over_repeat_errors');
+
+        // If hint count >= 3, immediately show visual guide on target
+        if (_hintCount >= 3) {
+          _showVisualGuide();
+        }
+
+        // Start a 10-second timer — the voice-over will replay when it fires
+        _startNoResponseTimer();
+      } else {
+        // Restart idle timer after wrong tap
+        _startNoResponseTimer();
+      }
     }
   }
 
@@ -336,5 +448,11 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       Offset(event.canvasPosition.x, event.canvasPosition.y),
       isValid: event.handled,
     );
+  }
+
+  @override
+  void onRemove() {
+    _cancelNoResponseTimer();
+    super.onRemove();
   }
 }

@@ -141,6 +141,11 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           _showCelebration = true;
         });
 
+        // Trigger game-complete haptic feedback
+        if (context.read<ChildProvider>().vibrationEnabled) {
+          context.read<HapticService>().gameCompleteFeedback();
+        }
+
         // Record the session in the assessment provider
         final childProvider = context.read<ChildProvider>();
         final assessmentProvider = context.read<AssessmentProvider>();
@@ -160,6 +165,12 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           hapticFeedbackEnabled: childProvider.vibrationEnabled,
         );
         
+        // Include randomTouchCount in extras so pre-assessment summary can display it
+        final enrichedExtras = {
+          ...extras,
+          'random_touch_count': analytics?.randomTouchCount ?? 0,
+        };
+
         // If onComplete is provided (pre-assessment mode), show celebration then call it
         // If onComplete is null (practice mode), show celebration then show built-in reward
         if (widget.assessmentContext == 'practice' && widget.onComplete == null) {
@@ -167,7 +178,7 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           _fadeOutCelebrationThenShowReward();
         } else if (widget.onComplete != null) {
           // Pre-assessment mode: Show celebration then call onComplete (pre-assessment handles reward)
-          _fadeOutCelebrationThenCallOnComplete(score, totalItems, errorCount, totalResponseTimeMs, extras);
+          _fadeOutCelebrationThenCallOnComplete(score, totalItems, errorCount, totalResponseTimeMs, enrichedExtras);
         } else {
           // Assessment mode without onComplete: Just delay then pop
           Future.delayed(const Duration(milliseconds: 2500), () {

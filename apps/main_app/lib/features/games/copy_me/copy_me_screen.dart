@@ -128,6 +128,11 @@ class _CopyMeScreenState extends State<CopyMeScreen>
           _showCelebration = true;
         });
 
+        // Trigger game-complete haptic feedback
+        if (context.read<ChildProvider>().vibrationEnabled) {
+          context.read<HapticService>().gameCompleteFeedback();
+        }
+
         // Record the session in the assessment provider
         final childProvider = context.read<ChildProvider>();
         final assessmentProvider = context.read<AssessmentProvider>();

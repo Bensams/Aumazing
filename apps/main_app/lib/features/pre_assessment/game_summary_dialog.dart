@@ -38,14 +38,24 @@ class GameSummaryDialog extends StatelessWidget {
   };
 
   int get _totalCorrect => results.fold(0, (sum, r) => sum + r.score);
-  int get _totalItems => results.fold(0, (sum, r) => sum + r.totalItems);
   int get _totalErrors => results.fold(0, (sum, r) => sum + r.errorCount);
-  int get _totalFailures => _totalItems - _totalCorrect;
+  int get _totalRandomTouches =>
+      results.fold(0, (sum, r) => sum + r.randomTouchCount);
+
+  /// Total taps = correct taps + error taps + random/off-target taps.
+  /// This matches how game_lab computes totalTaps.
+  int get _totalTaps => _totalCorrect + _totalErrors + _totalRandomTouches;
+
   int get _totalTimeMs =>
       results.fold(0, (sum, r) => sum + r.avgResponseTimeMs * r.totalItems);
 
-  double get _overallAccuracy =>
-      _totalItems > 0 ? (_totalCorrect / _totalItems).clamp(0.0, 1.0) : 0.0;
+  /// Overall accuracy adjusted for errors: score / (score + errorCount).
+  /// This penalises errors even when the game retries until correct.
+  double get _overallAccuracy {
+    final total = _totalCorrect + _totalErrors;
+    if (total <= 0) return 0.0;
+    return (_totalCorrect / total).clamp(0.0, 1.0);
+  }
 
   String _formatDuration(int ms) {
     final seconds = ms ~/ 1000;
@@ -225,9 +235,11 @@ class GameSummaryDialog extends StatelessWidget {
           Expanded(
             child: _buildTapStat(
               '⚠️',
-              'Failed\nTaps',
-              '$_totalFailures',
-              _totalFailures == 0 ? AppColors.mint : AppColors.butterYellow,
+              'Off-Target\nTaps',
+              '$_totalRandomTouches',
+              _totalRandomTouches == 0
+                  ? AppColors.mint
+                  : AppColors.butterYellow,
             ),
           ),
         ],
@@ -284,7 +296,7 @@ class GameSummaryDialog extends StatelessWidget {
             child: _buildMiniStat(
               Icons.touch_app_rounded,
               'Total Taps',
-              '$_totalItems',
+              '$_totalTaps',
               AppColors.primaryPurple,
             ),
           ),
@@ -355,13 +367,12 @@ class GameSummaryDialog extends StatelessWidget {
   }
 
   Widget _buildGameRow(AssessmentResult r) {
-    final accuracy = r.totalItems > 0
-        ? (r.score / r.totalItems).clamp(0.0, 1.0)
-        : 0.0;
+    // Use adjustedAccuracy: score / (score + errorCount)
+    // This properly penalises errors even when the game retries until correct.
+    final accuracy = r.adjustedAccuracy;
     final pct = (accuracy * 100).round();
     final emoji = _gameEmojis[r.gameId] ?? '🎮';
     final name = _gameNames[r.gameId] ?? r.gameId;
-    final failures = r.totalItems - r.score;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -377,7 +388,7 @@ class GameSummaryDialog extends StatelessWidget {
                     style: AppTextStyles.bodySmall
                         .copyWith(fontWeight: FontWeight.w600)),
                 Text(
-                  '✅ ${r.score}  ❌ ${r.errorCount}  ⚠️ $failures',
+                  '✅ ${r.score}  ❌ ${r.errorCount}  ⚠️ ${r.randomTouchCount}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.mutedForeground,
                     fontSize: 11,

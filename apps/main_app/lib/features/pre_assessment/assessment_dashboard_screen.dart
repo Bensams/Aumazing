@@ -514,14 +514,14 @@ class _GameRow extends StatelessWidget {
   }
 
   Color get _color {
-    if (result.accuracy >= 0.8) return AppColors.mint;
-    if (result.accuracy >= 0.5) return AppColors.butterYellow;
+    if (result.adjustedAccuracy >= 0.8) return AppColors.mint;
+    if (result.adjustedAccuracy >= 0.5) return AppColors.butterYellow;
     return AppColors.peach;
   }
 
   @override
   Widget build(BuildContext context) {
-    final pct = (result.accuracy * 100).round();
+    final pct = (result.adjustedAccuracy * 100).round();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(

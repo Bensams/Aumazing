@@ -2,11 +2,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/child_profile_policy.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/sync_service.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
@@ -687,7 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
               x: i,
               barRods: [
                 BarChartRodData(
-                  toY: results[i].accuracy * 100,
+                  toY: results[i].adjustedAccuracy * 100,
                   color: AppColors.primaryPurple,
                   width: 20,
                   borderRadius: const BorderRadius.vertical(
@@ -1072,9 +1074,13 @@ class SettingsModal extends StatelessWidget {
                         Icons.vibration_rounded,
                         'Vibration',
                         childProv.vibrationEnabled,
-                        (val) => childProv.updateComfortSettings(
-                          vibrationEnabled: val,
-                        ),
+                        (val) {
+                          childProv.updateComfortSettings(vibrationEnabled: val);
+                          final hapticService = context.read<HapticService>();
+                          hapticService.updateConfig(hapticService.config.copyWith(
+                            enabled: val,
+                          ));
+                        },
                       ),
                       // Animation intensity slider
                       _buildSettingSlider(
@@ -1366,6 +1372,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
       // on the next guest sign-in (this account is now bound).
       await widget.authService.clearStoredGuestSession();
 
+      // Backfill guest data and sync to Supabase
+      final newUserId = widget.authService.currentUser?.id;
+      if (newUserId != null) {
+        await syncService.onUserAuthenticated(newUserId);
+      }
+
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1402,6 +1414,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
       // Clear stored guest session so a new guest account will be created
       // on the next guest sign-in (this account is now bound).
       await widget.authService.clearStoredGuestSession();
+
+      // Backfill guest data and sync to Supabase
+      final newUserId = widget.authService.currentUser?.id;
+      if (newUserId != null) {
+        await syncService.onUserAuthenticated(newUserId);
+      }
 
       if (mounted) {
         Navigator.of(context).pop();

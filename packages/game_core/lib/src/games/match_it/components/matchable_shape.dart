@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -13,8 +14,8 @@ enum ShapeType { star, heart, circle, diamond, triangle }
 /// A large, ASD-friendly tappable shape component for the Match It game.
 ///
 /// Renders a colored rounded-rect card with a centered 3D shape icon.
-/// Supports selection highlight, correct/incorrect feedback, and
-/// gentle scale animations.
+/// Supports selection highlight, correct/incorrect feedback, hint state,
+/// and gentle scale animations.
 class MatchableShape extends PositionComponent with TapCallbacks {
   MatchableShape({
     required this.shapeType,
@@ -33,6 +34,31 @@ class MatchableShape extends PositionComponent with TapCallbacks {
   bool isSelected = false;
   bool isMatched = false;
   bool _showError = false;
+
+  // ── Hint state ─────────────────────────────────────────────────────
+  bool _isHint = false;
+  double _hintTime = 0.0;
+
+  /// Whether this shape is currently showing a hint highlight.
+  bool get isHint => _isHint;
+
+  /// Sets the hint state and resets the animation timer.
+  set isHint(bool v) {
+    _isHint = v;
+    if (v) {
+      _hintTime = 0.0;
+    }
+  }
+
+  /// Convenience method to activate the hint visual.
+  void showHint() {
+    isHint = true;
+  }
+
+  /// Convenience method to deactivate the hint visual.
+  void hideHint() {
+    isHint = false;
+  }
 
   static const double _cornerRadius = 24.0;
   static const double _borderWidth = 3.0;
@@ -95,15 +121,41 @@ class MatchableShape extends PositionComponent with TapCallbacks {
   }
 
   @override
+  void update(double dt) {
+    super.update(dt);
+    if (_isHint) {
+      _hintTime += dt;
+    }
+  }
+
+  @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
     // Card background
-    final bgAlpha = isMatched ? 30 : (isSelected ? 80 : 40);
+    final bgAlpha = isMatched ? 30 : (_isHint ? 80 : (isSelected ? 80 : 40));
     Color? borderColor;
     if (_showError) borderColor = const Color(0xFFE88888);
     if (isSelected && !_showError) {
       borderColor = const Color(0xFF9B82C4).withAlpha(140);
+    }
+    if (_isHint) borderColor = const Color(0xFFFFA726);
+
+    // Hint pulsing ring (same pattern as SequenceShape)
+    if (_isHint) {
+      final pulse = (math.sin(_hintTime * 2 * math.pi) + 1) / 2; // 0..1
+      final pulseAlpha = (128 + 127 * pulse).round().clamp(0, 255);
+      final hintPaint = Paint()
+        ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(-8, -8, size.x + 16, size.y + 16),
+          const Radius.circular(_cornerRadius + 4),
+        ),
+        hintPaint,
+      );
     }
 
     ShapePainter3D.drawCard3D(
@@ -112,7 +164,7 @@ class MatchableShape extends PositionComponent with TapCallbacks {
       color: shapeColor,
       cornerRadius: _cornerRadius,
       alpha: bgAlpha,
-      showBorder: isSelected || _showError,
+      showBorder: isSelected || _showError || _isHint,
       borderColor: borderColor,
       borderWidth: _borderWidth,
     );

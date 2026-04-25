@@ -94,11 +94,11 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 11; // v11: Add rubric scoring columns to assessment_results_local + telemetry to game_sessions_local
+  static const _dbVersion = 13; // v13: Add random_touch_count to assessment_results_local
   static const _uuid = Uuid();
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
-      'display_name IS NOT NULL AND birth_date IS NOT NULL';
+      'display_name IS NOT NULL';
 
   static Database? _database;
 
@@ -312,13 +312,15 @@ class LocalDbService {
       CREATE TABLE ${LocalTables.assessmentResults} (
         id TEXT PRIMARY KEY,
         child_id TEXT NOT NULL,
-        assessment_run_id TEXT NOT NULL,
+        assessment_run_id TEXT,
         game_id TEXT NOT NULL,
         type TEXT NOT NULL,
         score INTEGER NOT NULL,
         total_items INTEGER NOT NULL,
         error_count INTEGER NOT NULL,
+        random_touch_count INTEGER NOT NULL DEFAULT 0,
         avg_response_time_ms INTEGER NOT NULL,
+        completed_at TEXT,
         raw_metrics TEXT,
         play_skills_label TEXT,
         communication_label TEXT,
@@ -770,6 +772,20 @@ class LocalDbService {
 
       debugPrint('[LocalDbService] Added rubric scoring + telemetry columns (v11)');
     }
+
+    if (oldVersion < 12) {
+      // Migration from v11 to v12: Add missing completed_at column to assessment_results_local
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN completed_at TEXT');
+      debugPrint('[LocalDbService] Added completed_at column to assessment_results_local (v12)');
+    }
+
+    if (oldVersion < 13) {
+      // Migration from v12 to v13: Add random_touch_count to assessment_results_local
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0',
+      );
+      debugPrint('[LocalDbService] Added random_touch_count column to assessment_results_local (v13)');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
@@ -996,11 +1012,20 @@ class LocalDbService {
         markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
-    await db.insert(
-      LocalTables.gameSessions,
-      map,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    debugPrint('[LocalDbService] insertGameSession map keys: ${map.keys.toList()}');
+    debugPrint('[LocalDbService] insertGameSession map: $map');
+    try {
+      await db.insert(
+        LocalTables.gameSessions,
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      debugPrint('[LocalDbService] insertGameSession SUCCESS for id=${session.id}');
+    } catch (e, st) {
+      debugPrint('[LocalDbService] insertGameSession FAILED: $e');
+      debugPrint('[LocalDbService] insertGameSession stacktrace: $st');
+      rethrow;
+    }
   }
 
   Future<List<GameplaySession>> getGameSessions({
@@ -1112,11 +1137,20 @@ class LocalDbService {
         markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
-    await db.insert(
-      LocalTables.assessmentResults,
-      map,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    debugPrint('[LocalDbService] insertAssessmentResult map keys: ${map.keys.toList()}');
+    debugPrint('[LocalDbService] insertAssessmentResult map: $map');
+    try {
+      await db.insert(
+        LocalTables.assessmentResults,
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      debugPrint('[LocalDbService] insertAssessmentResult SUCCESS for id=${result.id}');
+    } catch (e, st) {
+      debugPrint('[LocalDbService] insertAssessmentResult FAILED: $e');
+      debugPrint('[LocalDbService] insertAssessmentResult stacktrace: $st');
+      rethrow;
+    }
   }
 
   Future<List<AssessmentResult>> getAssessmentResults({
