@@ -291,7 +291,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
-          // Game complete — wait for praise VO to finish, then play celebration
+          // Game complete
           analyticsMarkCompleted();
           analyticsCompleteSession();
 
@@ -302,10 +302,14 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
           analyticsAddGameSpecificMetric('max_sequence_length',
             totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
 
+          // Play game-complete SFX immediately (uses AudioService — separate
+          // player pool from VoiceOverService, so no conflict with praise VO)
+          onPlayGameCompleteSfx?.call();
+
           // Wait for praise VO to finish before playing celebration VO
+          // (both use VoiceOverService, so they would cut each other off)
           Future.delayed(const Duration(milliseconds: 2000), () {
             if (!isMounted) return;
-            onPlayGameCompleteSfx?.call();
             onPlayCelebrationVo?.call();
 
             Future.delayed(const Duration(milliseconds: 600), () {
@@ -319,10 +323,14 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
             });
           });
         } else {
-          // Level/round complete — wait for praise VO to finish, then play transition
+          // Level/round complete — play SFX immediately (uses AudioService —
+          // separate player pool, no conflict with praise VO)
+          onPlayLevelCompleteSfx?.call();
+
+          // Wait for praise VO to finish before playing transition VO
+          // (both use VoiceOverService, so they would cut each other off)
           Future.delayed(const Duration(milliseconds: 2000), () {
             if (!isMounted) return;
-            onPlayLevelCompleteSfx?.call();
             onPlayTransitionVo?.call();
 
             // Wait for transition VO to finish before starting next round
