@@ -268,12 +268,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     "$name's Dashboard",
                     style: AppTextStyles.headlineSmall.copyWith(
                       fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   Text(
                     'Age $age',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.mutedForeground,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -306,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Icon(
                                 Icons.email_outlined,
                                 size: 16,
-                                color: AppColors.mutedForeground,
+                                color: AppColors.textSecondary,
                               ),
                               const SizedBox(width: 6),
                               Flexible(
@@ -315,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: AppColors.mutedForeground,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               ),
@@ -327,13 +328,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.settings_rounded),
                       tooltip: 'Settings',
                       onPressed: _showSettingsModal,
-                      color: AppColors.mutedForeground,
+                      color: AppColors.textSecondary,
                     ),
                     IconButton(
                       icon: const Icon(Icons.logout_rounded),
                       tooltip: 'Sign Out',
                       onPressed: _signOut,
-                      color: AppColors.mutedForeground,
+                      color: AppColors.textSecondary,
                     ),
                   ],
                 ),
@@ -438,14 +439,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           name.toString(),
                           style: AppTextStyles.titleLarge.copyWith(
-                            color: AppColors.primaryPurple,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Age $age',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.mutedForeground,
+                            color: AppColors.textSecondary,
                           ),
                         ),
 
@@ -494,13 +495,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.primaryPurple),
+          Icon(icon, size: 20, color: AppColors.textSecondary),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
           Text(
             value,
             style: AppTextStyles.labelLarge.copyWith(
-              color: AppColors.primaryPurple,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -556,12 +564,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.butterLight,
+                    color: AppColors.statusWarningBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.info_outline_rounded,
-                    color: Color(0xFFD4A017),
+                    color: AppColors.statusWarningDark,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -569,14 +577,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Pre-Assessment Needed',
-                        style: AppTextStyles.titleMedium,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Pre-Assessment Needed',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          const StatusPillBadge(
+                            label: 'Pre-Assessment Needed',
+                            level: StatusLevel.warning,
+                            compact: true,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Start the pre-assessment to determine your child\'s starting level and get a recommended learning module.',
-                        style: AppTextStyles.bodySmall,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -597,12 +621,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: AppColors.mintLight,
+                      color: AppColors.statusSuccessBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.recommend_rounded,
-                      color: AppColors.mint,
+                      color: AppColors.statusSuccessDark,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -612,34 +636,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           'Recommended Module',
-                          style: AppTextStyles.titleMedium,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           assessProv.recommendedModuleName ?? 'Basic Skills',
                           style: AppTextStyles.headlineSmall.copyWith(
-                            color: AppColors.primaryPurple,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.lavenderLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Level ${assessProv.recommendedLevel}',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryPurple,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  StatusPillBadge(
+                    label: 'Level ${assessProv.recommendedLevel}',
+                    level: StatusLevel.info,
+                    compact: true,
                   ),
                 ],
               ),
@@ -652,13 +666,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Icon(
                       Icons.trending_up_rounded,
                       size: 18,
-                      color: AppColors.mint,
+                      color: AppColors.statusSuccessDark,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Post-assessment completed — view progress below',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mint,
+                        color: AppColors.statusSuccessDark,
                       ),
                     ),
                   ],
@@ -708,7 +722,12 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Assessment Scores', style: AppTextStyles.titleMedium),
+              Text(
+                'Assessment Scores',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 height: 160,
@@ -733,7 +752,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (value % 25 == 0) {
                               return Text(
                                 '${value.toInt()}%',
-                                style: AppTextStyles.bodySmall,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
                               );
                             }
                             return const SizedBox.shrink();
@@ -752,6 +773,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   gameLabels[idx],
                                   style: AppTextStyles.bodySmall.copyWith(
                                     fontSize: 10,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               );
@@ -788,19 +810,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(
                       Icons.history_rounded,
                       size: 36,
-                      color: AppColors.muted,
+                      color: AppColors.textSecondary,
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'No activity yet',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Start a pre-assessment or enter child mode to begin!',
-                      style: AppTextStyles.bodySmall,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -814,7 +838,12 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Recent Activity', style: AppTextStyles.titleMedium),
+              Text(
+                'Recent Activity',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
               ...sessions.take(5).map((session) {
                 final gameName = session.gameId.replaceAll('_', ' ');
@@ -833,7 +862,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: const Icon(
                           Icons.games_rounded,
                           size: 18,
-                          color: AppColors.primaryPurple,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -843,18 +872,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Text(
                               gameName[0].toUpperCase() + gameName.substring(1),
-                              style: AppTextStyles.labelLarge,
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
                             ),
                             Text(
                               '${session.score}/${session.totalItems} correct · $time',
-                              style: AppTextStyles.bodySmall,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       Text(
                         _formatDate(session.endedAt),
-                        style: AppTextStyles.bodySmall,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -905,9 +940,9 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.white.withAlpha(230),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppRadius.card,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.card,
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -915,8 +950,9 @@ class _ActionCard extends StatelessWidget {
             vertical: AppSpacing.md,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.card,
             border: Border.all(color: color.withAlpha(80)),
+            boxShadow: AppShadows.card,
           ),
           child: Row(
             children: [
@@ -936,13 +972,15 @@ class _ActionCard extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: AppTextStyles.titleMedium,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textSecondary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -972,7 +1010,7 @@ class SettingsModal extends StatelessWidget {
         mediaQuery.size.height - mediaQuery.viewInsets.vertical;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 360,
@@ -1004,6 +1042,7 @@ class SettingsModal extends StatelessWidget {
                       'Settings',
                       style: AppTextStyles.headlineSmall.copyWith(
                         fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -1016,7 +1055,7 @@ class SettingsModal extends StatelessWidget {
               Text(
                 'Sensory & Comfort Settings',
                 style: AppTextStyles.labelLarge.copyWith(
-                  color: AppColors.mutedForeground,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -1110,7 +1149,7 @@ class SettingsModal extends StatelessWidget {
               Text(
                 'Reward Celebration',
                 style: AppTextStyles.labelLarge.copyWith(
-                  color: AppColors.mutedForeground,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -1152,7 +1191,7 @@ class SettingsModal extends StatelessWidget {
                         child: Text(
                           'A different celebration every time!',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.mutedForeground,
+                            color: AppColors.textSecondary,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -1169,7 +1208,7 @@ class SettingsModal extends StatelessWidget {
                 Text(
                   'Account',
                   style: AppTextStyles.labelLarge.copyWith(
-                    color: AppColors.mutedForeground,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -1206,9 +1245,16 @@ class SettingsModal extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.mutedForeground),
+          Icon(icon, size: 20, color: AppColors.textSecondary),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
@@ -1230,7 +1276,12 @@ class SettingsModal extends StatelessWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: AppTextStyles.bodySmall),
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
             child: Slider(
@@ -1244,7 +1295,9 @@ class SettingsModal extends StatelessWidget {
             width: 36,
             child: Text(
               '${(value * 100).round()}%',
-              style: AppTextStyles.bodySmall,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -1255,9 +1308,9 @@ class SettingsModal extends StatelessWidget {
   Widget _buildBindAccountButton(BuildContext context) {
     return Material(
       color: AppColors.butterLight,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.chip,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.chip,
         onTap: () {
           Navigator.of(context).pop();
           showDialog(
@@ -1281,7 +1334,7 @@ class SettingsModal extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.link_rounded,
-                  color: Color(0xFFD4A017),
+                  color: AppColors.statusWarningDark,
                   size: 18,
                 ),
               ),
@@ -1294,12 +1347,13 @@ class SettingsModal extends StatelessWidget {
                       'Bind Account',
                       style: AppTextStyles.labelLarge.copyWith(
                         fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
                       'Save your progress permanently',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1308,7 +1362,7 @@ class SettingsModal extends StatelessWidget {
               const Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 16,
-                color: AppColors.mutedForeground,
+                color: AppColors.textSecondary,
               ),
             ],
           ),
@@ -1460,7 +1514,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
         mediaQuery.size.height - mediaQuery.viewInsets.vertical;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 340,
@@ -1487,7 +1541,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
         Text(
           'Choose how you want to save this guest account permanently.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.mutedForeground,
+            color: AppColors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -1530,7 +1584,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
         Text(
           'Create an email and password for this guest account.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.mutedForeground,
+            color: AppColors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -1615,7 +1669,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
             color: AppColors.butterLight,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.link_rounded, color: Color(0xFFD4A017)),
+          child: const Icon(Icons.link_rounded, color: AppColors.statusWarningDark),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -1623,6 +1677,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
             title,
             style: AppTextStyles.headlineSmall.copyWith(
               fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -1634,17 +1689,17 @@ class _BindAccountModalState extends State<BindAccountModal> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.red.withAlpha(20),
+        color: AppColors.statusDangerBg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
+          const Icon(Icons.error_outline_rounded, color: AppColors.statusDangerDark, size: 18),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.statusDangerDark),
             ),
           ),
         ],
@@ -1660,14 +1715,14 @@ class _BindAccountModalState extends State<BindAccountModal> {
   }) {
     return Material(
       color: AppColors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: AppRadius.chip,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.chip,
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: AppRadius.chip,
             border: Border.all(color: AppColors.border),
           ),
           child: Row(
@@ -1690,13 +1745,14 @@ class _BindAccountModalState extends State<BindAccountModal> {
                       title,
                       style: AppTextStyles.labelLarge.copyWith(
                         fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1712,7 +1768,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
                 const Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
-                  color: AppColors.mutedForeground,
+                  color: AppColors.textSecondary,
                 ),
             ],
           ),

@@ -156,27 +156,12 @@ class _DashboardBody extends StatelessWidget {
   /// Badge showing whether results are AI-powered or rule-based.
   Widget _buildSourceBadge() {
     final isAi = aiPrediction != null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: isAi
-            ? AppColors.mint.withAlpha(40)
-            : AppColors.butterYellow.withAlpha(40),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isAi
-              ? AppColors.mint.withAlpha(100)
-              : AppColors.butterYellow.withAlpha(100),
-        ),
-      ),
-      child: Text(
-        isAi ? '🤖 AI-Powered' : '📊 Rule-Based',
-        style: AppTextStyles.bodySmall.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: isAi ? AppColors.mint : AppColors.butterYellow,
-        ),
-      ),
+    return StatusPillBadge(
+      label: isAi ? 'AI-Powered' : 'Rule-Based',
+      level: isAi ? StatusLevel.info : StatusLevel.warning,
+      icon: Text(isAi ? '🤖' : '📊', style: const TextStyle(fontSize: 10)),
+      compact: true,
+      fontSize: 10,
     );
   }
 
@@ -189,13 +174,9 @@ class _DashboardBody extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _MiniStat('✅', '$_totalCorrect', AppColors.mint),
-            _MiniStat('❌', '$_totalErrors', AppColors.peach),
-            _MiniStat(
-              '📝',
-              '$_totalItems',
-              AppColors.lavender,
-            ),
+            _MiniStat('✅', '$_totalCorrect'),
+            _MiniStat('❌', '$_totalErrors'),
+            _MiniStat('📝', '$_totalItems'),
           ],
         ),
         const SizedBox(height: 8),
@@ -233,11 +214,6 @@ class _DashboardBody extends StatelessWidget {
   Widget _buildAiProfileHeader() {
     final ai = aiPrediction!;
     final confidencePct = (ai.confidence * 100).round();
-    final confidenceColor = ai.confidence >= 0.8
-        ? AppColors.mint
-        : ai.confidence >= 0.6
-            ? AppColors.butterYellow
-            : AppColors.peach;
 
     return Container(
       padding: const EdgeInsets.all(8),
@@ -258,27 +234,12 @@ class _DashboardBody extends StatelessWidget {
                   ai.profileDisplayName,
                   style: AppTextStyles.labelLarge.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primaryPurple,
+                    color: AppColors.textPrimary,
                     fontSize: 12,
                   ),
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: confidenceColor.withAlpha(40),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$confidencePct%',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    color: confidenceColor,
-                  ),
-                ),
-              ),
+              StatusPillBadge.fromScore(confidencePct, compact: true),
             ],
           ),
           if (ai.summary.isNotEmpty) ...[
@@ -287,7 +248,7 @@ class _DashboardBody extends StatelessWidget {
               ai.summary,
               style: AppTextStyles.bodySmall.copyWith(
                 fontSize: 10,
-                color: AppColors.mutedForeground,
+                color: AppColors.textSecondary,
                 height: 1.3,
               ),
               maxLines: 2,
@@ -332,6 +293,7 @@ class _DashboardBody extends StatelessWidget {
                 style: AppTextStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -347,7 +309,10 @@ class _DashboardBody extends StatelessWidget {
                     Expanded(
                       child: Text(
                         mod.name,
-                        style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     Container(
@@ -387,10 +352,11 @@ class _DashboardBody extends StatelessWidget {
                 'Retake',
                 style: AppTextStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primaryPurple,
+                foregroundColor: AppColors.textPrimary,
                 side: const BorderSide(color: AppColors.lavender),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -436,10 +402,16 @@ class _OverallBadge extends StatelessWidget {
   const _OverallBadge({required this.pct});
   final int pct;
 
-  Color get _color {
-    if (pct >= 80) return AppColors.mint;
-    if (pct >= 50) return AppColors.butterYellow;
-    return AppColors.peach;
+  Color get _bgColor {
+    if (pct >= 80) return AppColors.statusSuccessBg;
+    if (pct >= 50) return AppColors.statusWarningBg;
+    return AppColors.statusDangerBg;
+  }
+
+  Color get _textColor {
+    if (pct >= 80) return AppColors.statusSuccessDark;
+    if (pct >= 50) return AppColors.statusWarningDark;
+    return AppColors.statusDangerDark;
   }
 
   @override
@@ -447,22 +419,22 @@ class _OverallBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: _color.withAlpha(40),
+        color: _bgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _color.withAlpha(100)),
+        border: Border.all(color: _textColor.withAlpha(40)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             '$pct%',
-            style: AppTextStyles.titleMedium.copyWith(color: _color),
+            style: AppTextStyles.titleMedium.copyWith(color: _textColor),
           ),
           const SizedBox(width: 4),
           Text(
             'Overall',
             style: AppTextStyles.bodySmall.copyWith(
-              color: _color,
+              color: AppColors.textSecondary,
               fontSize: 10,
             ),
           ),
@@ -473,10 +445,9 @@ class _OverallBadge extends StatelessWidget {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat(this.emoji, this.value, this.color);
+  const _MiniStat(this.emoji, this.value);
   final String emoji;
   final String value;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +458,9 @@ class _MiniStat extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTextStyles.labelLarge.copyWith(color: color),
+          style: AppTextStyles.labelLarge.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
       ],
     );
@@ -513,12 +486,6 @@ class _GameRow extends StatelessWidget {
     }
   }
 
-  Color get _color {
-    if (result.adjustedAccuracy >= 0.8) return AppColors.mint;
-    if (result.adjustedAccuracy >= 0.5) return AppColors.butterYellow;
-    return AppColors.peach;
-  }
-
   @override
   Widget build(BuildContext context) {
     final pct = (result.adjustedAccuracy * 100).round();
@@ -529,7 +496,9 @@ class _GameRow extends StatelessWidget {
           Expanded(
             child: Text(
               _name,
-              style: AppTextStyles.bodySmall,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -537,26 +506,12 @@ class _GameRow extends StatelessWidget {
           Text(
             '${result.score}/${result.totalItems}',
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.mutedForeground,
+              color: AppColors.textSecondary,
               fontSize: 10,
             ),
           ),
           const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: _color.withAlpha(40),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '$pct%',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: _color,
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
-              ),
-            ),
-          ),
+          StatusPillBadge.fromScore(pct, compact: true),
         ],
       ),
     );
@@ -568,21 +523,6 @@ class _ProfileRow extends StatelessWidget {
   final String area;
   final String level;
 
-  Color get _color {
-    switch (level) {
-      case 'strong':
-      case 'good':
-      case 'sustained':
-        return AppColors.mint;
-      case 'developing':
-      case 'improving':
-      case 'moderate':
-        return AppColors.butterYellow;
-      default:
-        return AppColors.peach;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -590,23 +530,14 @@ class _ProfileRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(area, style: AppTextStyles.bodySmall),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _color.withAlpha(40),
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: Text(
-              level,
+              area,
               style: AppTextStyles.bodySmall.copyWith(
-                color: _color,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
+          StatusPillBadge.fromLabel(level, compact: true),
         ],
       ),
     );
@@ -630,7 +561,10 @@ class _RecRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+              style: AppTextStyles.bodySmall.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           Text(
@@ -638,6 +572,7 @@ class _RecRow extends StatelessWidget {
             style: AppTextStyles.bodySmall.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 11,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -660,10 +595,11 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: AppSpacing.paddingLg,
       decoration: BoxDecoration(
-        color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.white,
+        borderRadius: AppRadius.card,
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,7 +611,10 @@ class _Card extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 title,
-                style: AppTextStyles.titleMedium.copyWith(fontSize: 13),
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),

@@ -123,4 +123,27 @@ abstract final class AppTextStyles {
         height: 1.4,
         letterSpacing: 0.5,
       );
+
+  // ── WCAG-enhanced text styles ──────────────────────────────────────
+
+  /// High-contrast body text for critical readability
+  static TextStyle get bodyLargeStrong => bodyLarge.copyWith(
+        color: AppColors.textPrimary,
+        fontWeight: FontWeight.w600,
+      );
+
+  /// High-contrast small text — replaces mutedForeground usage where contrast is needed
+  static TextStyle get bodySmallStrong => bodySmall.copyWith(
+        color: AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      );
+
+  /// Status badge text style
+  static TextStyle get statusBadge => TextStyle(
+        fontFamily: _poppins,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+        letterSpacing: 0.3,
+      );
 }

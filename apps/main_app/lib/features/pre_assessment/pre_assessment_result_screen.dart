@@ -71,7 +71,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                         Text(
                           'Assessment Complete!',
                           style: AppTextStyles.headlineMedium.copyWith(
-                            color: AppColors.primaryPurple,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -82,7 +82,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                     Text(
                       'Here\'s what we observed during the games.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -181,28 +181,19 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   /// Badge showing whether results are AI-powered or rule-based.
   Widget _buildSourceBadge() {
     final isAi = aiResponse != null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: isAi
-            ? AppColors.mint.withAlpha(40)
-            : AppColors.butterYellow.withAlpha(40),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isAi
-              ? AppColors.mint.withAlpha(100)
-              : AppColors.butterYellow.withAlpha(100),
-        ),
-      ),
-      child: Text(
-        isAi ? '🤖 AI-Powered' : '📊 Rule-Based',
-        style: AppTextStyles.bodySmall.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: isAi ? AppColors.mint : AppColors.butterYellow,
-        ),
-      ),
-    );
+    if (isAi) {
+      return const StatusPillBadge(
+        label: 'AI-Powered',
+        level: StatusLevel.info,
+        icon: Text('🤖'),
+      );
+    } else {
+      return const StatusPillBadge(
+        label: 'Rule-Based',
+        level: StatusLevel.warning,
+        icon: Text('📊'),
+      );
+    }
   }
 
   /// AI Insights card — shown when AI prediction data is available.
@@ -238,14 +229,14 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.lavenderLight.withAlpha(60),
+              color: AppColors.statusInfoBg,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               ai.summary,
               style: AppTextStyles.bodySmall.copyWith(
                 fontSize: 11,
-                color: AppColors.foreground,
+                color: AppColors.textSecondary,
                 height: 1.3,
               ),
               maxLines: 3,
@@ -267,6 +258,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                 style: AppTextStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -283,24 +275,17 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                     Expanded(
                       child: Text(
                         mod.name,
-                        style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.lavenderLight.withAlpha(80),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'Level ${mod.startingLevel}',
                         style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryPurple,
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
                         ),
                       ),
+                    ),
+                    StatusPillBadge(
+                      label: 'Level ${mod.startingLevel}',
+                      level: StatusLevel.info,
+                      compact: true,
+                      fontSize: 10,
                     ),
                   ],
                 ),
@@ -316,6 +301,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                 style: AppTextStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -331,7 +317,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                     const SizedBox(width: 4),
                     Text(
                       name,
-                      style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -341,14 +330,14 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     );
   }
 
-  /// Confidence row with a visual progress bar.
+  /// Confidence row with a visual progress bar and WCAG-compliant pill.
   Widget _buildConfidenceRow(double confidence) {
     final pct = (confidence * 100).round();
     final color = confidence >= 0.8
-        ? AppColors.mint
+        ? AppColors.statusSuccessDark
         : confidence >= 0.6
-            ? AppColors.butterYellow
-            : AppColors.peach;
+            ? AppColors.statusWarningDark
+            : AppColors.statusDangerDark;
 
     return Row(
       children: [
@@ -357,7 +346,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
         Expanded(
           child: Text(
             'Confidence',
-            style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+            style: AppTextStyles.bodySmall.copyWith(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
         SizedBox(
@@ -373,14 +365,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          '$pct%',
-          style: AppTextStyles.bodySmall.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
-            color: color,
-          ),
-        ),
+        StatusPillBadge.fromScore(pct, compact: true),
       ],
     );
   }
@@ -395,7 +380,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
           Expanded(
             child: Text(
               label,
-              style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+              style: AppTextStyles.bodySmall.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           Text(
@@ -403,6 +391,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             style: AppTextStyles.bodySmall.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 11,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -479,23 +468,12 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
               Expanded(
                 child: Text(
                   _gameName(r.gameId),
-                  style: AppTextStyles.bodySmall,
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _scoreColor(r.adjustedAccuracy).withAlpha(40),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$pct%',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: _scoreColor(r.adjustedAccuracy),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
+              StatusPillBadge.fromScore(pct, compact: true),
             ],
           ),
         );
@@ -507,13 +485,13 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.butterLight.withAlpha(120),
+        color: AppColors.statusWarningBg,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         '⚠️ Not a clinical diagnosis. Observations help customize learning.',
         style: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.mutedForeground,
+          color: AppColors.statusWarningDark,
           fontSize: 10,
         ),
         textAlign: TextAlign.center,
@@ -528,10 +506,11 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: AppSpacing.paddingLg,
       decoration: BoxDecoration(
-        color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.white,
+        borderRadius: AppRadius.card,
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,7 +521,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
               const SizedBox(width: 6),
               Text(
                 title,
-                style: AppTextStyles.titleMedium.copyWith(fontSize: 14),
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
@@ -566,24 +548,14 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Text(area, style: AppTextStyles.bodySmall),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _levelColor(level).withAlpha(40),
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: Text(
-              level,
+              area,
               style: AppTextStyles.bodySmall.copyWith(
-                color: _levelColor(level),
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
+                color: AppColors.textSecondary,
               ),
             ),
           ),
+          StatusPillBadge.fromLabel(level, compact: true),
         ],
       ),
     );
@@ -599,7 +571,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
           Expanded(
             child: Text(
               label,
-              style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+              style: AppTextStyles.bodySmall.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           Text(
@@ -607,32 +582,12 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             style: AppTextStyles.bodySmall.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 11,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
       ),
     );
-  }
-
-  Color _levelColor(String level) {
-    switch (level) {
-      case 'strong':
-      case 'good':
-      case 'sustained':
-        return AppColors.mint;
-      case 'developing':
-      case 'improving':
-      case 'moderate':
-        return AppColors.butterYellow;
-      default:
-        return AppColors.peach;
-    }
-  }
-
-  Color _scoreColor(double accuracy) {
-    if (accuracy >= 0.8) return AppColors.mint;
-    if (accuracy >= 0.5) return AppColors.butterYellow;
-    return AppColors.peach;
   }
 
   String _gameName(String gameId) {

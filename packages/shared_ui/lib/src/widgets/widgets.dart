@@ -12,6 +12,7 @@ export 'parent_mode_top_bar.dart';
 export 'parent_verification_dialog.dart';
 export 'progress_dots.dart';
 export 'section_title.dart';
+export 'status_pill_badge.dart';
 export 'voice_over_prompt_bubble.dart';
 export 'game_celebration_overlay.dart';
 export 'three_star_sparkle.dart';

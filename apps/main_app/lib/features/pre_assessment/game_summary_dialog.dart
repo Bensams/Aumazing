@@ -67,12 +67,6 @@ class GameSummaryDialog extends StatelessWidget {
     return '${remainingSeconds}s';
   }
 
-  Color _scoreColor(double accuracy) {
-    if (accuracy >= 0.8) return AppColors.mint;
-    if (accuracy >= 0.5) return AppColors.butterYellow;
-    return AppColors.peach;
-  }
-
   String _performanceLabel() {
     if (_overallAccuracy >= 0.8) return 'Excellent!';
     if (_overallAccuracy >= 0.6) return 'Good Job!';
@@ -105,14 +99,8 @@ class GameSummaryDialog extends StatelessWidget {
               Color(0xFFFFFFFF),
             ],
           ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryPurple.withAlpha(30),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          borderRadius: AppRadius.card,
+          boxShadow: AppShadows.modal,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -128,35 +116,29 @@ class GameSummaryDialog extends StatelessWidget {
                   Text(
                     'Pre-Assessment Summary',
                     style: AppTextStyles.headlineSmall.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   // Performance badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _scoreColor(_overallAccuracy).withAlpha(30),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_performanceEmoji(),
-                            style: const TextStyle(fontSize: 18)),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${_performanceLabel()} ($pct%)',
-                          style: AppTextStyles.labelLarge.copyWith(
-                            color: _scoreColor(_overallAccuracy),
-                            fontWeight: FontWeight.w600,
-                          ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_performanceEmoji(),
+                          style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 6),
+                      Text(
+                        _performanceLabel(),
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      StatusPillBadge.fromScore(pct),
+                    ],
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -206,11 +188,12 @@ class GameSummaryDialog extends StatelessWidget {
 
   Widget _buildTapStats() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
         color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.chip,
         border: Border.all(color: AppColors.border.withAlpha(80)),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         children: [
@@ -219,7 +202,6 @@ class GameSummaryDialog extends StatelessWidget {
               '✅',
               'Correct\nTaps',
               '$_totalCorrect',
-              AppColors.mint,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -228,7 +210,6 @@ class GameSummaryDialog extends StatelessWidget {
               '❌',
               'Error\nTaps',
               '$_totalErrors',
-              _totalErrors == 0 ? AppColors.mint : AppColors.peach,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -237,9 +218,6 @@ class GameSummaryDialog extends StatelessWidget {
               '⚠️',
               'Off-Target\nTaps',
               '$_totalRandomTouches',
-              _totalRandomTouches == 0
-                  ? AppColors.mint
-                  : AppColors.butterYellow,
             ),
           ),
         ],
@@ -247,8 +225,7 @@ class GameSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildTapStat(
-      String emoji, String label, String value, Color color) {
+  Widget _buildTapStat(String emoji, String label, String value) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -258,13 +235,13 @@ class GameSummaryDialog extends StatelessWidget {
           value,
           style: AppTextStyles.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
-            color: color,
+            color: AppColors.textPrimary,
           ),
         ),
         Text(
           label,
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.mutedForeground,
+            color: AppColors.textSecondary,
             fontSize: 11,
           ),
           textAlign: TextAlign.center,
@@ -275,11 +252,12 @@ class GameSummaryDialog extends StatelessWidget {
 
   Widget _buildOverallStats() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
         color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.chip,
         border: Border.all(color: AppColors.border.withAlpha(80)),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         children: [
@@ -325,12 +303,13 @@ class GameSummaryDialog extends StatelessWidget {
           value,
           style: AppTextStyles.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
         Text(
           label,
           style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.mutedForeground,
+            color: AppColors.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -340,11 +319,12 @@ class GameSummaryDialog extends StatelessWidget {
 
   Widget _buildGameBreakdown() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
         color: AppColors.white.withAlpha(200),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.chip,
         border: Border.all(color: AppColors.border.withAlpha(80)),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,8 +335,10 @@ class GameSummaryDialog extends StatelessWidget {
               const Text('🎮', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 6),
               Text('Game Results',
-                  style: AppTextStyles.labelLarge
-                      .copyWith(fontWeight: FontWeight.w600)),
+                  style: AppTextStyles.labelLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  )),
             ],
           ),
           const SizedBox(height: 10),
@@ -385,32 +367,21 @@ class GameSummaryDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(fontWeight: FontWeight.w600)),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    )),
                 Text(
                   '✅ ${r.score}  ❌ ${r.errorCount}  ⚠️ ${r.randomTouchCount}',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.mutedForeground,
+                    color: AppColors.textSecondary,
                     fontSize: 11,
                   ),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: _scoreColor(accuracy).withAlpha(35),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '$pct%',
-              style: AppTextStyles.labelLarge.copyWith(
-                color: _scoreColor(accuracy),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          StatusPillBadge.fromScore(pct, compact: true),
         ],
       ),
     );
