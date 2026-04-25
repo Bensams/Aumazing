@@ -23,10 +23,10 @@ class ChildRepository {
   ChildRepository({
     LocalDbService? localDb,
     AuthService? authService,
-    SyncService? syncService,
+    SyncService? overrideSyncService,
   })  : _localDb = localDb ?? localDbService,
         _authService = authService ?? AuthService(),
-        _syncService = syncService ?? SyncService();
+        _syncService = overrideSyncService ?? syncService;
 
   /// Get the current effective user ID (authenticated or guest)
   String get _effectiveUserId {
@@ -34,9 +34,6 @@ class ChildRepository {
            _authService.currentGuestId ??
            'guest';
   }
-
-  /// Check if we're in guest mode
-  bool get _isGuestMode => _authService.currentUser == null;
 
   // ─── CRUD Operations ──────────────────────────────────────────────────
 
@@ -79,13 +76,10 @@ class ChildRepository {
       markPending: true,
     );
 
-    debugPrint('[ChildRepository] Child created locally: ${child.id} '
-        '(guest: $_isGuestMode)');
+    debugPrint('[ChildRepository] Child created locally: ${child.id}');
 
-    // Trigger background sync if online
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
 
     return child;
   }
@@ -131,9 +125,8 @@ class ChildRepository {
 
     debugPrint('[ChildRepository] Child updated: ${child.id}');
 
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
 
     return updated;
   }
@@ -157,9 +150,8 @@ class ChildRepository {
     debugPrint('[ChildRepository] Reward preference updated for child: ${child.id} '
         '(preference: ${rewardPreference.value}, random: $useRandomReward)');
 
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
 
     return updated;
   }
@@ -169,9 +161,8 @@ class ChildRepository {
     await _localDb.deleteChild(id);
     debugPrint('[ChildRepository] Child soft-deleted: $id');
 
-    if (!_isGuestMode) {
-      _syncService.syncNow();
-    }
+    // Trigger background sync (anonymous users are authenticated in Supabase)
+    _syncService.syncNow();
   }
 
   // ─── Guest Mode Operations ────────────────────────────────────────────
@@ -188,10 +179,6 @@ class ChildRepository {
 
   /// Force sync of pending child records
   Future<void> syncPending() async {
-    if (_isGuestMode) {
-      debugPrint('[ChildRepository] Cannot sync in guest mode');
-      return;
-    }
     await _syncService.syncNow();
   }
 

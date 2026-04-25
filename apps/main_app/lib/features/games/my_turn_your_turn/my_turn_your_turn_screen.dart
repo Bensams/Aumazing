@@ -126,6 +126,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       }) {
         setState(() => _gameComplete = true);
 
+        // Trigger game-complete haptic feedback
+        if (context.read<ChildProvider>().vibrationEnabled) {
+          context.read<HapticService>().gameCompleteFeedback();
+        }
+
         // Record the session in the assessment provider
         final childProvider = context.read<ChildProvider>();
         final assessmentProvider = context.read<AssessmentProvider>();
@@ -145,10 +150,16 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
           hapticFeedbackEnabled: childProvider.vibrationEnabled,
         );
         
+        // Include randomTouchCount in extras so pre-assessment summary can display it
+        final enrichedExtras = {
+          ...extras,
+          'random_touch_count': analytics?.randomTouchCount ?? 0,
+        };
+
         // If onComplete is provided (pre-assessment mode), call it directly
         // Reward overlay will show on top of this game screen
         if (widget.onComplete != null) {
-          widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs, extras);
+          widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs, enrichedExtras);
           return;
         }
         

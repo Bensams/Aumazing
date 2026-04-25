@@ -9,7 +9,7 @@ import '../model/module_progress.dart';
 /// SQLite database for offline caching and unsynced gameplay data.
 class LocalDbService {
   static const _dbName = 'aumazing.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3; // v3: Add random_touch_count to assessment_results
 
   static Database? _database;
 
@@ -54,6 +54,7 @@ class LocalDbService {
         score INTEGER NOT NULL,
         total_items INTEGER NOT NULL,
         error_count INTEGER NOT NULL,
+        random_touch_count INTEGER NOT NULL DEFAULT 0,
         avg_response_time_ms INTEGER NOT NULL,
         completed_at TEXT NOT NULL,
         raw_metrics TEXT
@@ -133,6 +134,13 @@ class LocalDbService {
           'ALTER TABLE gameplay_sessions ADD COLUMN time_to_completion REAL');
       await db.execute(
           'ALTER TABLE gameplay_sessions ADD COLUMN sensory_condition TEXT');
+    }
+
+    if (oldVersion < 3) {
+      // Migration from v2 to v3: Add random_touch_count to assessment_results
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0');
+      debugPrint('[LocalDbService-legacy] Added random_touch_count column to assessment_results (v3)');
     }
   }
 

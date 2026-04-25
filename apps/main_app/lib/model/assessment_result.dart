@@ -3,6 +3,9 @@ class AssessmentResult {
   final String id;
   final String childId;
 
+  /// The assessment run this result belongs to.
+  final String? assessmentRunId;
+
   /// 'pre' or 'post'
   final String type;
 
@@ -12,6 +15,9 @@ class AssessmentResult {
   final int score;
   final int totalItems;
   final int errorCount;
+
+  /// Number of random/off-target touches (taps on non-interactive areas).
+  final int randomTouchCount;
 
   /// Average response time in milliseconds across all items.
   final int avgResponseTimeMs;
@@ -44,7 +50,10 @@ class AssessmentResult {
   /// Overall summary text from rubric scoring.
   final String? overallSummary;
 
-  /// Source of labels: 'rubric_based' or 'xgboost'.
+  /// Source of assessment labels.
+  ///
+  /// - `'rubric_based'` — scored by the local rubric engine only.
+  /// - `'xgboost'`      — scored/confirmed by the AI Assessment API (XGBoost model).
   final String? modelSource;
 
   /// Whether this row can be used for XGBoost training.
@@ -53,11 +62,13 @@ class AssessmentResult {
   const AssessmentResult({
     required this.id,
     required this.childId,
+    this.assessmentRunId,
     required this.type,
     required this.gameId,
     required this.score,
     required this.totalItems,
     required this.errorCount,
+    this.randomTouchCount = 0,
     required this.avgResponseTimeMs,
     required this.completedAt,
     this.rawMetrics = const {},
@@ -75,6 +86,26 @@ class AssessmentResult {
   double get accuracy =>
       totalItems > 0 ? (score / totalItems).clamp(0.0, 1.0) : 0.0;
 
+  /// Accuracy adjusted for errors.
+  ///
+  /// Uses the formula `score / (score + errorCount)` so that errors
+  /// penalise the result even when the game retries until correct
+  /// (which makes [accuracy] always 1.0).
+  ///
+  /// Falls back to [accuracy] when there are no errors, and returns
+  /// 0.0 when both score and errorCount are zero.
+  double get adjustedAccuracy {
+    final total = score + errorCount;
+    if (total <= 0) return 0.0;
+    return (score / total).clamp(0.0, 1.0);
+  }
+
+  /// Whether this result was assessed by the AI (XGBoost) model.
+  ///
+  /// Returns `true` when [modelSource] is `'xgboost'`, making it easy
+  /// to distinguish AI-generated assessment data from rubric-only data.
+  bool get isAiAssessed => modelSource == 'xgboost';
+
   /// Create a copy with updated rubric scoring fields.
   AssessmentResult copyWithRubric({
     String? playSkillsLabel,
@@ -90,11 +121,13 @@ class AssessmentResult {
     return AssessmentResult(
       id: id,
       childId: childId,
+      assessmentRunId: assessmentRunId,
       type: type,
       gameId: gameId,
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
+      randomTouchCount: randomTouchCount,
       avgResponseTimeMs: avgResponseTimeMs,
       completedAt: completedAt,
       rawMetrics: rawMetrics,
@@ -113,11 +146,13 @@ class AssessmentResult {
   Map<String, dynamic> toMap() => {
         'id': id,
         'child_id': childId,
+        'assessment_run_id': assessmentRunId,
         'type': type,
         'game_id': gameId,
         'score': score,
         'total_items': totalItems,
         'error_count': errorCount,
+        'random_touch_count': randomTouchCount,
         'avg_response_time_ms': avgResponseTimeMs,
         'completed_at': completedAt.toIso8601String(),
         'raw_metrics': rawMetrics.toString(),
@@ -138,11 +173,13 @@ class AssessmentResult {
       AssessmentResult(
         id: map['id'] as String,
         childId: map['child_id'] as String,
+        assessmentRunId: map['assessment_run_id'] as String?,
         type: map['type'] as String,
         gameId: map['game_id'] as String,
         score: map['score'] as int,
         totalItems: map['total_items'] as int,
         errorCount: map['error_count'] as int,
+        randomTouchCount: (map['random_touch_count'] as int?) ?? 0,
         avgResponseTimeMs: map['avg_response_time_ms'] as int,
         completedAt: DateTime.parse(map['completed_at'] as String),
         playSkillsLabel: map['play_skills_label'] as String?,
@@ -162,11 +199,13 @@ class AssessmentResult {
       AssessmentResult(
         id: map['id'] as String,
         childId: map['child_id'] as String,
+        assessmentRunId: map['assessment_run_id'] as String?,
         type: map['type'] as String,
         gameId: map['game_id'] as String,
         score: map['score'] as int,
         totalItems: map['total_items'] as int,
         errorCount: map['error_count'] as int,
+        randomTouchCount: (map['random_touch_count'] as int?) ?? 0,
         avgResponseTimeMs: map['avg_response_time_ms'] as int,
         completedAt: DateTime.parse(map['completed_at'] as String),
         rawMetrics: (map['raw_metrics'] as Map<String, dynamic>?) ?? {},
@@ -184,11 +223,13 @@ class AssessmentResult {
   Map<String, dynamic> toSupabase() => {
         'id': id,
         'child_id': childId,
+        'assessment_run_id': assessmentRunId,
         'type': type,
         'game_id': gameId,
         'score': score,
         'total_items': totalItems,
         'error_count': errorCount,
+        'random_touch_count': randomTouchCount,
         'avg_response_time_ms': avgResponseTimeMs,
         'completed_at': completedAt.toIso8601String(),
         'raw_metrics': rawMetrics,

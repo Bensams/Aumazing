@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flame/events.dart';
@@ -95,6 +96,13 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   int _turnsInRound = 0;
   static const _slotsPerRound = 6; // 3x2 grid = 6 slots, 3 each
 
+  // ── Variable buddy turn duration ───────────────────────────────────
+  final math.Random _rng = math.Random();
+
+  // ── Idle timer / hint system ───────────────────────────────────────
+  Timer? _noResponseTimer;
+  int _hintCount = 0;
+
   static const _buddyColors = [
     AppColors.peach,
     AppColors.skyBlue,
@@ -130,11 +138,14 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   }
 
   void _setupRound() {
+    _cancelNoResponseTimer();
+
     for (final s in _slots) {
       s.removeFromParent();
     }
     _slots.clear();
     _turnsInRound = 0;
+    _hintCount = 0;
 
     // Start analytics round
     analyticsStartRound(roundNumber: _currentRound + 1);
@@ -159,6 +170,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       final slot = TurnSlot(
         slotIndex: i,
         onTapped: _onSlotTapped,
+        onTappedWhileDisabled: _onSlotTappedWhileDisabled,
         position: Vector2(
           startX + col * (cardSize + gap),
           startY + row * (cardSize + gap),
@@ -175,6 +187,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
 
   void _startBuddyTurn() {
     _isBuddyTurn = true;
+    _cancelNoResponseTimer();
     onTurnChanged(true);
     // Play "my turn" and "wait" voice-overs for buddy's turn
     onPlayMyTurnVo?.call();
@@ -184,8 +197,11 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       s.inputEnabled = false;
     }
 
-    // Buddy acts after a delay (simulating thinking)
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    // Variable delay between 1000-5000ms to test impulse control
+    final delayMs = 1000 + _rng.nextInt(4001); // 1000..5000
+    analyticsAddRoundData('buddy_turn_delay_ms', delayMs);
+
+    Future.delayed(Duration(milliseconds: delayMs), () {
       if (!isMounted) return;
       _buddyPlays();
     });
@@ -226,32 +242,40 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     for (final s in _slots) {
       s.inputEnabled = true; // allow tapping empty slots
     }
+
+    _startNoResponseTimer();
+  }
+
+  /// Called when a slot is tapped while input is disabled (buddy's turn).
+  /// Records an impulse-control error tap.
+  void _onSlotTappedWhileDisabled(int index) {
+    final slot = _slots[index];
+
+    _earlyTaps++;
+    _errorCount++;
+
+    // Play wrong SFX and voice-over for early tap
+    onPlayWrongSfx?.call();
+    onPlayWrongVo?.call();
+
+    // Record as off-task action (important for XGBoost)
+    analyticsRecordOffTaskAction(actionType: 'early_tap_slot_buddy_turn');
+    analyticsRecordWrong(extraData: {
+      'error_type': 'impulse_control',
+      'turn_phase': 'buddy_turn',
+      'tap_target': 'slot',
+      'slot_index': index,
+    });
+
+    slot.showEarlyTapWarning();
   }
 
   void _onSlotTapped(int index) {
     final slot = _slots[index];
     if (slot.isFilled) return;
 
-    if (_isBuddyTurn) {
-      // Early tap during buddy's turn — impulse control issue
-      _earlyTaps++;
-      _errorCount++;
-
-      // Play wrong SFX and voice-over for early tap
-      onPlayWrongSfx?.call();
-      onPlayWrongVo?.call();
-
-      // Record as off-task action (important for XGBoost)
-      analyticsRecordOffTaskAction(actionType: 'early_tap_during_buddy_turn');
-      analyticsRecordWrong(extraData: {
-        'error_type': 'impulse_control',
-        'turn_phase': 'buddy_turn',
-        'slot_index': index,
-      });
-
-      slot.showEarlyTapWarning();
-      return;
-    }
+    // Child's turn — cancel idle timer and clear hints
+    _cancelNoResponseTimer();
 
     // Child's turn — fill the slot
     // Play tap SFX
@@ -301,6 +325,8 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     final allFilled = _slots.every((s) => s.isFilled);
     if (!allFilled) return false;
 
+    _cancelNoResponseTimer();
+
     _currentRound++;
     onStepChanged(_currentRound);
 
@@ -319,6 +345,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
 
       // Add game-specific metrics for XGBoost
       analyticsAddGameSpecificMetric('early_taps_total', _earlyTaps);
+      analyticsAddGameSpecificMetric('hint_count', _hintCount);
       analyticsAddGameSpecificMetric('avg_response_time_ms',
         _totalResponseTimeMs / (_score > 0 ? _score : 1));
       analyticsAddGameSpecificMetric('impulse_control_score',
@@ -354,6 +381,59 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       Offset(event.canvasPosition.x, event.canvasPosition.y),
       isValid: event.handled,
     );
+
+    // Canvas taps during buddy turn are random/failed touches, not error taps.
+    // Error taps on slots during buddy turn are handled by _onSlotTappedWhileDisabled.
+  }
+
+  // ── Idle timer / hint methods ──────────────────────────────────────
+
+  void _startNoResponseTimer() {
+    _cancelNoResponseTimer();
+    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+      if (!isMounted || _isBuddyTurn) return;
+      _showVisualGuide();
+    });
+  }
+
+  void _cancelNoResponseTimer() {
+    _noResponseTimer?.cancel();
+    _noResponseTimer = null;
+    _hideVisualHints();
+  }
+
+  void _showVisualGuide() {
+    // Find first empty slot and highlight it
+    final emptySlots = _slots.where((s) => !s.isFilled).toList();
+    if (emptySlots.isEmpty) return;
+
+    final targetSlot = emptySlots.first;
+    targetSlot.showHint();
+
+    _hintCount++;
+    analyticsRecordHint(hintType: 'idle_visual_guide');
+    analyticsRecordPrompt(promptType: 'visual_guide_idle_slot');
+
+    // Auto-hide hint after 3 seconds and restart timer
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!isMounted) return;
+      targetSlot.hideHint();
+      if (!_isBuddyTurn) {
+        _startNoResponseTimer();
+      }
+    });
+  }
+
+  void _hideVisualHints() {
+    for (final s in _slots) {
+      s.hideHint();
+    }
+  }
+
+  @override
+  void onRemove() {
+    _cancelNoResponseTimer();
+    super.onRemove();
   }
 
   @override

@@ -12,7 +12,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
-import '../../services/scoring_service.dart';
+import '../../services/rubric/rubric_labels.dart';
 
 import '../games/copy_me/copy_me_screen.dart';
 import '../games/do_what_i_say/do_what_i_say_screen.dart';
@@ -66,14 +66,27 @@ class _PreAssessmentProgressScreenState
     super.initState();
     _initSensoryController();
     _saveSensoryConsent();
+    _startAssessmentRun();
+  }
+
+  /// Create an assessment run record so all sessions and results
+  /// are linked together under a single run ID.
+  void _startAssessmentRun() {
+    final assessProv = context.read<AssessmentProvider>();
+    assessProv.startAssessmentRun(
+      childId: _childId,
+      type: 'pre',
+    );
   }
 
   /// Persist the parent's sensory consent decision to the local database.
   void _saveSensoryConsent() {
     final consentGiven =
         widget.sensoryConsentResult == SensoryConsentResult.accepted;
+    final assessProv = context.read<AssessmentProvider>();
     localDbService.insertSensoryConsent(
       childId: _childId,
+      assessmentRunId: assessProv.currentAssessmentRunId,
       consentGiven: consentGiven,
     );
     debugPrint(
@@ -141,19 +154,14 @@ class _PreAssessmentProgressScreenState
     int totalResponseTimeMs, [
     Map<String, dynamic> extras = const {},
   ]) {
-    // Record session in assessment provider (persists to local DB + syncs)
-    context.read<AssessmentProvider>().recordGameSession(
-          childId: _childId,
-          gameId: gameId,
-          context: 'pre_assessment',
-          score: score,
-          totalItems: totalItems,
-          errorCount: errorCount,
-          totalResponseTimeMs: totalResponseTimeMs,
-          startedAt: DateTime.now().subtract(
-            Duration(milliseconds: totalResponseTimeMs),
-          ),
-        );
+    // NOTE: recordGameSession() is NOT called here because each game screen
+    // (CopyMeScreen, DoWhatISayScreen, MyTurnYourTurnScreen, MatchItScreen)
+    // already calls recordGameSession() with the full GameSessionMetrics
+    // analytics object. Calling it here as well would double-record sessions
+    // and lose the analytics data (failed taps, retries, off-task actions).
+
+    // Extract randomTouchCount from extras if available (passed by game screens)
+    final randomTouchCount = (extras['random_touch_count'] as int?) ?? 0;
 
     // Store result locally for the summary
     _results.add(AssessmentResult(
@@ -164,6 +172,7 @@ class _PreAssessmentProgressScreenState
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
+      randomTouchCount: randomTouchCount,
       avgResponseTimeMs:
           totalItems > 0 ? (totalResponseTimeMs / totalItems).round() : 0,
       completedAt: DateTime.now(),
@@ -282,10 +291,12 @@ class _PreAssessmentProgressScreenState
       );
 
       // Save sensory round metrics to local DB
+      final assessProv = context.read<AssessmentProvider>();
       final metricsMapList =
           _sensoryMetrics.map((m) => m.toMap()).toList();
       await localDbService.insertSensoryRoundMetrics(
         childId: _childId,
+        assessmentRunId: assessProv.currentAssessmentRunId,
         metricsMapList: metricsMapList,
       );
       debugPrint(
@@ -295,6 +306,7 @@ class _PreAssessmentProgressScreenState
       // Save sensory preference result to local DB
       await localDbService.insertSensoryPreference(
         childId: _childId,
+        assessmentRunId: assessProv.currentAssessmentRunId,
         preferenceMap: _sensoryPreferenceResult!.toMap(),
       );
       debugPrint('[PreAssessment] Saved sensory preference result');
@@ -341,63 +353,67 @@ class _PreAssessmentProgressScreenState
 
   /// Build a [SupportProfile] from the AI response or rule-based fallback.
   ///
-  /// When AI is available, uses [AiAssessmentResponse.supportLevel] to set
-  /// nuanced levels across all developmental areas, with the primary area
-  /// (matching the predicted profile) set lower than the others.
+  /// The Developmental Profile labels (communication, socialInteraction,
+  /// playSkills, attention, sensory) always come from the [RubricResult]
+  /// produced by [RubricScoringService] so that rubric scoring is the
+  /// single source of truth for the profile UI.
+  ///
+  /// When AI is available, the Recommendations section (difficulty, prompt
+  /// style, session length, etc.) is driven by the AI response. When AI is
+  /// unavailable, recommendations fall back to sensible defaults derived
+  /// from the rubric labels.
   SupportProfile _buildSupportProfile(
     AiAssessmentResponse? aiResponse,
     List<AssessmentResult> finalResults,
   ) {
+    final assessProv = context.read<AssessmentProvider>();
+    final rubric = assessProv.rubricResult;
+
+    // ── Developmental Profile labels from rubric ──────────────────────
+    final String communication;
+    final String socialInteraction;
+    final String playSkills;
+    final String attention;
+    final List<String> sensoryNotes;
+
+    if (rubric != null) {
+      communication = _mapPerformanceLabel(rubric.communicationLabel);
+      socialInteraction =
+          _mapPerformanceLabel(rubric.socialInteractionLabel);
+      playSkills = _mapPerformanceLabel(rubric.playSkillsLabel);
+      attention = _mapAttentionLabel(rubric.behaviorAttentionLabel);
+      sensoryNotes = [rubric.sensoryPreferenceLabel.displayName];
+
+      debugPrint('[PreAssessment] 📐 Using rubric-based profile labels: '
+          'comm=$communication, social=$socialInteraction, '
+          'play=$playSkills, attn=$attention, '
+          'sensory=${rubric.sensoryPreferenceLabel.displayName}');
+    } else {
+      // Rubric not available — use neutral defaults
+      debugPrint('[PreAssessment] ⚠️ Rubric result not available, '
+          'using neutral defaults for profile labels');
+      communication = 'emerging';
+      socialInteraction = 'emerging';
+      playSkills = 'emerging';
+      attention = 'moderate';
+      sensoryNotes = const [];
+    }
+
+    // ── Recommendations from AI or rubric-based defaults ─────────────
     if (aiResponse != null) {
-      debugPrint('[PreAssessment] ✅ Using AI-based profile: '
+      debugPrint('[PreAssessment] ✅ Using AI-based recommendations: '
           '${aiResponse.profileDisplayName} '
           '(${aiResponse.confidencePercent}), '
           'support_level=${aiResponse.supportLevel}');
 
-      // Map support_level to nuanced developmental levels
-      // high → primary area 'emerging', others 'developing'
-      // moderate → primary area 'developing', others 'developing'
-      // low → primary area 'developing', others 'strong'
-      final String primaryLevel;
-      final String secondaryLevel;
-      final String attentionPrimary;
-      final String attentionSecondary;
-
-      switch (aiResponse.supportLevel) {
-        case 'high':
-          primaryLevel = 'emerging';
-          secondaryLevel = 'developing';
-          attentionPrimary = 'short attention';
-          attentionSecondary = 'moderate';
-        case 'moderate':
-          primaryLevel = 'developing';
-          secondaryLevel = 'developing';
-          attentionPrimary = 'moderate';
-          attentionSecondary = 'moderate';
-        case 'low':
-        default:
-          primaryLevel = 'developing';
-          secondaryLevel = 'strong';
-          attentionPrimary = 'moderate';
-          attentionSecondary = 'sustained';
-      }
-
       final profile = aiResponse.predictedProfile;
 
       return SupportProfile(
-        communication: profile == 'communication_support'
-            ? primaryLevel
-            : secondaryLevel,
-        socialInteraction: profile == 'social_support'
-            ? primaryLevel
-            : secondaryLevel,
-        playSkills: profile == 'play_support'
-            ? primaryLevel
-            : secondaryLevel,
-        attention: profile == 'attention_support'
-            ? attentionPrimary
-            : attentionSecondary,
-        sensoryNotes: const [], // Don't stuff AI info into sensoryNotes
+        communication: communication,
+        socialInteraction: socialInteraction,
+        playSkills: playSkills,
+        attention: attention,
+        sensoryNotes: sensoryNotes,
         recommendedDifficulty: aiResponse.supportLevel == 'high'
             ? 'beginner'
             : aiResponse.supportLevel == 'moderate'
@@ -422,16 +438,73 @@ class _PreAssessmentProgressScreenState
                 : 1,
       );
     } else {
-      // Fallback: existing rule-based scoring
-      debugPrint('[PreAssessment] ⚠️ Using rule-based profile '
+      // Fallback: derive recommendations from rubric labels
+      debugPrint('[PreAssessment] ⚠️ Using rubric-based recommendations '
           '(AI unavailable)');
-      const scorer = ScoringService();
-      final sensorySettings =
-          context.read<ChildProvider>().sensorySettingsMap;
-      return scorer.generateProfile(
-        results: finalResults.isNotEmpty ? finalResults : _results,
-        sensorySettings: sensorySettings,
+
+      // Derive difficulty from rubric performance labels
+      final emergingCount = [communication, socialInteraction, playSkills]
+          .where((l) => l == 'emerging')
+          .length;
+      final strongCount = [communication, socialInteraction, playSkills]
+          .where((l) => l == 'strong')
+          .length;
+
+      final String difficulty;
+      if (strongCount >= 2) {
+        difficulty = 'advanced';
+      } else if (emergingCount >= 2) {
+        difficulty = 'beginner';
+      } else {
+        difficulty = 'intermediate';
+      }
+
+      final sessionMin = attention == 'short attention' ? 3 : 5;
+      final lowStim = attention == 'short attention';
+      final needsTurnPractice = socialInteraction == 'emerging';
+      final promptRep = emergingCount >= 2
+          ? 3
+          : emergingCount >= 1
+              ? 2
+              : 1;
+
+      return SupportProfile(
+        communication: communication,
+        socialInteraction: socialInteraction,
+        playSkills: playSkills,
+        attention: attention,
+        sensoryNotes: sensoryNotes,
+        recommendedDifficulty: difficulty,
+        recommendedPromptStyle: 'combined',
+        recommendedSessionMinutes: sessionMin,
+        lowStimulationMode: lowStim,
+        turnTakingPractice: needsTurnPractice,
+        promptRepetition: promptRep,
       );
+    }
+  }
+
+  /// Map [PerformanceLabel] to the string used by [SupportProfile].
+  String _mapPerformanceLabel(PerformanceLabel label) {
+    switch (label) {
+      case PerformanceLabel.strength:
+        return 'strong';
+      case PerformanceLabel.emerging:
+        return 'good';
+      case PerformanceLabel.needsSupport:
+        return 'emerging';
+    }
+  }
+
+  /// Map [AttentionLabel] to the string used by [SupportProfile].
+  String _mapAttentionLabel(AttentionLabel label) {
+    switch (label) {
+      case AttentionLabel.sustainedAttention:
+        return 'sustained';
+      case AttentionLabel.variableAttention:
+        return 'moderate';
+      case AttentionLabel.needsAttentionSupport:
+        return 'short attention';
     }
   }
 

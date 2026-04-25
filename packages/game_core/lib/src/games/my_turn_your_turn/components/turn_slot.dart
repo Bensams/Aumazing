@@ -1,4 +1,6 @@
 
+import 'dart:math' as math;
+
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
@@ -13,6 +15,7 @@ class TurnSlot extends PositionComponent with TapCallbacks {
   TurnSlot({
     required this.slotIndex,
     required this.onTapped,
+    this.onTappedWhileDisabled,
     super.position,
     super.size,
   });
@@ -20,16 +23,43 @@ class TurnSlot extends PositionComponent with TapCallbacks {
   final int slotIndex;
   final void Function(int index) onTapped;
 
+  /// Called when the slot is tapped while [inputEnabled] is false (buddy's turn)
+  /// and the slot is not yet filled. Used to record impulse-control errors.
+  final void Function(int slotIndex)? onTappedWhileDisabled;
+
   bool isFilled = false;
   bool isBuddy = false; // true = filled by buddy, false = filled by child
   Color fillColor = AppColors.lavender;
   bool inputEnabled = false;
 
+  // ── Hint state ─────────────────────────────────────────────────────
+  bool _isHint = false;
+  double _hintTime = 0.0; // time accumulator for pulsing animation
+
+  set isHint(bool v) {
+    _isHint = v;
+    _hintTime = 0.0;
+  }
+
+  bool get isHint => _isHint;
+
+  void showHint() {
+    isHint = true;
+  }
+
+  void hideHint() {
+    isHint = false;
+  }
+
   static const double _cornerRadius = 20.0;
 
   @override
   void onTapDown(TapDownEvent event) {
-    if (!inputEnabled || isFilled) return;
+    if (isFilled) return;
+    if (!inputEnabled) {
+      onTappedWhileDisabled?.call(slotIndex);
+      return;
+    }
     onTapped(slotIndex);
   }
 
@@ -66,6 +96,14 @@ class TurnSlot extends PositionComponent with TapCallbacks {
   }
 
   @override
+  void update(double dt) {
+    super.update(dt);
+    if (_isHint) {
+      _hintTime += dt;
+    }
+  }
+
+  @override
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
@@ -93,6 +131,24 @@ class TurnSlot extends PositionComponent with TapCallbacks {
         Offset(size.x / 2 - tp.width / 2, size.y / 2 - tp.height / 2),
       );
     } else {
+      // Hint indicator — pulsing orange ring (same style as SequenceShape)
+      if (_isHint) {
+        final pulseAlpha = (128 + 127 * math.sin(_hintTime * 2 * math.pi))
+            .round()
+            .clamp(0, 255);
+        final hintPaint = Paint()
+          ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(-8, -8, size.x + 16, size.y + 16),
+            const Radius.circular(_cornerRadius + 4),
+          ),
+          hintPaint,
+        );
+      }
+
       // 3D recessed empty slot
       final rrect = RRect.fromRectAndRadius(
         rect,

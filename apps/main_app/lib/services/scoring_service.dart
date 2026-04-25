@@ -26,7 +26,7 @@ class ScoringService {
     // ── Communication ───────────────────────────────────────────────
     final commScores = results
         .where((r) => commGameIds.contains(r.gameId))
-        .map((r) => r.accuracy)
+        .map((r) => r.adjustedAccuracy)
         .toList();
     final communication = _level(commScores.isEmpty ? 0.0 : _avg(commScores));
 
@@ -42,7 +42,7 @@ class ScoringService {
       final earlyTaps = socialResults
           .map((r) => r.rawMetrics['early_taps'] as int? ?? 0)
           .reduce((a, b) => a + b);
-      final socialAccuracy = _avg(socialResults.map((r) => r.accuracy).toList());
+      final socialAccuracy = _avg(socialResults.map((r) => r.adjustedAccuracy).toList());
       if (earlyTaps <= 1 && socialAccuracy >= 0.8) {
         socialInteraction = 'good';
       } else if (socialAccuracy >= 0.5) {
@@ -55,7 +55,7 @@ class ScoringService {
     // ── Play Skills ─────────────────────────────────────────────────
     final playScores = results
         .where((r) => playGameIds.contains(r.gameId))
-        .map((r) => r.accuracy)
+        .map((r) => r.adjustedAccuracy)
         .toList();
     final playSkills = _level(playScores.isEmpty ? 0.0 : _avg(playScores));
 
@@ -90,7 +90,7 @@ class ScoringService {
     // ── Recommendations ─────────────────────────────────────────────
     final overallAccuracy = results.isEmpty
         ? 0.0
-        : results.map((r) => r.accuracy).reduce((a, b) => a + b) /
+        : results.map((r) => r.adjustedAccuracy).reduce((a, b) => a + b) /
             results.length;
 
     String difficulty;
@@ -106,7 +106,7 @@ class ScoringService {
         (socialResults
                 .map((r) => r.rawMetrics['early_taps'] as int? ?? 0)
                 .reduce((a, b) => a + b) > 2 ||
-            _avg(socialResults.map((r) => r.accuracy).toList()) < 0.5);
+            _avg(socialResults.map((r) => r.adjustedAccuracy).toList()) < 0.5);
 
     final lowStim = sensoryNotes.length >= 2;
 

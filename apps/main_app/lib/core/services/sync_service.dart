@@ -529,10 +529,11 @@ class SyncService {
       'id': local['id'],
       'parent_user_id': local['user_id'],
       'display_name': local['display_name'],
-      'birth_date':
-          DateTime.parse(
-            local['birth_date'] as String,
-          ).toIso8601String().split('T').first,
+      'birth_date': local['birth_date'] != null
+          ? DateTime.parse(
+              local['birth_date'] as String,
+            ).toIso8601String().split('T').first
+          : null,
       'created_at': local['local_created_at'],
       'updated_at': local['updated_at'],
     };
@@ -657,7 +658,9 @@ class SyncService {
       'score': local['score'],
       'total_items': local['total_items'],
       'error_count': local['error_count'],
+      'random_touch_count': local['random_touch_count'] ?? 0,
       'avg_response_time_ms': local['avg_response_time_ms'],
+      'completed_at': local['completed_at'],
       'raw_metrics':
           local['raw_metrics'] != null ? local['raw_metrics'] as String : null,
       // Rubric scoring fields

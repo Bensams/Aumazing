@@ -4,6 +4,9 @@ class GameplaySession {
   final String id;
   final String childId;
 
+  /// The assessment run this session belongs to (null for practice sessions).
+  final String? assessmentRunId;
+
   /// Game identifier: 'match_it', 'copy_me', etc.
   final String gameId;
 
@@ -91,6 +94,7 @@ class GameplaySession {
   const GameplaySession({
     required this.id,
     required this.childId,
+    this.assessmentRunId,
     required this.gameId,
     required this.context,
     required this.score,
@@ -131,6 +135,7 @@ class GameplaySession {
   GameplaySession markSynced() => GameplaySession(
         id: id,
         childId: childId,
+        assessmentRunId: assessmentRunId,
         gameId: gameId,
         context: context,
         score: score,
@@ -166,6 +171,7 @@ class GameplaySession {
   Map<String, dynamic> toMap() => {
         'id': id,
         'child_id': childId,
+        'assessment_run_id': assessmentRunId,
         'game_id': gameId,
         'context': context,
         'score': score,
@@ -201,6 +207,7 @@ class GameplaySession {
   factory GameplaySession.fromMap(Map<String, dynamic> map) => GameplaySession(
         id: map['id'] as String,
         childId: map['child_id'] as String,
+        assessmentRunId: map['assessment_run_id'] as String?,
         gameId: map['game_id'] as String,
         context: map['context'] as String,
         score: map['score'] as int,
@@ -236,6 +243,7 @@ class GameplaySession {
   Map<String, dynamic> toSupabase() => {
         'id': id,
         'child_id': childId,
+        'assessment_run_id': assessmentRunId,
         'game_id': gameId,
         'context': context,
         'score': score,
@@ -271,6 +279,7 @@ class GameplaySession {
       GameplaySession(
         id: map['id'] as String,
         childId: map['child_id'] as String,
+        assessmentRunId: map['assessment_run_id'] as String?,
         gameId: map['game_id'] as String,
         context: map['context'] as String,
         score: map['score'] as int,

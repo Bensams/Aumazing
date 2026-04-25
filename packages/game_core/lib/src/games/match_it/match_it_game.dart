@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -96,6 +97,10 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
   int? _selectedRightIndex;
   bool _firstInputRecorded = false;
 
+  // ── Hint / idle timer state ──────────────────────────────────────────
+  Timer? _noResponseTimer;
+  int _hintCount = 0;
+
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
 
@@ -186,6 +191,9 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
   }
 
   void _setupRound() {
+    // Cancel any existing timer from previous round
+    _cancelNoResponseTimer();
+
     // Clear previous shapes
     for (final s in _leftShapes) {
       s.removeFromParent();
@@ -198,6 +206,9 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     _selectedLeftIndex = null;
     _selectedRightIndex = null;
     _firstInputRecorded = false;
+
+    // Reset hint count per round
+    _hintCount = 0;
 
     final rng = math.Random();
 
@@ -293,9 +304,15 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     // Add round-specific data
     analyticsAddRoundData('round_pairs_count', 3);
     analyticsAddRoundData('shapes_available', _allPairs.length);
+
+    // Start idle timer for this round
+    _startNoResponseTimer();
   }
 
   void _onLeftSelected(int index) {
+    _cancelNoResponseTimer();
+    _hideVisualHints();
+
     // Deselect previous
     for (final s in _leftShapes) {
       if (s.isSelected) s.deselect();
@@ -304,9 +321,17 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     _leftShapes[index].select();
     onPlayTapSfx?.call();
     _checkMatch();
+
+    // Restart timer after selection (if match wasn't triggered)
+    if (_selectedLeftIndex != null || _selectedRightIndex != null) {
+      _startNoResponseTimer();
+    }
   }
 
   void _onRightSelected(int index) {
+    _cancelNoResponseTimer();
+    _hideVisualHints();
+
     // Deselect previous
     for (final s in _rightShapes) {
       if (s.isSelected) s.deselect();
@@ -317,6 +342,11 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     }
     onPlayTapSfx?.call();
     _checkMatch();
+
+    // Restart timer after selection (if match wasn't triggered)
+    if (_selectedLeftIndex != null || _selectedRightIndex != null) {
+      _startNoResponseTimer();
+    }
   }
 
   void _checkMatch() {
@@ -375,7 +405,9 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
       // Check if all 3 pairs matched in this round
       final allMatched = _leftShapes.every((s) => s.isMatched);
       if (allMatched) {
-        // Round complete
+        // Round complete — cancel timer
+        _cancelNoResponseTimer();
+
         analyticsCompleteRound(successful: true);
         analyticsAddRoundData('matches_in_round', 3);
 
@@ -383,7 +415,8 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
-          // Game complete — play game complete SFX and celebration VO
+          // Game complete — cancel timer and play game complete SFX and celebration VO
+          _cancelNoResponseTimer();
           onPlayGameCompleteSfx?.call();
           onPlayCelebrationVo?.call();
 
@@ -395,6 +428,7 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
             _totalResponseTimeMs / (_score > 0 ? _score : 1));
           analyticsAddGameSpecificMetric('shape_types_used',
             _usedPairIndices.length);
+          analyticsAddGameSpecificMetric('hint_count', _hintCount);
 
           Future.delayed(const Duration(milliseconds: 600), () {
             onGameComplete(
@@ -414,10 +448,11 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
           Future.delayed(const Duration(milliseconds: 800), _setupRound);
         }
       } else {
-        // Partial match - continue round
+        // Partial match - continue round, restart timer for next pair
         _roundStartTime = DateTime.now();
         _firstInputRecorded = false;
         analyticsShowStimulus();
+        _startNoResponseTimer();
       }
     } else {
       // Wrong match
@@ -441,13 +476,115 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
       leftShape.showError();
       rightShape.showError();
 
+      // Remember the left index before clearing selection
+      final hintLeftIndex = _selectedLeftIndex!;
+
       Future.delayed(const Duration(milliseconds: 500), () {
+        if (!isMounted) return;
         _selectedLeftIndex = null;
         _selectedRightIndex = null;
         _roundStartTime = DateTime.now();
         _firstInputRecorded = false;
         analyticsShowStimulus();
+
+        // Show visual hint highlighting the correct match
+        _showMatchHint(hintLeftIndex);
+
+        // Auto-hide hints after 3 seconds and restart timer
+        Future.delayed(const Duration(seconds: 3), () {
+          if (!isMounted) return;
+          _hideVisualHints();
+          _startNoResponseTimer();
+        });
       });
+    }
+  }
+
+  // ── Hint / idle timer methods ────────────────────────────────────────
+
+  void _startNoResponseTimer() {
+    _cancelNoResponseTimer();
+    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+      if (!isMounted) return;
+      _showIdleHint();
+    });
+  }
+
+  void _cancelNoResponseTimer() {
+    _noResponseTimer?.cancel();
+    _noResponseTimer = null;
+  }
+
+  /// Show visual hint for the correct match of a given left shape index.
+  /// Called after an incorrect match attempt.
+  void _showMatchHint(int leftIndex) {
+    if (leftIndex < 0 || leftIndex >= _leftShapes.length) return;
+
+    final leftShape = _leftShapes[leftIndex];
+    if (leftShape.isMatched) return;
+
+    // Highlight the left shape
+    leftShape.showHint();
+
+    // Find and highlight the correct right-side match by shape type + color
+    for (final rightShape in _rightShapes) {
+      if (!rightShape.isMatched &&
+          rightShape.shapeType == leftShape.shapeType &&
+          rightShape.shapeColor.value == leftShape.shapeColor.value) {
+        rightShape.showHint();
+        break;
+      }
+    }
+
+    _hintCount++;
+    analyticsRecordHint(hintType: 'incorrect_match_hint');
+  }
+
+  /// Show visual hint for the first unmatched pair.
+  /// Called when the idle timer fires (10 seconds of no interaction).
+  void _showIdleHint() {
+    // Guard: ensure there are still unmatched shapes
+    final hasUnmatched = _leftShapes.any((s) => !s.isMatched);
+    if (!hasUnmatched) return;
+
+    // Find the first unmatched left shape and its correct right match
+    for (final leftShape in _leftShapes) {
+      if (leftShape.isMatched) continue;
+
+      // Highlight this left shape
+      leftShape.showHint();
+
+      // Find and highlight its correct right match
+      for (final rightShape in _rightShapes) {
+        if (!rightShape.isMatched &&
+            rightShape.shapeType == leftShape.shapeType &&
+            rightShape.shapeColor.value == leftShape.shapeColor.value) {
+          rightShape.showHint();
+          break;
+        }
+      }
+
+      break; // Only hint one pair at a time
+    }
+
+    _hintCount++;
+    analyticsRecordHint(hintType: 'idle_match_hint');
+
+    // Auto-hide hints after 3 seconds and restart timer
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!isMounted) return;
+      _hideVisualHints();
+      _startNoResponseTimer();
+    });
+  }
+
+  /// Hide all visual hints on all shapes.
+  void _hideVisualHints() {
+    for (final s in _leftShapes) {
+      s.hideHint();
+    }
+    for (final s in _rightShapes) {
+      s.hideHint();
     }
   }
 
@@ -503,5 +640,11 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     );
 
     super.render(canvas);
+  }
+
+  @override
+  void onRemove() {
+    _cancelNoResponseTimer();
+    super.onRemove();
   }
 }
