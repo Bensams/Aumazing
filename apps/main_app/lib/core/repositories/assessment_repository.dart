@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:game_core/game_core.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../model/assessment_result.dart';
@@ -76,6 +77,7 @@ class AssessmentRepository {
     required int totalResponseTimeMs,
     required DateTime startedAt,
     Map<String, dynamic>? settingsSnapshot,
+    GameSessionMetrics? analytics,
   }) async {
     final now = DateTime.now();
 
@@ -88,6 +90,16 @@ class AssessmentRepository {
       totalItems: totalItems,
       errorCount: errorCount,
       totalResponseTimeMs: totalResponseTimeMs,
+      retryCount: analytics?.retryCount ?? 0,
+      hintCount: analytics?.hintCount ?? 0,
+      promptCount: analytics?.promptCount ?? 0,
+      idleTimeSeconds: analytics?.idleTimeSeconds.toDouble() ?? 0.0,
+      randomTouchCount: analytics?.randomTouchCount ?? 0,
+      avgResponseTime: analytics?.avgResponseTime ?? 0.0,
+      avgValidResponseTime: analytics?.avgValidResponseTime ?? 0.0,
+      offTaskActionCount: analytics?.offTaskActionCount ?? 0,
+      improvementScore: analytics?.improvementScore ?? 0.0,
+      consistencyScore: analytics?.consistencyScore ?? 0.0,
       startedAt: startedAt,
       endedAt: now,
     );
@@ -97,6 +109,20 @@ class AssessmentRepository {
       ownerId: _effectiveUserId,
       markPending: true,
     );
+
+    // Insert per-round metrics if analytics data is available
+    if (analytics != null) {
+      for (final round in analytics.rounds) {
+        // Propagate session-level sensory state to each round
+        round.musicEnabled = session.bgMusicEnabled;
+        round.hapticEnabled = session.hapticFeedbackEnabled;
+        await _localDb.insertGameRound(
+          sessionId: session.id,
+          round: round,
+          ownerId: _effectiveUserId,
+        );
+      }
+    }
 
     final accuracy = session.totalItems > 0
         ? ((session.score / session.totalItems) * 100).round()

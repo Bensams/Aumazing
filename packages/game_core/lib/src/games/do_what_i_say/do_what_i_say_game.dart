@@ -327,4 +327,14 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       _shapes[index].showWrong();
     }
   }
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+    // Record ALL taps — valid ones that hit components and invalid ones that missed
+    analyticsRecordTouch(
+      Offset(event.canvasPosition.x, event.canvasPosition.y),
+      isValid: event.handled,
+    );
+  }
 }

@@ -145,6 +145,9 @@ class _MatchItScreenState extends State<MatchItScreen> {
       errorCount: errorCount,
       totalResponseTimeMs: totalResponseTimeMs,
       startedAt: _sessionStartTime,
+      analytics: analytics,
+      bgMusicEnabled: childProvider.musicEnabled,
+      hapticFeedbackEnabled: childProvider.vibrationEnabled,
     );
 
     // If onComplete callback is provided (game flow mode), call it instead of showing built-in reward

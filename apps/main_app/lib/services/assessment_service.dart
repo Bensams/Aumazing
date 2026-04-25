@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:game_core/game_core.dart';
 import 'package:uuid/uuid.dart';
 
 import '../model/assessment_result.dart';
@@ -40,6 +41,9 @@ class AssessmentService {
     required int errorCount,
     required int totalResponseTimeMs,
     required DateTime startedAt,
+    GameSessionMetrics? analytics,
+    bool bgMusicEnabled = true,
+    bool hapticFeedbackEnabled = true,
   }) async {
     final session = GameplaySession(
       id: _uuid.v4(),
@@ -50,6 +54,18 @@ class AssessmentService {
       totalItems: totalItems,
       errorCount: errorCount,
       totalResponseTimeMs: totalResponseTimeMs,
+      retryCount: analytics?.retryCount ?? 0,
+      hintCount: analytics?.hintCount ?? 0,
+      promptCount: analytics?.promptCount ?? 0,
+      idleTimeSeconds: analytics?.idleTimeSeconds.toDouble() ?? 0.0,
+      randomTouchCount: analytics?.randomTouchCount ?? 0,
+      avgResponseTime: analytics?.avgResponseTime ?? 0.0,
+      avgValidResponseTime: analytics?.avgValidResponseTime ?? 0.0,
+      offTaskActionCount: analytics?.offTaskActionCount ?? 0,
+      improvementScore: analytics?.improvementScore ?? 0.0,
+      consistencyScore: analytics?.consistencyScore ?? 0.0,
+      bgMusicEnabled: bgMusicEnabled,
+      hapticFeedbackEnabled: hapticFeedbackEnabled,
       startedAt: startedAt,
       endedAt: DateTime.now(),
     );

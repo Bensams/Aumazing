@@ -151,11 +151,73 @@ mixin EnhancedGameplayAnalyticsMixin on FlameGame {
   /// Number of valid (task-related) touches.
   int get analyticsValidTouches => _validTouches;
 
+  /// Number of invalid/failed taps (taps on non-interactive areas).
+  /// These are touches recorded with isValid: false.
+  int get analyticsFailedTouches => _sessionMetrics?.randomTouchCount ?? 0;
+
   /// Ratio of valid touches to total touches.
   double get analyticsTouchValidityRatio => _totalTouches > 0 ? _validTouches / _totalTouches : 0.0;
 
   /// Current accumulated idle time in seconds.
   int get analyticsIdleTimeSeconds => _sessionMetrics?.idleTimeSeconds ?? 0;
+
+  // ── Session Performance Getters ────────────────────────────────────────────────
+
+  /// Number of correct responses recorded this session.
+  int get analyticsCorrectCount => _sessionMetrics?.correctCount ?? 0;
+
+  /// Number of wrong/error responses recorded this session.
+  int get analyticsWrongCount => _sessionMetrics?.wrongCount ?? 0;
+
+  /// Number of retry attempts this session.
+  int get analyticsRetryCount => _sessionMetrics?.retryCount ?? 0;
+
+  /// Session accuracy (0.0 to 1.0).
+  double get analyticsAccuracy => _sessionMetrics?.accuracy ?? 0.0;
+
+  /// Whether the game is completed.
+  bool get analyticsIsCompleted => _sessionMetrics?.isCompleted ?? false;
+
+  /// Task completion rate (0.0 to 1.0).
+  double get analyticsCompletionRate => _sessionMetrics?.taskCompletionRate ?? 0.0;
+
+  /// Number of completed rounds.
+  int get analyticsCompletedRounds => _sessionMetrics?.completedRounds ?? 0;
+
+  /// Total rounds configured.
+  int get analyticsTotalRounds => _sessionMetrics?.rounds.length ?? 0;
+
+  /// Time spent in session (milliseconds).
+  /// Calculated from session start time to now.
+  int get analyticsTimeSpentMs {
+    final start = _sessionMetrics?.startTime;
+    if (start == null) return 0;
+    return DateTime.now().difference(DateTime.parse(start)).inMilliseconds;
+  }
+
+  /// Hint count this session.
+  int get analyticsHintCount => _sessionMetrics?.hintCount ?? 0;
+
+  /// Prompt count this session.
+  int get analyticsPromptCount => _sessionMetrics?.promptCount ?? 0;
+
+  /// Off-task action count.
+  int get analyticsOffTaskCount => _sessionMetrics?.offTaskActionCount ?? 0;
+
+  /// Improvement score (0.0 to 1.0).
+  double get analyticsImprovementScore => _sessionMetrics?.improvementScore ?? 0.0;
+
+  /// Consistency score (0.0 to 1.0).
+  double get analyticsConsistencyScore => _sessionMetrics?.consistencyScore ?? 0.0;
+
+  /// Assistance level string.
+  String get analyticsAssistanceLevel => _sessionMetrics?.assistanceLevel.name ?? 'independent';
+
+  /// Game-specific metrics map.
+  Map<String, dynamic> get analyticsGameSpecificMetrics => _sessionMetrics?.gameSpecificMetrics ?? {};
+
+  /// Round metrics list.
+  List<GameRoundMetrics> get analyticsRoundMetrics => _sessionMetrics?.rounds ?? [];
 
   // ── Initialization ─────────────────────────────────────────────────────────────
 

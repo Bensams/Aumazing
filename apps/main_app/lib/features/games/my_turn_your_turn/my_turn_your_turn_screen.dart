@@ -140,6 +140,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
           errorCount: errorCount,
           totalResponseTimeMs: totalResponseTimeMs,
           startedAt: _sessionStartTime,
+          analytics: analytics,
+          bgMusicEnabled: childProvider.musicEnabled,
+          hapticFeedbackEnabled: childProvider.vibrationEnabled,
         );
         
         // If onComplete is provided (pre-assessment mode), call it directly

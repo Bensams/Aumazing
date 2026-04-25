@@ -458,6 +458,16 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   }
 
   @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+    // Record ALL taps — valid ones that hit components and invalid ones that missed
+    analyticsRecordTouch(
+      Offset(event.canvasPosition.x, event.canvasPosition.y),
+      isValid: event.handled,
+    );
+  }
+
+  @override
   void render(Canvas canvas) {
     final fontSize = (size.x * 0.035).clamp(16.0, 24.0);
     // Demo phase label

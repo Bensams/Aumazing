@@ -452,6 +452,16 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
   }
 
   @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+    // Record ALL taps — valid ones that hit components and invalid ones that missed
+    analyticsRecordTouch(
+      Offset(event.canvasPosition.x, event.canvasPosition.y),
+      isValid: event.handled,
+    );
+  }
+
+  @override
   void render(Canvas canvas) {
     // Draw center swap arrows
     final centerX = size.x / 2;

@@ -47,8 +47,16 @@ class AiAssessmentService {
                 'total_response_time_ms': s.totalResponseTimeMs,
                 'retry_count': s.retryCount,
                 'hint_count': s.hintCount,
+                'prompt_count': s.promptCount,
                 'idle_time_seconds': s.idleTimeSeconds,
                 'random_touch_count': s.randomTouchCount,
+                'avg_response_time': s.avgResponseTime,
+                'avg_valid_response_time': s.avgValidResponseTime,
+                'off_task_action_count': s.offTaskActionCount,
+                'improvement_score': s.improvementScore,
+                'consistency_score': s.consistencyScore,
+                'bg_music_enabled': s.bgMusicEnabled,
+                'haptic_feedback_enabled': s.hapticFeedbackEnabled,
               })
           .toList(),
     });

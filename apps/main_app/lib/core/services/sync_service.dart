@@ -127,6 +127,9 @@ class SyncService {
       await _syncAssessmentResults();
       await _syncModuleRecommendations();
       await _syncAssessmentComparisons();
+      await _syncSensoryConsent();
+      await _syncSensoryRoundMetrics();
+      await _syncSensoryPreferences();
 
       // Sync soft deletes last
       await _propagateDeletes();
@@ -419,6 +422,81 @@ class SyncService {
     }
   }
 
+  Future<void> _syncSensoryConsent() async {
+    final records = await _localDb.getPendingRecords(
+      LocalTables.sensoryConsent,
+    );
+    if (records.isEmpty) return;
+
+    debugPrint('[SyncService] Syncing ${records.length} sensory consent records');
+
+    for (final record in records) {
+      final id = record['id'] as String;
+      try {
+        await _localDb.markSyncing(LocalTables.sensoryConsent, id);
+        final supabaseData = _mapSensoryConsentToSupabase(record);
+        await _supabase.upsertSensoryConsent(supabaseData, id);
+        await _localDb.markSynced(LocalTables.sensoryConsent, id);
+      } catch (e) {
+        await _localDb.markSyncFailed(
+          LocalTables.sensoryConsent,
+          id,
+          error: e.toString(),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncSensoryRoundMetrics() async {
+    final records = await _localDb.getPendingRecords(
+      LocalTables.sensoryRoundMetrics,
+    );
+    if (records.isEmpty) return;
+
+    debugPrint('[SyncService] Syncing ${records.length} sensory round metrics');
+
+    for (final record in records) {
+      final id = record['id'] as String;
+      try {
+        await _localDb.markSyncing(LocalTables.sensoryRoundMetrics, id);
+        final supabaseData = _mapSensoryRoundMetricsToSupabase(record);
+        await _supabase.upsertSensoryRoundMetrics(supabaseData, id);
+        await _localDb.markSynced(LocalTables.sensoryRoundMetrics, id);
+      } catch (e) {
+        await _localDb.markSyncFailed(
+          LocalTables.sensoryRoundMetrics,
+          id,
+          error: e.toString(),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncSensoryPreferences() async {
+    final records = await _localDb.getPendingRecords(
+      LocalTables.sensoryPreferences,
+    );
+    if (records.isEmpty) return;
+
+    debugPrint('[SyncService] Syncing ${records.length} sensory preferences');
+
+    for (final record in records) {
+      final id = record['id'] as String;
+      try {
+        await _localDb.markSyncing(LocalTables.sensoryPreferences, id);
+        final supabaseData = _mapSensoryPreferencesToSupabase(record);
+        await _supabase.upsertSensoryPreferences(supabaseData, id);
+        await _localDb.markSynced(LocalTables.sensoryPreferences, id);
+      } catch (e) {
+        await _localDb.markSyncFailed(
+          LocalTables.sensoryPreferences,
+          id,
+          error: e.toString(),
+        );
+      }
+    }
+  }
+
   /// Propagate soft deletes to Supabase
   Future<void> _propagateDeletes() async {
     for (final table in SyncOrder.dependencyOrder.reversed) {
@@ -482,6 +560,37 @@ class SyncService {
       'total_items': local['total_items'],
       'error_count': local['error_count'],
       'total_response_time_ms': local['total_response_time_ms'],
+      'retry_count': local['retry_count'] ?? 0,
+      'hint_count': local['hint_count'] ?? 0,
+      'prompt_count': local['prompt_count'] ?? 0,
+      'idle_time_seconds': local['idle_time_seconds'] ?? 0.0,
+      'random_touch_count': local['random_touch_count'] ?? 0,
+      'avg_response_time': local['avg_response_time'] ?? 0.0,
+      'avg_valid_response_time': local['avg_valid_response_time'] ?? 0.0,
+      'off_task_action_count': local['off_task_action_count'] ?? 0,
+      'improvement_score': local['improvement_score'] ?? 0.0,
+      'consistency_score': local['consistency_score'] ?? 0.0,
+      'bg_music_enabled': (local['bg_music_enabled'] ?? 1) == 1,
+      'haptic_feedback_enabled': (local['haptic_feedback_enabled'] ?? 1) == 1,
+      // Rubric telemetry fields
+      if (local['task_completion_rate'] != null)
+        'task_completion_rate': local['task_completion_rate'],
+      if (local['prompt_dependency_score'] != null)
+        'prompt_dependency_score': local['prompt_dependency_score'],
+      if (local['turn_taking_success_rate'] != null)
+        'turn_taking_success_rate': local['turn_taking_success_rate'],
+      if (local['interruption_count'] != null)
+        'interruption_count': local['interruption_count'],
+      if (local['waiting_tolerance_seconds'] != null)
+        'waiting_tolerance_seconds': local['waiting_tolerance_seconds'],
+      if (local['time_to_first_touch'] != null)
+        'time_to_first_touch': local['time_to_first_touch'],
+      if (local['time_to_first_valid_action'] != null)
+        'time_to_first_valid_action': local['time_to_first_valid_action'],
+      if (local['time_to_completion'] != null)
+        'time_to_completion': local['time_to_completion'],
+      if (local['sensory_condition'] != null)
+        'sensory_condition': local['sensory_condition'],
       'started_at': local['started_at'],
       'ended_at': local['ended_at'],
       'settings_snapshot':
@@ -495,15 +604,23 @@ class SyncService {
     return {
       'id': local['id'],
       'session_id': local['session_id'],
-      'round_number': local['round_number'],
-      'stimulus': local['stimulus'],
-      'response': local['response'],
-      'is_correct': local['is_correct'] == 1,
-      'response_time_ms': local['response_time_ms'],
-      'started_at': local['started_at'],
-      'ended_at': local['ended_at'],
-      'metadata':
-          local['metadata'] != null ? local['metadata'] as String : null,
+      'round_no': local['round_no'],
+      'stimulus_type': local['stimulus_type'],
+      'valid_action_type': local['valid_action_type'],
+      'correct': (local['correct'] as int?) == 1,
+      'response_time': local['response_time'],
+      'valid_response_time': local['valid_response_time'],
+      'time_to_first_hint': local['time_to_first_hint'],
+      'retry_count': local['retry_count'] ?? 0,
+      'hint_count': local['hint_count'] ?? 0,
+      'prompt_count': local['prompt_count'] ?? 0,
+      'random_touch_count': local['random_touch_count'] ?? 0,
+      'strong_prompt_triggered': (local['strong_prompt_triggered'] as int?) == 1,
+      'guided_assist_triggered': (local['guided_assist_triggered'] as int?) == 1,
+      'completed': (local['completed'] as int?) == 1,
+      'music_enabled': (local['music_enabled'] as int?) == 1,
+      'haptic_enabled': (local['haptic_enabled'] as int?) == 1,
+      'created_at': local['created_at'],
     };
   }
 
@@ -543,6 +660,25 @@ class SyncService {
       'avg_response_time_ms': local['avg_response_time_ms'],
       'raw_metrics':
           local['raw_metrics'] != null ? local['raw_metrics'] as String : null,
+      // Rubric scoring fields
+      if (local['play_skills_label'] != null)
+        'play_skills_label': local['play_skills_label'],
+      if (local['communication_label'] != null)
+        'communication_label': local['communication_label'],
+      if (local['social_interaction_label'] != null)
+        'social_interaction_label': local['social_interaction_label'],
+      if (local['behavior_attention_label'] != null)
+        'behavior_attention_label': local['behavior_attention_label'],
+      if (local['sensory_preference_label'] != null)
+        'sensory_preference_label': local['sensory_preference_label'],
+      if (local['recommended_module'] != null)
+        'recommended_module': local['recommended_module'],
+      if (local['overall_summary'] != null)
+        'overall_summary': local['overall_summary'],
+      if (local['model_source'] != null)
+        'model_source': local['model_source'],
+      if (local['xgboost_ready'] != null)
+        'xgboost_ready': (local['xgboost_ready'] as int?) == 1,
     };
   }
 
@@ -571,6 +707,58 @@ class SyncService {
       'response_time_improvement_ms': local['response_time_improvement_ms'],
       'overall_improvement_percent': local['overall_improvement_percent'],
       'summary': local['summary'],
+    };
+  }
+
+  Map<String, dynamic> _mapSensoryConsentToSupabase(Map<String, dynamic> local) {
+    return {
+      'id': local['id'],
+      'child_id': local['child_id'],
+      'assessment_run_id': local['assessment_run_id'],
+      'consent_given': (local['consent_given'] as int?) == 1,
+      'created_at': local['created_at'],
+    };
+  }
+
+  Map<String, dynamic> _mapSensoryRoundMetricsToSupabase(Map<String, dynamic> local) {
+    return {
+      'id': local['id'],
+      'child_id': local['child_id'],
+      'assessment_run_id': local['assessment_run_id'],
+      'game_id': local['game_id'],
+      'round_number': local['round_number'],
+      'music_enabled': (local['music_enabled'] as int?) == 1,
+      'haptic_enabled': (local['haptic_enabled'] as int?) == 1,
+      'sensory_purpose': local['sensory_purpose'],
+      'correct_count': local['correct_count'] ?? 0,
+      'wrong_count': local['wrong_count'] ?? 0,
+      'accuracy': local['accuracy'] ?? 0.0,
+      'total_response_time_ms': local['total_response_time_ms'] ?? 0,
+      'avg_response_time_ms': local['avg_response_time_ms'] ?? 0.0,
+      'tap_count': local['tap_count'] ?? 0,
+      'idle_time_seconds': local['idle_time_seconds'] ?? 0.0,
+      'random_touch_count': local['random_touch_count'] ?? 0,
+      'time_to_first_touch_ms': local['time_to_first_touch_ms'] ?? 0.0,
+      'time_to_completion_ms': local['time_to_completion_ms'] ?? 0.0,
+      'hint_count': local['hint_count'] ?? 0,
+      'prompt_count': local['prompt_count'] ?? 0,
+      'retry_count': local['retry_count'] ?? 0,
+      'created_at': local['created_at'],
+    };
+  }
+
+  Map<String, dynamic> _mapSensoryPreferencesToSupabase(Map<String, dynamic> local) {
+    return {
+      'id': local['id'],
+      'child_id': local['child_id'],
+      'assessment_run_id': local['assessment_run_id'],
+      'recommended_music_enabled': (local['recommended_music_enabled'] as int?) == 1,
+      'recommended_haptic_enabled': (local['recommended_haptic_enabled'] as int?) == 1,
+      'best_config': local['best_config'],
+      'confidence': local['confidence'],
+      'config_scores': local['config_scores'],
+      'attention_summary': local['attention_summary'],
+      'analyzed_at': local['analyzed_at'],
     };
   }
 
