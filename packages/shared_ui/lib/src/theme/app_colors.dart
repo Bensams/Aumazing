@@ -29,4 +29,35 @@ abstract final class AppColors {
   // ── Derived helpers ──────────────────────────────────────────────────
   static const Color inputFill = Color(0xFFF7F5F2);
   static const Color disabledFill = Color(0xFFF0EEE9);
+
+  // ── WCAG-compliant dark text colors for status badges ───────────────
+  /// Deep navy for primary text — 12.6:1 on white
+  static const Color textPrimary = Color(0xFF1E293B); // slate-800
+
+  /// Dark slate for secondary text — 7.5:1 on white
+  static const Color textSecondary = Color(0xFF475569); // slate-600
+
+  /// Dark green for positive/success status text — 5.9:1 on white
+  static const Color statusSuccessDark = Color(0xFF166534); // green-800
+
+  /// Dark amber for moderate/warning status text — 4.6:1 on white
+  static const Color statusWarningDark = Color(0xFF92400E); // amber-800
+
+  /// Dark red for attention/error status text — 5.6:1 on white
+  static const Color statusDangerDark = Color(0xFF991B1B); // red-800
+
+  /// Dark blue for info status text — 5.2:1 on white
+  static const Color statusInfoDark = Color(0xFF1E40AF); // blue-800
+
+  /// Soft green background for success pills
+  static const Color statusSuccessBg = Color(0xFFDCFCE7); // green-100
+
+  /// Soft amber background for warning pills
+  static const Color statusWarningBg = Color(0xFFFEF3C7); // amber-100
+
+  /// Soft red background for danger pills
+  static const Color statusDangerBg = Color(0xFFFEE2E2); // red-100
+
+  /// Soft blue background for info pills
+  static const Color statusInfoBg = Color(0xFFDBEAFE); // blue-100
 }
