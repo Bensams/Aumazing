@@ -170,6 +170,9 @@ class RemoteTables {
   static const String assessmentResults = 'assessment_results';
   static const String moduleRecommendations = 'module_recommendations';
   static const String assessmentComparisons = 'assessment_comparisons';
+  static const String sensoryConsent = 'sensory_consent';
+  static const String sensoryRoundMetrics = 'sensory_round_metrics';
+  static const String sensoryPreferences = 'sensory_preferences';
   static const String learningModules = 'learning_modules';
   static const String modulePaths = 'module_paths';
   static const String modulePathItems = 'module_path_items';
@@ -206,6 +209,9 @@ class SyncOrder {
       LocalTables.assessmentResults: RemoteTables.assessmentResults,
       LocalTables.moduleRecommendations: RemoteTables.moduleRecommendations,
       LocalTables.assessmentComparisons: RemoteTables.assessmentComparisons,
+      LocalTables.sensoryConsent: RemoteTables.sensoryConsent,
+      LocalTables.sensoryRoundMetrics: RemoteTables.sensoryRoundMetrics,
+      LocalTables.sensoryPreferences: RemoteTables.sensoryPreferences,
     };
     return mapping[localTable];
   }

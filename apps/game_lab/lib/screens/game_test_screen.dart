@@ -38,14 +38,20 @@ class _GameTestScreenState extends State<GameTestScreen>
   bool _gameComplete = false;
   int _score = 0;
   int _totalItems = 0;
-  int _errors = 0;
   bool _showDebug = true;
   bool _musicMuted = false;
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
 
-  // Gameplay analytics debug data
+  // ── Tap tracking ────────────────────────────────────────────────────────
+  int _correctTaps = 0;
+  int _errorTaps = 0;
+  int _failedTaps = 0;
+  int _totalTaps = 0;
+
+  // ── Analytics metrics ───────────────────────────────────────────────────
   double _avgResponseTimeMs = 0;
+  double _avgValidResponseTimeMs = 0;
   double _accuracy = 0;
   int _retryCount = 0;
   int _timeSpentMs = 0;
@@ -53,19 +59,17 @@ class _GameTestScreenState extends State<GameTestScreen>
   double _completionRate = 0;
   int _completedSubTasks = 0;
   int _totalSubTasks = 0;
-  String _interactionQuality = 'enhanced';
-  int _totalTaps = 0;
-  int _rapidTaps = 0;
-  double _rapidTapRatio = 0;
-  int _totalDragPoints = 0;
-  bool _hasSmoothDrags = false;
   DateTime? _sessionStartTime;
 
-  // Enhanced analytics debug data
+  // ── Touch analysis ──────────────────────────────────────────────────────
+  int _validTouches = 0;
+  double _touchValidityRatio = 0;
+  int _offTaskCount = 0;
+
+  // ── Enhanced analytics ──────────────────────────────────────────────────
   int _hintCount = 0;
   int _promptCount = 0;
   int _idleTimeSeconds = 0;
-  int _offTaskCount = 0;
   double _improvementScore = 0;
   double _consistencyScore = 0;
   String _assistanceLevel = 'independent';
@@ -95,7 +99,6 @@ class _GameTestScreenState extends State<GameTestScreen>
       _gameComplete = false;
       _score = 0;
       _totalItems = 0;
-      _errors = 0;
       _resetAnalytics();
     });
 
@@ -125,7 +128,6 @@ class _GameTestScreenState extends State<GameTestScreen>
           _gameComplete = true;
           _score = score;
           _totalItems = totalItems;
-          _errors = errorCount;
           _updateAnalyticsFromGame();
         });
         // Play game complete SFX (already wired via callbacks, but also
@@ -140,7 +142,12 @@ class _GameTestScreenState extends State<GameTestScreen>
   }
 
   void _resetAnalytics() {
+    _correctTaps = 0;
+    _errorTaps = 0;
+    _failedTaps = 0;
+    _totalTaps = 0;
     _avgResponseTimeMs = 0;
+    _avgValidResponseTimeMs = 0;
     _accuracy = 0;
     _retryCount = 0;
     _timeSpentMs = 0;
@@ -148,17 +155,22 @@ class _GameTestScreenState extends State<GameTestScreen>
     _completionRate = 0;
     _completedSubTasks = 0;
     _totalSubTasks = 0;
-    _interactionQuality = 'mixed';
-    _totalTaps = 0;
-    _rapidTaps = 0;
-    _rapidTapRatio = 0;
-    _totalDragPoints = 0;
-    _hasSmoothDrags = false;
+    _validTouches = 0;
+    _touchValidityRatio = 0;
+    _offTaskCount = 0;
+    _hintCount = 0;
+    _promptCount = 0;
+    _idleTimeSeconds = 0;
+    _improvementScore = 0;
+    _consistencyScore = 0;
+    _assistanceLevel = 'independent';
+    _gameSpecificMetrics = {};
+    _roundMetrics = [];
     _sessionStartTime = null;
   }
 
   void _startAnalyticsTimer() {
-    // Update time spent every second while game is active
+    // Update analytics every second while game is active
     Future.doWhile(() async {
       if (!mounted || _gameComplete) return false;
       await Future.delayed(const Duration(seconds: 1));
@@ -176,137 +188,53 @@ class _GameTestScreenState extends State<GameTestScreen>
   }
 
   void _updateAnalyticsFromGame() {
-    // Try to extract analytics from games using GameplayAnalyticsMixin
-    final game = _game;
-    if (game is MatchItGame) {
-      _extractMatchItAnalytics(game);
-    } else if (game is CopyMeGame) {
-      _extractCopyMeAnalytics(game);
-    } else if (game is DoWhatISayGame) {
-      _extractDoWhatISayAnalytics(game);
-    } else if (game is MyTurnYourTurnGame) {
-      _extractMyTurnYourTurnAnalytics(game);
+    _extractAnalytics(_game);
+  }
+
+  /// Consolidated analytics extraction for any game using
+  /// [EnhancedGameplayAnalyticsMixin]. Replaces the previous four
+  /// game-specific methods that were nearly identical.
+  void _extractAnalytics(FlameGame game) {
+    if (game is! EnhancedGameplayAnalyticsMixin) return;
+
+    final EnhancedGameplayAnalyticsMixin analytics = game;
+
+    // Tap tracking
+    _correctTaps = analytics.analyticsCorrectCount;
+    _errorTaps = analytics.analyticsWrongCount;
+    _failedTaps = analytics.analyticsFailedTouches;
+    _totalTaps = _correctTaps + _errorTaps + _failedTaps;
+
+    // Analytics metrics
+    _avgResponseTimeMs = analytics.analyticsAvgResponseTime * 1000;
+    _avgValidResponseTimeMs = analytics.analyticsAvgValidResponseTime * 1000;
+    _accuracy = analytics.analyticsAccuracy;
+    _retryCount = analytics.analyticsRetryCount;
+    _isCompleted = analytics.analyticsIsCompleted;
+    _completionRate = analytics.analyticsCompletionRate;
+    _completedSubTasks = analytics.analyticsCompletedRounds;
+    _totalSubTasks = analytics.analyticsTotalRounds;
+
+    // Touch analysis
+    _validTouches = analytics.analyticsValidTouches;
+    _touchValidityRatio = analytics.analyticsTouchValidityRatio;
+    _offTaskCount = analytics.analyticsOffTaskCount;
+
+    // Enhanced metrics
+    _hintCount = analytics.analyticsHintCount;
+    _promptCount = analytics.analyticsPromptCount;
+    _idleTimeSeconds = analytics.analyticsIdleTimeSeconds;
+    _improvementScore = analytics.analyticsImprovementScore;
+    _consistencyScore = analytics.analyticsConsistencyScore;
+    _assistanceLevel = analytics.analyticsAssistanceLevel;
+    _gameSpecificMetrics = analytics.analyticsGameSpecificMetrics;
+    _roundMetrics = analytics.analyticsRoundMetrics;
+
+    // Use mixin's time tracking if session is active, fall back to local timer
+    final mixinTimeMs = analytics.analyticsTimeSpentMs;
+    if (mixinTimeMs > 0) {
+      _timeSpentMs = mixinTimeMs;
     }
-  }
-
-  void _extractMatchItAnalytics(MatchItGame game) {
-    final session = game.analyticsSession;
-    if (session == null) return;
-
-    _avgResponseTimeMs = session.avgResponseTime * 1000;
-    _accuracy = session.accuracy;
-    _retryCount = session.retryCount;
-    _isCompleted = session.isCompleted;
-    _completionRate = session.taskCompletionRate;
-    _completedSubTasks = session.completedRounds;
-    _totalSubTasks = session.totalRounds;
-    _interactionQuality = 'enhanced';
-    _totalTaps = game.analyticsTotalTouches;
-    _rapidTaps = 0;
-    _rapidTapRatio = 0.0;
-    _totalDragPoints = 0;
-    _hasSmoothDrags = false;
-
-    // Enhanced metrics
-    _hintCount = session.hintCount;
-    _promptCount = session.promptCount;
-    _idleTimeSeconds = session.idleTimeSeconds;
-    _offTaskCount = session.offTaskActionCount;
-    _improvementScore = session.improvementScore;
-    _consistencyScore = session.consistencyScore;
-    _assistanceLevel = session.assistanceLevel.name;
-    _gameSpecificMetrics = session.gameSpecificMetrics;
-    _roundMetrics = session.rounds;
-  }
-
-  void _extractCopyMeAnalytics(CopyMeGame game) {
-    final session = game.analyticsSession;
-    if (session == null) return;
-
-    _avgResponseTimeMs = session.avgResponseTime * 1000;
-    _accuracy = session.accuracy;
-    _retryCount = session.retryCount;
-    _isCompleted = session.isCompleted;
-    _completionRate = session.taskCompletionRate;
-    _completedSubTasks = session.completedRounds;
-    _totalSubTasks = session.totalRounds;
-    _interactionQuality = 'enhanced';
-    _totalTaps = game.analyticsTotalTouches;
-    _rapidTaps = 0;
-    _rapidTapRatio = 0.0;
-    _totalDragPoints = 0;
-    _hasSmoothDrags = false;
-
-    // Enhanced metrics
-    _hintCount = session.hintCount;
-    _promptCount = session.promptCount;
-    _idleTimeSeconds = session.idleTimeSeconds;
-    _offTaskCount = session.offTaskActionCount;
-    _improvementScore = session.improvementScore;
-    _consistencyScore = session.consistencyScore;
-    _assistanceLevel = session.assistanceLevel.name;
-    _gameSpecificMetrics = session.gameSpecificMetrics;
-    _roundMetrics = session.rounds;
-  }
-
-  void _extractDoWhatISayAnalytics(DoWhatISayGame game) {
-    final session = game.analyticsSession;
-    if (session == null) return;
-
-    _avgResponseTimeMs = session.avgResponseTime * 1000;
-    _accuracy = session.accuracy;
-    _retryCount = session.retryCount;
-    _isCompleted = session.isCompleted;
-    _completionRate = session.taskCompletionRate;
-    _completedSubTasks = session.completedRounds;
-    _totalSubTasks = session.totalRounds;
-    _interactionQuality = 'enhanced';
-    _totalTaps = game.analyticsTotalTouches;
-    _rapidTaps = 0;
-    _rapidTapRatio = 0.0;
-    _totalDragPoints = 0;
-    _hasSmoothDrags = false;
-
-    // Enhanced metrics
-    _hintCount = session.hintCount;
-    _promptCount = session.promptCount;
-    _idleTimeSeconds = session.idleTimeSeconds;
-    _offTaskCount = session.offTaskActionCount;
-    _improvementScore = session.improvementScore;
-    _consistencyScore = session.consistencyScore;
-    _assistanceLevel = session.assistanceLevel.name;
-    _gameSpecificMetrics = session.gameSpecificMetrics;
-    _roundMetrics = session.rounds;
-  }
-
-  void _extractMyTurnYourTurnAnalytics(MyTurnYourTurnGame game) {
-    final session = game.analyticsSession;
-    if (session == null) return;
-
-    _avgResponseTimeMs = session.avgResponseTime * 1000;
-    _accuracy = session.accuracy;
-    _retryCount = session.retryCount;
-    _isCompleted = session.isCompleted;
-    _completionRate = session.taskCompletionRate;
-    _completedSubTasks = session.completedRounds;
-    _totalSubTasks = session.totalRounds;
-    _interactionQuality = 'enhanced';
-    _totalTaps = game.analyticsTotalTouches;
-    _rapidTaps = 0;
-    _rapidTapRatio = 0.0;
-    _totalDragPoints = 0;
-    _hasSmoothDrags = false;
-
-    // Enhanced metrics
-    _hintCount = session.hintCount;
-    _promptCount = session.promptCount;
-    _idleTimeSeconds = session.idleTimeSeconds;
-    _offTaskCount = session.offTaskActionCount;
-    _improvementScore = session.improvementScore;
-    _consistencyScore = session.consistencyScore;
-    _assistanceLevel = session.assistanceLevel.name;
-    _gameSpecificMetrics = session.gameSpecificMetrics;
-    _roundMetrics = session.rounds;
   }
 
   /// Pause music when the app goes to background, resume when it returns.
@@ -336,6 +264,8 @@ class _GameTestScreenState extends State<GameTestScreen>
     }
   }
 
+  // ── Debug overlay helpers ─────────────────────────────────────────────────
+
   Widget _buildDebugRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
@@ -361,6 +291,66 @@ class _GameTestScreenState extends State<GameTestScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildColoredDebugRow(
+    String label,
+    String value, {
+    Color valueColor = Colors.white,
+    Widget? trailing,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+            ),
+          ),
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: valueColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 2),
+                  trailing,
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {Color color = Colors.cyanAccent}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Text(
+        '── $title ',
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -437,7 +427,7 @@ class _GameTestScreenState extends State<GameTestScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Header
+                              // ── Header ──────────────────────────────
                               Row(
                                 children: [
                                   const Icon(Icons.analytics_rounded,
@@ -458,20 +448,54 @@ class _GameTestScreenState extends State<GameTestScreen>
                               const Divider(
                                   color: Colors.white24, height: 12),
 
-                              // Progress
+                              // ── Progress ────────────────────────────
+                              _buildSectionHeader('Progress'),
                               _buildDebugRow('Step',
                                   '$_currentStep/${widget.config.totalRounds}'),
-                              _buildDebugRow(
-                                  'Score', '$_score/$_totalItems'),
-                              _buildDebugRow('Errors', '$_errors'),
 
                               const Divider(
                                   color: Colors.white24, height: 12),
 
-                              // Analytics indicators
+                              // ── Tap Tracking ────────────────────────
+                              _buildSectionHeader('Tap Tracking'),
+                              _buildColoredDebugRow(
+                                'Correct Taps',
+                                '$_correctTaps',
+                                valueColor: Colors.greenAccent,
+                              ),
+                              _buildColoredDebugRow(
+                                'Error Taps',
+                                '$_errorTaps',
+                                valueColor: Colors.amber,
+                              ),
+                              _buildColoredDebugRow(
+                                'Failed Taps',
+                                '$_failedTaps',
+                                valueColor: Colors.redAccent,
+                                trailing: const Tooltip(
+                                  message:
+                                      'Taps on non-interactive areas that did not register as any game action',
+                                  child: Icon(
+                                    Icons.info_outline,
+                                    color: Colors.white38,
+                                    size: 10,
+                                  ),
+                                ),
+                              ),
+                              _buildDebugRow('Total Taps', '$_totalTaps'),
+
+                              const Divider(
+                                  color: Colors.white24, height: 12),
+
+                              // ── Analytics ───────────────────────────
+                              _buildSectionHeader('Analytics'),
                               _buildDebugRow(
-                                'Response Time',
+                                'Avg Response',
                                 '${_avgResponseTimeMs.toStringAsFixed(0)}ms',
+                              ),
+                              _buildDebugRow(
+                                'Avg Valid Resp',
+                                '${_avgValidResponseTimeMs.toStringAsFixed(0)}ms',
                               ),
                               _buildDebugRow(
                                 'Accuracy',
@@ -494,27 +518,23 @@ class _GameTestScreenState extends State<GameTestScreen>
                               const Divider(
                                   color: Colors.white24, height: 12),
 
-                              // Interaction patterns
+                              // ── Touch Analysis ──────────────────────
+                              _buildSectionHeader('Touch Analysis'),
                               _buildDebugRow(
-                                'Interaction',
-                                _interactionQuality,
+                                  'Valid Touches', '$_validTouches'),
+                              _buildDebugRow(
+                                  'Failed Touches', '$_failedTaps'),
+                              _buildDebugRow(
+                                'Touch Validity',
+                                '${(_touchValidityRatio * 100).toStringAsFixed(1)}%',
                               ),
-                              _buildDebugRow('Taps', '$_totalTaps'),
-                              _buildDebugRow(
-                                'Rapid Taps',
-                                '$_rapidTaps (${(_rapidTapRatio * 100).toStringAsFixed(0)}%)',
-                              ),
-                              _buildDebugRow(
-                                  'Drags', '$_totalDragPoints'),
-                              _buildDebugRow(
-                                'Smooth Drags',
-                                _hasSmoothDrags ? 'Yes' : 'No',
-                              ),
+                              _buildDebugRow('Off-Task', '$_offTaskCount'),
 
                               const Divider(
                                   color: Colors.white24, height: 12),
 
-                              // Enhanced Analytics - Assistance
+                              // ── Enhanced Analytics - Assistance ─────
+                              _buildSectionHeader('Assistance'),
                               _buildDebugRow(
                                 'Assistance Level',
                                 _assistanceLevel,
@@ -525,13 +545,12 @@ class _GameTestScreenState extends State<GameTestScreen>
                                 'Idle Time',
                                 '${_idleTimeSeconds}s',
                               ),
-                              _buildDebugRow(
-                                  'Off-Task', '$_offTaskCount'),
 
                               const Divider(
                                   color: Colors.white24, height: 12),
 
-                              // Enhanced Analytics - Progress
+                              // ── Enhanced Analytics - Progress ───────
+                              _buildSectionHeader('Learning Progress'),
                               _buildDebugRow(
                                 'Improvement',
                                 '${(_improvementScore * 100).toStringAsFixed(0)}%',
@@ -541,10 +560,11 @@ class _GameTestScreenState extends State<GameTestScreen>
                                 '${(_consistencyScore * 100).toStringAsFixed(0)}%',
                               ),
 
-                              // Game-specific metrics
+                              // ── Game-Specific Metrics ───────────────
                               if (_gameSpecificMetrics.isNotEmpty) ...[
                                 const Divider(
                                     color: Colors.white24, height: 12),
+                                _buildSectionHeader('Game-Specific'),
                                 ..._gameSpecificMetrics.entries
                                     .take(4)
                                     .map(
@@ -555,17 +575,18 @@ class _GameTestScreenState extends State<GameTestScreen>
                                     ),
                               ],
 
-                              // Round details
+                              // ── Round Details ───────────────────────
                               if (_roundMetrics.isNotEmpty) ...[
                                 const Divider(
                                     color: Colors.white24, height: 12),
+                                _buildSectionHeader('Round Details'),
                                 _buildDebugRow(
                                   'Rounds Done',
                                   '${_roundMetrics.length}',
                                 ),
                               ],
 
-                              // ── Audio Status Section ──────────────
+                              // ── Audio Status ────────────────────────
                               const Divider(
                                   color: Colors.cyanAccent, height: 12),
                               const Text(
@@ -614,6 +635,7 @@ class _GameTestScreenState extends State<GameTestScreen>
                                     : _services.lastPlayedVo,
                               ),
 
+                              // ── Game Complete indicator ─────────────
                               if (_gameComplete) ...[
                                 const Divider(
                                     color: Colors.greenAccent,

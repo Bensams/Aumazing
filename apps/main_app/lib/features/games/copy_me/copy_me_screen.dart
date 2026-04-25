@@ -142,6 +142,9 @@ class _CopyMeScreenState extends State<CopyMeScreen>
           errorCount: errorCount,
           totalResponseTimeMs: totalResponseTimeMs,
           startedAt: _sessionStartTime,
+          analytics: analytics,
+          bgMusicEnabled: childProvider.musicEnabled,
+          hapticFeedbackEnabled: childProvider.vibrationEnabled,
         );
         
         // If onComplete is provided (pre-assessment mode), show celebration then call it

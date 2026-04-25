@@ -9,7 +9,7 @@ import '../model/module_progress.dart';
 /// SQLite database for offline caching and unsynced gameplay data.
 class LocalDbService {
   static const _dbName = 'aumazing.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   static Database? _database;
 
@@ -26,6 +26,7 @@ class LocalDbService {
       path,
       version: _dbVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -89,6 +90,50 @@ class LocalDbService {
         updated_at TEXT NOT NULL
       )
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // ── assessment_results: rubric scoring columns ──
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN play_skills_label TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN communication_label TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN social_interaction_label TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN behavior_attention_label TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN sensory_preference_label TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN recommended_module TEXT');
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN overall_summary TEXT');
+      await db.execute(
+          "ALTER TABLE assessment_results ADD COLUMN model_source TEXT DEFAULT 'rubric_based'");
+      await db.execute(
+          'ALTER TABLE assessment_results ADD COLUMN xgboost_ready INTEGER DEFAULT 1');
+
+      // ── gameplay_sessions: telemetry columns ──
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN task_completion_rate REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN prompt_dependency_score REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN turn_taking_success_rate REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN interruption_count INTEGER DEFAULT 0');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN waiting_tolerance_seconds REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN time_to_first_touch REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN time_to_first_valid_action REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN time_to_completion REAL');
+      await db.execute(
+          'ALTER TABLE gameplay_sessions ADD COLUMN sensory_condition TEXT');
+    }
   }
 
   // ── Child Profile ─────────────────────────────────────────────────────

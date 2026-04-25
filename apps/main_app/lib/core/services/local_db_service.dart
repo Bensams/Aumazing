@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:game_core/game_core.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:uuid/uuid.dart';
@@ -93,7 +94,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 7; // Incremented for sensory persistence tables
+  static const _dbVersion = 11; // v11: Add rubric scoring columns to assessment_results_local + telemetry to game_sessions_local
   static const _uuid = Uuid();
   static const _readableChildWhere = 'display_name IS NOT NULL';
   static const _syncableChildWhere =
@@ -195,6 +196,27 @@ class LocalDbService {
         total_items INTEGER NOT NULL,
         error_count INTEGER NOT NULL,
         total_response_time_ms INTEGER NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        hint_count INTEGER NOT NULL DEFAULT 0,
+        prompt_count INTEGER NOT NULL DEFAULT 0,
+        idle_time_seconds REAL NOT NULL DEFAULT 0.0,
+        random_touch_count INTEGER NOT NULL DEFAULT 0,
+        avg_response_time REAL NOT NULL DEFAULT 0.0,
+        avg_valid_response_time REAL NOT NULL DEFAULT 0.0,
+        off_task_action_count INTEGER NOT NULL DEFAULT 0,
+        improvement_score REAL NOT NULL DEFAULT 0.0,
+        consistency_score REAL NOT NULL DEFAULT 0.0,
+        bg_music_enabled INTEGER NOT NULL DEFAULT 1,
+        haptic_feedback_enabled INTEGER NOT NULL DEFAULT 1,
+        task_completion_rate REAL,
+        prompt_dependency_score REAL,
+        turn_taking_success_rate REAL,
+        interruption_count INTEGER DEFAULT 0,
+        waiting_tolerance_seconds REAL,
+        time_to_first_touch REAL,
+        time_to_first_valid_action REAL,
+        time_to_completion REAL,
+        sensory_condition TEXT,
         started_at TEXT NOT NULL,
         ended_at TEXT NOT NULL,
         settings_snapshot TEXT,
@@ -211,19 +233,28 @@ class LocalDbService {
       CREATE INDEX idx_game_sessions_sync ON ${LocalTables.gameSessions}(sync_status)
     ''');
 
-    // Game rounds (granular game data)
+    // Game rounds (per-round metrics matching Supabase game_rounds schema)
     await db.execute('''
       CREATE TABLE ${LocalTables.gameRounds} (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
-        round_number INTEGER NOT NULL,
-        stimulus TEXT,
-        response TEXT,
-        is_correct INTEGER,
-        response_time_ms INTEGER,
-        started_at TEXT,
-        ended_at TEXT,
-        metadata TEXT,
+        round_no INTEGER NOT NULL,
+        stimulus_type TEXT,
+        valid_action_type TEXT,
+        correct INTEGER,
+        response_time REAL,
+        valid_response_time REAL,
+        time_to_first_hint REAL,
+        retry_count INTEGER DEFAULT 0,
+        hint_count INTEGER DEFAULT 0,
+        prompt_count INTEGER DEFAULT 0,
+        random_touch_count INTEGER DEFAULT 0,
+        strong_prompt_triggered INTEGER DEFAULT 0,
+        guided_assist_triggered INTEGER DEFAULT 0,
+        completed INTEGER DEFAULT 0,
+        music_enabled INTEGER NOT NULL DEFAULT 1,
+        haptic_enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT,
         $_syncColumns,
         FOREIGN KEY (session_id) REFERENCES ${LocalTables.gameSessions}(id)
       )
@@ -289,6 +320,15 @@ class LocalDbService {
         error_count INTEGER NOT NULL,
         avg_response_time_ms INTEGER NOT NULL,
         raw_metrics TEXT,
+        play_skills_label TEXT,
+        communication_label TEXT,
+        social_interaction_label TEXT,
+        behavior_attention_label TEXT,
+        sensory_preference_label TEXT,
+        recommended_module TEXT,
+        overall_summary TEXT,
+        model_source TEXT DEFAULT 'rubric_based',
+        xgboost_ready INTEGER DEFAULT 1,
         $_syncColumns,
         FOREIGN KEY (child_id) REFERENCES ${LocalTables.children}(id),
         FOREIGN KEY (assessment_run_id) REFERENCES ${LocalTables.assessmentRuns}(id)
@@ -637,6 +677,99 @@ class LocalDbService {
 
       debugPrint('[LocalDbService] Added sensory persistence tables (v7)');
     }
+
+    if (oldVersion < 8) {
+      // Migration from v7 to v8: Recreate game_rounds_local with new schema
+      // matching Supabase game_rounds table
+      await db.execute('DROP TABLE IF EXISTS ${LocalTables.gameRounds}');
+      await db.execute('''
+        CREATE TABLE ${LocalTables.gameRounds} (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          round_no INTEGER NOT NULL,
+          stimulus_type TEXT,
+          valid_action_type TEXT,
+          correct INTEGER,
+          response_time REAL,
+          valid_response_time REAL,
+          time_to_first_hint REAL,
+          retry_count INTEGER DEFAULT 0,
+          hint_count INTEGER DEFAULT 0,
+          prompt_count INTEGER DEFAULT 0,
+          random_touch_count INTEGER DEFAULT 0,
+          strong_prompt_triggered INTEGER DEFAULT 0,
+          guided_assist_triggered INTEGER DEFAULT 0,
+          completed INTEGER DEFAULT 0,
+          created_at TEXT,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          last_synced_at TEXT,
+          deleted_at TEXT,
+          updated_at TEXT NOT NULL,
+          local_created_at TEXT NOT NULL,
+          owner_id TEXT,
+          FOREIGN KEY (session_id) REFERENCES ${LocalTables.gameSessions}(id)
+        )
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_game_rounds_session
+        ON ${LocalTables.gameRounds}(session_id)
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_game_rounds_sync
+        ON ${LocalTables.gameRounds}(sync_status)
+      ''');
+      debugPrint('[LocalDbService] Recreated game_rounds_local with new schema (v8)');
+    }
+
+    if (oldVersion < 9) {
+      // Migration from v8 to v9: Add analytics + sensory columns to game_sessions_local
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN hint_count INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_count INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN idle_time_seconds REAL NOT NULL DEFAULT 0.0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_response_time REAL NOT NULL DEFAULT 0.0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_valid_response_time REAL NOT NULL DEFAULT 0.0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN off_task_action_count INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN improvement_score REAL NOT NULL DEFAULT 0.0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN consistency_score REAL NOT NULL DEFAULT 0.0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN bg_music_enabled INTEGER NOT NULL DEFAULT 1');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN haptic_feedback_enabled INTEGER NOT NULL DEFAULT 1');
+      debugPrint('[LocalDbService] Added analytics + sensory columns to game_sessions_local (v9)');
+    }
+
+    if (oldVersion < 10) {
+      // Migration from v9 to v10: Add sensory columns to game_rounds_local
+      await db.execute('ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN music_enabled INTEGER NOT NULL DEFAULT 1');
+      await db.execute('ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN haptic_enabled INTEGER NOT NULL DEFAULT 1');
+      debugPrint('[LocalDbService] Added sensory columns to game_rounds_local (v10)');
+    }
+
+    if (oldVersion < 11) {
+      // Migration from v10 to v11: Add rubric scoring columns to assessment_results_local
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN play_skills_label TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN communication_label TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN social_interaction_label TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN behavior_attention_label TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN sensory_preference_label TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN recommended_module TEXT');
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN overall_summary TEXT');
+      await db.execute("ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN model_source TEXT DEFAULT 'rubric_based'");
+      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN xgboost_ready INTEGER DEFAULT 1');
+
+      // Add missing telemetry columns to game_sessions_local
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN task_completion_rate REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_dependency_score REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN turn_taking_success_rate REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN interruption_count INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN waiting_tolerance_seconds REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_touch REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_valid_action REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_completion REAL');
+      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN sensory_condition TEXT');
+
+      debugPrint('[LocalDbService] Added rubric scoring + telemetry columns (v11)');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
@@ -911,6 +1044,55 @@ class LocalDbService {
       orderBy: 'started_at ASC',
     );
     return rows.map((r) => GameplaySession.fromMap(r)).toList();
+  }
+
+  // ─── Game Rounds ───────────────────────────────────────────────────────
+
+  /// Insert a single game round from [GameRoundMetrics] into the local DB.
+  ///
+  /// Maps game_core analytics fields to the Supabase-aligned local schema.
+  Future<void> insertGameRound({
+    required String sessionId,
+    required GameRoundMetrics round,
+    required String ownerId,
+    bool markPending = true,
+  }) async {
+    final db = await database;
+    final now = DateTime.now();
+    final id = _uuid.v4();
+
+    await db.insert(
+      LocalTables.gameRounds,
+      {
+        'id': id,
+        'session_id': sessionId,
+        'round_no': round.roundNumber,
+        'stimulus_type': round.gameSpecificData['stimulusType'] as String?,
+        'valid_action_type':
+            round.gameSpecificData['validActionType'] as String?,
+        'correct': round.isSuccessful ? 1 : 0,
+        'response_time': round.timeToFirstTouch,
+        'valid_response_time': round.timeToFirstValidAction,
+        'time_to_first_hint': round.hintCount > 0 ? round.timeToCompletion : null,
+        'retry_count': round.retryCount,
+        'hint_count': round.hintCount,
+        'prompt_count': round.promptCount,
+        'random_touch_count': round.randomTouchCount,
+        'strong_prompt_triggered': round.promptCount >= 3 ? 1 : 0,
+        'guided_assist_triggered': round.hintCount >= 2 ? 1 : 0,
+        'completed': round.isSuccessful ? 1 : 0,
+        'music_enabled': round.musicEnabled ? 1 : 0,
+        'haptic_enabled': round.hapticEnabled ? 1 : 0,
+        'created_at': now.toUtc().toIso8601String(),
+        // sync columns
+        'owner_id': ownerId,
+        'sync_status':
+            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+        'local_created_at': now.toUtc().toIso8601String(),
+        'updated_at': now.toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ─── Assessment Results ───────────────────────────────────────────────

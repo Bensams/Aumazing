@@ -202,6 +202,50 @@ class SupabaseService {
     }
   }
 
+  // ─── Sensory Data ─────────────────────────────────────────────────────
+
+  Future<void> upsertSensoryConsent(
+    Map<String, dynamic> data,
+    String id,
+  ) async {
+    try {
+      await _client
+          .from(RemoteTables.sensoryConsent)
+          .upsert(data, onConflict: 'id');
+    } catch (e) {
+      debugPrint('[SupabaseService] upsertSensoryConsent error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> upsertSensoryRoundMetrics(
+    Map<String, dynamic> data,
+    String id,
+  ) async {
+    try {
+      await _client
+          .from(RemoteTables.sensoryRoundMetrics)
+          .upsert(data, onConflict: 'id');
+    } catch (e) {
+      debugPrint('[SupabaseService] upsertSensoryRoundMetrics error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> upsertSensoryPreferences(
+    Map<String, dynamic> data,
+    String id,
+  ) async {
+    try {
+      await _client
+          .from(RemoteTables.sensoryPreferences)
+          .upsert(data, onConflict: 'id');
+    } catch (e) {
+      debugPrint('[SupabaseService] upsertSensoryPreferences error: $e');
+      rethrow;
+    }
+  }
+
   // ─── Reference Data (Cached Tables) ───────────────────────────────────
 
   /// Fetch all learning modules for caching

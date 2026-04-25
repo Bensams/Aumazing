@@ -207,6 +207,24 @@ class _FakeSupabaseService implements SupabaseService {
   ) async {}
 
   @override
+  Future<void> upsertSensoryConsent(
+    Map<String, dynamic> data,
+    String id,
+  ) async {}
+
+  @override
+  Future<void> upsertSensoryRoundMetrics(
+    Map<String, dynamic> data,
+    String id,
+  ) async {}
+
+  @override
+  Future<void> upsertSensoryPreferences(
+    Map<String, dynamic> data,
+    String id,
+  ) async {}
+
+  @override
   Future<List<Map<String, dynamic>>> fetchLearningModules() async => const [];
 
   @override

@@ -347,6 +347,16 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   }
 
   @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+    // Record ALL taps — valid ones that hit components and invalid ones that missed
+    analyticsRecordTouch(
+      Offset(event.canvasPosition.x, event.canvasPosition.y),
+      isValid: event.handled,
+    );
+  }
+
+  @override
   void render(Canvas canvas) {
     // Turn indicator
     final text = _isBuddyTurn ? "🐻 Buddy's turn…" : '⭐ Your turn!';

@@ -127,6 +127,7 @@ class GameSessionInput(BaseModel):
     # Sensory round metrics (optional)
     retry_count: int = Field(default=0, description="Number of retries in the session")
     hint_count: int = Field(default=0, description="Number of hints used in the session")
+    prompt_count: int = Field(default=0, description="Number of prompts given in the session")
     idle_time_seconds: float = Field(
         default=0.0,
         description="Total idle/inactive time in seconds",
@@ -134,6 +135,36 @@ class GameSessionInput(BaseModel):
     random_touch_count: int = Field(
         default=0,
         description="Number of random/invalid touches during the session",
+    )
+    # Extended analytics fields
+    avg_response_time: float = Field(
+        default=0.0,
+        description="Average response time in seconds",
+    )
+    avg_valid_response_time: float = Field(
+        default=0.0,
+        description="Average valid response time in seconds",
+    )
+    off_task_action_count: int = Field(
+        default=0,
+        description="Number of off-task actions",
+    )
+    improvement_score: float = Field(
+        default=0.0,
+        description="Performance improvement score (-1.0 to 1.0)",
+    )
+    consistency_score: float = Field(
+        default=0.0,
+        description="Performance consistency score (0.0 to 1.0)",
+    )
+    # Sensory preference fields
+    bg_music_enabled: bool = Field(
+        default=True,
+        description="Whether background music was enabled during this session",
+    )
+    haptic_feedback_enabled: bool = Field(
+        default=True,
+        description="Whether haptic feedback was enabled during this session",
     )
 
 

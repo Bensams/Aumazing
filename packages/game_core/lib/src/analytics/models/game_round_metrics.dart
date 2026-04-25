@@ -100,6 +100,14 @@ class GameRoundMetrics {
   /// Example for CopyMe: {'sequenceLength': 3, 'patternCorrect': true}
   Map<String, dynamic> gameSpecificData = {};
 
+  // ── Sensory State ───────────────────────────────────────────────────────
+
+  /// Whether background music was enabled during this round.
+  bool musicEnabled;
+
+  /// Whether haptic feedback was enabled during this round.
+  bool hapticEnabled;
+
   // ── Internal State ───────────────────────────────────────────────────────
 
   DateTime? _roundStartTime;
@@ -112,6 +120,8 @@ class GameRoundMetrics {
   GameRoundMetrics({
     required this.roundNumber,
     this.roundId,
+    this.musicEnabled = true,
+    this.hapticEnabled = true,
   });
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -234,6 +244,8 @@ class GameRoundMetrics {
       'is_successful': isSuccessful,
       'is_abandoned': isAbandoned,
       'game_specific': gameSpecificData,
+      'music_enabled': musicEnabled,
+      'haptic_enabled': hapticEnabled,
     };
   }
 
@@ -259,6 +271,8 @@ class GameRoundMetrics {
     round.offTaskActionCount = map['off_task_action_count'] as int? ?? 0;
     round.isSuccessful = map['is_successful'] as bool? ?? false;
     round.isAbandoned = map['is_abandoned'] as bool? ?? false;
+    round.musicEnabled = map['music_enabled'] as bool? ?? true;
+    round.hapticEnabled = map['haptic_enabled'] as bool? ?? true;
 
     if (map['game_specific'] != null) {
       round.gameSpecificData = Map<String, dynamic>.from(map['game_specific'] as Map);

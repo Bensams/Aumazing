@@ -21,6 +21,35 @@ class AssessmentResult {
   /// Optional bag of extra metrics (e.g. per-item breakdown).
   final Map<String, dynamic> rawMetrics;
 
+  // ── Rubric scoring fields ────────────────────────────────────────────
+
+  /// Rubric label for play skills: Strength, Emerging, or Needs Support.
+  final String? playSkillsLabel;
+
+  /// Rubric label for communication: Strength, Emerging, or Needs Support.
+  final String? communicationLabel;
+
+  /// Rubric label for social interaction: Strength, Emerging, or Needs Support.
+  final String? socialInteractionLabel;
+
+  /// Rubric label for behavior/attention.
+  final String? behaviorAttentionLabel;
+
+  /// Rubric label for sensory preference.
+  final String? sensoryPreferenceLabel;
+
+  /// Recommended module based on rubric scoring.
+  final String? recommendedModule;
+
+  /// Overall summary text from rubric scoring.
+  final String? overallSummary;
+
+  /// Source of labels: 'rubric_based' or 'xgboost'.
+  final String? modelSource;
+
+  /// Whether this row can be used for XGBoost training.
+  final bool? xgboostReady;
+
   const AssessmentResult({
     required this.id,
     required this.childId,
@@ -32,10 +61,54 @@ class AssessmentResult {
     required this.avgResponseTimeMs,
     required this.completedAt,
     this.rawMetrics = const {},
+    this.playSkillsLabel,
+    this.communicationLabel,
+    this.socialInteractionLabel,
+    this.behaviorAttentionLabel,
+    this.sensoryPreferenceLabel,
+    this.recommendedModule,
+    this.overallSummary,
+    this.modelSource,
+    this.xgboostReady,
   });
 
   double get accuracy =>
       totalItems > 0 ? (score / totalItems).clamp(0.0, 1.0) : 0.0;
+
+  /// Create a copy with updated rubric scoring fields.
+  AssessmentResult copyWithRubric({
+    String? playSkillsLabel,
+    String? communicationLabel,
+    String? socialInteractionLabel,
+    String? behaviorAttentionLabel,
+    String? sensoryPreferenceLabel,
+    String? recommendedModule,
+    String? overallSummary,
+    String? modelSource,
+    bool? xgboostReady,
+  }) {
+    return AssessmentResult(
+      id: id,
+      childId: childId,
+      type: type,
+      gameId: gameId,
+      score: score,
+      totalItems: totalItems,
+      errorCount: errorCount,
+      avgResponseTimeMs: avgResponseTimeMs,
+      completedAt: completedAt,
+      rawMetrics: rawMetrics,
+      playSkillsLabel: playSkillsLabel ?? this.playSkillsLabel,
+      communicationLabel: communicationLabel ?? this.communicationLabel,
+      socialInteractionLabel: socialInteractionLabel ?? this.socialInteractionLabel,
+      behaviorAttentionLabel: behaviorAttentionLabel ?? this.behaviorAttentionLabel,
+      sensoryPreferenceLabel: sensoryPreferenceLabel ?? this.sensoryPreferenceLabel,
+      recommendedModule: recommendedModule ?? this.recommendedModule,
+      overallSummary: overallSummary ?? this.overallSummary,
+      modelSource: modelSource ?? this.modelSource,
+      xgboostReady: xgboostReady ?? this.xgboostReady,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -48,6 +121,17 @@ class AssessmentResult {
         'avg_response_time_ms': avgResponseTimeMs,
         'completed_at': completedAt.toIso8601String(),
         'raw_metrics': rawMetrics.toString(),
+        'play_skills_label': playSkillsLabel,
+        'communication_label': communicationLabel,
+        'social_interaction_label': socialInteractionLabel,
+        'behavior_attention_label': behaviorAttentionLabel,
+        'sensory_preference_label': sensoryPreferenceLabel,
+        'recommended_module': recommendedModule,
+        'overall_summary': overallSummary,
+        'model_source': modelSource,
+        'xgboost_ready': xgboostReady == null
+            ? null
+            : (xgboostReady! ? 1 : 0),
       };
 
   factory AssessmentResult.fromMap(Map<String, dynamic> map) =>
@@ -61,6 +145,17 @@ class AssessmentResult {
         errorCount: map['error_count'] as int,
         avgResponseTimeMs: map['avg_response_time_ms'] as int,
         completedAt: DateTime.parse(map['completed_at'] as String),
+        playSkillsLabel: map['play_skills_label'] as String?,
+        communicationLabel: map['communication_label'] as String?,
+        socialInteractionLabel: map['social_interaction_label'] as String?,
+        behaviorAttentionLabel: map['behavior_attention_label'] as String?,
+        sensoryPreferenceLabel: map['sensory_preference_label'] as String?,
+        recommendedModule: map['recommended_module'] as String?,
+        overallSummary: map['overall_summary'] as String?,
+        modelSource: map['model_source'] as String?,
+        xgboostReady: map['xgboost_ready'] == null
+            ? null
+            : (map['xgboost_ready'] as int) == 1,
       );
 
   factory AssessmentResult.fromSupabase(Map<String, dynamic> map) =>
@@ -75,6 +170,15 @@ class AssessmentResult {
         avgResponseTimeMs: map['avg_response_time_ms'] as int,
         completedAt: DateTime.parse(map['completed_at'] as String),
         rawMetrics: (map['raw_metrics'] as Map<String, dynamic>?) ?? {},
+        playSkillsLabel: map['play_skills_label'] as String?,
+        communicationLabel: map['communication_label'] as String?,
+        socialInteractionLabel: map['social_interaction_label'] as String?,
+        behaviorAttentionLabel: map['behavior_attention_label'] as String?,
+        sensoryPreferenceLabel: map['sensory_preference_label'] as String?,
+        recommendedModule: map['recommended_module'] as String?,
+        overallSummary: map['overall_summary'] as String?,
+        modelSource: map['model_source'] as String?,
+        xgboostReady: map['xgboost_ready'] as bool?,
       );
 
   Map<String, dynamic> toSupabase() => {
@@ -88,5 +192,14 @@ class AssessmentResult {
         'avg_response_time_ms': avgResponseTimeMs,
         'completed_at': completedAt.toIso8601String(),
         'raw_metrics': rawMetrics,
+        'play_skills_label': playSkillsLabel,
+        'communication_label': communicationLabel,
+        'social_interaction_label': socialInteractionLabel,
+        'behavior_attention_label': behaviorAttentionLabel,
+        'sensory_preference_label': sensoryPreferenceLabel,
+        'recommended_module': recommendedModule,
+        'overall_summary': overallSummary,
+        'model_source': modelSource,
+        'xgboost_ready': xgboostReady,
       };
 }

@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:game_core/game_core.dart';
 
 import '../model/ai_assessment_response.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
+import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../services/ai_assessment_service.dart';
 import '../services/assessment_service.dart';
 import '../services/local_db_service.dart';
+import '../services/rubric/rubric.dart';
 
 /// Manages assessment state: collecting gameplay metrics, storing results,
 /// and providing recommendation data.
@@ -24,6 +27,12 @@ class AssessmentProvider extends ChangeNotifier {
   /// AI-based prediction result (null if API unavailable or not yet called).
   AiAssessmentResponse? _aiPrediction;
 
+  /// Rubric-based scoring result (null if not yet computed).
+  RubricResult? _rubricResult;
+
+  /// Sensory round metrics collected during the pre-assessment sensory experiment.
+  List<SensoryRoundMetrics>? _sensoryMetrics;
+
   AssessmentProvider({
     AssessmentService? assessmentService,
     LocalDbService? localDb,
@@ -40,6 +49,9 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// The latest AI prediction result, or null if unavailable.
   AiAssessmentResponse? get aiPrediction => _aiPrediction;
+
+  /// The latest rubric-based scoring result, or null if not yet computed.
+  RubricResult? get rubricResult => _rubricResult;
 
   /// The sessions collected during the current assessment round.
   List<GameplaySession> get currentSessions =>
@@ -84,6 +96,9 @@ class AssessmentProvider extends ChangeNotifier {
     required int errorCount,
     required int totalResponseTimeMs,
     required DateTime startedAt,
+    GameSessionMetrics? analytics,
+    bool bgMusicEnabled = true,
+    bool hapticFeedbackEnabled = true,
   }) async {
     final session = await _assessmentService.recordSession(
       childId: childId,
@@ -94,10 +109,21 @@ class AssessmentProvider extends ChangeNotifier {
       errorCount: errorCount,
       totalResponseTimeMs: totalResponseTimeMs,
       startedAt: startedAt,
+      analytics: analytics,
+      bgMusicEnabled: bgMusicEnabled,
+      hapticFeedbackEnabled: hapticFeedbackEnabled,
     );
 
     _currentSessions.add(session);
     notifyListeners();
+  }
+
+  /// Set sensory round metrics collected during the sensory experiment.
+  ///
+  /// Call this before [finalizePreAssessment] so rubric scoring can
+  /// incorporate sensory preference analysis.
+  void setSensoryMetrics(List<SensoryRoundMetrics> metrics) {
+    _sensoryMetrics = metrics;
   }
 
   /// Finalizes the pre-assessment after all 4 mini-games are played.
@@ -122,6 +148,85 @@ class AssessmentProvider extends ChangeNotifier {
       }
 
       _recommendation = _assessmentService.recommendModule(_preResults);
+
+      // --- Rubric Scoring (new) ---
+      try {
+        const rubricScorer = RubricScoringService();
+        const sensoryAnalyzer = SensoryLabelAnalyzer();
+        const recommender = RecommendationService();
+
+        // Get sensory label if metrics are available
+        final sensoryLabel =
+            _sensoryMetrics != null && _sensoryMetrics!.isNotEmpty
+                ? sensoryAnalyzer.analyze(_sensoryMetrics!)
+                : SensoryPreferenceLabel.noSensorySupportNeeded;
+
+        // Score all areas
+        final playSkills = rubricScorer.scorePlaySkills(_currentSessions);
+        final communication =
+            rubricScorer.scoreCommunication(_currentSessions);
+        final socialInteraction =
+            rubricScorer.scoreSocialInteraction(_currentSessions);
+        final behaviorAttention =
+            rubricScorer.scoreBehaviorAttention(_currentSessions);
+
+        // Get recommendation
+        final recommendation = recommender.recommend(
+          playSkills: playSkills,
+          communication: communication,
+          socialInteraction: socialInteraction,
+          behaviorAttention: behaviorAttention,
+          sensoryPreference: sensoryLabel,
+        );
+
+        // Generate summary
+        final summary = recommender.generateSummary(
+          playSkills: playSkills,
+          communication: communication,
+          socialInteraction: socialInteraction,
+          behaviorAttention: behaviorAttention,
+          sensoryPreference: sensoryLabel,
+          recommendedModule: recommendation.moduleName,
+        );
+
+        // Create rubric result
+        _rubricResult = RubricResult(
+          playSkillsLabel: playSkills,
+          communicationLabel: communication,
+          socialInteractionLabel: socialInteraction,
+          behaviorAttentionLabel: behaviorAttention,
+          sensoryPreferenceLabel: sensoryLabel,
+          recommendedModule: recommendation.moduleName,
+          overallSummary: summary,
+        );
+
+        // Update assessment results with rubric labels (immutable — replace list)
+        _preResults = _preResults
+            .map((result) => result.copyWithRubric(
+                  playSkillsLabel: playSkills.displayName,
+                  communicationLabel: communication.displayName,
+                  socialInteractionLabel: socialInteraction.displayName,
+                  behaviorAttentionLabel: behaviorAttention.displayName,
+                  sensoryPreferenceLabel: sensoryLabel.displayName,
+                  recommendedModule: recommendation.moduleName,
+                  overallSummary: summary,
+                  modelSource: 'rubric_based',
+                  xgboostReady: true,
+                ))
+            .toList();
+
+        debugPrint('[AssessmentProvider] Rubric scoring complete: '
+            'playSkills=${playSkills.displayName}, '
+            'communication=${communication.displayName}, '
+            'socialInteraction=${socialInteraction.displayName}, '
+            'behaviorAttention=${behaviorAttention.displayName}, '
+            'sensory=${sensoryLabel.displayName}, '
+            'recommended=${recommendation.moduleName}');
+      } catch (e) {
+        // Rubric scoring failure should not break the existing flow
+        debugPrint('[AssessmentProvider] Rubric scoring failed: $e');
+      }
+
       // Note: _currentSessions are NOT cleared here so they remain
       // available for the AI prediction call (predictWithAI).
       // They are cleared in clear() or after AI prediction.
@@ -211,12 +316,28 @@ class AssessmentProvider extends ChangeNotifier {
     }
   }
 
+  /// Export a single XGBoost-ready data row for the current assessment.
+  ///
+  /// Returns `null` if rubric scoring has not been performed or no sessions
+  /// are available.
+  Map<String, dynamic>? exportXGBoostRow(String childId) {
+    if (_rubricResult == null || _currentSessions.isEmpty) return null;
+    const exporter = XGBoostExportService();
+    return exporter.generateRow(
+      childId: childId,
+      sessions: _currentSessions,
+      rubricResult: _rubricResult!,
+    );
+  }
+
   void clear() {
     _preResults.clear();
     _postResults.clear();
     _recommendation = null;
     _currentSessions.clear();
     _aiPrediction = null;
+    _rubricResult = null;
+    _sensoryMetrics = null;
     notifyListeners();
   }
 }
