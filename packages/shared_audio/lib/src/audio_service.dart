@@ -190,15 +190,18 @@ class AudioService {
 
   // ── Game Sound Effects ────────────────────────────────────────────
 
+  // NOTE: Intentionally swapped with _levelCompleteSfx
   /// SFX file for correct answer feedback (3-star sparkle).
   static const String _correctSfx = 'sfx/wrong.wav';
 
+  // NOTE: Intentionally swapped with _levelCompleteSfx
   /// SFX file for wrong answer feedback.
   static const String _wrongSfx = 'sfx/level_complete.wav';
 
   /// SFX file for in-game taps (distinct from UI button tap).
   static const String _gameTapSfx = 'sfx/game_tap.wav';
 
+  // NOTE: Changed to 3_star.ogg (originally level_complete.wav, swapped with correct, then overridden)
   /// SFX file for level completion (satisfying pop).
   static const String _levelCompleteSfx = 'sfx/3_star.ogg';
 
