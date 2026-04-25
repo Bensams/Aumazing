@@ -27,7 +27,7 @@ class RubricScoringService {
   static const _emergingAccuracy = 0.50;
   static const _strengthCompletionRate = 0.80;
   static const _emergingCompletionRate = 0.50;
-  static const _strengthMaxPrompts = 1.0;
+  static const _strengthMaxPromptDependency = 0.2;
   static const _strengthMaxRetries = 2.0;
   static const _promptDependencyThreshold = 0.5;
   static const _strengthTurnTaking = 0.80;
@@ -82,7 +82,7 @@ class RubricScoringService {
   ///
   /// Games: `match_it`, `copy_me`.
   ///
-  /// - **Strength**: accuracy ≥ 0.80 AND completion ≥ 0.80 AND prompts ≤ 1 AND retries ≤ 2
+  /// - **Strength**: accuracy ≥ 0.80 AND completion ≥ 0.80 AND prompt dependency ≤ 0.20 AND retries ≤ 2
   /// - **Emerging**: accuracy ≥ 0.50 OR completion ≥ 0.50
   /// - **Needs Support**: everything else
   PerformanceLabel scorePlaySkills(List<GameplaySession> sessions) {
@@ -94,12 +94,12 @@ class RubricScoringService {
 
       final avgAccuracy = _meanAccuracy(valid);
       final avgCompletionRate = _meanCompletionRate(valid);
-      final avgPromptCount = _meanDouble(valid, (s) => s.promptCount.toDouble());
+      final avgPromptDependency = _meanPromptDependency(valid);
       final avgRetryCount = _meanDouble(valid, (s) => s.retryCount.toDouble());
 
       if (avgAccuracy >= _strengthAccuracy &&
           avgCompletionRate >= _strengthCompletionRate &&
-          avgPromptCount <= _strengthMaxPrompts &&
+          avgPromptDependency <= _strengthMaxPromptDependency &&
           avgRetryCount <= _strengthMaxRetries) {
         return PerformanceLabel.strength;
       }
@@ -119,7 +119,7 @@ class RubricScoringService {
   ///
   /// Games: `copy_me`, `do_what_i_say`.
   ///
-  /// - **Strength**: accuracy ≥ 0.80 AND avg prompts ≤ 1
+  /// - **Strength**: accuracy ≥ 0.80 AND prompt dependency ≤ 0.20
   /// - **Emerging**: accuracy ≥ 0.50 AND < 0.80, OR prompt dependency < 0.5
   /// - **Needs Support**: accuracy < 0.50 OR prompt dependency ≥ 0.5
   PerformanceLabel scoreCommunication(List<GameplaySession> sessions) {
@@ -130,11 +130,10 @@ class RubricScoringService {
       if (valid.isEmpty) return PerformanceLabel.emerging;
 
       final avgAccuracy = _meanAccuracy(valid);
-      final avgPromptCount = _meanDouble(valid, (s) => s.promptCount.toDouble());
       final avgPromptDependency = _meanPromptDependency(valid);
 
       if (avgAccuracy >= _strengthAccuracy &&
-          avgPromptCount <= _strengthMaxPrompts) {
+          avgPromptDependency <= _strengthMaxPromptDependency) {
         return PerformanceLabel.strength;
       }
 
