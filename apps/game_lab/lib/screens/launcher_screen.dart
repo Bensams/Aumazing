@@ -8,6 +8,7 @@ import 'audio_tester_screen.dart';
 import 'haptic_tester_screen.dart';
 import 'game_flow_screen.dart';
 import 'game_test_screen.dart';
+import 'result_screen_tester.dart';
 import 'reward_tester_screen.dart';
 
 /// The launcher screen for Game Lab.
@@ -155,6 +156,17 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                       horizontal: 16, vertical: 10),
                                 ),
                               ),
+                              ElevatedButton.icon(
+                                onPressed: _launchResultTester,
+                                icon: const Icon(Icons.assessment_rounded, size: 18),
+                                label: const Text('Test Result Screen'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFAB47BC),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -222,6 +234,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const HapticTesterScreen(),
+      ),
+    );
+  }
+
+  void _launchResultTester() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ResultScreenTester(),
       ),
     );
   }
