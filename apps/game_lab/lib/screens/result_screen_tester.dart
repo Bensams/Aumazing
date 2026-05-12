@@ -366,14 +366,6 @@ class _ResultScreenTesterState extends State<ResultScreenTester> {
             compact: true,
             fontSize: 10,
           ),
-          const SizedBox(width: 4),
-          Text(
-            '${(area.confidence * 100).round()}%',
-            style: AppTextStyles.bodySmall.copyWith(
-              fontSize: 10,
-              color: AppColors.textSecondary,
-            ),
-          ),
         ],
       ),
     );
