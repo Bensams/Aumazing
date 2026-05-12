@@ -603,7 +603,6 @@ class _Card extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -619,7 +618,14 @@ class _Card extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          ...children,
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
+            ),
+          ),
         ],
       ),
     );

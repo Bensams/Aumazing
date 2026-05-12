@@ -41,10 +41,25 @@ def _safe_mean(values: list[float]) -> float:
 
 
 def _session_accuracy(session: GameSessionInput) -> float:
-    """Compute accuracy for a single session (score / total_items)."""
-    if session.total_items <= 0:
+    """Compute *adjusted* accuracy for a single session.
+
+    Formula: ``score / (score + error_count)``
+
+    The Aumazing games retry until the child gets each item correct, so
+    ``score`` almost always equals ``total_items`` (raw accuracy ≈ 1.0).
+    ``error_count`` captures the failed attempts that the raw ratio hides.
+    Using the adjusted formula aligns the API with the Flutter client's
+    ``AssessmentResult.adjustedAccuracy`` and with the labeling rubric
+    used to generate training data.
+
+    Falls back to ``score / total_items`` when ``error_count`` is zero
+    (backwards-compatible with sessions that don't report errors).
+    """
+    denominator = session.score + session.error_count
+    if denominator <= 0:
+        # No score and no errors — treat as zero accuracy
         return 0.0
-    return session.score / session.total_items
+    return session.score / denominator
 
 
 def _per_game_accuracy(

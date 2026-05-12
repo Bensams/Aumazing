@@ -149,12 +149,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
                               children: [
                                 if (aiResponse != null) ...[
                                   Expanded(
-                                    flex: 2,
                                     child: _buildProfileCard(),
                                   ),
                                   const SizedBox(height: 8),
                                   Expanded(
-                                    flex: 3,
                                     child: _buildRecommendationsCard(),
                                   ),
                                 ] else ...[
