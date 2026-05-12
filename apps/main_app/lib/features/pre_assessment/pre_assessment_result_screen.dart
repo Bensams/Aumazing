@@ -444,7 +444,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     );
   }
 
-  /// Single per-area row: area name + level pill + confidence percent.
+  /// Single per-area row: area name + level pill.
   Widget _buildAreaLevelRow(String areaLabel, AreaLevel area) {
     final StatusLevel pillLevel;
     switch (area.levelInt) {
@@ -480,14 +480,6 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
             level: pillLevel,
             compact: true,
             fontSize: 10,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            area.confidencePercent,
-            style: AppTextStyles.bodySmall.copyWith(
-              fontSize: 10,
-              color: AppColors.textSecondary,
-            ),
           ),
         ],
       ),
