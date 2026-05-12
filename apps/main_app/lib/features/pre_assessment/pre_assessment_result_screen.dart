@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/ai_assessment_response.dart';
+import '../../model/area_level.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
+import '../../services/active_games_service.dart';
+import '../../services/recommendation_filter.dart';
 
 /// Displays the pre-assessment results with a developmental profile
 /// and recommended settings.
@@ -34,6 +37,10 @@ class PreAssessmentResultScreen extends StatefulWidget {
 class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   bool _showCelebration = true;
 
+  /// Filtered recommendations after removing inactive games.
+  /// `null` means "still loading"; non-null means "ready to display".
+  FilteredRecommendations? _filtered;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +49,21 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     Future.delayed(const Duration(milliseconds: 3000), () {
       if (mounted) setState(() => _showCelebration = false);
     });
+
+    // Load active game IDs and filter recommendations.
+    if (widget.aiResponse != null) {
+      _loadFilteredRecommendations(widget.aiResponse!);
+    }
+  }
+
+  /// Fetches the active game set (cached after first call) and applies
+  /// the pure filter to the AI response's module recommendations.
+  Future<void> _loadFilteredRecommendations(AiAssessmentResponse ai) async {
+    final activeIds = await ActiveGamesService.instance.activeGameIds;
+    final filtered = RecommendationFilter.filter(ai, activeIds);
+    if (mounted) {
+      setState(() => _filtered = filtered);
+    }
   }
 
   SupportProfile get profile => widget.profile;
@@ -203,25 +225,36 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       title: 'AI Insights',
       emoji: '🤖',
       children: [
-        // AI Profile
-        _aiRow(
-          Icons.psychology_rounded,
-          'AI Profile',
-          ai.profileDisplayName,
-        ),
-        const SizedBox(height: 4),
+        // Per-area breakdown (Path B). When the API returns per-area
+        // ordinal predictions, prefer them over the single legacy profile.
+        if (ai.hasAreaLevels) ...[
+          _buildAreaLevelsSection(ai),
+          const SizedBox(height: 4),
+        ] else ...[
+          // Legacy single-profile display for older API responses.
+          _aiRow(
+            Icons.psychology_rounded,
+            'AI Profile',
+            ai.profileDisplayName,
+          ),
+          const SizedBox(height: 4),
+        ],
 
         // Confidence with visual bar
         _buildConfidenceRow(ai.confidence),
         const SizedBox(height: 4),
 
-        // Support Level
-        _aiRow(
-          Icons.support_rounded,
-          'Support Level',
-          _supportLevelDisplay(ai.supportLevel),
-        ),
-        const SizedBox(height: 6),
+        // Support Level (legacy summary). Skipped when per-area breakdown
+        // is shown to avoid redundancy.
+        if (!ai.hasAreaLevels) ...[
+          _aiRow(
+            Icons.support_rounded,
+            'Support Level',
+            _supportLevelDisplay(ai.supportLevel),
+          ),
+          const SizedBox(height: 6),
+        ] else
+          const SizedBox(height: 2),
 
         // Summary text
         if (ai.summary.isNotEmpty) ...[
@@ -246,87 +279,220 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
           const SizedBox(height: 6),
         ],
 
-        // Recommended Activities
-        if (ai.moduleDetails.isNotEmpty) ...[
-          Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded,
-                  size: 13, color: AppColors.lavender),
-              const SizedBox(width: 4),
-              Text(
-                'Recommended Activities',
-                style: AppTextStyles.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+        // Recommended Activities — filtered by active games
+        ..._buildFilteredActivitiesSection(ai),
+      ],
+    );
+  }
+
+  /// Builds the "Recommended Activities" widget list, using the filtered
+  /// set from [_filtered]. Shows a fallback message when all games are
+  /// disabled or the filter hasn't loaded yet.
+  List<Widget> _buildFilteredActivitiesSection(AiAssessmentResponse ai) {
+    // While the active-games query is still in flight, show nothing
+    // (the celebration overlay covers the first ~3 seconds anyway).
+    if (_filtered == null) return const [];
+
+    final filtered = _filtered!;
+
+    // Edge case: all recommendations were filtered out.
+    if (filtered.isEmpty) {
+      return [
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.statusWarningBg,
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(height: 4),
-          ...ai.moduleDetails.map((mod) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 17),
-                    Icon(Icons.play_circle_outline_rounded,
-                        size: 12, color: AppColors.mint),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        mod.name,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    StatusPillBadge(
-                      label: 'Level ${mod.startingLevel}',
-                      level: StatusLevel.info,
-                      compact: true,
-                      fontSize: 10,
-                    ),
-                  ],
-                ),
-              )),
-        ] else if (ai.recommendedModules.isNotEmpty) ...[
-          Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded,
-                  size: 13, color: AppColors.lavender),
-              const SizedBox(width: 4),
-              Text(
-                'Recommended Activities',
-                style: AppTextStyles.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+          child: Text(
+            'No activities available right now — please contact your administrator.',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontSize: 11,
+              color: AppColors.statusWarningDark,
+            ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
-          ...ai.recommendedModules.map((name) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 17),
-                    Icon(Icons.play_circle_outline_rounded,
-                        size: 12, color: AppColors.mint),
-                    const SizedBox(width: 4),
-                    Text(
-                      name,
+        ),
+      ];
+    }
+
+    final widgets = <Widget>[];
+
+    // Prefer structured moduleDetails when available.
+    if (filtered.moduleDetails.isNotEmpty) {
+      widgets.addAll([
+        Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded,
+                size: 13, color: AppColors.lavender),
+            const SizedBox(width: 4),
+            Text(
+              'Recommended Activities',
+              style: AppTextStyles.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ...filtered.moduleDetails.map((mod) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  const SizedBox(width: 17),
+                  Icon(Icons.play_circle_outline_rounded,
+                      size: 12, color: AppColors.mint),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      mod.name,
                       style: AppTextStyles.bodySmall.copyWith(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
                     ),
-                  ],
-                ),
-              )),
-        ],
+                  ),
+                  StatusPillBadge(
+                    label: 'Level ${mod.startingLevel}',
+                    level: StatusLevel.info,
+                    compact: true,
+                    fontSize: 10,
+                  ),
+                ],
+              ),
+            )),
+      ]);
+    } else if (filtered.recommendedModules.isNotEmpty) {
+      widgets.addAll([
+        Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded,
+                size: 13, color: AppColors.lavender),
+            const SizedBox(width: 4),
+            Text(
+              'Recommended Activities',
+              style: AppTextStyles.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ...filtered.recommendedModules.map((name) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  const SizedBox(width: 17),
+                  Icon(Icons.play_circle_outline_rounded,
+                      size: 12, color: AppColors.mint),
+                  const SizedBox(width: 4),
+                  Text(
+                    name,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+      ]);
+    }
+
+    return widgets;
+  }
+
+  /// Per-area breakdown (Path B). Renders one row per skill area showing
+  /// the predicted ordinal level (Needs Support / Emerging / Strength)
+  /// and the model's confidence for that area.
+  Widget _buildAreaLevelsSection(AiAssessmentResponse ai) {
+    // Display order matches the developmental profile card.
+    const orderedAreas = <String, String>{
+      'communication': 'Communication',
+      'social': 'Social Interaction',
+      'play': 'Play Skills',
+      'attention': 'Attention',
+    };
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.psychology_rounded, size: 14, color: AppColors.lavender),
+            const SizedBox(width: 6),
+            Text(
+              'Per-Area Levels',
+              style: AppTextStyles.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        for (final entry in orderedAreas.entries)
+          if (ai.areaLevels[entry.key] != null)
+            _buildAreaLevelRow(entry.value, ai.areaLevels[entry.key]!),
       ],
+    );
+  }
+
+  /// Single per-area row: area name + level pill + confidence percent.
+  Widget _buildAreaLevelRow(String areaLabel, AreaLevel area) {
+    final StatusLevel pillLevel;
+    switch (area.levelInt) {
+      case 0:
+        pillLevel = StatusLevel.warning; // Needs Support
+        break;
+      case 1:
+        pillLevel = StatusLevel.info; // Emerging
+        break;
+      case 2:
+        pillLevel = StatusLevel.success; // Strength
+        break;
+      default:
+        pillLevel = StatusLevel.info;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          const SizedBox(width: 20),
+          Expanded(
+            child: Text(
+              areaLabel,
+              style: AppTextStyles.bodySmall.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          StatusPillBadge(
+            label: area.levelName,
+            level: pillLevel,
+            compact: true,
+            fontSize: 10,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            area.confidencePercent,
+            style: AppTextStyles.bodySmall.copyWith(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
