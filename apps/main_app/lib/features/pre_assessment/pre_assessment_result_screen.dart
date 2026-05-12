@@ -670,7 +670,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: AppSpacing.paddingLg,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: AppRadius.card,
