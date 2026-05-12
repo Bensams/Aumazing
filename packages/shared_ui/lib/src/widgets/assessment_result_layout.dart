@@ -106,73 +106,60 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
                     ),
                     const SizedBox(height: 8),
 
-                    // ── Main content: two columns ──────────────────
+                    // ── Main content: two scrollable columns ─────────
                     Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left column
-                          Expanded(
-                            child: Column(
-                              children: [
-                                if (_isAi) ...[
-                                  Expanded(
-                                    flex: 4,
-                                    child: _buildAiInsightsCard(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    flex: 2,
-                                    child: _buildGameScoresCard(),
-                                  ),
-                                ] else ...[
-                                  Expanded(
-                                    flex: 3,
-                                    child: _buildProfileCard(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    flex: 2,
-                                    child: _buildGameScoresCard(),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Right column
-                          Expanded(
-                            child: Column(
-                              children: [
-                                if (_isAi) ...[
-                                  Expanded(
-                                    child: _buildProfileCard(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    child: _buildRecommendationsCard(),
-                                  ),
-                                ] else ...[
-                                  Expanded(
-                                    flex: 3,
-                                    child: _buildRecommendationsCard(),
-                                  ),
-                                ],
-                                const SizedBox(height: 6),
-                                _buildDisclaimer(),
-                                const SizedBox(height: 6),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: AppPrimaryButton(
-                                    label: 'Continue to Home',
-                                    icon: Icons.home_rounded,
-                                    onPressed: widget.onContinue,
-                                  ),
+                      child: SingleChildScrollView(
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Left column
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isAi) ...[
+                                      _buildAiInsightsCard(),
+                                      const SizedBox(height: 8),
+                                      _buildGameScoresCard(),
+                                    ] else ...[
+                                      _buildProfileCard(),
+                                      const SizedBox(height: 8),
+                                      _buildGameScoresCard(),
+                                    ],
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Right column
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isAi) ...[
+                                      _buildProfileCard(),
+                                      const SizedBox(height: 8),
+                                      _buildRecommendationsCard(),
+                                    ] else ...[
+                                      _buildRecommendationsCard(),
+                                    ],
+                                    const SizedBox(height: 6),
+                                    _buildDisclaimer(),
+                                    const SizedBox(height: 6),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: AppPrimaryButton(
+                                        label: 'Continue to Home',
+                                        icon: Icons.home_rounded,
+                                        onPressed: widget.onContinue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ],
@@ -677,6 +664,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
         boxShadow: AppShadows.card,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -693,14 +681,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
             ],
           ),
           const SizedBox(height: 6),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
-              ),
-            ),
-          ),
+          ...children,
         ],
       ),
     );
