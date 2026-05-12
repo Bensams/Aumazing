@@ -1,4 +1,6 @@
 // Barrel export for all shared widgets.
+export 'assessment_result_data.dart';
+export 'assessment_result_layout.dart';
 export 'app_card.dart';
 export 'app_gradient_background.dart';
 export 'app_gradient_card.dart';
