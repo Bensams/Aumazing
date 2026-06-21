@@ -98,10 +98,10 @@ class CategoryBin extends PositionComponent {
       rect,
       color: color,
       cornerRadius: _cornerRadius,
-      alpha: _isHint ? 90 : 60,
+      alpha: 255, // bold, fully-saturated basket color
       showBorder: true,
-      borderColor: _isHint ? const Color(0xFFFFA726) : color.withAlpha(180),
-      borderWidth: 3.0,
+      borderColor: _isHint ? const Color(0xFFFFA726) : const Color(0xFFFFFFFF).withAlpha(200),
+      borderWidth: _isHint ? 4.0 : 3.0,
     );
 
     _emojiPaint.render(
@@ -109,6 +109,15 @@ class CategoryBin extends PositionComponent {
       emoji,
       Vector2(size.x / 2, size.y * 0.40),
       anchor: Anchor.center,
+    );
+
+    // White backing pill so the label stays legible on the bold basket color.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.x * 0.08, size.y * 0.68, size.x * 0.84, size.y * 0.22),
+        Radius.circular(size.y * 0.11),
+      ),
+      Paint()..color = const Color(0xFFFFFFFF).withAlpha(225),
     );
     _labelPaint.render(
       canvas,
