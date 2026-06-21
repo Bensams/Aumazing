@@ -263,6 +263,7 @@ class GameRegistry {
           itemsPerRound: config.itemsPerRound,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          strings: config.strings,
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,

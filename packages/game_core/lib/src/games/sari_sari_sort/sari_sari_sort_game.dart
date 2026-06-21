@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 import 'components/category_bin.dart';
 import 'components/draggable_item.dart';
@@ -48,6 +49,7 @@ class SariSariSortGame extends FlameGame
     this.totalRounds = 3,
     this.itemsPerRound = 3,
     this.gameVersion,
+    this.strings = const AppStrings(GameLanguage.english),
     this.onCorrectDrop,
     // Audio event callbacks (optional, wired by screen wrappers).
     this.onPlayCorrectSfx,
@@ -92,6 +94,21 @@ class SariSariSortGame extends FlameGame
   final int itemsPerRound;
   final String childId;
   final String? gameVersion;
+
+  /// Localized strings (English / Tagalog / Cebuano) for on-screen labels.
+  final AppStrings strings;
+
+  /// The localized basket label for a category, following [strings].
+  String _binLabel(StoreCategory category) {
+    switch (category) {
+      case StoreCategory.food:
+        return strings.binFood;
+      case StoreCategory.drinks:
+        return strings.binDrinks;
+      case StoreCategory.toiletries:
+        return strings.binToiletries;
+    }
+  }
 
   // ── Game state ───────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -171,7 +188,7 @@ class SariSariSortGame extends FlameGame
       final x = gap + i * (binW + gap);
       final bin = CategoryBin(
         category: cat,
-        label: cat.label,
+        label: _binLabel(cat),
         emoji: cat.emoji,
         color: cat.color,
         position: Vector2(x, binY),
