@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 import '../core/services/local_db_service.dart';
 import '../model/child_profile.dart';
@@ -11,6 +13,11 @@ class ChildProvider extends ChangeNotifier {
 
   ChildProfile? _profile;
   bool _isLoading = false;
+
+  /// Parent's manual background-theme override. When null, the theme is
+  /// derived from the child's sex. Persisted locally (no DB migration).
+  GameTheme? _themeOverride;
+  static const _themeOverrideKeyPrefix = 'theme_override_';
 
   ChildProvider({
     LocalDbService? localDb,
@@ -34,6 +41,22 @@ class ChildProvider extends ChangeNotifier {
   // Reward preference shortcuts
   RewardPreference get rewardPreference => _profile?.rewardPreference ?? RewardPreference.bubbles;
   bool get useRandomReward => _profile?.useRandomReward ?? false;
+
+  // ── Background theme ──────────────────────────────────────────────────
+
+  /// The parent's manual theme override, or null if following the child's sex.
+  GameTheme? get themeOverride => _themeOverride;
+
+  /// Whether the active theme comes from a manual override (vs. auto-from-sex).
+  bool get isThemeOverridden => _themeOverride != null;
+
+  /// The active background theme: manual override if set, else derived from
+  /// the child's sex (defaults to neutral).
+  GameTheme get activeTheme =>
+      _themeOverride ?? GameTheme.fromSexValue(_profile?.sex?.value);
+
+  /// The full color palette for the [activeTheme] (game + dashboard).
+  GamePalette get activePalette => GamePalettes.of(activeTheme);
 
   /// Returns the sensory settings as a map for use in scoring/assessment.
   Map<String, dynamic> get sensorySettingsMap =>
@@ -61,6 +84,7 @@ class ChildProvider extends ChangeNotifier {
 
       final children = await _localDb.getChildren(userId: userId);
       _profile = children.isEmpty ? null : children.first;
+      await _loadThemeOverride();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
@@ -129,8 +153,43 @@ class ChildProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets a manual background-theme override and persists it locally.
+  Future<void> setThemeOverride(GameTheme theme) async {
+    _themeOverride = theme;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_themeOverrideKeyPrefix$id', theme.slug);
+    }
+  }
+
+  /// Clears the manual override so the theme follows the child's sex again.
+  Future<void> clearThemeOverride() async {
+    _themeOverride = null;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_themeOverrideKeyPrefix$id');
+    }
+  }
+
+  /// Loads any persisted theme override for the current child.
+  Future<void> _loadThemeOverride() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _themeOverride = null;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final slug = prefs.getString('$_themeOverrideKeyPrefix$id');
+    _themeOverride = slug == null ? null : GameTheme.fromSlug(slug);
+  }
+
   void clear() {
     _profile = null;
+    _themeOverride = null;
     notifyListeners();
   }
 }

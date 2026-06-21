@@ -255,7 +255,11 @@ class _CopyMeScreenState extends State<CopyMeScreen>
               });
             },
             child: Container(
-              decoration: const BoxDecoration(gradient: AppGradients.copyMe),
+              decoration: BoxDecoration(
+                  gradient: context
+                      .watch<ChildProvider>()
+                      .activePalette
+                      .gameBackground),
               child: GameWidget(game: _game),
             ),
           ),

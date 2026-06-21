@@ -224,8 +224,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
               });
             },
             child: Container(
-              decoration: const BoxDecoration(
-                gradient: AppGradients.myTurnYourTurn,
+              decoration: BoxDecoration(
+                gradient:
+                    context.watch<ChildProvider>().activePalette.gameBackground,
               ),
               child: GameWidget(game: _game),
             ),
