@@ -16,6 +16,8 @@ class ThemeLabScreen extends StatefulWidget {
 
 class _ThemeLabScreenState extends State<ThemeLabScreen> {
   final AppThemeController _controller = AppThemeController(GameTheme.neutral);
+  final AppLanguageController _lang =
+      AppLanguageController(GameLanguage.english);
 
   /// Simulated child sex, to demonstrate the auto-from-sex default.
   String _simulatedSex = 'prefer_not_to_say';
@@ -23,6 +25,7 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _lang.dispose();
     super.dispose();
   }
 
@@ -30,40 +33,44 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
   Widget build(BuildContext context) {
     return AppThemeScope(
       controller: _controller,
-      child: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) {
-          final palette = _controller.palette;
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('Theme Lab'),
-              backgroundColor: palette.primary,
-              foregroundColor: palette.onPrimary,
-            ),
-            body: Container(
-              decoration: BoxDecoration(gradient: palette.parentBackground),
-              child: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildControls(palette),
-                      const SizedBox(height: 24),
-                      _sectionLabel('Child game background', palette),
-                      const SizedBox(height: 8),
-                      _buildGamePreview(palette),
-                      const SizedBox(height: 24),
-                      _sectionLabel('Parent dashboard', palette),
-                      const SizedBox(height: 8),
-                      _buildDashboardPreview(palette),
-                    ],
+      child: AppLanguageScope(
+        controller: _lang,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([_controller, _lang]),
+          builder: (context, _) {
+            final palette = _controller.palette;
+            final strings = _lang.strings;
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Theme & Language Lab'),
+                backgroundColor: palette.primary,
+                foregroundColor: palette.onPrimary,
+              ),
+              body: Container(
+                decoration: BoxDecoration(gradient: palette.parentBackground),
+                child: SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildControls(palette),
+                        const SizedBox(height: 24),
+                        _sectionLabel('Child game background', palette),
+                        const SizedBox(height: 8),
+                        _buildGamePreview(palette, strings),
+                        const SizedBox(height: 24),
+                        _sectionLabel('Parent dashboard', palette),
+                        const SizedBox(height: 8),
+                        _buildDashboardPreview(palette),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -140,6 +147,26 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
                 fontWeight: FontWeight.w700,
               ),
             ),
+            const Divider(height: 28),
+            const Text('Language',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: GameLanguage.values.map((l) {
+                final selected = _lang.language == l;
+                return ChoiceChip(
+                  label: Text(l.label),
+                  selected: selected,
+                  selectedColor: palette.primary,
+                  labelStyle: TextStyle(
+                    color: selected ? palette.onPrimary : AppColors.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (_) => _lang.setLanguage(l),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
@@ -159,7 +186,7 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
     );
   }
 
-  Widget _buildGamePreview(GamePalette palette) {
+  Widget _buildGamePreview(GamePalette palette, AppStrings strings) {
     // A mini sari-sari-style scene to show the game background + accents.
     final items = <(String, Color)>[
       ('🍌', const Color(0xFFF5D547)),
@@ -186,7 +213,7 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Ilagay sa tamang basket!',
+                strings.sortInstruction,
                 style: TextStyle(
                   color: palette.onPrimary,
                   fontWeight: FontWeight.w700,
@@ -206,9 +233,9 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _binChip('Pagkain', palette.accent),
-              _binChip('Inumin', palette.primary),
-              _binChip('Gamit', palette.accent),
+              _binChip(strings.binFood, palette.accent),
+              _binChip(strings.binDrinks, palette.primary),
+              _binChip(strings.binToiletries, palette.accent),
             ],
           ),
         ],

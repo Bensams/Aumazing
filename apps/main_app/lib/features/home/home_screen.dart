@@ -1257,6 +1257,45 @@ class SettingsModal extends StatelessWidget {
                 },
               ),
 
+              // Language Section
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              Consumer<ChildProvider>(
+                builder: (context, childProv, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        childProv.strings.languageLabel,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: 8,
+                        children: GameLanguage.values.map((lang) {
+                          final selected = childProv.language == lang;
+                          return ChoiceChip(
+                            label: Text(lang.label),
+                            selected: selected,
+                            selectedColor: AppColors.primaryPurple,
+                            labelStyle: AppTextStyles.bodySmall.copyWith(
+                              color: selected
+                                  ? AppColors.white
+                                  : AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            onSelected: (_) => childProv.setLanguage(lang),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  );
+                },
+              ),
+
               if (isGuest) ...[
                 const SizedBox(height: AppSpacing.md),
                 const Divider(height: 1),
