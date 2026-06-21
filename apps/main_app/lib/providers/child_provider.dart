@@ -19,6 +19,11 @@ class ChildProvider extends ChangeNotifier {
   GameTheme? _themeOverride;
   static const _themeOverrideKeyPrefix = 'theme_override_';
 
+  /// Selected app/game language (English / Tagalog / Cebuano). Persisted
+  /// locally; defaults to English.
+  GameLanguage _language = GameLanguage.english;
+  static const _languageKeyPrefix = 'language_';
+
   ChildProvider({
     LocalDbService? localDb,
     AuthService? authService,
@@ -58,6 +63,14 @@ class ChildProvider extends ChangeNotifier {
   /// The full color palette for the [activeTheme] (game + dashboard).
   GamePalette get activePalette => GamePalettes.of(activeTheme);
 
+  // ── Language ──────────────────────────────────────────────────────────
+
+  /// The active app/game language (defaults to English).
+  GameLanguage get language => _language;
+
+  /// Localized strings for the active language.
+  AppStrings get strings => AppStrings(_language);
+
   /// Returns the sensory settings as a map for use in scoring/assessment.
   Map<String, dynamic> get sensorySettingsMap =>
       _profile?.sensorySettingsMap ??
@@ -85,6 +98,7 @@ class ChildProvider extends ChangeNotifier {
       final children = await _localDb.getChildren(userId: userId);
       _profile = children.isEmpty ? null : children.first;
       await _loadThemeOverride();
+      await _loadLanguage();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
@@ -187,9 +201,33 @@ class ChildProvider extends ChangeNotifier {
     _themeOverride = slug == null ? null : GameTheme.fromSlug(slug);
   }
 
+  /// Sets the app/game language and persists it locally.
+  Future<void> setLanguage(GameLanguage language) async {
+    _language = language;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_languageKeyPrefix$id', language.slug);
+    }
+  }
+
+  /// Loads the persisted language for the current child (defaults to English).
+  Future<void> _loadLanguage() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _language = GameLanguage.english;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final slug = prefs.getString('$_languageKeyPrefix$id');
+    _language = GameLanguage.fromSlug(slug);
+  }
+
   void clear() {
     _profile = null;
     _themeOverride = null;
+    _language = GameLanguage.english;
     notifyListeners();
   }
 }
