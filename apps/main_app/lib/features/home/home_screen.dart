@@ -188,8 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppGradients.parentLavenderMint,
+        decoration: BoxDecoration(
+          gradient:
+              context.watch<ChildProvider>().activePalette.parentBackground,
         ),
         child: Row(
           children: [
@@ -1201,6 +1202,61 @@ class SettingsModal extends StatelessWidget {
                 },
               ),
 
+              // Background Theme Section
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Background Theme',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Some children are sensitive to colors. Pick a calmer theme '
+                'if the current one is overstimulating.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Consumer<ChildProvider>(
+                builder: (context, childProv, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          for (final theme in GameTheme.values)
+                            Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: _buildThemeOption(theme, childProv),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (childProv.isThemeOverridden)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () => childProv.clearThemeOverride(),
+                            icon: const Icon(Icons.restart_alt_rounded,
+                                size: 16),
+                            label: const Text('Auto from gender'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+
               if (isGuest) ...[
                 const SizedBox(height: AppSpacing.md),
                 const Divider(height: 1),
@@ -1230,6 +1286,56 @@ class SettingsModal extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// A tappable swatch for one background theme, showing its dashboard
+  /// gradient and primary color. Highlights when it is the active theme.
+  Widget _buildThemeOption(GameTheme theme, ChildProvider childProv) {
+    final palette = GamePalettes.of(theme);
+    final selected = childProv.activeTheme == theme;
+    return GestureDetector(
+      onTap: () => childProv.setThemeOverride(theme),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? palette.primary : AppColors.border,
+            width: selected ? 2.5 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: palette.parentBackground,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: palette.primary.withAlpha(60)),
+              ),
+              alignment: Alignment.center,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: palette.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              theme.label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: selected ? palette.primary : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
