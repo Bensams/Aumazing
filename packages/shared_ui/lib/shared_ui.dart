@@ -7,6 +7,9 @@ library shared_ui;
 // Theme / design tokens
 export 'src/theme/theme.dart';
 
+// Localization (curated EN / TL / CEB strings)
+export 'src/i18n/app_strings.dart';
+
 // Reusable widgets
 export 'src/widgets/widgets.dart';
 
