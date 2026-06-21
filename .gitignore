@@ -52,3 +52,8 @@ ai_assessment/__pycache__/
 ai_assessment/app/__pycache__/
 ai_assessment/training/__pycache__/
 ai_assessment/.venv/
+
+# Credentials / service-account keys — never commit
+docs/aumazing-*.json
+*-service-account*.json
+**/service-account*.json
