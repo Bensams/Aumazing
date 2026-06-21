@@ -1,3 +1,4 @@
+import 'package:shared_ui/shared_ui.dart';
 
 /// Shared game configuration used by all Aumazing mini-games.
 ///
@@ -27,6 +28,9 @@ class GameConfig {
   /// Optional game version string (for analytics).
   final String? gameVersion;
 
+  /// Selected in-game language for on-screen labels (en / tl / ceb).
+  final GameLanguage language;
+
   const GameConfig({
     this.difficulty = 1,
     this.promptRepetition = 1,
@@ -35,7 +39,11 @@ class GameConfig {
     this.sfxVolume = 0.7,
     this.childId = 'anonymous',
     this.gameVersion,
+    this.language = GameLanguage.english,
   });
+
+  /// Localized strings for the configured [language].
+  AppStrings get strings => AppStrings(language);
 
   /// Default config suitable for first-time players.
   static const GameConfig defaults = GameConfig();
@@ -48,6 +56,7 @@ class GameConfig {
     double? sfxVolume,
     String? childId,
     String? gameVersion,
+    GameLanguage? language,
   }) {
     return GameConfig(
       difficulty: difficulty ?? this.difficulty,
@@ -57,6 +66,7 @@ class GameConfig {
       sfxVolume: sfxVolume ?? this.sfxVolume,
       childId: childId ?? this.childId,
       gameVersion: gameVersion ?? this.gameVersion,
+      language: language ?? this.language,
     );
   }
 
