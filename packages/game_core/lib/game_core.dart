@@ -23,6 +23,11 @@ export 'src/games/do_what_i_say/components/instruction_shape.dart';
 export 'src/games/my_turn_your_turn/my_turn_your_turn_game.dart';
 export 'src/games/my_turn_your_turn/components/turn_slot.dart';
 
+// Games — Sari-Sari Store Sorting
+export 'src/games/sari_sari_sort/sari_sari_sort_game.dart';
+export 'src/games/sari_sari_sort/components/draggable_item.dart';
+export 'src/games/sari_sari_sort/components/category_bin.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
