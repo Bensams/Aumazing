@@ -183,15 +183,15 @@ class DraggableItem extends PositionComponent with DragCallbacks {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
     final borderColor =
-        _showError ? const Color(0xFFE88888) : color.withAlpha(160);
+        _showError ? const Color(0xFFE88888) : const Color(0xFFFFFFFF).withAlpha(180);
 
     ShapePainter3D.drawCard3D(
       canvas,
       rect,
       color: color,
       cornerRadius: _cornerRadius,
-      alpha: _dragging ? 70 : 50,
-      showBorder: _dragging || _showError,
+      alpha: 255, // bold, fully-saturated natural color
+      showBorder: true,
       borderColor: borderColor,
       borderWidth: 3.0,
     );
@@ -201,6 +201,15 @@ class DraggableItem extends PositionComponent with DragCallbacks {
       data.emoji,
       Vector2(size.x / 2, size.y * 0.40),
       anchor: Anchor.center,
+    );
+
+    // White backing pill so the label stays legible on any item color.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.x * 0.08, size.y * 0.68, size.x * 0.84, size.y * 0.24),
+        Radius.circular(size.y * 0.12),
+      ),
+      Paint()..color = const Color(0xFFFFFFFF).withAlpha(220),
     );
     _labelPaint.render(
       canvas,
