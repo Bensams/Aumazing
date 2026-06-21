@@ -263,7 +263,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
                   gradient: context
                       .watch<ChildProvider>()
                       .activePalette
-                      .gameBackground),
+                      .gameBackgroundFor('match_it')),
               child: GameWidget(game: _game),
             ),
           ),

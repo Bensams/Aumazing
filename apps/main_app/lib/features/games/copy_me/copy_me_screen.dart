@@ -259,7 +259,7 @@ class _CopyMeScreenState extends State<CopyMeScreen>
                   gradient: context
                       .watch<ChildProvider>()
                       .activePalette
-                      .gameBackground),
+                      .gameBackgroundFor('copy_me')),
               child: GameWidget(game: _game),
             ),
           ),
