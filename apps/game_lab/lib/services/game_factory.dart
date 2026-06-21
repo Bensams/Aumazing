@@ -305,6 +305,46 @@ class GameLabGameFactory {
           },
         );
 
+      case 'sari_sari_sort':
+        return SariSariSortGame(
+          totalRounds: config.totalRounds,
+          itemsPerRound: config.itemsPerRound,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
+          onStepChanged: onStepChanged,
+          onCorrectDrop: wrappedOnCorrectMatch,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+          // SFX callbacks
+          onPlayCorrectSfx: playCorrectSfx,
+          onPlayWrongSfx: playWrongSfx,
+          onPlayDragSfx: playDragSfx,
+          onPlayDropSfx: playDropSfx,
+          onPlayLevelCompleteSfx: playLevelCompleteSfx,
+          onPlayGameCompleteSfx: playGameCompleteSfx,
+          // VO callbacks
+          onPlayCorrectVo: playCorrectVo,
+          onPlayWrongVo: playWrongVo,
+          onPlayTransitionVo: playTransitionVo,
+          onPlayCelebrationVo: playCelebrationVo,
+          onPlayInstructionVo: () {
+            vo.play(VoiceOverCue.matchIt);
+            services.lastPlayedVo = 'matchIt';
+          },
+        );
+
       default:
         // Fallback: use registry without audio callbacks
         final entry = GameRegistry.find(gameId);
