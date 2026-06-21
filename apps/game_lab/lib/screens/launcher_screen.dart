@@ -345,6 +345,39 @@ class _LauncherScreenState extends State<LauncherScreen> {
               ),
             ),
 
+            const SizedBox(height: AppSpacing.sm),
+
+            // Language
+            Row(
+              children: [
+                const Icon(Icons.translate_rounded,
+                    color: AppColors.primaryPurple, size: 18),
+                const SizedBox(width: 6),
+                Text('Language',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.primaryPurple)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: 6,
+              children: GameLanguage.values.map((l) {
+                final selected = _config.language == l;
+                return ChoiceChip(
+                  label: Text(l.label),
+                  selected: selected,
+                  selectedColor: AppColors.primaryPurple,
+                  labelStyle: AppTextStyles.labelSmall.copyWith(
+                    color: selected ? Colors.white : AppColors.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (_) => setState(
+                    () => _config = _config.copyWith(language: l),
+                  ),
+                );
+              }).toList(),
+            ),
+
             const Divider(height: 32),
 
             // ── Audio Section ──────────────────────────────────────

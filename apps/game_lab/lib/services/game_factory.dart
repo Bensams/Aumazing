@@ -311,6 +311,7 @@ class GameLabGameFactory {
           itemsPerRound: config.itemsPerRound,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          strings: config.strings,
           onStepChanged: onStepChanged,
           onCorrectDrop: wrappedOnCorrectMatch,
           onGameComplete: ({
