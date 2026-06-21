@@ -276,7 +276,7 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
                   gradient: context
                       .watch<ChildProvider>()
                       .activePalette
-                      .gameBackground),
+                      .gameBackgroundFor('do_what_i_say')),
               child: GameWidget(game: _game),
             ),
           ),

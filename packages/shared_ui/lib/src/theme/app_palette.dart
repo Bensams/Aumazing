@@ -53,6 +53,7 @@ class GamePalette {
     required this.onPrimary,
     required this.gameBackground,
     required this.parentBackground,
+    this.backgroundTones = const [],
   });
 
   final GameTheme theme;
@@ -74,6 +75,40 @@ class GamePalette {
 
   /// Full-bleed gradient behind parent dashboard screens.
   final LinearGradient parentBackground;
+
+  /// Soft shades within this theme's color family. Used by
+  /// [gameBackgroundFor] to give each game a distinct-but-on-theme background.
+  final List<Color> backgroundTones;
+
+  /// A per-game background gradient that stays within the theme's family.
+  ///
+  /// Each [gameId] deterministically maps to a different pair of
+  /// [backgroundTones] (with a calm off-white centre), so games look varied
+  /// without leaving the selected theme. Falls back to [gameBackground] when
+  /// no tones are defined.
+  LinearGradient gameBackgroundFor(String gameId) {
+    final n = backgroundTones.length;
+    if (n < 2) return gameBackground;
+    // Two independent hashes give a well-spread (a, b) tone pair per game.
+    final a = _hash(gameId, 1000003) % n;
+    final raw = _hash(gameId, 137) % (n - 1);
+    final b = raw < a ? raw : raw + 1; // maps around a → guarantees b != a
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [backgroundTones[a], const Color(0xFFFAF9F6), backgroundTones[b]],
+    );
+  }
+
+  /// Platform-stable string hash (Dart's String.hashCode is not guaranteed
+  /// stable across runs), so a game always gets the same background.
+  static int _hash(String s, int mult) {
+    var h = 0;
+    for (final c in s.codeUnits) {
+      h = (h * mult + c) & 0x7fffffff;
+    }
+    return h;
+  }
 }
 
 /// Catalogue of the three built-in palettes.
@@ -95,6 +130,13 @@ abstract final class GamePalettes {
       end: Alignment.bottomRight,
       colors: [Color(0xFFE3F0F7), Color(0xFFFAF9F6), Color(0xFFE4F2EC)],
     ),
+    backgroundTones: [
+      Color(0xFFD9EAF3), // sky
+      Color(0xFFDDEFE6), // sage
+      Color(0xFFE4EFF5), // pale blue
+      Color(0xFFE8F2EC), // pale mint
+      Color(0xFFD6E8EE), // teal mist
+    ],
   );
 
   // ── Girl — natural rose & peach (calm, ASD-friendly) ─────────────────
@@ -114,6 +156,13 @@ abstract final class GamePalettes {
       end: Alignment.bottomRight,
       colors: [Color(0xFFF8E6EC), Color(0xFFFAF9F6), Color(0xFFFBEDE4)],
     ),
+    backgroundTones: [
+      Color(0xFFF7E1E8), // rose
+      Color(0xFFFBE8DD), // peach
+      Color(0xFFF9E6EE), // pink
+      Color(0xFFFBEDE4), // cream peach
+      Color(0xFFF6E4E0), // blush
+    ],
   );
 
   // ── Neutral — the existing lavender & mint pastel ────────────────────
@@ -125,6 +174,13 @@ abstract final class GamePalettes {
     onPrimary: Color(0xFFFFFFFF),
     gameBackground: AppGradients.matchIt,
     parentBackground: AppGradients.parentLavenderMint,
+    backgroundTones: [
+      AppColors.lavenderLight, // lavender
+      AppColors.mintLight, // mint
+      AppColors.skyLight, // sky
+      AppColors.butterLight, // butter
+      AppColors.peachLight, // peach
+    ],
   );
 
   /// Returns the palette for [theme].
