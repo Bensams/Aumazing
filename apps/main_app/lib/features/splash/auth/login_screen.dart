@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +31,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   bool _musicOn = true;
   bool _hasExistingGuestAccount = false;
+
+  /// Whether the parent has accepted the Data Privacy Notice (register only).
+  bool _privacyAccepted = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -228,6 +232,17 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Registration requires explicit Data Privacy consent.
+    if (!_isLogin && !_privacyAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Please accept the Data Privacy Notice to continue.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -242,6 +257,13 @@ class _LoginScreenState extends State<LoginScreen>
           email: _emailController.text.trim(),
           password: _passwordController.text,
           displayName: _nameController.text.trim(),
+        );
+
+        // Record proof-of-consent (Data Privacy Act of 2012).
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          'privacy_consent_accepted_at',
+          DateTime.now().toIso8601String(),
         );
 
         if (response.session == null) {
@@ -552,13 +574,18 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               )
-                            else
+                            else ...[
                               const SizedBox(height: AppSpacing.sm),
+                              _buildPrivacyConsent(),
+                            ],
 
                             // ── Submit button ──────────────────────
                             AppPrimaryButton(
                               label: _isLogin ? 'Log In' : 'Sign Up',
-                              onPressed: _isLoading ? null : _submitForm,
+                              onPressed: (_isLoading ||
+                                      (!_isLogin && !_privacyAccepted))
+                                  ? null
+                                  : _submitForm,
                               isLoading: _isLoading,
                             ),
 
@@ -724,6 +751,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       : () {
                                           setState(() {
                                             _isLogin = !_isLogin;
+                                            _privacyAccepted = false;
                                             _formKey.currentState?.reset();
                                           });
                                         },
@@ -759,6 +787,213 @@ class _LoginScreenState extends State<LoginScreen>
               child: Icon(
                 _musicOn ? Icons.music_note : Icons.music_off,
                 color: AppColors.primaryPurple,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Consent row shown only in register mode: a required checkbox plus a
+  /// tappable link to the full Data Privacy Notice.
+  Widget _buildPrivacyConsent() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: Checkbox(
+              value: _privacyAccepted,
+              activeColor: AppColors.primaryPurple,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: _isLoading
+                  ? null
+                  : (v) => setState(() => _privacyAccepted = v ?? false),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text.rich(
+                TextSpan(
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                  children: [
+                    const TextSpan(text: 'I have read and agree to the '),
+                    TextSpan(
+                      text: 'Data Privacy Notice',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.primaryPurple,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = _showPrivacyNotice,
+                    ),
+                    const TextSpan(
+                      text: ', and consent to the collection and processing '
+                          'of my and my child\'s information.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Full Data Privacy Notice dialog (Data Privacy Act of 2012, RA 10173).
+  void _showPrivacyNotice() {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
+          title: Row(
+            children: [
+              const Icon(Icons.privacy_tip_outlined,
+                  color: AppColors.primaryPurple),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Data Privacy Notice',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Aumazing respects your privacy and complies with the '
+                    'Data Privacy Act of 2012 (RA 10173). By creating an '
+                    'account, you consent to our collection and processing of '
+                    'the following information:',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _privacySection(
+                    'What we collect',
+                    [
+                      'Parent account: your name and email address, for sign-in '
+                          'and account recovery.',
+                      'Child profile: nickname, birth date or age, sex, and '
+                          'chosen avatar.',
+                      'Gameplay data: in-game performance such as response time, '
+                          'accuracy, errors, and progress, used to personalize '
+                          'learning recommendations.',
+                      'Comfort settings: music, sound, vibration, animation, and '
+                          'background-theme preferences.',
+                      'Device location: used only momentarily to find nearby '
+                          'therapy centers (Premium) and never stored.',
+                    ],
+                  ),
+                  _privacySection(
+                    'How we use it',
+                    [
+                      'To deliver assessments, personalize learning modules, '
+                          'track your child\'s progress, and improve the app.',
+                      'Aumazing is a learning-support tool only. It does not '
+                          'provide a medical diagnosis.',
+                    ],
+                  ),
+                  _privacySection(
+                    'Where it is stored',
+                    [
+                      'Data is saved on your device and securely synced to our '
+                          'cloud provider (Supabase) when you are online.',
+                    ],
+                  ),
+                  _privacySection(
+                    'Your rights',
+                    [
+                      'You may access, correct, or request deletion of your data, '
+                          'and withdraw consent at any time, through the app '
+                          'settings or by contacting the Aumazing team.',
+                      'Children\'s data is collected with your consent and used '
+                          'solely to support your child\'s learning.',
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Close',
+                style: AppTextStyles.labelLarge
+                    .copyWith(color: AppColors.mutedForeground),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() => _privacyAccepted = true);
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'I Agree',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.primaryPurple,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _privacySection(String heading, List<String> points) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: AppTextStyles.labelLarge.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ...points.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('•  ',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.primaryPurple)),
+                  Expanded(
+                    child: Text(
+                      p,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
