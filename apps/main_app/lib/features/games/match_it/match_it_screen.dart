@@ -259,7 +259,11 @@ class _MatchItScreenState extends State<MatchItScreen> {
               });
             },
             child: Container(
-              decoration: const BoxDecoration(gradient: AppGradients.matchIt),
+              decoration: BoxDecoration(
+                  gradient: context
+                      .watch<ChildProvider>()
+                      .activePalette
+                      .gameBackground),
               child: GameWidget(game: _game),
             ),
           ),

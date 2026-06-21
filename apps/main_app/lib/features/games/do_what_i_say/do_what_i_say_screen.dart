@@ -272,7 +272,11 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
               });
             },
             child: Container(
-              decoration: const BoxDecoration(gradient: AppGradients.doWhatISay),
+              decoration: BoxDecoration(
+                  gradient: context
+                      .watch<ChildProvider>()
+                      .activePalette
+                      .gameBackground),
               child: GameWidget(game: _game),
             ),
           ),
