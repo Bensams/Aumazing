@@ -25,10 +25,15 @@ class MatchItScreen extends StatefulWidget {
     this.assessmentContext = 'practice',
     this.onComplete,
     this.sensoryController,
+    this.difficulty,
   });
 
   /// 'pre_assessment', 'post_assessment', or 'practice'
   final String assessmentContext;
+
+  /// Optional difficulty (1–3) derived from the child's level. When null,
+  /// the default round count is used (preserves assessment behaviour).
+  final int? difficulty;
   final void Function(
     int score,
     int totalItems,
@@ -43,8 +48,20 @@ class MatchItScreen extends StatefulWidget {
   State<MatchItScreen> createState() => _MatchItScreenState();
 }
 
+/// Maps a difficulty (1–3) to a round count; null keeps the default of 5.
+int _roundsForDifficulty(int? difficulty) {
+  switch (difficulty) {
+    case 1:
+      return 3;
+    case 3:
+      return 7;
+    default:
+      return 5;
+  }
+}
+
 class _MatchItScreenState extends State<MatchItScreen> {
-  static const _totalRounds = 5;
+  late final int _totalRounds = _roundsForDifficulty(widget.difficulty);
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
@@ -188,51 +205,27 @@ class _MatchItScreenState extends State<MatchItScreen> {
   }
 
   void _showCompletionDialog(int score, int totalItems, int errorCount) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('🎉', style: TextStyle(fontSize: 48)),
-                const SizedBox(height: 12),
-                Text(
-                  'Great Job!',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: const Color(0xFF9B82C4),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'You matched $score out of $totalItems shapes!',
-                  textAlign: TextAlign.center,
-                ),
-                if (errorCount == 0)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Perfect — no mistakes! ⭐',
-                      style: TextStyle(color: Color(0xFFB8E8D4)),
-                    ),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Return to previous screen
-                },
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
+    showGameCompletionDialog(
+      context,
+      // Retry/Next only for non-assessment (learning-path / practice) modules.
+      showRetryNext: widget.assessmentContext == 'practice',
+      title: 'Great Job!',
+      message: 'You matched $score out of $totalItems shapes!'
+          '${errorCount == 0 ? '\nPerfect — no mistakes! ⭐' : ''}',
+      onRetry: _retryGame,
+      onNext: () => Navigator.of(context).pop(), // back to learning path
+    );
+  }
+
+  /// Replays the current game from the start (learning-path Retry).
+  void _retryGame() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MatchItScreen(
+          assessmentContext: widget.assessmentContext,
+          sensoryController: widget.sensoryController,
+        ),
+      ),
     );
   }
 

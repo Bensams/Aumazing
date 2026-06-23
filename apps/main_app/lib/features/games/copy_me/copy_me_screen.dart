@@ -21,6 +21,7 @@ class CopyMeScreen extends StatefulWidget {
     this.assessmentContext = 'pre_assessment',
     this.onComplete,
     this.sensoryController,
+    this.difficulty,
   });
 
   final String assessmentContext;
@@ -35,13 +36,27 @@ class CopyMeScreen extends StatefulWidget {
   /// Optional sensory controller for per-round music/haptic during pre-assessment.
   final SensoryRoundController? sensoryController;
 
+  /// Optional difficulty (1–3) from the child's level; null keeps the default.
+  final int? difficulty;
+
   @override
   State<CopyMeScreen> createState() => _CopyMeScreenState();
 }
 
+int _roundsForDifficulty(int? difficulty) {
+  switch (difficulty) {
+    case 1:
+      return 3;
+    case 3:
+      return 7;
+    default:
+      return 5;
+  }
+}
+
 class _CopyMeScreenState extends State<CopyMeScreen>
     with SingleTickerProviderStateMixin {
-  static const _totalRounds = 5;
+  late final int _totalRounds = _roundsForDifficulty(widget.difficulty);
   int _currentStep = 0;
   bool _gameComplete = false;
   bool _isDemoPhase = true;
@@ -218,8 +233,30 @@ class _CopyMeScreenState extends State<CopyMeScreen>
           profile: childProvider.profile!,
           onComplete: () {
             Navigator.of(dialogContext).pop(); // Close reward overlay
-            Navigator.of(dialogContext).pop(); // Return to previous screen
+            _showGameCompletion();
           },
+        ),
+      ),
+    );
+  }
+
+  /// Practice/learning-path completion: offer Retry + Next.
+  void _showGameCompletion() {
+    showGameCompletionDialog(
+      context,
+      showRetryNext: widget.assessmentContext == 'practice',
+      title: 'Great Job!',
+      onRetry: _retryGame,
+      onNext: () => Navigator.of(context).pop(),
+    );
+  }
+
+  void _retryGame() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CopyMeScreen(
+          assessmentContext: widget.assessmentContext,
+          sensoryController: widget.sensoryController,
         ),
       ),
     );
