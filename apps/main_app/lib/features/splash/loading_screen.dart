@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/auth_service.dart';
@@ -193,13 +194,26 @@ class _LoadingScreenState extends State<LoadingScreen> {
     final result = await _bootstrapService.bootstrap();
     if (!mounted) return;
 
-    final destination = switch (result.destination) {
-      BootstrapDestination.login => const LoginScreen(),
-      BootstrapDestination.childProfileSetup => ChildProfileSetupScreen(
-        initialErrorMessage: result.errorMessage,
-      ),
-      BootstrapDestination.home => const HomeScreen(),
-    };
+    // First open / fresh install: until the Data Privacy Notice is accepted,
+    // always land on the login page (which shows the mandatory notice) so the
+    // parent cannot skip straight to child profile setup or home.
+    final prefs = await SharedPreferences.getInstance();
+    final hasConsent =
+        prefs.getString('privacy_consent_accepted_at') != null;
+    if (!mounted) return;
+
+    final Widget destination;
+    if (!hasConsent) {
+      destination = const LoginScreen();
+    } else {
+      destination = switch (result.destination) {
+        BootstrapDestination.login => const LoginScreen(),
+        BootstrapDestination.childProfileSetup => ChildProfileSetupScreen(
+            initialErrorMessage: result.errorMessage,
+          ),
+        BootstrapDestination.home => const HomeScreen(),
+      };
+    }
 
     // Use fade transition to avoid audio/video interruptions
     Navigator.of(context).pushReplacement(
