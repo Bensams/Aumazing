@@ -303,7 +303,25 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  /// Ensures the Data Privacy Notice has been accepted before continuing.
+  /// If not yet accepted, shows the notice; returns whether it is now accepted.
+  Future<bool> _ensurePrivacyConsent() async {
+    if (_privacyAccepted) return true;
+    await _showPrivacyNotice();
+    if (_privacyAccepted) {
+      // Record proof-of-consent (Data Privacy Act of 2012).
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'privacy_consent_accepted_at',
+        DateTime.now().toIso8601String(),
+      );
+    }
+    return _privacyAccepted;
+  }
+
   Future<void> _handleGoogleSignIn() async {
+    // Require Data Privacy consent before social sign-in.
+    if (!await _ensurePrivacyConsent()) return;
     setState(() => _isLoading = true);
 
     try {
@@ -322,6 +340,8 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleFacebookSignIn() async {
+    // Require Data Privacy consent before social sign-in.
+    if (!await _ensurePrivacyConsent()) return;
     setState(() => _isLoading = true);
 
     try {
@@ -851,8 +871,8 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   /// Full Data Privacy Notice dialog (Data Privacy Act of 2012, RA 10173).
-  void _showPrivacyNotice() {
-    showDialog<void>(
+  Future<void> _showPrivacyNotice() {
+    return showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
