@@ -92,10 +92,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       _showError('Birth date cannot be in the future.');
       return;
     }
-    if (validation != ChildBirthDateValidation.valid) {
-      _showError('Aumazing currently supports children ages 2 to 6.');
-      return;
-    }
+    // Ages outside 2–6 are allowed at initialization (no age-range limit).
 
     setState(() => _isLoading = true);
 
@@ -142,7 +139,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     final today = DateTime.now();
     final initialDate =
         _selectedBirthDate ?? DateTime(today.year - 4, today.month, today.day);
-    final firstDate = DateTime(today.year - 10, today.month, today.day);
+    final firstDate = DateTime(today.year - 18, today.month, today.day);
     if (!mounted) return;
     final pickedDate = await showDatePicker(
       context: currentContext,
@@ -321,10 +318,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       _showError('Birth date cannot be in the future.');
       return;
     }
-    if (validation != ChildBirthDateValidation.valid) {
-      _showError('Aumazing currently supports children ages 2 to 6.');
-      return;
-    }
+    // Ages outside 2–6 are allowed at initialization (no age-range limit).
 
     setState(() => _currentStep = 1);
   }
@@ -538,12 +532,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     final helperText =
         validation == ChildBirthDateValidation.futureDate
             ? 'Birth date cannot be in the future.'
-            : validation == ChildBirthDateValidation.tooYoung ||
-                validation == ChildBirthDateValidation.tooOld
-            ? 'Aumazing currently supports children ages 2 to 6.'
             : selectedBirthDate != null
             ? '${selectedBirthDate.month}/${selectedBirthDate.day}/${selectedBirthDate.year}'
-            : 'Choose a date between ages 2 and 6.';
+            : "Select your child's birth date.";
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,11 +591,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         Text(
           helperText,
           style: AppTextStyles.bodySmall.copyWith(
-            color:
-                validation == ChildBirthDateValidation.valid ||
-                        validation == ChildBirthDateValidation.missing
-                    ? AppColors.mutedForeground
-                    : AppColors.destructiveSoftRed,
+            color: validation == ChildBirthDateValidation.futureDate
+                ? AppColors.destructiveSoftRed
+                : AppColors.mutedForeground,
           ),
         ),
       ],
