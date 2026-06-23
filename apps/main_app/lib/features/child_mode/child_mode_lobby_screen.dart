@@ -11,6 +11,7 @@ import '../games/copy_me/copy_me_screen.dart';
 import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
+import '../games/sari_sari_sort/sari_sari_sort_screen.dart';
 
 /// Child Mode Lobby.
 ///
@@ -33,6 +34,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     'copy_me',
     'do_what_i_say',
     'my_turn_your_turn',
+    'sari_sari_sort',
   };
 
   static const _categoryOrder = [
@@ -70,6 +72,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
             assessmentContext: 'practice', difficulty: difficulty);
       case 'my_turn_your_turn':
         screen = MyTurnYourTurnScreen(
+            assessmentContext: 'practice', difficulty: difficulty);
+      case 'sari_sari_sort':
+        screen = SariSariSortScreen(
             assessmentContext: 'practice', difficulty: difficulty);
     }
     if (screen == null) return;
