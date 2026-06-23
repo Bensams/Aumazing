@@ -40,10 +40,20 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     SkillCategory.socialInteraction,
   ];
 
-  /// The category the child tapped, or null while showing the 3 buttons.
+  /// The category the child tapped, or null while showing the buttons.
   SkillCategory? _selected;
 
+  /// True when the child tapped "All" (show every game).
+  bool _viewingAll = false;
+
+  bool get _inView => _selected != null || _viewingAll;
+
   int _difficultyFromLevel(int level) => level.clamp(1, 3);
+
+  /// All supported games, deduplicated (used by the "All" view/button).
+  List<GameEntry> _allGames() => GameRegistry.games
+      .where((g) => _supportedGameIds.contains(g.id))
+      .toList();
 
   void _launch(String gameId, int difficulty) {
     Widget? screen;
@@ -114,9 +124,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
             children: [
               _buildHeader(palette, level),
               Expanded(
-                child: _selected == null
+                child: !_inView
                     ? _buildCategoryButtons(palette)
-                    : _buildGamesRow(_selected!, difficulty, palette),
+                    : _buildGamesRow(difficulty, palette),
               ),
             ],
           ),
@@ -128,27 +138,32 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   // ── Header ─────────────────────────────────────────────────────────────
 
   Widget _buildHeader(GamePalette palette, int level) {
-    final inCategory = _selected != null;
+    final title = _viewingAll
+        ? 'All Games'
+        : (_selected?.displayName ?? 'Choose a Game');
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       child: Row(
         children: [
-          if (inCategory)
+          if (_inView)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Material(
                 color: AppColors.white.withAlpha(200),
                 shape: const CircleBorder(),
                 child: IconButton(
-                  onPressed: () => setState(() => _selected = null),
+                  onPressed: () => setState(() {
+                    _selected = null;
+                    _viewingAll = false;
+                  }),
                   icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
                   tooltip: 'Back',
                 ),
               ),
             ),
           Text(
-            inCategory ? _selected!.displayName : 'Choose a Game',
+            title,
             style: AppTextStyles.displayMedium.copyWith(
               color: palette.primary,
               fontWeight: FontWeight.w800,
@@ -187,20 +202,31 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   // ── Step 1: category buttons ───────────────────────────────────────────
 
   Widget _buildCategoryButtons(GamePalette palette) {
+    final buttons = <Widget>[
+      _CategoryButton(
+        label: 'All',
+        icon: Icons.apps_rounded,
+        gradient: const [Color(0xFFFFF3D4), Color(0xFFD4F4E8)],
+        count: _allGames().length,
+        onTap: () => setState(() => _viewingAll = true),
+      ),
+      for (final cat in _categoryOrder)
+        _CategoryButton(
+          label: cat.displayName,
+          icon: _iconForCategory(cat),
+          gradient: _gradientForCategory(cat),
+          count: _gamesFor(cat).length,
+          onTap: () => setState(() => _selected = cat),
+        ),
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
       child: Row(
         children: [
-          for (final cat in _categoryOrder) ...[
-            Expanded(child: _CategoryButton(
-              label: cat.displayName,
-              icon: _iconForCategory(cat),
-              gradient: _gradientForCategory(cat),
-              count: _gamesFor(cat).length,
-              onTap: () => setState(() => _selected = cat),
-            )),
-            if (cat != _categoryOrder.last) const SizedBox(width: AppSpacing.md),
+          for (var i = 0; i < buttons.length; i++) ...[
+            Expanded(child: buttons[i]),
+            if (i != buttons.length - 1) const SizedBox(width: AppSpacing.md),
           ],
         ],
       ),
@@ -209,9 +235,8 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
 
   // ── Step 2: games in a single horizontal row ───────────────────────────
 
-  Widget _buildGamesRow(
-      SkillCategory cat, int difficulty, GamePalette palette) {
-    final games = _gamesFor(cat);
+  Widget _buildGamesRow(int difficulty, GamePalette palette) {
+    final games = _viewingAll ? _allGames() : _gamesFor(_selected!);
     if (games.isEmpty) {
       return Center(
         child: Text('No games yet for this category.',
