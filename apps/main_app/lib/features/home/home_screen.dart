@@ -13,7 +13,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
-import '../games/match_it/match_it_screen.dart';
+import '../child_mode/child_mode_lobby_screen.dart';
 import '../pre_assessment/assessment_dashboard_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
@@ -166,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _enterChildMode() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const MatchItScreen(assessmentContext: 'practice'),
+        builder: (_) => const ChildModeLobbyScreen(),
       ),
     );
   }
