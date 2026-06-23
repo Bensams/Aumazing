@@ -71,7 +71,29 @@ class _LoginScreenState extends State<LoginScreen>
     // Music already started by LoadingScreen, just verify it's playing
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verifyMusicPlaying();
+      _maybeShowFirstLaunchPrivacyNotice();
     });
+  }
+
+  /// On first launch (no consent recorded yet), show the Data Privacy Notice
+  /// before the parent can register or proceed to child profile setup. It
+  /// re-appears each launch until accepted.
+  Future<void> _maybeShowFirstLaunchPrivacyNotice() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyConsented =
+        prefs.getString('privacy_consent_accepted_at') != null;
+    if (alreadyConsented || _privacyAccepted || !mounted) return;
+    await _showPrivacyNotice(dismissible: false);
+  }
+
+  /// Records Data Privacy consent (checkbox state + persisted timestamp).
+  Future<void> _acceptPrivacy() async {
+    setState(() => _privacyAccepted = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'privacy_consent_accepted_at',
+      DateTime.now().toIso8601String(),
+    );
   }
 
   /// Check SharedPreferences for a stored guest refresh token.
@@ -871,11 +893,14 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   /// Full Data Privacy Notice dialog (Data Privacy Act of 2012, RA 10173).
-  Future<void> _showPrivacyNotice() {
+  Future<void> _showPrivacyNotice({bool dismissible = true}) {
     return showDialog<void>(
       context: context,
+      barrierDismissible: dismissible,
       builder: (context) {
-        return AlertDialog(
+        return PopScope(
+          canPop: dismissible,
+          child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
           title: Row(
             children: [
@@ -956,17 +981,18 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Close',
-                style: AppTextStyles.labelLarge
-                    .copyWith(color: AppColors.mutedForeground),
+            if (dismissible)
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  'Close',
+                  style: AppTextStyles.labelLarge
+                      .copyWith(color: AppColors.mutedForeground),
+                ),
               ),
-            ),
             TextButton(
               onPressed: () {
-                setState(() => _privacyAccepted = true);
+                _acceptPrivacy();
                 Navigator.of(context).pop();
               },
               child: Text(
@@ -978,6 +1004,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           ],
+          ),
         );
       },
     );
