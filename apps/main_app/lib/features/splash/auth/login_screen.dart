@@ -388,6 +388,8 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleGuestSignIn() async {
+    // Require Data Privacy consent before continuing as guest.
+    if (!await _ensurePrivacyConsent()) return;
     setState(() => _isLoading = true);
 
     try {
