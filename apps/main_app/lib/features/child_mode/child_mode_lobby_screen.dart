@@ -13,14 +13,19 @@ import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 
 /// Child Mode Lobby.
 ///
-/// Reached from the parent dashboard's "Enter Child Mode". The child picks a
-/// non-assessment (practice) game, grouped by skill category: Play,
-/// Communication, and Social Interaction. Games are practice-mode (no
-/// assessment), but their difficulty follows the child's current level from
-/// the latest assessment.
-class ChildModeLobbyScreen extends StatelessWidget {
+/// Reached from the parent dashboard's "Enter Child Mode". The child first
+/// picks a skill category (Play, Communication, Social Interaction), then sees
+/// that category's games in a single horizontally-scrolling row. Games are
+/// non-assessment (practice) mode, but difficulty follows the child's current
+/// level from the latest assessment.
+class ChildModeLobbyScreen extends StatefulWidget {
   const ChildModeLobbyScreen({super.key});
 
+  @override
+  State<ChildModeLobbyScreen> createState() => _ChildModeLobbyScreenState();
+}
+
+class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   /// Games that have a main_app practice screen wired up.
   static const _supportedGameIds = {
     'match_it',
@@ -35,9 +40,12 @@ class ChildModeLobbyScreen extends StatelessWidget {
     SkillCategory.socialInteraction,
   ];
 
+  /// The category the child tapped, or null while showing the 3 buttons.
+  SkillCategory? _selected;
+
   int _difficultyFromLevel(int level) => level.clamp(1, 3);
 
-  void _launch(BuildContext context, String gameId, int difficulty) {
+  void _launch(String gameId, int difficulty) {
     Widget? screen;
     switch (gameId) {
       case 'match_it':
@@ -57,9 +65,9 @@ class ChildModeLobbyScreen extends StatelessWidget {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen!));
   }
 
-  Future<void> _exitToParent(BuildContext context) async {
+  Future<void> _exitToParent() async {
     final verified = await ParentVerificationDialog.show(context);
-    if (verified && context.mounted) {
+    if (verified && mounted) {
       Navigator.of(context).pop();
     }
   }
@@ -75,6 +83,22 @@ class ChildModeLobbyScreen extends StatelessWidget {
     }
   }
 
+  List<Color> _gradientForCategory(SkillCategory cat) {
+    switch (cat) {
+      case SkillCategory.playSkills:
+        return const [Color(0xFFD4F4E8), Color(0xFFD4E8FA)];
+      case SkillCategory.communication:
+        return const [Color(0xFFE8DEFA), Color(0xFFFFF3D4)];
+      case SkillCategory.socialInteraction:
+        return const [Color(0xFFD4E8FA), Color(0xFFFFDDD4)];
+    }
+  }
+
+  List<GameEntry> _gamesFor(SkillCategory cat) =>
+      GameRegistry.gamesForCategory(cat)
+          .where((g) => _supportedGameIds.contains(g.id))
+          .toList();
+
   @override
   Widget build(BuildContext context) {
     final palette = context.watch<ChildProvider>().activePalette;
@@ -88,64 +112,11 @@ class ChildModeLobbyScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header ──────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-                child: Row(
-                  children: [
-                    Text(
-                      'Choose a Game',
-                      style: AppTextStyles.displayMedium.copyWith(
-                        color: palette.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: palette.primary.withAlpha(30),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        'Level $level',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: palette.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    // Parent lock to exit child mode.
-                    Material(
-                      color: AppColors.white.withAlpha(200),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        onPressed: () => _exitToParent(context),
-                        icon: Icon(Icons.lock_rounded, color: palette.primary),
-                        tooltip: 'Exit (parent only)',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Categorized games ───────────────────────────────────
+              _buildHeader(palette, level),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final cat in _categoryOrder)
-                        _buildCategorySection(
-                            context, cat, difficulty, palette),
-                    ],
-                  ),
-                ),
+                child: _selected == null
+                    ? _buildCategoryButtons(palette)
+                    : _buildGamesRow(_selected!, difficulty, palette),
               ),
             ],
           ),
@@ -154,53 +125,196 @@ class ChildModeLobbyScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCategorySection(
-    BuildContext context,
-    SkillCategory cat,
-    int difficulty,
-    GamePalette palette,
-  ) {
-    final games = GameRegistry.gamesForCategory(cat)
-        .where((g) => _supportedGameIds.contains(g.id))
-        .toList();
-    if (games.isEmpty) return const SizedBox.shrink();
+  // ── Header ─────────────────────────────────────────────────────────────
 
+  Widget _buildHeader(GamePalette palette, int level) {
+    final inCategory = _selected != null;
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(_iconForCategory(cat), color: palette.primary, size: 22),
-              const SizedBox(width: 8),
-              Text(
-                cat.displayName,
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: AppColors.foreground,
-                  fontWeight: FontWeight.w800,
+          if (inCategory)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Material(
+                color: AppColors.white.withAlpha(200),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => setState(() => _selected = null),
+                  icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
+                  tooltip: 'Back',
                 ),
               ),
-            ],
+            ),
+          Text(
+            inCategory ? _selected!.displayName : 'Choose a Game',
+            style: AppTextStyles.displayMedium.copyWith(
+              color: palette.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              for (final g in games)
-                _GameCard(
-                  entry: g,
-                  onTap: () => _launch(context, g.id, difficulty),
-                ),
-            ],
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: palette.primary.withAlpha(30),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Level $level',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: palette.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Material(
+            color: AppColors.white.withAlpha(200),
+            shape: const CircleBorder(),
+            child: IconButton(
+              onPressed: _exitToParent,
+              icon: Icon(Icons.lock_rounded, color: palette.primary),
+              tooltip: 'Exit (parent only)',
+            ),
           ),
         ],
       ),
     );
   }
+
+  // ── Step 1: category buttons ───────────────────────────────────────────
+
+  Widget _buildCategoryButtons(GamePalette palette) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+      child: Row(
+        children: [
+          for (final cat in _categoryOrder) ...[
+            Expanded(child: _CategoryButton(
+              label: cat.displayName,
+              icon: _iconForCategory(cat),
+              gradient: _gradientForCategory(cat),
+              count: _gamesFor(cat).length,
+              onTap: () => setState(() => _selected = cat),
+            )),
+            if (cat != _categoryOrder.last) const SizedBox(width: AppSpacing.md),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Step 2: games in a single horizontal row ───────────────────────────
+
+  Widget _buildGamesRow(
+      SkillCategory cat, int difficulty, GamePalette palette) {
+    final games = _gamesFor(cat);
+    if (games.isEmpty) {
+      return Center(
+        child: Text('No games yet for this category.',
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.mutedForeground)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: SizedBox(
+        height: 200,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          itemCount: games.length,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+          itemBuilder: (_, i) => _GameCard(
+            entry: games[i],
+            onTap: () => _launch(games[i].id, difficulty),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
+/// One of the three large skill-category buttons (step 1).
+class _CategoryButton extends StatelessWidget {
+  const _CategoryButton({
+    required this.label,
+    required this.icon,
+    required this.gradient,
+    required this.count,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final List<Color> gradient;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradient,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: gradient.first.withAlpha(120),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.white.withAlpha(200),
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    Icon(icon, color: AppColors.primaryPurple, size: 38),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$count ${count == 1 ? 'game' : 'games'}',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.mutedForeground),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A game card shown in the horizontal row (step 2).
 class _GameCard extends StatelessWidget {
   const _GameCard({required this.entry, required this.onTap});
 
@@ -217,7 +331,7 @@ class _GameCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               gradient: LinearGradient(
@@ -233,42 +347,38 @@ class _GameCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: AppColors.white.withAlpha(190),
-                    borderRadius: BorderRadius.circular(14),
+                    color: AppColors.white.withAlpha(200),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(entry.icon,
-                      color: AppColors.primaryPurple, size: 28),
+                      color: AppColors.primaryPurple, size: 30),
                 ),
-                const SizedBox(width: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  entry.name,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        entry.name,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.foreground,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        entry.description,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.mutedForeground),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  child: Text(
+                    entry.description,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.mutedForeground),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
