@@ -220,15 +220,28 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  void _showError(String message) {
+  /// Converts raw exceptions into friendly messages (esp. offline/network).
+  String _friendlyError(Object error) {
+    final text = error.toString();
+    if (text.contains('SocketException') ||
+        text.contains('Failed host lookup') ||
+        text.contains('No address associated') ||
+        text.contains('Network is unreachable') ||
+        text.contains('Connection refused')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return text;
+  }
+
+  void _showError(String message, {String title = 'Something went wrong'}) {
     if (!mounted) return;
 
-    // For configuration errors, show a dialog with more space
+    // For long/configuration errors, show a dialog with more space
     if (message.contains('configuration error') || message.length > 100) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Google Sign-In Error'),
+          title: Text(title),
           content: SingleChildScrollView(
             child: Text(message),
           ),
@@ -355,7 +368,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Google Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError('Google sign-in failed: $e');
+      _showError(_friendlyError(e), title: 'Google Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -375,7 +388,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Facebook Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError('Facebook sign-in failed: $e');
+      _showError(_friendlyError(e), title: 'Facebook Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -405,7 +418,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Guest Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError('Guest sign-in failed: $e');
+      _showError(_friendlyError(e), title: 'Guest Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
