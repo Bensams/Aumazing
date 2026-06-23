@@ -162,25 +162,44 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
                 ),
               ),
             ),
-          Text(
-            title,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: palette.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: palette.primary.withAlpha(30),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'Level $level',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: palette.primary,
-                fontWeight: FontWeight.w700,
+          Flexible(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.white.withAlpha(235),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.displayMedium.copyWith(
+                        color: palette.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: palette.primary.withAlpha(30),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Level $level',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
