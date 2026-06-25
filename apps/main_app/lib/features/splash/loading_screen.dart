@@ -12,6 +12,7 @@ import '../../core/services/child_bootstrap_service.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/supabase_service.dart';
+import '../../providers/child_provider.dart';
 import '../home/home_screen.dart';
 import 'auth/child_profile_setup_screen.dart';
 import 'auth/login_screen.dart';
@@ -94,6 +95,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _initVideo() async {
+    // Reduced motion: skip the video (release _waitForVideo) and keep the
+    // static gradient background.
+    if (await ChildProvider.readReducedMotion()) {
+      if (mounted) setState(() => _videoInitialized = true);
+      return;
+    }
+
     final videoPaths = [
       'assets/videos/login_page_bg.mp4',
       'assets/videos/login_page_bg.webm',
@@ -247,8 +255,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Video background
-          if (_videoInitialized)
+          // Video background (null controller under reduced motion → gradient)
+          if (_videoInitialized && _videoController != null)
             SizedBox.expand(
               child: FittedBox(
                 fit: BoxFit.cover,

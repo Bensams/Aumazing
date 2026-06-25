@@ -1130,6 +1130,13 @@ class SettingsModal extends StatelessWidget {
                           animationIntensity: val,
                         ),
                       ),
+                      // Reduced motion / static background toggle
+                      _buildSettingToggle(
+                        Icons.motion_photos_off_rounded,
+                        'Reduced Motion (static background)',
+                        childProv.reducedMotion,
+                        (val) => childProv.setReducedMotion(val),
+                      ),
                       // Prompt speed slider
                       _buildSettingSlider(
                         'Prompt Speed',

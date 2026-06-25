@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../providers/child_provider.dart';
 import '../loading_screen.dart';
 import 'forgot_password_screen.dart';
 import 'otp_verification_screen.dart';
@@ -139,6 +140,13 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _initVideoPlayer() async {
+    // Respect reduced motion: skip the looping video and keep the static
+    // gradient background (lower sensory load and device heat).
+    if (await ChildProvider.readReducedMotion()) {
+      debugPrint('[LoginScreen] Reduced motion on — using static background.');
+      return;
+    }
+
     // Try MP4 first (best Android compatibility), then WebM as fallback
     final videoPaths = [
       'assets/videos/login_page_bg.mp4',
