@@ -1130,12 +1130,56 @@ class SettingsModal extends StatelessWidget {
                           animationIntensity: val,
                         ),
                       ),
-                      // Reduced motion / static background toggle
-                      _buildSettingToggle(
-                        Icons.motion_photos_off_rounded,
-                        'Reduced Motion (static background)',
-                        childProv.reducedMotion,
-                        (val) => childProv.setReducedMotion(val),
+                      // Graphics quality (heat / sensory) selector
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.speed_rounded,
+                                size: 20, color: AppColors.textSecondary),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'Graphics Quality',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 6,
+                              children: GraphicsQuality.values.map((q) {
+                                final selected =
+                                    childProv.graphicsQuality == q;
+                                return ChoiceChip(
+                                  label: Text(q.label),
+                                  selected: selected,
+                                  selectedColor: AppColors.primaryPurple,
+                                  visualDensity: VisualDensity.compact,
+                                  labelStyle: AppTextStyles.labelSmall.copyWith(
+                                    color: selected
+                                        ? AppColors.white
+                                        : AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  onSelected: (_) =>
+                                      childProv.setGraphicsQuality(q),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32, bottom: 4),
+                        child: Text(
+                          'Lower quality = static background and fewer effects '
+                          '(cooler device, calmer visuals).',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                       ),
                       // Prompt speed slider
                       _buildSettingSlider(

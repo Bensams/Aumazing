@@ -24,11 +24,11 @@ class ChildProvider extends ChangeNotifier {
   GameLanguage _language = GameLanguage.english;
   static const _languageKeyPrefix = 'language_';
 
-  /// Reduced-motion / static-background accessibility preference
-  /// (device-level). When on, looping video backgrounds are replaced by a
-  /// static gradient — easing sensory load and device heat. Defaults off.
-  bool _reducedMotion = false;
-  static const _reducedMotionKey = 'reduced_motion';
+  /// Graphics quality / performance tier (device-level). Lower tiers drop the
+  /// video backgrounds and reward particles to ease device heat and sensory
+  /// load. Defaults to High.
+  GraphicsQuality _graphicsQuality = GraphicsQuality.high;
+  static const _graphicsQualityKey = 'graphics_quality';
 
   ChildProvider({
     LocalDbService? localDb,
@@ -77,16 +77,23 @@ class ChildProvider extends ChangeNotifier {
   /// Localized strings for the active language.
   AppStrings get strings => AppStrings(_language);
 
-  // ── Reduced motion / static background ────────────────────────────────
+  // ── Graphics quality (heat / sensory) ─────────────────────────────────
 
-  /// Whether reduced-motion (static backgrounds, calmer visuals) is enabled.
-  bool get reducedMotion => _reducedMotion;
+  /// The active graphics quality tier (Low / Medium / High).
+  GraphicsQuality get graphicsQuality => _graphicsQuality;
 
-  /// Reads the reduced-motion preference directly — usable before a profile
-  /// is loaded (e.g. on the login / loading screens).
-  static Future<bool> readReducedMotion() async {
+  /// Whether backgrounds should be static (video only plays on High).
+  bool get useStaticBackground => _graphicsQuality.useStaticBackground;
+
+  /// Whether motion/particle effects should be minimised (Low only).
+  bool get reducedMotion => _graphicsQuality.reducedMotion;
+
+  /// Reads whether to use a static background directly — usable before a
+  /// profile is loaded (e.g. on the login / loading screens).
+  static Future<bool> readUseStaticBackground() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_reducedMotionKey) ?? false;
+    return GraphicsQuality.fromSlug(prefs.getString(_graphicsQualityKey))
+        .useStaticBackground;
   }
 
   /// Returns the sensory settings as a map for use in scoring/assessment.
@@ -108,7 +115,7 @@ class ChildProvider extends ChangeNotifier {
 
     try {
       // Device-level preference — load regardless of profile/auth state.
-      await _loadReducedMotion();
+      await _loadGraphicsQuality();
 
       final userId = _authService.effectiveUserId;
       if (userId == null) {
@@ -245,24 +252,26 @@ class ChildProvider extends ChangeNotifier {
     _language = GameLanguage.fromSlug(slug);
   }
 
-  /// Sets the reduced-motion preference and persists it (device-level).
-  Future<void> setReducedMotion(bool enabled) async {
-    _reducedMotion = enabled;
+  /// Sets the graphics quality tier and persists it (device-level).
+  Future<void> setGraphicsQuality(GraphicsQuality quality) async {
+    _graphicsQuality = quality;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_reducedMotionKey, enabled);
+    await prefs.setString(_graphicsQualityKey, quality.slug);
   }
 
-  /// Loads the persisted reduced-motion preference (defaults off).
-  Future<void> _loadReducedMotion() async {
+  /// Loads the persisted graphics quality (defaults to High).
+  Future<void> _loadGraphicsQuality() async {
     final prefs = await SharedPreferences.getInstance();
-    _reducedMotion = prefs.getBool(_reducedMotionKey) ?? false;
+    _graphicsQuality =
+        GraphicsQuality.fromSlug(prefs.getString(_graphicsQualityKey));
   }
 
   void clear() {
     _profile = null;
     _themeOverride = null;
     _language = GameLanguage.english;
+    _graphicsQuality = GraphicsQuality.high;
     notifyListeners();
   }
 }

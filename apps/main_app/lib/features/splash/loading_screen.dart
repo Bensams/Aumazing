@@ -95,9 +95,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _initVideo() async {
-    // Reduced motion: skip the video (release _waitForVideo) and keep the
-    // static gradient background.
-    if (await ChildProvider.readReducedMotion()) {
+    // Lower graphics tiers: skip the video (release _waitForVideo) and keep
+    // the static gradient background.
+    if (await ChildProvider.readUseStaticBackground()) {
       if (mounted) setState(() => _videoInitialized = true);
       return;
     }
