@@ -4,6 +4,7 @@ import 'dart:ui' hide TextStyle, FontWeight;
 import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
+import '../../../config/game_motion.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../sari_sari_sort_game.dart' show StoreCategory;
 
@@ -77,7 +78,9 @@ class CategoryBin extends PositionComponent {
   void render(Canvas canvas) {
     // Pulsing hint ring (matches MatchableShape / SequenceShape).
     if (_isHint) {
-      final pulse = (math.sin(_hintTime * 2 * math.pi) + 1) / 2;
+      final pulse = GameMotion.reduced
+          ? 1.0
+          : (math.sin(_hintTime * 2 * math.pi) + 1) / 2;
       final pulseAlpha = (128 + 127 * pulse).round().clamp(0, 255);
       final hintPaint = Paint()
         ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)

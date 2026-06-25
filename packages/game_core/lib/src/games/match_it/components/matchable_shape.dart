@@ -6,6 +6,7 @@ import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 
+import '../../../config/game_motion.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// The shape type drawn on each matchable card.
@@ -143,7 +144,9 @@ class MatchableShape extends PositionComponent with TapCallbacks {
 
     // Hint pulsing ring (same pattern as SequenceShape)
     if (_isHint) {
-      final pulse = (math.sin(_hintTime * 2 * math.pi) + 1) / 2; // 0..1
+      final pulse = GameMotion.reduced
+          ? 1.0
+          : (math.sin(_hintTime * 2 * math.pi) + 1) / 2; // 0..1
       final pulseAlpha = (128 + 127 * pulse).round().clamp(0, 255);
       final hintPaint = Paint()
         ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)

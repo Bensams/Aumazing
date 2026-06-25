@@ -87,6 +87,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
 
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
+    GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
     _game = MatchItGame(
       totalRounds: _totalRounds,
       childId: childId,

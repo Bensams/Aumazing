@@ -6,6 +6,7 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 
 import 'package:shared_ui/shared_ui.dart';
+import '../../../config/game_motion.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// Shape used in the Copy Me game for sequence demonstrations.
@@ -155,7 +156,11 @@ class SequenceShape extends PositionComponent with TapCallbacks {
 
     // Hint indicator - pulsing ring around the shape
     if (isHint) {
-      final pulseAlpha = (128 + 127 * (DateTime.now().millisecond % 1000) / 1000).round().clamp(0, 255);
+      final pulseAlpha = GameMotion.reduced
+          ? 240
+          : (128 + 127 * (DateTime.now().millisecond % 1000) / 1000)
+              .round()
+              .clamp(0, 255);
       final hintPaint = Paint()
         ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)
         ..style = PaintingStyle.stroke
