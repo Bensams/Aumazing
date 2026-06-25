@@ -257,6 +257,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
+            onRetry:
+                widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu: widget.assessmentContext == 'practice'
+                ? () => Navigator.of(context).pop()
+                : null,
           ),
 
           Positioned(
