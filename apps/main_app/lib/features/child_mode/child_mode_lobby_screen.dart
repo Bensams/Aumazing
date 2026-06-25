@@ -102,11 +102,11 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   List<Color> _gradientForCategory(SkillCategory cat) {
     switch (cat) {
       case SkillCategory.playSkills:
-        return const [Color(0xFFD4F4E8), Color(0xFFD4E8FA)];
+        return const [Color(0xFF9FD3B8), Color(0xFFABD2F0)]; // sage → sky
       case SkillCategory.communication:
-        return const [Color(0xFFE8DEFA), Color(0xFFFFF3D4)];
+        return const [Color(0xFFC7B4EC), Color(0xFFFBE49A)]; // lavender → butter
       case SkillCategory.socialInteraction:
-        return const [Color(0xFFD4E8FA), Color(0xFFFFDDD4)];
+        return const [Color(0xFFABD2F0), Color(0xFFF6C6B4)]; // sky → peach
     }
   }
 
@@ -230,7 +230,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
       _CategoryButton(
         label: 'All',
         icon: Icons.apps_rounded,
-        gradient: const [Color(0xFFFFF3D4), Color(0xFFD4F4E8)],
+        gradient: const [Color(0xFFFBD89A), Color(0xFFA9E3CC)], // amber → mint
         count: _allGames().length,
         onTap: () => setState(() => _viewingAll = true),
       ),

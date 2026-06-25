@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
-import 'app_gradients.dart';
 
 /// Selectable game/dashboard color themes.
 ///
@@ -123,19 +122,19 @@ abstract final class GamePalettes {
     gameBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFD9EAF3), Color(0xFFFAF9F6), Color(0xFFDDEFE6)],
+      colors: [Color(0xFF9CCBE6), Color(0xFFDCEFE6), Color(0xFF97C9AE)],
     ),
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFE3F0F7), Color(0xFFFAF9F6), Color(0xFFE4F2EC)],
+      colors: [Color(0xFFA6D2EC), Color(0xFFE1F1EA), Color(0xFF9FD0B6)],
     ),
     backgroundTones: [
-      Color(0xFFD9EAF3), // sky
-      Color(0xFFDDEFE6), // sage
-      Color(0xFFE4EFF5), // pale blue
-      Color(0xFFE8F2EC), // pale mint
-      Color(0xFFD6E8EE), // teal mist
+      Color(0xFF9CCBE6), // sky blue
+      Color(0xFF97C9AE), // sage green
+      Color(0xFFACD6EE), // light blue
+      Color(0xFFA6D2BE), // mint green
+      Color(0xFF8FC2DA), // teal
     ],
   );
 
@@ -149,19 +148,19 @@ abstract final class GamePalettes {
     gameBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFF7E1E8), Color(0xFFFAF9F6), Color(0xFFFBE8DD)],
+      colors: [Color(0xFFF2BFD0), Color(0xFFFBE6DC), Color(0xFFF4C6A8)],
     ),
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFF8E6EC), Color(0xFFFAF9F6), Color(0xFFFBEDE4)],
+      colors: [Color(0xFFF0BCCF), Color(0xFFFBEAE2), Color(0xFFF5CBAE)],
     ),
     backgroundTones: [
-      Color(0xFFF7E1E8), // rose
-      Color(0xFFFBE8DD), // peach
-      Color(0xFFF9E6EE), // pink
-      Color(0xFFFBEDE4), // cream peach
-      Color(0xFFF6E4E0), // blush
+      Color(0xFFF2BFD0), // rose
+      Color(0xFFF4C6A8), // peach
+      Color(0xFFEFB9D2), // pink
+      Color(0xFFF6CFB6), // warm peach
+      Color(0xFFEDB6C6), // blush
     ],
   );
 
@@ -172,14 +171,22 @@ abstract final class GamePalettes {
     accent: AppColors.mint,
     cardSurface: Color(0xFFF1ECFA),
     onPrimary: Color(0xFFFFFFFF),
-    gameBackground: AppGradients.matchIt,
-    parentBackground: AppGradients.parentLavenderMint,
+    gameBackground: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFA9E3CC), Color(0xFFABD2F0), Color(0xFFC7B4EC)],
+    ),
+    parentBackground: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFC9B6EE), Color(0xFFECE5FB), Color(0xFFA9E3CC)],
+    ),
     backgroundTones: [
-      AppColors.lavenderLight, // lavender
-      AppColors.mintLight, // mint
-      AppColors.skyLight, // sky
-      AppColors.butterLight, // butter
-      AppColors.peachLight, // peach
+      Color(0xFFC7B4EC), // lavender
+      Color(0xFFA9E3CC), // mint
+      Color(0xFFABD2F0), // sky
+      Color(0xFFFBE49A), // butter
+      Color(0xFFF7C6B4), // peach
     ],
   );
 
