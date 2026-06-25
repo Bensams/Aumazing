@@ -140,10 +140,10 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _initVideoPlayer() async {
-    // Respect reduced motion: skip the looping video and keep the static
-    // gradient background (lower sensory load and device heat).
-    if (await ChildProvider.readReducedMotion()) {
-      debugPrint('[LoginScreen] Reduced motion on — using static background.');
+    // Lower graphics tiers use a static gradient instead of the looping video
+    // (lower sensory load and device heat).
+    if (await ChildProvider.readUseStaticBackground()) {
+      debugPrint('[LoginScreen] Static background — skipping video.');
       return;
     }
 
