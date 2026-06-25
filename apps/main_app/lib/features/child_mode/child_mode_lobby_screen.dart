@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../core/widgets/app_video_background.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../games/copy_me/copy_me_screen.dart';
@@ -122,7 +121,8 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     final difficulty = _difficultyFromLevel(level);
 
     return Scaffold(
-      body: AppVideoBackground(
+      body: Container(
+        decoration: BoxDecoration(gradient: palette.gameBackground),
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
