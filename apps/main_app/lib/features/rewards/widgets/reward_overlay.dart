@@ -159,33 +159,37 @@ class _RewardOverlayState extends State<RewardOverlay>
   }
 
   Widget _buildRewardEffect() {
+    // Scale particle counts to the graphics quality (fewer on lower tiers →
+    // less GPU work / heat), keeping at least a few so the effect still reads.
+    final scale = context.read<ChildProvider>().graphicsQuality.effectScale;
+    int n(int base) => (base * scale).round().clamp(3, base);
     switch (widget.rewardType) {
       case RewardType.balloons:
         return BalloonsReward(
           onComplete: () {},
           onAllPopped: _onAllItemsInteracted,
-          balloonCount: 15,
+          balloonCount: n(15),
           duration: const Duration(seconds: 8),
         );
       case RewardType.fireworks:
         return FireworksReward(
           onComplete: () {},
           onAllExploded: _onAllItemsInteracted,
-          rocketCount: 10,
+          rocketCount: n(10),
           duration: const Duration(seconds: 10),
         );
       case RewardType.bubbles:
         return BubblesReward(
           onComplete: () {},
           onAllPopped: _onAllItemsInteracted,
-          bubbleCount: 20,
+          bubbleCount: n(20),
           duration: const Duration(seconds: 10),
         );
       case RewardType.candy:
         return CandyReward(
           onComplete: () {},
           onAllCollected: _onAllItemsInteracted,
-          candyCount: 18,
+          candyCount: n(18),
           duration: const Duration(seconds: 8),
         );
     }
