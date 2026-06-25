@@ -6,6 +6,7 @@ library game_core;
 
 // Configuration
 export 'src/config/game_config.dart';
+export 'src/config/game_motion.dart';
 
 // Games — Match It
 export 'src/games/match_it/match_it_game.dart';

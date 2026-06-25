@@ -8,6 +8,7 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
+import '../../../config/game_motion.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// A slot in the turn-taking grid.
@@ -133,9 +134,11 @@ class TurnSlot extends PositionComponent with TapCallbacks {
     } else {
       // Hint indicator — pulsing orange ring (same style as SequenceShape)
       if (_isHint) {
-        final pulseAlpha = (128 + 127 * math.sin(_hintTime * 2 * math.pi))
-            .round()
-            .clamp(0, 255);
+        final pulseAlpha = GameMotion.reduced
+            ? 240
+            : (128 + 127 * math.sin(_hintTime * 2 * math.pi))
+                .round()
+                .clamp(0, 255);
         final hintPaint = Paint()
           ..color = const Color(0xFFFFA726).withAlpha(pulseAlpha)
           ..style = PaintingStyle.stroke
