@@ -24,6 +24,12 @@ class ChildProvider extends ChangeNotifier {
   GameLanguage _language = GameLanguage.english;
   static const _languageKeyPrefix = 'language_';
 
+  /// Reduced-motion / static-background accessibility preference
+  /// (device-level). When on, looping video backgrounds are replaced by a
+  /// static gradient — easing sensory load and device heat. Defaults off.
+  bool _reducedMotion = false;
+  static const _reducedMotionKey = 'reduced_motion';
+
   ChildProvider({
     LocalDbService? localDb,
     AuthService? authService,
@@ -71,6 +77,18 @@ class ChildProvider extends ChangeNotifier {
   /// Localized strings for the active language.
   AppStrings get strings => AppStrings(_language);
 
+  // ── Reduced motion / static background ────────────────────────────────
+
+  /// Whether reduced-motion (static backgrounds, calmer visuals) is enabled.
+  bool get reducedMotion => _reducedMotion;
+
+  /// Reads the reduced-motion preference directly — usable before a profile
+  /// is loaded (e.g. on the login / loading screens).
+  static Future<bool> readReducedMotion() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_reducedMotionKey) ?? false;
+  }
+
   /// Returns the sensory settings as a map for use in scoring/assessment.
   Map<String, dynamic> get sensorySettingsMap =>
       _profile?.sensorySettingsMap ??
@@ -89,6 +107,9 @@ class ChildProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Device-level preference — load regardless of profile/auth state.
+      await _loadReducedMotion();
+
       final userId = _authService.effectiveUserId;
       if (userId == null) {
         _profile = null;
@@ -222,6 +243,20 @@ class ChildProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final slug = prefs.getString('$_languageKeyPrefix$id');
     _language = GameLanguage.fromSlug(slug);
+  }
+
+  /// Sets the reduced-motion preference and persists it (device-level).
+  Future<void> setReducedMotion(bool enabled) async {
+    _reducedMotion = enabled;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_reducedMotionKey, enabled);
+  }
+
+  /// Loads the persisted reduced-motion preference (defaults off).
+  Future<void> _loadReducedMotion() async {
+    final prefs = await SharedPreferences.getInstance();
+    _reducedMotion = prefs.getBool(_reducedMotionKey) ?? false;
   }
 
   void clear() {
