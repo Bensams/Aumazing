@@ -334,6 +334,11 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
+            onRetry:
+                widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu: widget.assessmentContext == 'practice'
+                ? () => Navigator.of(context).pop()
+                : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)
