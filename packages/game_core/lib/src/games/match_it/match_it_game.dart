@@ -32,7 +32,8 @@ class MatchPairData {
 /// Presents two columns of shapes — the child taps one on the left,
 /// then one on the right. If they match, it advances the step.
 /// Tracks comprehensive gameplay analytics for ML analysis.
-class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+class MatchItGame extends FlameGame
+    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   MatchItGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -275,6 +276,7 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
         shapeColor: roundPairs[i].color,
         index: i,
         onSelected: _onLeftSelected,
+        onDragDropped: _onShapeDragged,
         position: Vector2(leftX, y),
         size: Vector2.all(cardSize),
       );
@@ -285,6 +287,7 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
         shapeColor: roundPairs[ri].color,
         index: ri,
         onSelected: _onRightSelected,
+        onDragDropped: _onShapeDragged,
         position: Vector2(rightX, y),
         size: Vector2.all(cardSize),
       );
@@ -347,6 +350,38 @@ class MatchItGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalytics
     if (_selectedLeftIndex != null || _selectedRightIndex != null) {
       _startNoResponseTimer();
     }
+  }
+
+  /// Drag input: [shape] was dropped at [dropCenter]. If it lands on a
+  /// non-matched shape in the opposite column, resolve it as a match attempt
+  /// using the same logic as tap.
+  void _onShapeDragged(MatchableShape shape, Vector2 dropCenter) {
+    if (shape.isMatched) return;
+    _cancelNoResponseTimer();
+    _hideVisualHints();
+
+    final isLeft = _leftShapes.contains(shape);
+    final opposite = isLeft ? _rightShapes : _leftShapes;
+
+    MatchableShape? target;
+    for (final s in opposite) {
+      if (!s.isMatched && s.containsPoint(dropCenter)) {
+        target = s;
+        break;
+      }
+    }
+    if (target == null) {
+      // Dropped on empty space — no match attempt; resume the idle timer.
+      _startNoResponseTimer();
+      return;
+    }
+
+    final leftShape = isLeft ? shape : target;
+    final rightShape = isLeft ? target : shape;
+    _selectedLeftIndex = leftShape.index;
+    _selectedRightIndex = rightShape.index;
+    onPlayDropSfx?.call();
+    _checkMatch();
   }
 
   void _checkMatch() {
