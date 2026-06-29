@@ -17,12 +17,13 @@ enum ShapeType { star, heart, circle, diamond, triangle }
 /// Renders a colored rounded-rect card with a centered 3D shape icon.
 /// Supports selection highlight, correct/incorrect feedback, hint state,
 /// and gentle scale animations.
-class MatchableShape extends PositionComponent with TapCallbacks {
+class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks {
   MatchableShape({
     required this.shapeType,
     required this.shapeColor,
     required this.index,
     required this.onSelected,
+    this.onDragDropped,
     super.position,
     super.size,
   });
@@ -30,11 +31,21 @@ class MatchableShape extends PositionComponent with TapCallbacks {
   final ShapeType shapeType;
   final Color shapeColor;
   final int index;
+
+  /// Tap input: fired when the shape is tapped (selected).
   final void Function(int index) onSelected;
+
+  /// Drag input: fired when the shape is dropped, with its centre in game
+  /// coordinates so the game can find the shape it was dropped onto.
+  final void Function(MatchableShape shape, Vector2 dropCenter)? onDragDropped;
 
   bool isSelected = false;
   bool isMatched = false;
   bool _showError = false;
+
+  // ── Drag state ─────────────────────────────────────────────────────
+  bool _dragging = false;
+  Vector2? _dragStartPos;
 
   // ── Hint state ─────────────────────────────────────────────────────
   bool _isHint = false;
@@ -64,10 +75,59 @@ class MatchableShape extends PositionComponent with TapCallbacks {
   static const double _cornerRadius = 24.0;
   static const double _borderWidth = 3.0;
 
+  // Selection happens on tap UP so a drag (which cancels the tap) does not
+  // also trigger a tap-match — letting tap and drag coexist cleanly.
   @override
-  void onTapDown(TapDownEvent event) {
-    if (isMatched) return;
+  void onTapDown(TapDownEvent event) {}
+
+  @override
+  void onTapUp(TapUpEvent event) {
+    if (isMatched || _dragging) return;
     onSelected(index);
+  }
+
+  // ── Drag-and-drop input ─────────────────────────────────────────────
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    if (isMatched) return;
+    _dragging = true;
+    _dragStartPos = position.clone();
+    priority = 100; // float above other shapes while dragging
+    add(ScaleEffect.to(
+      Vector2.all(1.1),
+      EffectController(duration: 0.1, curve: Curves.easeOut),
+    ));
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    if (isMatched || !_dragging) return;
+    position += event.localDelta;
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    if (!_dragging) return;
+    _dragging = false;
+    priority = 0;
+    scale = Vector2.all(1.0);
+    final dropCenter = position + size / 2;
+    // Snap instantly back to the slot, then let the game resolve the match
+    // (feedback animations then play in the shape's home position).
+    if (_dragStartPos != null) position = _dragStartPos!;
+    onDragDropped?.call(this, dropCenter);
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    super.onDragCancel(event);
+    _dragging = false;
+    priority = 0;
+    scale = Vector2.all(1.0);
+    if (_dragStartPos != null) position = _dragStartPos!;
   }
 
   void select() {
