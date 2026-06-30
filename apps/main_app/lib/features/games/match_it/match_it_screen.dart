@@ -190,7 +190,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
           profile: childProvider.profile!,
           // Longer reward so children enjoy popping it (engagement);
           // the text "Great Job" dialog has been removed.
-          minDisplayDuration: const Duration(seconds: 7),
+          minDisplayDuration: const Duration(seconds: 10),
           showContinueButton: false, // pop-to-advance; no text button
           onComplete: () {
             Navigator.of(dialogContext).pop(); // Close reward overlay
