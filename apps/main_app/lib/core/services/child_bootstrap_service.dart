@@ -60,12 +60,16 @@ class ChildBootstrapService {
       );
     }
 
+    // Only an actually-unusable birth date (missing or in the future) sends the
+    // parent back to setup. Ages outside 2–6 are accepted here to stay
+    // consistent with the child-setup screen, which no longer enforces a range.
     final child = children.first;
     final validation = validateBirthDate(child.birthDate);
-    if (validation != ChildBirthDateValidation.valid) {
+    if (validation == ChildBirthDateValidation.missing ||
+        validation == ChildBirthDateValidation.futureDate) {
       return const BootstrapResult(
         destination: BootstrapDestination.childProfileSetup,
-        errorMessage: invalidChildAgeMessage,
+        errorMessage: missingChildProfileMessage,
       );
     }
 
