@@ -70,19 +70,9 @@ class GameConfig {
     );
   }
 
-  /// Number of rounds based on difficulty.
-  int get totalRounds {
-    switch (difficulty) {
-      case 1:
-        return 3;
-      case 2:
-        return 5;
-      case 3:
-        return 7;
-      default:
-        return 5;
-    }
-  }
+  /// Number of rounds per game — fixed at 4 to keep sessions short so young
+  /// children aren't overwhelmed (applies to assessment and practice alike).
+  int get totalRounds => 4;
 
   /// Number of items per round based on difficulty.
   int get itemsPerRound {
