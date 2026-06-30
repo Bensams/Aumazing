@@ -54,8 +54,10 @@ class RewardOverlay extends StatefulWidget {
 class _RewardOverlayState extends State<RewardOverlay>
     with TickerProviderStateMixin {
   bool _canContinue = false;
-  bool _showDialogue = true;
-  bool _showReward = false;
+  // Dialogue ("Great Job! You completed the game") is skipped — go straight to
+  // the reward so non-reading children just pop it.
+  final bool _showDialogue = false;
+  final bool _showReward = true;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late AnimationController _dialogueFadeController;
@@ -106,33 +108,17 @@ class _RewardOverlayState extends State<RewardOverlay>
       context.read<HapticService>().celebrationFeedback();
     }
 
-    // Phase 1: Show dialogue for 2 seconds
+    // No text card — fade the reward in immediately so children just pop it.
+    _fadeController.forward();
+
+    // Floor before it can auto-complete, so quick popping still gets a moment.
     Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      // Fade out dialogue
-      _dialogueFadeController.reverse().then((_) {
-        if (!mounted) return;
-        setState(() {
-          _showDialogue = false;
-          _showReward = true;
-        });
-        // Fade in reward
-        _fadeController.forward();
-        // Phase 3: Auto-proceed once the reward has been shown for
-        // minDisplayDuration (no button needed — children just pop and go).
-        Future.delayed(widget.minDisplayDuration, () {
-          if (mounted && _canContinue) {
-            _onContinue();
-          }
-        });
-      });
+      if (mounted) setState(() => _canContinue = true);
     });
 
-    // Phase 2: Enable continue button after dialogue fades (2s in)
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _canContinue = true);
-      }
+    // Auto-proceed once the reward has been shown for minDisplayDuration.
+    Future.delayed(widget.minDisplayDuration, () {
+      if (mounted && _canContinue) _onContinue();
     });
   }
 
