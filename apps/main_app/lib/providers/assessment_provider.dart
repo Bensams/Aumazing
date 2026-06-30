@@ -6,6 +6,7 @@ import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../services/ai_assessment_service.dart';
+import '../services/on_device_ai_assessment_service.dart';
 import '../services/assessment_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
@@ -330,18 +331,31 @@ class AssessmentProvider extends ChangeNotifier {
   Future<AiAssessmentResponse?> predictWithAI(String childId) async {
     debugPrint('[AssessmentProvider] 🔮 predictWithAI called for '
         'child=$childId with ${_currentSessions.length} sessions');
+    final onDevice = OnDeviceAiAssessmentService();
     final service = AiAssessmentService();
     try {
-      final prediction = await service.predictFromSessions(
+      // Prefer on-device ONNX inference (works offline); fall back to the
+      // cloud API only if the on-device model isn't available.
+      var modelSource = 'xgboost_onnx';
+      var prediction = await onDevice.predictFromSessions(
         childId: childId,
         sessions: _currentSessions,
       );
+      if (prediction != null) {
+        debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
+      } else {
+        modelSource = 'xgboost';
+        prediction = await service.predictFromSessions(
+          childId: childId,
+          sessions: _currentSessions,
+        );
+      }
       _aiPrediction = prediction;
       if (prediction != null) {
         // Mark all pre-assessment results as AI-assessed so they can be
         // distinguished from rubric-only results.
         _preResults = _preResults
-            .map((r) => r.copyWithRubric(modelSource: 'xgboost'))
+            .map((r) => r.copyWithRubric(modelSource: modelSource))
             .toList();
 
         debugPrint('[AssessmentProvider] ✅ AI prediction SUCCESS: '
@@ -361,6 +375,7 @@ class AssessmentProvider extends ChangeNotifier {
       debugPrint('[AssessmentProvider] ❌ predictWithAI error: $e');
       return null;
     } finally {
+      onDevice.dispose();
       service.dispose();
       // Clear sessions now that both finalization and AI prediction are done
       _currentSessions.clear();
