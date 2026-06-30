@@ -649,12 +649,15 @@ class _CandyRewardState extends State<CandyReward> {
 
   void _generateCandies() {
     for (var i = 0; i < widget.candyCount; i++) {
+      final delay = Duration(milliseconds: i * 200 + _random.nextInt(600));
       _candies.add(_CandyConfig(
         initialX: 0.08 + _random.nextDouble() * 0.84,
         size: 50 + _random.nextDouble() * 50,
         color: _candyColors[_random.nextInt(_candyColors.length)],
         type: CandyType.values[_random.nextInt(CandyType.values.length)],
-        delay: Duration(milliseconds: i * 200 + _random.nextInt(600)),
+        delay: delay,
+        // Create the spawn future ONCE so rebuilds don't restart the candy.
+        spawn: Future<void>.delayed(delay),
         fallDuration: widget.duration + Duration(seconds: _random.nextInt(4) - 2),
       ));
     }
@@ -682,7 +685,8 @@ class _CandyRewardState extends State<CandyReward> {
     return Stack(
       children: _candies.map((config) {
         return FutureBuilder(
-          future: Future.delayed(config.delay),
+          key: ObjectKey(config),
+          future: config.spawn,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const SizedBox.shrink();
@@ -709,6 +713,9 @@ class _CandyConfig {
   final Color color;
   final CandyType type;
   final Duration delay;
+
+  /// Spawn-delay future, created once so rebuilds don't restart the candy.
+  final Future<void> spawn;
   final Duration fallDuration;
 
   _CandyConfig({
@@ -717,6 +724,7 @@ class _CandyConfig {
     required this.color,
     required this.type,
     required this.delay,
+    required this.spawn,
     required this.fallDuration,
   });
 }
