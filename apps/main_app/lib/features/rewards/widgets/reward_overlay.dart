@@ -22,7 +22,7 @@ class RewardOverlay extends StatefulWidget {
     required this.rewardType,
     required this.onComplete,
     this.onAllItemsInteracted,
-    this.minDisplayDuration = const Duration(seconds: 3),
+    this.minDisplayDuration = const Duration(seconds: 6),
     this.showContinueButton = true,
     this.continueButtonText,
   });
@@ -32,7 +32,7 @@ class RewardOverlay extends StatefulWidget {
     required ChildProfile profile,
     required VoidCallback onComplete,
     VoidCallback? onAllItemsInteracted,
-    Duration minDisplayDuration = const Duration(seconds: 3),
+    Duration minDisplayDuration = const Duration(seconds: 6),
     bool showContinueButton = true,
     String? continueButtonText,
   }) {
@@ -118,8 +118,9 @@ class _RewardOverlayState extends State<RewardOverlay>
         });
         // Fade in reward
         _fadeController.forward();
-        // Phase 3: Auto proceed after total 8 seconds (2s dialogue + 6s reward)
-        Future.delayed(const Duration(seconds: 6), () {
+        // Phase 3: Auto-proceed once the reward has been shown for
+        // minDisplayDuration (no button needed — children just pop and go).
+        Future.delayed(widget.minDisplayDuration, () {
           if (mounted && _canContinue) {
             _onContinue();
           }
@@ -168,28 +169,28 @@ class _RewardOverlayState extends State<RewardOverlay>
         return BalloonsReward(
           onComplete: () {},
           onAllPopped: _onAllItemsInteracted,
-          balloonCount: n(15),
+          balloonCount: n(24),
           duration: const Duration(seconds: 8),
         );
       case RewardType.fireworks:
         return FireworksReward(
           onComplete: () {},
           onAllExploded: _onAllItemsInteracted,
-          rocketCount: n(10),
+          rocketCount: n(16),
           duration: const Duration(seconds: 10),
         );
       case RewardType.bubbles:
         return BubblesReward(
           onComplete: () {},
           onAllPopped: _onAllItemsInteracted,
-          bubbleCount: n(20),
+          bubbleCount: n(30),
           duration: const Duration(seconds: 10),
         );
       case RewardType.candy:
         return CandyReward(
           onComplete: () {},
           onAllCollected: _onAllItemsInteracted,
-          candyCount: n(18),
+          candyCount: n(28),
           duration: const Duration(seconds: 8),
         );
     }
@@ -378,7 +379,7 @@ extension RewardOverlayExtension on BuildContext {
   /// Shows a reward overlay as a full-screen dialog
   Future<void> showRewardOverlay({
     required RewardType rewardType,
-    Duration minDisplayDuration = const Duration(seconds: 3),
+    Duration minDisplayDuration = const Duration(seconds: 6),
     bool barrierDismissible = false,
   }) {
     return showDialog(
@@ -399,7 +400,7 @@ extension RewardOverlayExtension on BuildContext {
   /// Shows reward overlay based on child's preference
   Future<void> showRewardForChild({
     required ChildProfile profile,
-    Duration minDisplayDuration = const Duration(seconds: 3),
+    Duration minDisplayDuration = const Duration(seconds: 6),
     bool barrierDismissible = false,
   }) {
     final rewardType = RewardSelector.getRewardForChild(profile);
