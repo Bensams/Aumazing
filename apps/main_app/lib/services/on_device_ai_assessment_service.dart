@@ -198,6 +198,7 @@ class OnDeviceAiAssessmentService {
       featureValues: features,
       skillAreas: areaLevels.keys.toList(),
       areaLevels: areaLevels,
+      onDevice: true,
     );
   }
 

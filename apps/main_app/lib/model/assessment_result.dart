@@ -100,11 +100,13 @@ class AssessmentResult {
     return (score / total).clamp(0.0, 1.0);
   }
 
-  /// Whether this result was assessed by the AI (XGBoost) model.
-  ///
-  /// Returns `true` when [modelSource] is `'xgboost'`, making it easy
-  /// to distinguish AI-generated assessment data from rubric-only data.
-  bool get isAiAssessed => modelSource == 'xgboost';
+  /// Whether this result was assessed by the AI (XGBoost) model — either the
+  /// cloud API (`'xgboost'`) or the on-device ONNX model (`'xgboost_onnx'`).
+  bool get isAiAssessed =>
+      modelSource == 'xgboost' || modelSource == 'xgboost_onnx';
+
+  /// Whether this result was assessed by the on-device ONNX model.
+  bool get isOnDeviceAssessed => modelSource == 'xgboost_onnx';
 
   /// Create a copy with updated rubric scoring fields.
   AssessmentResult copyWithRubric({
