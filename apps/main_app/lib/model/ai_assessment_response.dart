@@ -1,8 +1,12 @@
+import 'area_level.dart';
 import 'module_recommendation.dart';
 
 /// Response model from the AI Assessment API's /predict-from-sessions endpoint.
 ///
 /// Maps to the Python PreAssessmentResponse schema in ai_assessment/app/schemas.py.
+/// Path B (May 2026): the canonical AI output is now [areaLevels] (per-area
+/// ordinal predictions). The legacy [predictedProfile] / [confidence] fields
+/// are still populated by the API for backwards compatibility (dual-response).
 class AiAssessmentResponse {
   final String predictedProfile;
   final double confidence;
@@ -17,6 +21,17 @@ class AiAssessmentResponse {
   /// Skill areas identified by the AI (e.g., 'communication', 'social').
   final List<String> skillAreas;
 
+  /// Per-area ordinal predictions keyed by area name.
+  ///
+  /// Keys: 'communication', 'social', 'play', 'attention'.
+  /// This is the canonical AI output under the Path B per-area design.
+  /// Empty when talking to a legacy API that does not yet emit `area_levels`.
+  final Map<String, AreaLevel> areaLevels;
+
+  /// True when this prediction was produced by the on-device ONNX model
+  /// (vs. the cloud API). Used to surface an "On-Device AI" indicator.
+  final bool onDevice;
+
   const AiAssessmentResponse({
     required this.predictedProfile,
     required this.confidence,
@@ -26,11 +41,21 @@ class AiAssessmentResponse {
     this.featureValues,
     this.moduleDetails = const [],
     this.skillAreas = const [],
+    this.areaLevels = const {},
+    this.onDevice = false,
   });
 
   factory AiAssessmentResponse.fromJson(Map<String, dynamic> json) {
     final preResult =
         json['pre_assessment_result'] as Map<String, dynamic>? ?? {};
+
+    final rawAreaLevels =
+        json['area_levels'] as Map<String, dynamic>? ?? const {};
+    final parsedAreaLevels = <String, AreaLevel>{
+      for (final entry in rawAreaLevels.entries)
+        entry.key: AreaLevel.fromJson(entry.value as Map<String, dynamic>),
+    };
+
     return AiAssessmentResponse(
       predictedProfile:
           json['predicted_profile'] as String? ?? 'balanced_profile',
@@ -54,6 +79,8 @@ class AiAssessmentResponse {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      areaLevels: parsedAreaLevels,
+      onDevice: json['on_device'] as bool? ?? false,
     );
   }
 
@@ -68,7 +95,15 @@ class AiAssessmentResponse {
         if (featureValues != null) 'feature_values': featureValues,
         'module_details': moduleDetails.map((m) => m.toJson()).toList(),
         'skill_areas': skillAreas,
+        'area_levels': {
+          for (final entry in areaLevels.entries)
+            entry.key: entry.value.toJson(),
+        },
+        'on_device': onDevice,
       };
+
+  /// True when the API returned per-area predictions (Path B response).
+  bool get hasAreaLevels => areaLevels.isNotEmpty;
 
   /// Human-readable profile name.
   String get profileDisplayName {
@@ -97,5 +132,6 @@ class AiAssessmentResponse {
       'confidence=$confidencePercent, '
       'modules=$recommendedModules, '
       'moduleDetails=$moduleDetails, '
-      'skillAreas=$skillAreas)';
+      'skillAreas=$skillAreas, '
+      'areaLevels=$areaLevels)';
 }

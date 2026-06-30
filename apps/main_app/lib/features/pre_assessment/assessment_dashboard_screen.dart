@@ -153,13 +153,19 @@ class _DashboardBody extends StatelessWidget {
     );
   }
 
-  /// Badge showing whether results are AI-powered or rule-based.
+  /// Badge showing whether results are on-device AI, cloud AI, or rule-based.
   Widget _buildSourceBadge() {
-    final isAi = aiPrediction != null;
+    final prediction = aiPrediction;
+    final isAi = prediction != null;
+    final onDevice = prediction?.onDevice ?? false;
+    final label = !isAi
+        ? 'Rule-Based'
+        : (onDevice ? 'On-Device AI' : 'AI-Powered');
+    final emoji = !isAi ? '📊' : (onDevice ? '📱' : '🤖');
     return StatusPillBadge(
-      label: isAi ? 'AI-Powered' : 'Rule-Based',
+      label: label,
       level: isAi ? StatusLevel.info : StatusLevel.warning,
-      icon: Text(isAi ? '🤖' : '📊', style: const TextStyle(fontSize: 10)),
+      icon: Text(emoji, style: const TextStyle(fontSize: 10)),
       compact: true,
       fontSize: 10,
     );
