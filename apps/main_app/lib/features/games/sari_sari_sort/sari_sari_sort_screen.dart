@@ -179,24 +179,15 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
         canPop: false,
         child: RewardOverlay.forChild(
           profile: childProvider.profile!,
+          // Longer reward so children enjoy popping it (engagement);
+          // the text "Great Job" dialog has been removed.
+          minDisplayDuration: const Duration(seconds: 7),
           onComplete: () {
             Navigator.of(dialogContext).pop(); // Close reward overlay
-            _showCompletionDialog(score, totalItems);
+            Navigator.of(context).pop(); // Back to the lobby
           },
         ),
       ),
-    );
-  }
-
-  void _showCompletionDialog(int score, int totalItems) {
-    showGameCompletionDialog(
-      context,
-      // Retry/Next only for non-assessment (learning-path / practice) modules.
-      showRetryNext: widget.assessmentContext == 'practice',
-      title: 'Great Job!',
-      message: 'You sorted $score out of $totalItems items!',
-      onRetry: _retryGame,
-      onNext: () => Navigator.of(context).pop(),
     );
   }
 
