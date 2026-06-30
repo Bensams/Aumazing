@@ -83,7 +83,10 @@ def main() -> None:
             estimator,
             initial_types=initial_types,
             options={id(estimator): {"zipmap": False}},
-            target_opset=12,
+            # Pin the ai.onnx.ml domain to v3 — the XGBoost converter defaults
+            # to v5, which skl2onnx does not yet support. Main ONNX opset 12 is
+            # widely compatible with ONNX Runtime Mobile.
+            target_opset={"": 12, "ai.onnx.ml": 3},
         )
         area = target.replace("_level", "")
         out_path = ASSETS_DIR / f"{area}.onnx"
