@@ -44,16 +44,9 @@ class MyTurnYourTurnScreen extends StatefulWidget {
   State<MyTurnYourTurnScreen> createState() => _MyTurnYourTurnScreenState();
 }
 
-int _roundsForDifficulty(int? difficulty) {
-  switch (difficulty) {
-    case 1:
-      return 3;
-    case 3:
-      return 7;
-    default:
-      return 5;
-  }
-}
+/// All games use a fixed 4 rounds to keep sessions short for young children.
+/// (Difficulty is reserved for future per-game tuning.)
+int _roundsForDifficulty(int? difficulty) => 4;
 
 class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
   late final int _totalRounds = _roundsForDifficulty(widget.difficulty);
