@@ -430,12 +430,15 @@ class _BalloonsRewardState extends State<BalloonsReward> {
 
   void _generateBalloons() {
     for (var i = 0; i < widget.balloonCount; i++) {
+      final delay = Duration(milliseconds: i * 200 + _random.nextInt(800));
       _balloons.add(_BalloonConfig(
         initialX: 0.05 + _random.nextDouble() * 0.9,
         size: 60 + _random.nextDouble() * 50,
         color: _balloonColors[_random.nextInt(_balloonColors.length)],
         pattern: _BalloonPattern.values[_random.nextInt(_BalloonPattern.values.length)],
-        delay: Duration(milliseconds: i * 200 + _random.nextInt(800)),
+        delay: delay,
+        // Create the spawn future ONCE so rebuilds don't restart the balloon.
+        spawn: Future<void>.delayed(delay),
         floatDuration: widget.duration + Duration(seconds: _random.nextInt(5) - 2),
       ));
     }
@@ -479,7 +482,8 @@ class _BalloonsRewardState extends State<BalloonsReward> {
       fit: StackFit.expand,
       children: _balloons.map((config) {
         return FutureBuilder(
-          future: Future.delayed(config.delay),
+          key: ObjectKey(config),
+          future: config.spawn,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const SizedBox.shrink();
@@ -509,6 +513,9 @@ class _BalloonConfig {
   final Color color;
   final _BalloonPattern pattern;
   final Duration delay;
+
+  /// Spawn-delay future, created once so rebuilds don't restart the balloon.
+  final Future<void> spawn;
   final Duration floatDuration;
 
   _BalloonConfig({
@@ -517,6 +524,7 @@ class _BalloonConfig {
     required this.color,
     required this.pattern,
     required this.delay,
+    required this.spawn,
     required this.floatDuration,
   });
 }

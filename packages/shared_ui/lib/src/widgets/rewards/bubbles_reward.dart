@@ -406,11 +406,14 @@ class _BubblesRewardState extends State<BubblesReward> {
 
   void _generateBubbles() {
     for (var i = 0; i < widget.bubbleCount; i++) {
+      final delay = Duration(milliseconds: i * 250 + _random.nextInt(500));
       _bubbles.add(_BubbleConfig(
         initialX: 0.05 + _random.nextDouble() * 0.9,
         size: 40 + _random.nextDouble() * 60,
         baseColor: _bubbleColors[_random.nextInt(_bubbleColors.length)],
-        delay: Duration(milliseconds: i * 250 + _random.nextInt(500)),
+        delay: delay,
+        // Create the spawn future ONCE so rebuilds don't restart the bubble.
+        spawn: Future<void>.delayed(delay),
         floatDuration: widget.duration + Duration(seconds: _random.nextInt(4) - 2),
       ));
     }
@@ -438,7 +441,8 @@ class _BubblesRewardState extends State<BubblesReward> {
     return Stack(
       children: _bubbles.map((config) {
         return FutureBuilder(
-          future: Future.delayed(config.delay),
+          key: ObjectKey(config),
+          future: config.spawn,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const SizedBox.shrink();
@@ -463,6 +467,9 @@ class _BubbleConfig {
   final double size;
   final Color baseColor;
   final Duration delay;
+
+  /// Spawn-delay future, created once so rebuilds don't restart the bubble.
+  final Future<void> spawn;
   final Duration floatDuration;
 
   _BubbleConfig({
@@ -470,6 +477,7 @@ class _BubbleConfig {
     required this.size,
     required this.baseColor,
     required this.delay,
+    required this.spawn,
     required this.floatDuration,
   });
 }
