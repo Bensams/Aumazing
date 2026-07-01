@@ -31,6 +31,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   final _nameFocusNode = FocusNode();
   DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
+  ChildSex? _selectedSex;
   bool _isLoading = false;
 
   // Setup step tracking
@@ -93,6 +94,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       return;
     }
     // Ages outside 2–6 are allowed at initialization (no age-range limit).
+    if (_selectedSex == null) {
+      _showError("Please select your child's gender.");
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -102,6 +107,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         displayName: _nameController.text.trim(),
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
+        sex: _selectedSex,
         rewardPreference: _selectedRewardPreference,
         useRandomReward: _useRandomReward,
       );
@@ -282,6 +288,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               _buildForm(),
               const SizedBox(height: AppSpacing.xl),
               _buildBirthDateSelector(),
+              const SizedBox(height: AppSpacing.xl),
+              _buildGenderSelector(),
             ],
           ),
         ),
@@ -319,6 +327,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       return;
     }
     // Ages outside 2–6 are allowed at initialization (no age-range limit).
+    if (_selectedSex == null) {
+      _showError("Please select your child's gender.");
+      return;
+    }
 
     setState(() => _currentStep = 1);
   }
@@ -339,6 +351,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           _buildForm(),
           const SizedBox(height: AppSpacing.xl),
           _buildBirthDateSelector(),
+          const SizedBox(height: AppSpacing.xl),
+          _buildGenderSelector(),
           const SizedBox(height: AppSpacing.xl),
           _buildAvatarPicker(),
           const SizedBox(height: AppSpacing.xl),
@@ -600,6 +614,69 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     );
   }
 
+  Widget _buildGenderSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Gender',
+          style: AppTextStyles.titleMedium.copyWith(
+            color: AppColors.foreground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Sets the app background theme. "Prefer not to say" uses a neutral theme.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _GenderCell(
+                icon: Icons.male_rounded,
+                label: 'Boy',
+                accent: GamePalettes.boy.primary,
+                selected: _selectedSex == ChildSex.male,
+                onTap: _isLoading ? null : () => _selectSex(ChildSex.male),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _GenderCell(
+                icon: Icons.female_rounded,
+                label: 'Girl',
+                accent: GamePalettes.girl.primary,
+                selected: _selectedSex == ChildSex.female,
+                onTap: _isLoading ? null : () => _selectSex(ChildSex.female),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _GenderCell(
+                icon: Icons.emoji_emotions_outlined,
+                label: 'Prefer not to say',
+                accent: GamePalettes.neutral.primary,
+                selected: _selectedSex == ChildSex.preferNotToSay,
+                onTap: _isLoading
+                    ? null
+                    : () => _selectSex(ChildSex.preferNotToSay),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _selectSex(ChildSex sex) {
+    _nameFocusNode.unfocus();
+    setState(() => _selectedSex = sex);
+  }
+
   Widget _buildAvatarPicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,4 +779,66 @@ class _AvatarOption {
   final Color bgColor;
 
   const _AvatarOption(this.emoji, this.label, this.bgColor);
+}
+
+/// A selectable gender option whose accent reflects the theme it applies.
+class _GenderCell extends StatelessWidget {
+  const _GenderCell({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? accent.withValues(alpha: 0.15) : AppColors.inputFill,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? accent : Colors.transparent,
+              width: 2.5,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 30,
+                  color: selected ? accent : AppColors.mutedForeground,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: selected ? accent : AppColors.foreground,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
