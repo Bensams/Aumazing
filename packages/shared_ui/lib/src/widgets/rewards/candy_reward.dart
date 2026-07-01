@@ -29,6 +29,7 @@ class _CollectibleCandy extends StatefulWidget {
   final VoidCallback onCollected;
 
   const _CollectibleCandy({
+    super.key,
     required this.initialX,
     required this.size,
     required this.color,
@@ -99,9 +100,26 @@ class _CollectibleCandyState extends State<_CollectibleCandy>
     _controller.forward();
   }
 
+  /// Collects this candy if [globalPosition] is within its current bounds —
+  /// lets a finger drag across candies to collect many smoothly.
+  bool tryPopAt(Offset globalPosition) {
+    if (_isCollected || _isOffScreen || !mounted) return false;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final local = box.globalToLocal(globalPosition);
+    if (local.dx >= 0 &&
+        local.dy >= 0 &&
+        local.dx <= box.size.width &&
+        local.dy <= box.size.height) {
+      _collect();
+      return true;
+    }
+    return false;
+  }
+
   void _collect() {
     if (_isCollected || _isOffScreen) return;
-    
+
     // Capture current position for sparkle effect
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -148,16 +166,13 @@ class _CollectibleCandyState extends State<_CollectibleCandy>
         return Positioned(
           left: x - widget.size / 2,
           top: y,
-          child: GestureDetector(
-            onTap: _collect,
-            child: Transform.rotate(
-              angle: _rotationAnimation.value,
-              child: CustomPaint(
-                size: Size(widget.size, widget.size),
-                painter: _CandyPainter(
-                  color: widget.color,
-                  type: widget.type,
-                ),
+          child: Transform.rotate(
+            angle: _rotationAnimation.value,
+            child: CustomPaint(
+              size: Size(widget.size, widget.size),
+              painter: _CandyPainter(
+                color: widget.color,
+                type: widget.type,
               ),
             ),
           ),
@@ -651,6 +666,7 @@ class _CandyRewardState extends State<CandyReward> {
     for (var i = 0; i < widget.candyCount; i++) {
       final delay = Duration(milliseconds: i * 200 + _random.nextInt(600));
       _candies.add(_CandyConfig(
+        key: GlobalKey<_CollectibleCandyState>(),
         initialX: 0.08 + _random.nextDouble() * 0.84,
         size: 50 + _random.nextDouble() * 50,
         color: _candyColors[_random.nextInt(_candyColors.length)],
@@ -680,34 +696,48 @@ class _CandyRewardState extends State<CandyReward> {
     }
   }
 
+  /// Collects any candy under the pointer — drag across to collect many.
+  void _handlePointer(PointerEvent event) {
+    for (final config in _candies) {
+      config.key.currentState?.tryPopAt(event.position);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: _candies.map((config) {
-        return FutureBuilder(
-          key: ObjectKey(config),
-          future: config.spawn,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox.shrink();
-            }
-            return _CollectibleCandy(
-              initialX: config.initialX * MediaQuery.of(context).size.width,
-              size: config.size,
-              color: config.color,
-              type: config.type,
-              fallDuration: config.fallDuration,
-              onCollected: _onCandyCollected,
-            );
-          },
-        );
-      }).toList(),
+    return Listener(
+      onPointerDown: _handlePointer,
+      onPointerMove: _handlePointer,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        children: _candies.map((config) {
+          return FutureBuilder(
+            key: ObjectKey(config),
+            future: config.spawn,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox.shrink();
+              }
+              return _CollectibleCandy(
+                key: config.key,
+                initialX: config.initialX * MediaQuery.of(context).size.width,
+                size: config.size,
+                color: config.color,
+                type: config.type,
+                fallDuration: config.fallDuration,
+                onCollected: _onCandyCollected,
+              );
+            },
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
 /// Configuration for a single candy
 class _CandyConfig {
+  final GlobalKey<_CollectibleCandyState> key;
   final double initialX;
   final double size;
   final Color color;
@@ -719,6 +749,7 @@ class _CandyConfig {
   final Duration fallDuration;
 
   _CandyConfig({
+    required this.key,
     required this.initialX,
     required this.size,
     required this.color,
