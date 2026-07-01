@@ -112,9 +112,18 @@ class MyTurnYourTurnGame extends FlameGame
   Timer? _noResponseTimer;
   int _hintCount = 0;
 
-  static const _buddyEmoji = '🐻';
   static const Color _buddyColor = AppColors.skyBlue;
   static const Color _childColor = AppColors.mint;
+
+  /// Buddy's emoji — a friendly bear by default, but if the child's avatar is
+  /// also a bear, pick a different character so the two are distinguishable.
+  String get _buddyEmoji {
+    const candidates = ['🐻', '🐰', '🐼', '🦊', '🐨'];
+    for (final c in candidates) {
+      if (c != avatar) return c;
+    }
+    return '🐻';
+  }
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -503,7 +512,8 @@ class MyTurnYourTurnGame extends FlameGame
 
   @override
   void render(Canvas canvas) {
-    final text = _isBuddyTurn ? "🐻 Buddy's turn…" : '$avatar Your turn!';
+    final text =
+        _isBuddyTurn ? "$_buddyEmoji Buddy's turn…" : '$avatar Your turn!';
     final color =
         _isBuddyTurn ? const Color(0xFF9B82C4) : const Color(0xFF5DAF8E);
     final fontSize = (size.x * 0.04).clamp(16.0, 28.0);
