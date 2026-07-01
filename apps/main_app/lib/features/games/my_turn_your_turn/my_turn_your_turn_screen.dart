@@ -75,10 +75,14 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
     _game = MyTurnYourTurnGame(
       totalRounds: _totalRounds,
       childId: childId,
+      // Child pieces + filled slots use the child's chosen avatar.
+      avatar: context.read<ChildProvider>().profile?.avatarEmoji ?? '⭐',
       // Audio SFX callbacks
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
       onPlayWrongSfx: () => audioService.playWrongSfx(),
       onPlayTapSfx: () => audioService.playGameTapSfx(),
+      onPlayDragSfx: () => audioService.playDragSfx(),
+      onPlayDropSfx: () => audioService.playDropSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
       onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
       // Voice-over callbacks
