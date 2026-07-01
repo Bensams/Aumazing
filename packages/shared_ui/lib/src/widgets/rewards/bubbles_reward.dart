@@ -25,6 +25,7 @@ class _PoppableBubble extends StatefulWidget {
   final VoidCallback onPopped;
 
   const _PoppableBubble({
+    super.key,
     required this.initialX,
     required this.size,
     required this.baseColor,
@@ -83,9 +84,26 @@ class _PoppableBubbleState extends State<_PoppableBubble>
     _controller.forward();
   }
 
+  /// Pops this bubble if [globalPosition] is within its current bounds — lets a
+  /// finger drag across bubbles to pop many smoothly.
+  bool tryPopAt(Offset globalPosition) {
+    if (_isPopped || _isOffScreen || !mounted) return false;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final local = box.globalToLocal(globalPosition);
+    if (local.dx >= 0 &&
+        local.dy >= 0 &&
+        local.dx <= box.size.width &&
+        local.dy <= box.size.height) {
+      _pop();
+      return true;
+    }
+    return false;
+  }
+
   void _pop() {
     if (_isPopped || _isOffScreen) return;
-    
+
     // Capture current position for pop effect
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -132,14 +150,11 @@ class _PoppableBubbleState extends State<_PoppableBubble>
         return Positioned(
           left: x - widget.size / 2,
           top: y,
-          child: GestureDetector(
-            onTap: _pop,
-            child: CustomPaint(
-              size: Size(widget.size, widget.size),
-              painter: _BubblePainter(
-                baseColor: widget.baseColor,
-                animationValue: _controller.value,
-              ),
+          child: CustomPaint(
+            size: Size(widget.size, widget.size),
+            painter: _BubblePainter(
+              baseColor: widget.baseColor,
+              animationValue: _controller.value,
             ),
           ),
         );
@@ -408,6 +423,7 @@ class _BubblesRewardState extends State<BubblesReward> {
     for (var i = 0; i < widget.bubbleCount; i++) {
       final delay = Duration(milliseconds: i * 250 + _random.nextInt(500));
       _bubbles.add(_BubbleConfig(
+        key: GlobalKey<_PoppableBubbleState>(),
         initialX: 0.05 + _random.nextDouble() * 0.9,
         size: 40 + _random.nextDouble() * 60,
         baseColor: _bubbleColors[_random.nextInt(_bubbleColors.length)],
@@ -436,33 +452,47 @@ class _BubblesRewardState extends State<BubblesReward> {
     }
   }
 
+  /// Pops any bubble under the pointer — drag across to pop many smoothly.
+  void _handlePointer(PointerEvent event) {
+    for (final config in _bubbles) {
+      config.key.currentState?.tryPopAt(event.position);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: _bubbles.map((config) {
-        return FutureBuilder(
-          key: ObjectKey(config),
-          future: config.spawn,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox.shrink();
-            }
-            return _PoppableBubble(
-              initialX: config.initialX * MediaQuery.of(context).size.width,
-              size: config.size,
-              baseColor: config.baseColor,
-              floatDuration: config.floatDuration,
-              onPopped: _onBubblePopped,
-            );
-          },
-        );
-      }).toList(),
+    return Listener(
+      onPointerDown: _handlePointer,
+      onPointerMove: _handlePointer,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        children: _bubbles.map((config) {
+          return FutureBuilder(
+            key: ObjectKey(config),
+            future: config.spawn,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox.shrink();
+              }
+              return _PoppableBubble(
+                key: config.key,
+                initialX: config.initialX * MediaQuery.of(context).size.width,
+                size: config.size,
+                baseColor: config.baseColor,
+                floatDuration: config.floatDuration,
+                onPopped: _onBubblePopped,
+              );
+            },
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
 /// Configuration for a single bubble
 class _BubbleConfig {
+  final GlobalKey<_PoppableBubbleState> key;
   final double initialX;
   final double size;
   final Color baseColor;
@@ -473,6 +503,7 @@ class _BubbleConfig {
   final Duration floatDuration;
 
   _BubbleConfig({
+    required this.key,
     required this.initialX,
     required this.size,
     required this.baseColor,

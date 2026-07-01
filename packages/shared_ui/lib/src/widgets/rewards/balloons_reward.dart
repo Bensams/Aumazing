@@ -31,6 +31,7 @@ class _PoppableBalloon extends StatefulWidget {
   final VoidCallback onPopped;
 
   const _PoppableBalloon({
+    super.key,
     required this.initialX,
     required this.size,
     required this.color,
@@ -109,6 +110,24 @@ class _PoppableBalloonState extends State<_PoppableBalloon>
     _floatController.forward();
   }
 
+  /// Pops this balloon if [globalPosition] falls within its current bounds.
+  /// Called by the parent so a finger dragged across balloons pops each one
+  /// smoothly (bubble-wrap style), not just single taps.
+  bool tryPopAt(Offset globalPosition) {
+    if (_isPopped || !mounted) return false;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final local = box.globalToLocal(globalPosition);
+    if (local.dx >= 0 &&
+        local.dy >= 0 &&
+        local.dx <= box.size.width &&
+        local.dy <= box.size.height) {
+      _pop();
+      return true;
+    }
+    return false;
+  }
+
   void _pop() {
     if (_isPopped) return;
 
@@ -175,15 +194,11 @@ class _PoppableBalloonState extends State<_PoppableBalloon>
         return Positioned(
           left: x - widget.size / 2,
           top: y,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _pop,
-            child: CustomPaint(
-              size: Size(widget.size, widget.size * 1.2),
-              painter: _BalloonPainter(
-                color: widget.color,
-                pattern: widget.pattern,
-              ),
+          child: CustomPaint(
+            size: Size(widget.size, widget.size * 1.2),
+            painter: _BalloonPainter(
+              color: widget.color,
+              pattern: widget.pattern,
             ),
           ),
         );
@@ -432,6 +447,7 @@ class _BalloonsRewardState extends State<BalloonsReward> {
     for (var i = 0; i < widget.balloonCount; i++) {
       final delay = Duration(milliseconds: i * 200 + _random.nextInt(800));
       _balloons.add(_BalloonConfig(
+        key: GlobalKey<_PoppableBalloonState>(),
         initialX: 0.05 + _random.nextDouble() * 0.9,
         size: 60 + _random.nextDouble() * 50,
         color: _balloonColors[_random.nextInt(_balloonColors.length)],
@@ -476,38 +492,53 @@ class _BalloonsRewardState extends State<BalloonsReward> {
     }
   }
 
+  /// Pops any balloon under the pointer — lets a finger drag across balloons
+  /// to pop many in one smooth swipe (and pops instantly on touch-down).
+  void _handlePointer(PointerEvent event) {
+    for (final config in _balloons) {
+      config.key.currentState?.tryPopAt(event.position);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: _balloons.map((config) {
-        return FutureBuilder(
-          key: ObjectKey(config),
-          future: config.spawn,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox.shrink();
-            }
-            final screenWidth = MediaQuery.of(context).size.width;
-            final maxSize = screenWidth * 0.2;
-            final actualSize = config.size > maxSize ? maxSize : config.size;
-            return _PoppableBalloon(
-              initialX: config.initialX * screenWidth,
-              size: actualSize,
-              color: config.color,
-              pattern: config.pattern,
-              floatDuration: config.floatDuration,
-              onPopped: _onBalloonPopped,
-            );
-          },
-        );
-      }).toList(),
+    return Listener(
+      onPointerDown: _handlePointer,
+      onPointerMove: _handlePointer,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        fit: StackFit.expand,
+        children: _balloons.map((config) {
+          return FutureBuilder(
+            key: ObjectKey(config),
+            future: config.spawn,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox.shrink();
+              }
+              final screenWidth = MediaQuery.of(context).size.width;
+              final maxSize = screenWidth * 0.2;
+              final actualSize = config.size > maxSize ? maxSize : config.size;
+              return _PoppableBalloon(
+                key: config.key,
+                initialX: config.initialX * screenWidth,
+                size: actualSize,
+                color: config.color,
+                pattern: config.pattern,
+                floatDuration: config.floatDuration,
+                onPopped: _onBalloonPopped,
+              );
+            },
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
 /// Configuration for a single balloon
 class _BalloonConfig {
+  final GlobalKey<_PoppableBalloonState> key;
   final double initialX;
   final double size;
   final Color color;
@@ -519,6 +550,7 @@ class _BalloonConfig {
   final Duration floatDuration;
 
   _BalloonConfig({
+    required this.key,
     required this.initialX,
     required this.size,
     required this.color,
