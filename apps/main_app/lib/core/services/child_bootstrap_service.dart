@@ -43,12 +43,14 @@ class ChildBootstrapService {
       await _authService.refreshSession();
     }
 
-    // Require a real authenticated session: an email/social account, or an
-    // anonymous account created via "Continue as Guest". The startup auto-guest
-    // (an in-memory id for offline storage, regenerated every launch with no
-    // Supabase user) is NOT a real session — those users go to login on every
-    // fresh open / new install, instead of being dropped into child setup.
-    if (!_authService.isLoggedIn) {
+    // Require either a real authenticated session (email/social/anonymous), or
+    // an established offline guest — one the user explicitly chose via
+    // "Continue as Guest", persisted across restarts. The startup auto-guest
+    // (a local id minted for offline storage, before any choice was made) is
+    // NOT a valid session: those users go to login on every fresh open / new
+    // install, instead of being dropped into child setup.
+    final isEstablishedGuest = await _authService.isGuestEstablished();
+    if (!_authService.isLoggedIn && !isEstablishedGuest) {
       return const BootstrapResult(destination: BootstrapDestination.login);
     }
 

@@ -524,6 +524,46 @@ class AuthService {
     }
   }
 
+  // ── Persistent offline guest ─────────────────────────────────────────
+
+  static const _guestEstablishedKey = 'guest_established';
+
+  /// Loads a persisted local guest id, or creates and persists a new one, so
+  /// the guest id is stable across app restarts (offline-first — no network).
+  Future<String> restoreOrCreateGuest() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = _guestId ?? prefs.getString(_guestUserIdKey);
+    if (id == null || id.isEmpty) {
+      id = 'guest_${_uuid.v4()}';
+      await prefs.setString(_guestUserIdKey, id);
+    }
+    _guestId = id;
+    return id;
+  }
+
+  /// Whether the user has explicitly chosen to continue as a guest (persisted).
+  Future<bool> isGuestEstablished() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_guestEstablishedKey) ?? false;
+  }
+
+  /// Establishes an offline guest session: ensures a persistent local guest id
+  /// and marks it as chosen. Works fully offline — no Supabase call.
+  Future<String> continueAsGuest() async {
+    final id = await restoreOrCreateGuest();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_guestEstablishedKey, true);
+    debugPrint('[AuthService] Continued as offline guest: $id');
+    return id;
+  }
+
+  /// Clears the "chosen guest" flag (e.g. on sign-out) so the next launch
+  /// returns to login.
+  Future<void> clearGuestEstablished() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_guestEstablishedKey);
+  }
+
   // --- Email / Password ---
 
   Future<AuthResponse> signUpWithEmail({
@@ -799,5 +839,7 @@ class AuthService {
       await clearStoredGuestSession();
       debugPrint('[AuthService] Bound user signed out with global scope');
     }
+    // Sign-out returns the user to login on next launch.
+    await clearGuestEstablished();
   }
 }
