@@ -52,9 +52,10 @@ class OfflineFirstIntegration {
 
     debugPrint('[OfflineFirst] Initializing offline-first services...');
 
-    // 1. Initialize guest mode (allows offline usage before auth)
+    // 1. Restore (or create) a persistent local guest id so offline guest
+    //    usage survives restarts without any network call.
     final auth = AuthService();
-    auth.initializeGuestMode();
+    await auth.restoreOrCreateGuest();
 
     // 2. Initialize connectivity monitoring
     await connectivityService.initialize();

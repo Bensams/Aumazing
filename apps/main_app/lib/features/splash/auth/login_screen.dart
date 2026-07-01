@@ -102,7 +102,10 @@ class _LoginScreenState extends State<LoginScreen>
   /// so we show "Continue to previous account" instead of "Continue as Guest".
   Future<void> _checkForExistingGuestAccount() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasToken = prefs.getString('guest_refresh_token') != null;
+    // A returning guest is either a cloud-backed anonymous account (refresh
+    // token) or an established offline guest (persisted locally).
+    final hasToken = prefs.getString('guest_refresh_token') != null ||
+        (prefs.getBool('guest_established') ?? false);
     if (mounted && hasToken != _hasExistingGuestAccount) {
       setState(() => _hasExistingGuestAccount = hasToken);
     }
@@ -414,15 +417,20 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Reuse an existing unbound guest account if available,
-      // otherwise create a new anonymous account.
+      // Offline-first: establish a persistent local guest immediately so guest
+      // mode works with no network at all and survives app restarts.
+      await _authService.continueAsGuest();
+
+      // Best-effort cloud upgrade: when online, back the guest with an anonymous
+      // account for sync. A failure here (e.g. offline) never blocks guest use.
       if (_authService.currentUser == null) {
-        await _authService.signInAnonymouslyOrReuse();
+        try {
+          await _authService.signInAnonymouslyOrReuse();
+        } catch (e) {
+          debugPrint('Guest cloud upgrade skipped (offline): $e');
+        }
       }
       await _navigateAfterAuth();
-    } on AuthException catch (e) {
-      debugPrint('Guest Sign-In AuthException: ${e.message}');
-      _showError(e.message);
     } catch (e, stackTrace) {
       debugPrint('Guest Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
