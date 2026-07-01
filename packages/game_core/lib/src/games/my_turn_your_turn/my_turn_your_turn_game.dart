@@ -115,15 +115,14 @@ class MyTurnYourTurnGame extends FlameGame
   static const Color _buddyColor = AppColors.skyBlue;
   static const Color _childColor = AppColors.mint;
 
-  /// Buddy's emoji — a friendly bear by default, but if the child's avatar is
-  /// also a bear, pick a different character so the two are distinguishable.
-  String get _buddyEmoji {
-    const candidates = ['🐻', '🐰', '🐼', '🦊', '🐨'];
-    for (final c in candidates) {
-      if (c != avatar) return c;
-    }
-    return '🐻';
-  }
+  /// Pool of buddy avatar candidates (matches the child avatar set).
+  static const _avatarPool = [
+    '🐻', '🐼', '🦊', '🐨', '🐸', '🦄', '🐙', '🐰',
+  ];
+
+  /// Buddy's avatar — picked once at load from [_avatarPool], always different
+  /// from the child's avatar so the two players are easy to tell apart.
+  String _buddyEmoji = '🐻';
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -131,6 +130,12 @@ class MyTurnYourTurnGame extends FlameGame
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Pick a buddy avatar that differs from the child's chosen avatar.
+    final buddyOptions =
+        _avatarPool.where((e) => e != avatar).toList()..shuffle(_rng);
+    if (buddyOptions.isNotEmpty) _buddyEmoji = buddyOptions.first;
+
     analyticsInitialize(
       gameId: 'my_turn_your_turn',
       childId: childId,
