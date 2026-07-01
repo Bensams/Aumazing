@@ -632,41 +632,43 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _GenderCell(
-                icon: Icons.male_rounded,
-                label: 'Boy',
-                accent: GamePalettes.boy.primary,
-                selected: _selectedSex == ChildSex.male,
-                onTap: _isLoading ? null : () => _selectSex(ChildSex.male),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _GenderCell(
+                  icon: Icons.male_rounded,
+                  label: 'Boy',
+                  accent: GamePalettes.boy.primary,
+                  selected: _selectedSex == ChildSex.male,
+                  onTap: _isLoading ? null : () => _selectSex(ChildSex.male),
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: _GenderCell(
-                icon: Icons.female_rounded,
-                label: 'Girl',
-                accent: GamePalettes.girl.primary,
-                selected: _selectedSex == ChildSex.female,
-                onTap: _isLoading ? null : () => _selectSex(ChildSex.female),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _GenderCell(
+                  icon: Icons.female_rounded,
+                  label: 'Girl',
+                  accent: GamePalettes.girl.primary,
+                  selected: _selectedSex == ChildSex.female,
+                  onTap: _isLoading ? null : () => _selectSex(ChildSex.female),
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: _GenderCell(
-                icon: Icons.emoji_emotions_outlined,
-                label: 'Prefer not to say',
-                accent: GamePalettes.neutral.primary,
-                selected: _selectedSex == ChildSex.preferNotToSay,
-                onTap: _isLoading
-                    ? null
-                    : () => _selectSex(ChildSex.preferNotToSay),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _GenderCell(
+                  icon: Icons.emoji_emotions_outlined,
+                  label: 'Prefer not to say',
+                  accent: GamePalettes.neutral.primary,
+                  selected: _selectedSex == ChildSex.preferNotToSay,
+                  onTap: _isLoading
+                      ? null
+                      : () => _selectSex(ChildSex.preferNotToSay),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
