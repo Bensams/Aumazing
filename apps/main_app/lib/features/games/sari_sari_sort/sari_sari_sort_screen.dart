@@ -238,7 +238,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
 
           if (_showStarSparkle && _lastTapPosition != null)
             ThreeStarSparkle(
-              position: _lastTapPosition!,
+              // Round-complete star always appears centred, not at last touch.
+              position: Offset(
+                MediaQuery.of(context).size.width / 2,
+                MediaQuery.of(context).size.height / 2,
+              ),
               onComplete: () {
                 setState(() {
                   _showStarSparkle = false;
