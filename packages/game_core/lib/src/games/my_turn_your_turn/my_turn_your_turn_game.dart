@@ -198,14 +198,15 @@ class MyTurnYourTurnGame extends FlameGame
       add(slot);
     }
 
-    // Side trays: pieces are centre-anchored tokens stacked vertically.
-    final pieceSize = cardSize * 0.82;
-    final spacing = pieceSize * 1.2;
-    final trayH = _turnsPerSide * spacing;
-    final trayTop = (gameH - trayH) / 2 + spacing / 2;
+    // Side trays: centre-anchored tokens stacked in the area BELOW the top bar
+    // so the top piece never overlaps the Retry/Menu/Lock icons.
+    final trayTop = gameH * 0.18;
+    final trayAvailH = gameH * 0.72;
+    final slotH = trayAvailH / _turnsPerSide;
+    final pieceSize = math.min(cardSize * 0.8, slotH * 0.82);
 
     for (var i = 0; i < _turnsPerSide; i++) {
-      final y = trayTop + i * spacing;
+      final y = trayTop + slotH * i + slotH / 2;
       final buddy = GamePiece(
         emoji: _buddyEmoji,
         color: _buddyColor,
