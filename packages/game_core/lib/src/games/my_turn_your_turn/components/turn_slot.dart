@@ -31,6 +31,7 @@ class TurnSlot extends PositionComponent with TapCallbacks {
   bool isFilled = false;
   bool isBuddy = false; // true = filled by buddy, false = filled by child
   Color fillColor = AppColors.lavender;
+  String fillEmoji = ''; // emoji shown once filled (buddy or child avatar)
   bool inputEnabled = false;
 
   // ── Hint state ─────────────────────────────────────────────────────
@@ -64,27 +65,23 @@ class TurnSlot extends PositionComponent with TapCallbacks {
     onTapped(slotIndex);
   }
 
-  void fillByBuddy(Color color) {
+  /// Fills the slot with a piece (buddy or child avatar), showing [emoji].
+  void fill({
+    required Color color,
+    required String emoji,
+    required bool isBuddy,
+  }) {
     isFilled = true;
-    isBuddy = true;
+    this.isBuddy = isBuddy;
     fillColor = color;
-    add(ScaleEffect.by(
-      Vector2.all(1.05),
-      EffectController(
-        duration: 0.2,
-        reverseDuration: 0.2,
-        curve: Curves.easeInOut,
-      ),
-    ));
-  }
-
-  void fillByChild(Color color) {
-    isFilled = true;
-    isBuddy = false;
-    fillColor = color;
+    fillEmoji = emoji;
     add(ScaleEffect.by(
       Vector2.all(1.08),
-      EffectController(duration: 0.15, curve: Curves.easeOut),
+      EffectController(
+        duration: 0.18,
+        reverseDuration: 0.14,
+        curve: Curves.easeInOut,
+      ),
     ));
   }
 
@@ -118,8 +115,8 @@ class TurnSlot extends PositionComponent with TapCallbacks {
         alpha: 160,
       );
 
-      // Emoji indicator
-      final label = isBuddy ? '🐻' : '⭐';
+      // Emoji indicator (buddy piece or child's avatar)
+      final label = fillEmoji;
       final tp = TextPainter(
         text: TextSpan(
           text: label,

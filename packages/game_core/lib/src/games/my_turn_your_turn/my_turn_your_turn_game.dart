@@ -6,22 +6,27 @@ import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
+import 'components/game_piece.dart';
 import 'components/turn_slot.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
-/// The app and child alternate placing shapes on a grid.
-/// Measures impulse control (early taps), waiting, and completion.
-/// Tracks comprehensive XGBoost-ready analytics.
-class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+/// Layout: the buddy's pieces sit in a tray on the LEFT and glide into a chosen
+/// slot on the buddy's turn; the child's pieces (their chosen avatar) sit in a
+/// tray on the RIGHT and are placed into slots on the child's turn — by tapping
+/// a piece then a slot, or by dragging a piece onto a slot. Measures impulse
+/// control (early taps), waiting, and completion.
+class MyTurnYourTurnGame extends FlameGame
+    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   MyTurnYourTurnGame({
     required this.totalRounds,
     required this.onStepChanged,
     required this.onGameComplete,
     required this.onTurnChanged,
     required this.childId,
+    this.avatar = '⭐',
     this.gameVersion,
     this.onCorrectMatch,
     // Audio event callbacks (optional, wired by screen wrappers)
@@ -46,6 +51,11 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   final int totalRounds;
   final String childId;
   final String? gameVersion;
+
+  /// The child's chosen avatar emoji (from their profile). Shown on the child's
+  /// pieces and filled slots instead of a generic star.
+  final String avatar;
+
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
@@ -59,8 +69,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   /// Notify Flutter layer: true = buddy's turn, false = child's turn
   final void Function(bool isBuddyTurn) onTurnChanged;
 
-  /// Optional callback fired on each correct child turn.
-  /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
+  /// Optional callback fired on each correct child turn (for haptics).
   final void Function()? onCorrectMatch;
 
   // ── Audio event callbacks ────────────────────────────────────────────
@@ -76,11 +85,8 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
-  /// Voice-over for buddy's turn ("My turn")
   final VoidCallback? onPlayMyTurnVo;
-  /// Voice-over for child's turn ("Your turn")
   final VoidCallback? onPlayYourTurnVo;
-  /// Voice-over for waiting phase ("Wait")
   final VoidCallback? onPlayWaitVo;
 
   // ── State ───────────────────────────────────────────────────────────
@@ -92,28 +98,23 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   DateTime? _turnStartTime;
 
   final List<TurnSlot> _slots = [];
+  final List<GamePiece> _buddyPieces = [];
+  final List<GamePiece> _childPieces = [];
+  GamePiece? _selectedPiece;
+
   bool _isBuddyTurn = true;
   int _turnsInRound = 0;
-  static const _slotsPerRound = 6; // 3x2 grid = 6 slots, 3 each
+  static const _slotsPerRound = 6; // 3 buddy + 3 child
+  int get _turnsPerSide => _slotsPerRound ~/ 2;
 
-  // ── Variable buddy turn duration ───────────────────────────────────
   final math.Random _rng = math.Random();
 
-  // ── Idle timer / hint system ───────────────────────────────────────
   Timer? _noResponseTimer;
   int _hintCount = 0;
 
-  static const _buddyColors = [
-    AppColors.peach,
-    AppColors.skyBlue,
-    AppColors.lavender,
-  ];
-
-  static const _childColors = [
-    AppColors.mint,
-    AppColors.butterYellow,
-    AppColors.peach,
-  ];
+  static const _buddyEmoji = '🐻';
+  static const Color _buddyColor = AppColors.skyBlue;
+  static const Color _childColor = AppColors.mint;
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -121,8 +122,6 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-
-    // Initialize and start analytics session
     analyticsInitialize(
       gameId: 'my_turn_your_turn',
       childId: childId,
@@ -130,39 +129,43 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       gameVersion: gameVersion ?? '1.0.0',
     );
     analyticsStartSession();
-
-    // Play instruction voice-over when game loads
     onPlayInstructionVo?.call();
-
     _setupRound();
   }
 
   void _setupRound() {
     _cancelNoResponseTimer();
-
     for (final s in _slots) {
       s.removeFromParent();
     }
+    for (final p in [..._buddyPieces, ..._childPieces]) {
+      p.removeFromParent();
+    }
     _slots.clear();
+    _buddyPieces.clear();
+    _childPieces.clear();
+    _selectedPiece = null;
     _turnsInRound = 0;
     _hintCount = 0;
 
-    // Start analytics round
     analyticsStartRound(roundNumber: _currentRound + 1);
     analyticsAddRoundData('slots_per_round', _slotsPerRound);
-    analyticsAddRoundData('child_turns_per_round', _slotsPerRound ~/ 2);
+    analyticsAddRoundData('child_turns_per_round', _turnsPerSide);
 
-    // Layout 3x2 responsive grid
     final gameW = size.x;
     final gameH = size.y;
+
+    // Centre slot grid (leaves side margins for the two trays).
     const cols = 3;
     const rows = 2;
-    final cardSize = math.min(gameW / (cols + 1.5), gameH / (rows + 1.5));
-    final gap = cardSize * 0.16;
-    final totalW = cols * cardSize + (cols - 1) * gap;
-    final totalH = rows * cardSize + (rows - 1) * gap;
-    final startX = (gameW - totalW) / 2;
-    final startY = (gameH - totalH) / 2;
+    final centreLeft = gameW * 0.20;
+    final centreW = gameW * 0.60;
+    final cardSize = math.min(centreW / (cols + 0.4), gameH / (rows + 1.2));
+    final gap = cardSize * 0.18;
+    final gridW = cols * cardSize + (cols - 1) * gap;
+    final gridH = rows * cardSize + (rows - 1) * gap;
+    final startX = centreLeft + (centreW - gridW) / 2;
+    final startY = (gameH - gridH) / 2;
 
     for (var i = 0; i < _slotsPerRound; i++) {
       final col = i % cols;
@@ -181,26 +184,60 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       add(slot);
     }
 
-    // Start with buddy's turn
+    // Side trays: pieces are centre-anchored tokens stacked vertically.
+    final pieceSize = cardSize * 0.82;
+    final spacing = pieceSize * 1.2;
+    final trayH = _turnsPerSide * spacing;
+    final trayTop = (gameH - trayH) / 2 + spacing / 2;
+
+    for (var i = 0; i < _turnsPerSide; i++) {
+      final y = trayTop + i * spacing;
+      final buddy = GamePiece(
+        emoji: _buddyEmoji,
+        color: _buddyColor,
+        isChild: false,
+        position: Vector2(gameW * 0.09, y),
+        size: Vector2.all(pieceSize),
+      );
+      _buddyPieces.add(buddy);
+      add(buddy);
+
+      final child = GamePiece(
+        emoji: avatar,
+        color: _childColor,
+        isChild: true,
+        onTapped: _onChildPieceTapped,
+        onPickedUp: _onChildPiecePickedUp,
+        onDragEnded: _onChildPieceDragEnded,
+        position: Vector2(gameW * 0.91, y),
+        size: Vector2.all(pieceSize),
+      );
+      _childPieces.add(child);
+      add(child);
+    }
+
     _startBuddyTurn();
   }
+
+  // ── Buddy's turn ─────────────────────────────────────────────────────
 
   void _startBuddyTurn() {
     _isBuddyTurn = true;
     _cancelNoResponseTimer();
     onTurnChanged(true);
-    // Play "my turn" and "wait" voice-overs for buddy's turn
     onPlayMyTurnVo?.call();
     onPlayWaitVo?.call();
 
     for (final s in _slots) {
       s.inputEnabled = false;
     }
+    for (final p in _childPieces) {
+      p.interactive = false;
+    }
 
-    // Variable delay between 1000-5000ms to test impulse control
-    final delayMs = 1000 + _rng.nextInt(4001); // 1000..5000
+    // Variable delay (1–5s) to test impulse control.
+    final delayMs = 1000 + _rng.nextInt(4001);
     analyticsAddRoundData('buddy_turn_delay_ms', delayMs);
-
     Future.delayed(Duration(milliseconds: delayMs), () {
       if (!isMounted) return;
       _buddyPlays();
@@ -208,57 +245,151 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   }
 
   void _buddyPlays() {
-    final emptySlots =
-        _slots.where((s) => !s.isFilled).toList();
-    if (emptySlots.isEmpty) return;
+    final emptySlots = _slots.where((s) => !s.isFilled).toList();
+    if (emptySlots.isEmpty || _buddyPieces.isEmpty) return;
 
-    final rng = math.Random();
-    final slot = emptySlots[rng.nextInt(emptySlots.length)];
-    final color = _buddyColors[rng.nextInt(_buddyColors.length)];
-    slot.fillByBuddy(color);
-    _turnsInRound++;
+    final slot = emptySlots[_rng.nextInt(emptySlots.length)];
+    final piece = _buddyPieces.removeLast();
+    onPlayDragSfx?.call();
 
-    // Check if round complete
-    if (_checkRoundComplete()) return;
-
-    // Switch to child's turn
-    Future.delayed(const Duration(milliseconds: 600), () {
+    piece.moveToTarget(slot.position + slot.size / 2, onDone: () {
       if (!isMounted) return;
-      _startChildTurn();
+      piece.removeFromParent();
+      slot.fill(color: _buddyColor, emoji: _buddyEmoji, isBuddy: true);
+      onPlayDropSfx?.call();
+      _turnsInRound++;
+      if (_checkRoundComplete()) return;
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (isMounted) _startChildTurn();
+      });
     });
   }
+
+  // ── Child's turn ─────────────────────────────────────────────────────
 
   void _startChildTurn() {
     _isBuddyTurn = false;
     onTurnChanged(false);
-    // Play "your turn" voice-over for child's turn
     onPlayYourTurnVo?.call();
     _turnStartTime = DateTime.now();
 
-    // Child's turn is the stimulus
     analyticsShowStimulus();
     analyticsRecordPrompt(promptType: 'your_turn_indicator');
 
     for (final s in _slots) {
-      s.inputEnabled = true; // allow tapping empty slots
+      s.inputEnabled = true;
+    }
+    for (final p in _childPieces) {
+      p.interactive = true;
     }
 
     _startNoResponseTimer();
   }
 
-  /// Called when a slot is tapped while input is disabled (buddy's turn).
-  /// Records an impulse-control error tap.
+  void _onChildPieceTapped(GamePiece piece) {
+    if (_isBuddyTurn) return;
+    _cancelNoResponseTimer();
+    for (final p in _childPieces) {
+      if (p != piece) p.deselect();
+    }
+    _selectedPiece = piece;
+    piece.select();
+    onPlayTapSfx?.call();
+    _startNoResponseTimer();
+  }
+
+  void _onChildPiecePickedUp(GamePiece piece) {
+    _cancelNoResponseTimer();
+    _hideVisualHints();
+    for (final p in _childPieces) {
+      if (p != piece) p.deselect();
+    }
+    _selectedPiece = piece;
+    onPlayDragSfx?.call();
+  }
+
+  /// Child drops a dragged piece — place it if it landed on an empty slot.
+  void _onChildPieceDragEnded(GamePiece piece, Vector2 dropCenter) {
+    if (_isBuddyTurn) {
+      piece.returnHome();
+      return;
+    }
+    TurnSlot? target;
+    for (final s in _slots) {
+      if (!s.isFilled && s.containsPoint(dropCenter)) {
+        target = s;
+        break;
+      }
+    }
+    if (target == null) {
+      piece.returnHome();
+      _startNoResponseTimer();
+      return;
+    }
+    _placeChildPiece(piece, target);
+  }
+
+  /// Child taps a slot — place the selected piece (or the next available one).
+  void _onSlotTapped(int index) {
+    if (_isBuddyTurn) return;
+    final slot = _slots[index];
+    if (slot.isFilled) return;
+    final piece = _selectedPiece ??
+        (_childPieces.isNotEmpty ? _childPieces.first : null);
+    if (piece == null) return;
+    _placeChildPiece(piece, slot);
+  }
+
+  void _placeChildPiece(GamePiece piece, TurnSlot slot) {
+    _cancelNoResponseTimer();
+    _selectedPiece = null;
+    _childPieces.remove(piece);
+
+    for (final s in _slots) {
+      s.inputEnabled = false;
+    }
+    for (final p in _childPieces) {
+      p.interactive = false;
+    }
+
+    onPlayDragSfx?.call();
+    piece.moveToTarget(slot.position + slot.size / 2, onDone: () {
+      if (!isMounted) return;
+      piece.removeFromParent();
+      slot.fill(color: _childColor, emoji: avatar, isBuddy: false);
+      _turnsInRound++;
+      _score++;
+
+      onPlayDropSfx?.call();
+      onPlayCorrectSfx?.call();
+      onPlayCorrectVo?.call();
+      onCorrectMatch?.call();
+
+      analyticsRecordValidAction();
+      analyticsRecordCorrect(extraData: {
+        'slot_index': slot.slotIndex,
+        'turn_in_round': _turnsInRound,
+        'waited_for_turn': true,
+      });
+      if (_turnStartTime != null) {
+        _totalResponseTimeMs +=
+            DateTime.now().difference(_turnStartTime!).inMilliseconds;
+      }
+
+      if (_checkRoundComplete()) return;
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (isMounted) _startBuddyTurn();
+      });
+    });
+  }
+
+  /// A slot tapped while input is disabled (buddy's turn) → impulse-control error.
   void _onSlotTappedWhileDisabled(int index) {
     final slot = _slots[index];
-
     _earlyTaps++;
     _errorCount++;
-
-    // Play wrong SFX and voice-over for early tap
     onPlayWrongSfx?.call();
     onPlayWrongVo?.call();
-
-    // Record as off-task action (important for XGBoost)
     analyticsRecordOffTaskAction(actionType: 'early_tap_slot_buddy_turn');
     analyticsRecordWrong(extraData: {
       'error_type': 'impulse_control',
@@ -266,59 +397,7 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
       'tap_target': 'slot',
       'slot_index': index,
     });
-
     slot.showEarlyTapWarning();
-  }
-
-  void _onSlotTapped(int index) {
-    final slot = _slots[index];
-    if (slot.isFilled) return;
-
-    // Child's turn — cancel idle timer and clear hints
-    _cancelNoResponseTimer();
-
-    // Child's turn — fill the slot
-    // Play tap SFX
-    onPlayTapSfx?.call();
-
-    final rng = math.Random();
-    final color = _childColors[rng.nextInt(_childColors.length)];
-    slot.fillByChild(color);
-    _turnsInRound++;
-    _score++;
-
-    // Play correct SFX and voice-over
-    onPlayCorrectSfx?.call();
-    onPlayCorrectVo?.call();
-
-    // Record valid action and correct response
-    analyticsRecordValidAction();
-    analyticsRecordCorrect(extraData: {
-      'slot_index': index,
-      'turn_in_round': _turnsInRound,
-      'waited_for_turn': true,
-    });
-
-    // Notify Flutter layer of correct child turn (for haptic feedback)
-    onCorrectMatch?.call();
-
-    if (_turnStartTime != null) {
-      _totalResponseTimeMs +=
-          DateTime.now().difference(_turnStartTime!).inMilliseconds;
-    }
-
-    for (final s in _slots) {
-      s.inputEnabled = false;
-    }
-
-    // Check if round complete
-    if (_checkRoundComplete()) return;
-
-    // Back to buddy
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!isMounted) return;
-      _startBuddyTurn();
-    });
   }
 
   bool _checkRoundComplete() {
@@ -326,37 +405,36 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
     if (!allFilled) return false;
 
     _cancelNoResponseTimer();
-
     _currentRound++;
     onStepChanged(_currentRound);
 
-    // Complete round
     analyticsCompleteRound(successful: true);
     analyticsAddRoundData('early_taps_in_round', _earlyTaps);
     analyticsAddRoundData('turns_taken', _turnsInRound);
 
     if (_currentRound >= totalRounds) {
-      // Game complete — play game complete SFX and celebration VO
       onPlayGameCompleteSfx?.call();
       onPlayCelebrationVo?.call();
 
       analyticsMarkCompleted();
       analyticsCompleteSession();
-
-      // Add game-specific metrics for XGBoost
       analyticsAddGameSpecificMetric('early_taps_total', _earlyTaps);
       analyticsAddGameSpecificMetric('hint_count', _hintCount);
       analyticsAddGameSpecificMetric('avg_response_time_ms',
-        _totalResponseTimeMs / (_score > 0 ? _score : 1));
-      analyticsAddGameSpecificMetric('impulse_control_score',
-        _earlyTaps == 0 ? 1.0 : 1.0 - (_earlyTaps / (_score + _earlyTaps)).clamp(0.0, 1.0));
+          _totalResponseTimeMs / (_score > 0 ? _score : 1));
+      analyticsAddGameSpecificMetric(
+          'impulse_control_score',
+          _earlyTaps == 0
+              ? 1.0
+              : 1.0 -
+                  (_earlyTaps / (_score + _earlyTaps)).clamp(0.0, 1.0));
       analyticsAddGameSpecificMetric('turn_completion_rate',
-        _score / (totalRounds * (_slotsPerRound ~/ 2)));
+          _score / (totalRounds * _turnsPerSide));
 
       Future.delayed(const Duration(milliseconds: 600), () {
         onGameComplete(
           score: _score,
-          totalItems: totalRounds * (_slotsPerRound ~/ 2), // child's slots
+          totalItems: totalRounds * _turnsPerSide,
           errorCount: _errorCount,
           totalResponseTimeMs: _totalResponseTimeMs,
           extras: {'early_taps': _earlyTaps},
@@ -364,10 +442,8 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
         );
       });
     } else {
-      // Level/round complete — play level complete SFX and transition VO
       onPlayLevelCompleteSfx?.call();
       onPlayTransitionVo?.call();
-
       Future.delayed(const Duration(milliseconds: 800), _setupRound);
     }
     return true;
@@ -376,17 +452,13 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
-    // Record ALL taps — valid ones that hit components and invalid ones that missed
     analyticsRecordTouch(
       Offset(event.canvasPosition.x, event.canvasPosition.y),
       isValid: event.handled,
     );
-
-    // Canvas taps during buddy turn are random/failed touches, not error taps.
-    // Error taps on slots during buddy turn are handled by _onSlotTappedWhileDisabled.
   }
 
-  // ── Idle timer / hint methods ──────────────────────────────────────
+  // ── Idle timer / hint ────────────────────────────────────────────────
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
@@ -403,24 +475,17 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
   }
 
   void _showVisualGuide() {
-    // Find first empty slot and highlight it
     final emptySlots = _slots.where((s) => !s.isFilled).toList();
     if (emptySlots.isEmpty) return;
-
     final targetSlot = emptySlots.first;
     targetSlot.showHint();
-
     _hintCount++;
     analyticsRecordHint(hintType: 'idle_visual_guide');
     analyticsRecordPrompt(promptType: 'visual_guide_idle_slot');
-
-    // Auto-hide hint after 3 seconds and restart timer
     Future.delayed(const Duration(seconds: 3), () {
       if (!isMounted) return;
       targetSlot.hideHint();
-      if (!_isBuddyTurn) {
-        _startNoResponseTimer();
-      }
+      if (!_isBuddyTurn) _startNoResponseTimer();
     });
   }
 
@@ -438,11 +503,9 @@ class MyTurnYourTurnGame extends FlameGame with TapCallbacks, EnhancedGameplayAn
 
   @override
   void render(Canvas canvas) {
-    // Turn indicator
-    final text = _isBuddyTurn ? "🐻 Buddy's turn…" : '⭐ Your turn!';
-    final color = _isBuddyTurn
-        ? const Color(0xFF9B82C4)
-        : const Color(0xFF5DAF8E);
+    final text = _isBuddyTurn ? "🐻 Buddy's turn…" : '$avatar Your turn!';
+    final color =
+        _isBuddyTurn ? const Color(0xFF9B82C4) : const Color(0xFF5DAF8E);
     final fontSize = (size.x * 0.04).clamp(16.0, 28.0);
 
     final tp = TextPainter(
