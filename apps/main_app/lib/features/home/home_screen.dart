@@ -12,6 +12,7 @@ import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/screen_time_service.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
 import '../post_assessment/post_assessment_progress_screen.dart';
@@ -245,6 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildHeader(),
                       const SizedBox(height: AppSpacing.md),
                       _buildActionButtons(),
+                      _buildScreenTimeStatus(),
                       const SizedBox(height: AppSpacing.md),
                       _buildAssessmentStatus(),
                       const SizedBox(height: AppSpacing.md),
@@ -573,6 +575,56 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  /// Compact "screen time today" monitor for the parent (FR: parents
+  /// monitor screen time from the dashboard). Hidden when no limit is set.
+  Widget _buildScreenTimeStatus() {
+    final childId = context.watch<ChildProvider>().profile?.id;
+    final screenTime = ScreenTimeService.instance;
+    if (childId != null && screenTime.loadedChildId != childId) {
+      screenTime.load(childId);
+    }
+    return ListenableBuilder(
+      listenable: screenTime,
+      builder: (context, _) {
+        final limit = screenTime.limitMinutes;
+        if (limit == null) return const SizedBox.shrink();
+        final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
+        final fraction = (usedMin / limit).clamp(0.0, 1.0);
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Row(
+            children: [
+              const Icon(Icons.timer_rounded,
+                  size: 16, color: AppColors.mutedForeground),
+              const SizedBox(width: 6),
+              Text(
+                'Screen time today: $usedMin / $limit min',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.mutedForeground),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: fraction,
+                    minHeight: 6,
+                    backgroundColor: AppColors.lavenderLight,
+                    valueColor: AlwaysStoppedAnimation(
+                      fraction >= 1.0
+                          ? AppColors.statusWarningDark
+                          : AppColors.mint,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
