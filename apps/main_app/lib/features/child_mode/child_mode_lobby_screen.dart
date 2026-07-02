@@ -76,6 +76,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     Map<String, AreaLevel> areaLevels,
     int fallback,
   ) {
+    // A parent's manual override (settings) wins over the AI-derived level.
+    final override = context.read<ChildProvider>().difficultyOverride;
+    if (override != null) return override.clamp(1, 3);
+
     int? weakest;
     for (final cat in entry.categories) {
       final area = areaLevels[_areaKeyForCategory[cat]];
