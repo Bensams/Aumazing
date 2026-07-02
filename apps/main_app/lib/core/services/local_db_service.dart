@@ -94,11 +94,18 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 13; // v13: Add random_touch_count to assessment_results_local
+  static const _dbVersion = 14; // v14: Add sync_error to syncable tables
   static const _uuid = Uuid();
   static const _readableChildWhere = 'display_name IS NOT NULL';
-  static const _syncableChildWhere =
-      'display_name IS NOT NULL';
+
+  /// Children eligible for cloud sync. Guest-owned rows are excluded:
+  /// their owner is a local id like `guest_<uuid>`, which Supabase's
+  /// `parent_user_id` (a real uuid) rejects with 22P02. They stay local
+  /// until sign-in backfills the real user id (see [backfillGuestData]).
+  static const _syncableChildWhere = "display_name IS NOT NULL "
+      "AND user_id IS NOT NULL "
+      "AND user_id NOT LIKE 'guest_%' "
+      "AND (owner_id IS NULL OR owner_id NOT LIKE 'guest_%')";
 
   static Database? _database;
 
@@ -124,6 +131,7 @@ class LocalDbService {
   /// Common sync metadata columns for all tables
   static const String _syncColumns = '''
     sync_status TEXT NOT NULL DEFAULT 'pending',
+    sync_error TEXT,
     last_synced_at TEXT,
     deleted_at TEXT,
     updated_at TEXT NOT NULL,
@@ -786,6 +794,34 @@ class LocalDbService {
       );
       debugPrint('[LocalDbService] Added random_touch_count column to assessment_results_local (v13)');
     }
+
+    if (oldVersion < 14) {
+      // Migration from v13 to v14: Add sync_error to all syncable tables.
+      // markSyncFailed writes it, but existing databases were created before
+      // the column existed, making the failure handler itself throw.
+      const syncableTables = [
+        LocalTables.children,
+        LocalTables.assessmentRuns,
+        LocalTables.gameSessions,
+        LocalTables.gameRounds,
+        LocalTables.sessionEvents,
+        LocalTables.caregiverQuestionnaires,
+        LocalTables.assessmentResults,
+        LocalTables.moduleRecommendations,
+        LocalTables.assessmentComparisons,
+        LocalTables.sensoryConsent,
+        LocalTables.sensoryRoundMetrics,
+        LocalTables.sensoryPreferences,
+      ];
+      for (final table in syncableTables) {
+        try {
+          await db.execute('ALTER TABLE $table ADD COLUMN sync_error TEXT');
+        } catch (_) {
+          // Table missing or column already present — safe to skip.
+        }
+      }
+      debugPrint('[LocalDbService] Added sync_error column to syncable tables (v14)');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
@@ -840,6 +876,7 @@ class LocalDbService {
       table,
       {
         'sync_status': SyncStatus.synced.value,
+        'sync_error': null,
         'last_synced_at': (syncedAt ?? DateTime.now()).toIso8601String(),
       },
       where: 'id = ?',
@@ -889,6 +926,10 @@ class LocalDbService {
     String newOwnerId,
   ) async {
     final db = await database;
+    // Match by prefix as well as exactly: guest ids are minted as
+    // `guest_<uuid>`, but callers backfill with the generic 'guest' prefix
+    // (see SyncService.onUserAuthenticated) — exact matching alone would
+    // never remap those rows.
     await db.update(
       table,
       {
@@ -897,8 +938,8 @@ class LocalDbService {
         'updated_at': DateTime.now().toIso8601String(),
         'sync_status': SyncStatus.pending.value,
       },
-      where: 'owner_id = ? OR user_id = ?',
-      whereArgs: [oldOwnerId, oldOwnerId],
+      where: 'owner_id = ? OR user_id = ? OR owner_id LIKE ? OR user_id LIKE ?',
+      whereArgs: [oldOwnerId, oldOwnerId, '$oldOwnerId%', '$oldOwnerId%'],
     );
     debugPrint(
       '[LocalDbService] Updated owner_id in $table: $oldOwnerId -> $newOwnerId',
