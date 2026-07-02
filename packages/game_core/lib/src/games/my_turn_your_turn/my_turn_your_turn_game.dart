@@ -5,7 +5,6 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
-import 'package:shared_ui/shared_ui.dart';
 import 'components/game_piece.dart';
 import 'components/turn_slot.dart';
 import '../shared/ghost_hand.dart';
@@ -135,8 +134,10 @@ class MyTurnYourTurnGame extends FlameGame
   bool get _hintBudgetLeft =>
       _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
-  static const Color _buddyColor = AppColors.skyBlue;
-  static const Color _childColor = AppColors.mint;
+  // True colors (not pastels): buddy pieces are real blue, the child's are
+  // real green, so "whose turn" reads instantly and matches natural colors.
+  static const Color _buddyColor = Color(0xFF1E88E5);
+  static const Color _childColor = Color(0xFF43A047);
 
   /// Pool of buddy avatar candidates (matches the child avatar set).
   static const _avatarPool = [
