@@ -1,99 +1,141 @@
 """
 app/model_loader.py
-Loads the trained XGBoost model, label encoder, and feature names from disk.
+Loads the trained multi-output ordinal classifier and supporting metadata.
 
-Provides a simple `predict()` function used by the FastAPI endpoint.
-Model artifacts are saved by `training/train_model.py` into the `models/` directory.
+Provides a `predict()` function that returns per-area developmental level
+predictions (Path B per-area design). Model artifacts are produced by
+`training/train_model.py` into the `models/` directory.
 """
 
 import json
-import os
 from pathlib import Path
 
 import joblib
 import numpy as np
 
 # ──────────────────────────────────────────────────────────────────────
-# Paths to model artifacts (relative to project root)
+# Paths to model artifacts (relative to project root = ai_assessment/)
 # ──────────────────────────────────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent.parent  # project root
-MODEL_PATH = BASE_DIR / "models" / "xgboost_preassessment.pkl"
-ENCODER_PATH = BASE_DIR / "models" / "label_encoder.pkl"
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "models" / "xgboost_multi_output.pkl"
 FEATURES_PATH = BASE_DIR / "models" / "feature_names.json"
+LEVEL_NAMES_PATH = BASE_DIR / "models" / "level_names.json"
+TARGET_NAMES_PATH = BASE_DIR / "models" / "target_names.json"
+
+# Default fallbacks if the JSON files are absent (kept in sync with train_model)
+DEFAULT_LEVEL_NAMES = {0: "Needs Support", 1: "Emerging", 2: "Strength"}
+DEFAULT_TARGET_NAMES = [
+    "communication_level",
+    "social_level",
+    "play_level",
+    "attention_level",
+]
+
+# Mapping from a target column name to a short area key used in the API response
+TARGET_TO_AREA = {
+    "communication_level": "communication",
+    "social_level": "social",
+    "play_level": "play",
+    "attention_level": "attention",
+}
+
+# Mapping from level int to the API-facing snake_case label
+LEVEL_INT_TO_API = {0: "needs_support", 1: "emerging", 2: "strength"}
+
 
 # ──────────────────────────────────────────────────────────────────────
-# Module-level variables (loaded once at import time)
+# Module-level state (loaded once at import time)
 # ──────────────────────────────────────────────────────────────────────
 _model = None
-_label_encoder = None
 _feature_names: list[str] = []
+_target_names: list[str] = []
+_level_names: dict[int, str] = {}
 _is_loaded = False
 
 
 def _load_artifacts() -> None:
-    """
-    Load model, label encoder, and feature names from disk.
-    Sets module-level variables so artifacts are only loaded once.
-    """
-    global _model, _label_encoder, _feature_names, _is_loaded
+    """Load model + metadata once and cache module-level."""
+    global _model, _feature_names, _target_names, _level_names, _is_loaded
 
     if _is_loaded:
         return
 
-    # Check that all required files exist
-    for path, name in [
-        (MODEL_PATH, "XGBoost model"),
-        (ENCODER_PATH, "Label encoder"),
-        (FEATURES_PATH, "Feature names"),
-    ]:
-        if not path.exists():
-            raise FileNotFoundError(
-                f"{name} not found at {path}. "
-                "Run `python training/train_model.py` first to generate model artifacts."
-            )
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Multi-output model not found at {MODEL_PATH}. "
+            "Run `python training/train_model.py` first to generate model artifacts."
+        )
+    if not FEATURES_PATH.exists():
+        raise FileNotFoundError(
+            f"Feature names file not found at {FEATURES_PATH}. "
+            "Run `python training/train_model.py` first."
+        )
 
     _model = joblib.load(MODEL_PATH)
-    _label_encoder = joblib.load(ENCODER_PATH)
 
     with open(FEATURES_PATH, "r") as f:
         _feature_names = json.load(f)
 
+    if TARGET_NAMES_PATH.exists():
+        with open(TARGET_NAMES_PATH, "r") as f:
+            _target_names = json.load(f)
+    else:
+        _target_names = list(DEFAULT_TARGET_NAMES)
+
+    if LEVEL_NAMES_PATH.exists():
+        with open(LEVEL_NAMES_PATH, "r") as f:
+            raw = json.load(f)
+            _level_names = {int(k): v for k, v in raw.items()}
+    else:
+        _level_names = dict(DEFAULT_LEVEL_NAMES)
+
     _is_loaded = True
-    print(f"[model_loader] Loaded model with {len(_feature_names)} features.")
+    print(
+        f"[model_loader] Loaded multi-output model with "
+        f"{len(_feature_names)} features and {len(_target_names)} target areas."
+    )
 
 
-def predict(features: dict) -> tuple[str, float]:
+def predict(features: dict) -> dict:
     """
-    Run a prediction using the loaded XGBoost model.
+    Run a per-area prediction.
 
     Args:
-        features: Dictionary of feature_name -> value. Keys must match
-                  the feature names used during training.
+        features: Dict of feature_name -> value. Keys must match training names.
 
     Returns:
-        Tuple of (predicted_profile_label, confidence_score).
-        - predicted_profile_label: e.g. "communication_support"
-        - confidence_score: float between 0.0 and 1.0
+        Dict keyed by short area name ("communication", "social", "play",
+        "attention"). Each value is a sub-dict:
+            {
+                "level":         "needs_support" | "emerging" | "strength",
+                "level_int":     0 | 1 | 2,
+                "level_name":    "Needs Support" | "Emerging" | "Strength",
+                "confidence":    float in [0.0, 1.0],
+            }
     """
-    # Ensure artifacts are loaded
     _load_artifacts()
 
-    # Build feature vector in the correct column order
-    feature_vector = []
-    for fname in _feature_names:
-        feature_vector.append(features.get(fname, 0.0))
+    # Build feature vector in canonical training order
+    x = np.array(
+        [[features.get(fname, 0.0) for fname in _feature_names]],
+        dtype=np.float64,
+    )
 
-    # Reshape to (1, n_features) for a single prediction
-    X = np.array([feature_vector], dtype=np.float64)
+    # MultiOutputClassifier exposes one underlying estimator per target.
+    # We call each one to get both the predicted class and its probability.
+    result: dict[str, dict] = {}
+    for target_idx, target_name in enumerate(_target_names):
+        estimator = _model.estimators_[target_idx]
+        probabilities = estimator.predict_proba(x)[0]
+        predicted_int = int(np.argmax(probabilities))
+        confidence = float(probabilities[predicted_int])
 
-    # Get predicted class index and probability distribution
-    predicted_index = _model.predict(X)[0]
-    probabilities = _model.predict_proba(X)[0]
+        area_key = TARGET_TO_AREA.get(target_name, target_name)
+        result[area_key] = {
+            "level": LEVEL_INT_TO_API.get(predicted_int, str(predicted_int)),
+            "level_int": predicted_int,
+            "level_name": _level_names.get(predicted_int, str(predicted_int)),
+            "confidence": round(confidence, 4),
+        }
 
-    # Decode the label back to a human-readable string
-    predicted_label = _label_encoder.inverse_transform([int(predicted_index)])[0]
-
-    # Confidence is the probability of the predicted class
-    confidence = float(probabilities[int(predicted_index)])
-
-    return predicted_label, confidence
+    return result

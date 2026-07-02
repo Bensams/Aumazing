@@ -197,48 +197,167 @@ class SupabasePredictInput(BaseModel):
 # ──────────────────────────────────────────────────────────────────────
 
 class PreAssessmentResult(BaseModel):
-    """
-    Nested result containing a human-readable summary and support level.
-    Maps to the `assessment_results` table (sensory_score / notes fields).
-    """
+    """Human-readable summary and support level for the assessment."""
     summary: str = Field(description="Human-readable summary of the assessment")
     support_level: str = Field(description="Support level: 'high', 'moderate', or 'low'")
+
+
+class AreaLevel(BaseModel):
+    """
+    Per-area ordinal prediction for a single developmental skill area.
+
+    Path B — each child receives one of these for each of the four areas
+    (communication, social, play, attention).
+    """
+    level: str = Field(
+        description="Snake-case label: 'needs_support', 'emerging', or 'strength'",
+    )
+    level_int: int = Field(
+        description="Ordinal integer encoding: 0=Needs Support, 1=Emerging, 2=Strength",
+        ge=0, le=2,
+    )
+    level_name: str = Field(
+        description="Title-case label for display: 'Needs Support', 'Emerging', or 'Strength'",
+    )
+    confidence: float = Field(
+        description="Model confidence for this area's prediction (0.0-1.0)",
+        ge=0.0, le=1.0,
+    )
+
+
+class ModuleDetail(BaseModel):
+    """A single recommended learning module with its driving context."""
+    game_id: str = Field(description="Game identifier (e.g. 'copy_me')")
+    name: str = Field(description="Display name (e.g. 'Copy Me')")
+    starting_level: int = Field(
+        description="Suggested starting difficulty (1=easiest, 3=hardest)",
+        ge=1, le=3,
+    )
+    driver_areas: List[str] = Field(
+        description="Skill areas that triggered this recommendation",
+    )
 
 
 class PreAssessmentResponse(BaseModel):
     """
     Full response from the pre-assessment prediction endpoint.
 
-    - predicted_profile maps to assessment_results.notes
-    - recommended_modules maps to module_recommendations entries
+    Dual-response shape (Path B):
+      * ``area_levels`` (NEW) is the canonical per-area output produced by
+        the multi-output classifier.
+      * ``module_details`` (NEW) lists each recommended module with its
+        driving area and starting level.
+      * ``predicted_profile`` / ``confidence`` / ``recommended_modules``
+        are derived legacy fields preserved for backwards compatibility
+        with old Flutter clients. New clients should prefer ``area_levels``.
     """
-    predicted_profile: str = Field(description="Predicted developmental profile category")
-    confidence: float = Field(description="Model confidence score (0.0-1.0)")
+
+    # ---- New per-area fields (preferred) ----
+    area_levels: Dict[str, AreaLevel] = Field(
+        description=(
+            "Per-area predictions keyed by short area name "
+            "('communication', 'social', 'play', 'attention')."
+        ),
+    )
+    module_details: List[ModuleDetail] = Field(
+        default_factory=list,
+        description="Detailed module recommendations with driver areas and starting levels",
+    )
+    skill_areas: List[str] = Field(
+        default_factory=list,
+        description="Skill areas implicated by the recommendation",
+    )
+
+    # ---- Legacy fields (derived, kept for backwards compatibility) ----
+    predicted_profile: str = Field(
+        description=(
+            "Legacy single-profile string derived via tie-break rule from "
+            "area_levels. Prefer area_levels for new clients."
+        ),
+    )
+    confidence: float = Field(
+        description="Confidence of the dominant area's prediction (legacy)",
+        ge=0.0, le=1.0,
+    )
     pre_assessment_result: PreAssessmentResult = Field(
         description="Assessment summary and support level",
     )
     recommended_modules: List[str] = Field(
-        description="List of recommended learning module titles",
+        description="Flat list of recommended module names (legacy)",
     )
+
+    # ---- Diagnostic ----
     feature_values: Optional[Dict[str, float]] = Field(
         default=None,
-        description="Computed feature values used for prediction (for transparency/debugging)",
+        description="Computed feature values used for prediction (transparency/debug)",
     )
 
     class Config:
         json_schema_extra = {
             "example": {
+                "area_levels": {
+                    "communication": {
+                        "level": "needs_support",
+                        "level_int": 0,
+                        "level_name": "Needs Support",
+                        "confidence": 0.84,
+                    },
+                    "social": {
+                        "level": "emerging",
+                        "level_int": 1,
+                        "level_name": "Emerging",
+                        "confidence": 0.72,
+                    },
+                    "play": {
+                        "level": "strength",
+                        "level_int": 2,
+                        "level_name": "Strength",
+                        "confidence": 0.91,
+                    },
+                    "attention": {
+                        "level": "emerging",
+                        "level_int": 1,
+                        "level_name": "Emerging",
+                        "confidence": 0.65,
+                    },
+                },
+                "module_details": [
+                    {
+                        "game_id": "copy_me",
+                        "name": "Copy Me",
+                        "starting_level": 1,
+                        "driver_areas": ["communication"],
+                    },
+                    {
+                        "game_id": "do_what_i_say",
+                        "name": "Do What I Say",
+                        "starting_level": 1,
+                        "driver_areas": ["communication", "attention"],
+                    },
+                    {
+                        "game_id": "my_turn_your_turn",
+                        "name": "My Turn, Your Turn",
+                        "starting_level": 2,
+                        "driver_areas": ["social"],
+                    },
+                ],
+                "skill_areas": ["communication", "social", "attention"],
                 "predicted_profile": "communication_support",
-                "confidence": 0.82,
+                "confidence": 0.84,
                 "pre_assessment_result": {
-                    "summary": "Your child may benefit from activities that build imitation and verbal instruction skills.",
+                    "summary": (
+                        "Your child may benefit from activities that build "
+                        "imitation and verbal instruction skills, turn-taking "
+                        "and social interaction, and focus and sustained attention."
+                    ),
                     "support_level": "high",
                 },
-                "recommended_modules": ["Copy Me", "Do What I Say"],
+                "recommended_modules": [
+                    "Copy Me", "Do What I Say", "My Turn, Your Turn",
+                ],
                 "feature_values": {
-                    "overall_accuracy": 0.65,
-                    "copy_me_accuracy": 0.7,
-                    "match_it_accuracy": 0.6,
+                    "overall_accuracy": 0.55,
+                    "copy_me_accuracy": 0.30,
                 },
             }
         }

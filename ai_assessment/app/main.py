@@ -103,10 +103,13 @@ def predict_preassessment(input_data: PreAssessmentInput):
     """
     try:
         features = input_data.model_dump()
-        predicted_profile, confidence = predict(features)
-        recommendation = get_recommendation(predicted_profile, confidence, features)
+        area_levels = predict(features)
+        recommendation = get_recommendation(area_levels, features)
 
         return PreAssessmentResponse(
+            area_levels=recommendation["area_levels"],
+            module_details=recommendation["module_details"],
+            skill_areas=recommendation["skill_areas"],
             predicted_profile=recommendation["predicted_profile"],
             confidence=recommendation["confidence"],
             pre_assessment_result=recommendation["pre_assessment_result"],
@@ -140,10 +143,13 @@ def predict_from_sessions(input_data: GameSessionsInput):
     """
     try:
         features = aggregate_features(input_data.sessions)
-        predicted_profile, confidence = predict(features)
-        recommendation = get_recommendation(predicted_profile, confidence, features)
+        area_levels = predict(features)
+        recommendation = get_recommendation(area_levels, features)
 
         return PreAssessmentResponse(
+            area_levels=recommendation["area_levels"],
+            module_details=recommendation["module_details"],
+            skill_areas=recommendation["skill_areas"],
             predicted_profile=recommendation["predicted_profile"],
             confidence=recommendation["confidence"],
             pre_assessment_result=recommendation["pre_assessment_result"],
@@ -224,8 +230,8 @@ def predict_from_supabase(input_data: SupabasePredictInput):
         features = aggregate_features(sessions)
 
         # 4. Predict and build recommendation
-        predicted_profile, confidence = predict(features)
-        recommendation = get_recommendation(predicted_profile, confidence, features)
+        area_levels = predict(features)
+        recommendation = get_recommendation(area_levels, features)
 
         # 5. Optionally save results back to Supabase
         if input_data.save_results:
@@ -238,6 +244,7 @@ def predict_from_supabase(input_data: SupabasePredictInput):
                         "confidence": recommendation["confidence"],
                         "summary": recommendation["pre_assessment_result"]["summary"],
                         "support_level": recommendation["pre_assessment_result"]["support_level"],
+                        "area_levels": recommendation["area_levels"],
                     },
                 )
                 save_module_recommendations(
@@ -258,6 +265,9 @@ def predict_from_supabase(input_data: SupabasePredictInput):
 
         # 6. Return response
         return PreAssessmentResponse(
+            area_levels=recommendation["area_levels"],
+            module_details=recommendation["module_details"],
+            skill_areas=recommendation["skill_areas"],
             predicted_profile=recommendation["predicted_profile"],
             confidence=recommendation["confidence"],
             pre_assessment_result=recommendation["pre_assessment_result"],

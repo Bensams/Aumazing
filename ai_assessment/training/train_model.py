@@ -1,14 +1,19 @@
 """
 training/train_model.py
-Training script for the Aumazing Pre-Assessment XGBoost model.
+Training pipeline for the Aumazing Pre-Assessment multi-output ordinal
+classifier (Path B per-area design).
+
+Trains FOUR XGBoost classifiers — one per developmental skill area —
+wrapped in a sklearn MultiOutputClassifier. Each classifier predicts
+an ordinal level in {0=Needs Support, 1=Emerging, 2=Strength}.
 
 This script:
-    1. Loads the sample CSV dataset
-    2. Encodes the target labels
-    3. Performs stratified 5-fold cross-validation
-    4. Trains a final XGBClassifier on the full dataset
-    5. Prints per-class precision/recall/F1, accuracy, and confusion matrix
-    6. Saves the model, label encoder, and feature names to the models/ directory
+    1. Loads the dataset (12 features + 4 ordinal targets)
+    2. Performs 5-fold cross-validation
+    3. Reports per-area accuracy, macro-F1, and confusion matrices
+    4. Reports overall exact-match accuracy (all 4 areas correct)
+    5. Trains a final MultiOutputClassifier on the full dataset
+    6. Saves the bundled model + feature names + level/target name maps
 
 Usage (from ai_assessment/ directory):
     python training/train_model.py
@@ -17,7 +22,6 @@ Usage (from ai_assessment/ directory):
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -28,9 +32,10 @@ from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
+    f1_score,
 )
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import KFold
+from sklearn.multioutput import MultiOutputClassifier
 from xgboost import XGBClassifier
 
 # ──────────────────────────────────────────────────────────────────────
@@ -39,15 +44,26 @@ from xgboost import XGBClassifier
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA_PATH = PROJECT_ROOT / "training" / "sample_preassessment_data.csv"
 MODELS_DIR = PROJECT_ROOT / "models"
-MODEL_OUTPUT = MODELS_DIR / "xgboost_preassessment.pkl"
-ENCODER_OUTPUT = MODELS_DIR / "label_encoder.pkl"
+MODEL_OUTPUT = MODELS_DIR / "xgboost_multi_output.pkl"
 FEATURES_OUTPUT = MODELS_DIR / "feature_names.json"
+LEVEL_NAMES_OUTPUT = MODELS_DIR / "level_names.json"
+TARGET_NAMES_OUTPUT = MODELS_DIR / "target_names.json"
+
+TARGET_COLUMNS = [
+    "communication_level",
+    "social_level",
+    "play_level",
+    "attention_level",
+]
+
+LEVEL_NAMES = {0: "Needs Support", 1: "Emerging", 2: "Strength"}
 
 
 def parse_args():
-    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Train the Aumazing Pre-Assessment XGBoost model."
+        description=(
+            "Train the Aumazing Pre-Assessment multi-output ordinal classifier."
+        )
     )
     parser.add_argument(
         "--data",
@@ -61,11 +77,36 @@ def parse_args():
     return parser.parse_args()
 
 
+def _build_estimator(num_class: int) -> MultiOutputClassifier:
+    """Construct a fresh MultiOutputClassifier wrapping XGBClassifier."""
+    base = XGBClassifier(
+        n_estimators=200,
+        max_depth=4,
+        learning_rate=0.1,
+        objective="multi:softprob",
+        num_class=num_class,
+        random_state=42,
+        eval_metric="mlogloss",
+    )
+    return MultiOutputClassifier(base)
+
+
+def _print_confusion_matrix(cm: np.ndarray, area_name: str) -> None:
+    print(f"\n  Confusion matrix — {area_name} (rows=true, cols=pred):")
+    header = f"    {'':>15s}"
+    for i in range(cm.shape[1]):
+        header += f"{LEVEL_NAMES[i][:13]:>15s}"
+    print(header)
+    for i, row in enumerate(cm):
+        line = f"    {LEVEL_NAMES[i][:13]:>15s}"
+        for val in row:
+            line += f"{val:>15d}"
+        print(line)
+
+
 def main():
-    """Main training pipeline."""
     args = parse_args()
 
-    # Resolve data path
     if args.data is not None:
         data_path = Path(args.data)
         if not data_path.is_absolute():
@@ -73,12 +114,11 @@ def main():
     else:
         data_path = DEFAULT_DATA_PATH
 
-    # Ensure the models directory exists
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── 1. Load the dataset ──────────────────────────────────────────
+    # ── 1. Load dataset ────────────────────────────────────────
     print("=" * 60)
-    print("Aumazing Pre-Assessment — XGBoost Training Pipeline")
+    print("Aumazing Pre-Assessment — Multi-Output Ordinal Training")
     print("=" * 60)
 
     if not data_path.exists():
@@ -88,133 +128,160 @@ def main():
     df = pd.read_csv(data_path)
     print(f"\nLoaded dataset: {df.shape[0]} rows, {df.shape[1]} columns")
     print(f"Source: {data_path}")
-    print(f"\nTarget distribution:\n{df['developmental_profile'].value_counts()}\n")
 
-    # ── 2. Separate features (X) and target (y) ─────────────────────
-    TARGET_COL = "developmental_profile"
-    feature_cols = [col for col in df.columns if col != TARGET_COL]
+    # Validate target columns exist
+    missing = [c for c in TARGET_COLUMNS if c not in df.columns]
+    if missing:
+        print(
+            f"ERROR: Target columns missing from dataset: {missing}. "
+            "Regenerate with `python training/generate_training_data.py`."
+        )
+        sys.exit(1)
 
+    feature_cols = [c for c in df.columns if c not in TARGET_COLUMNS]
     X = df[feature_cols].values
-    y_raw = df[TARGET_COL].values
+    Y = df[TARGET_COLUMNS].values  # shape: (n_samples, 4)
+    num_class = 3  # ordinal levels: 0, 1, 2
 
-    print(f"Feature columns ({len(feature_cols)}):")
+    print(f"\nFeature columns ({len(feature_cols)}):")
     for col in feature_cols:
+        print(f"  - {col}")
+
+    print(f"\nTarget columns ({len(TARGET_COLUMNS)}):")
+    for col in TARGET_COLUMNS:
         print(f"  - {col}")
     print()
 
-    # ── 3. Encode target labels ──────────────────────────────────────
-    label_encoder = LabelEncoder()
-    y = label_encoder.fit_transform(y_raw)
-
-    print("Label encoding:")
-    for i, label in enumerate(label_encoder.classes_):
-        print(f"  {i} -> {label}")
-    print()
-
-    # ── 4. Stratified 5-fold cross-validation ────────────────────────
+    # ── 2. 5-fold cross-validation ───────────────────────────────
     print("-" * 60)
-    print("Stratified 5-Fold Cross-Validation")
+    print("5-Fold Cross-Validation")
     print("-" * 60)
 
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    # XGBoost hyperparameters
-    xgb_params = dict(
-        n_estimators=200,
-        max_depth=4,
-        learning_rate=0.1,
-        objective="multi:softprob",
-        num_class=len(label_encoder.classes_),
-        random_state=42,
-        eval_metric="mlogloss",
-    )
+    # Per-area, per-fold metrics
+    fold_accs = {area: [] for area in TARGET_COLUMNS}
+    fold_f1s = {area: [] for area in TARGET_COLUMNS}
+    fold_exact_match = []
 
-    # Per-fold accuracy tracking
-    fold_accuracies = []
+    # Collect predictions across folds for full reports
+    Y_cv_pred = np.zeros_like(Y)
 
-    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y), start=1):
+    for fold_idx, (train_idx, val_idx) in enumerate(kf.split(X), start=1):
         X_train, X_val = X[train_idx], X[val_idx]
-        y_train, y_val = y[train_idx], y[val_idx]
+        Y_train, Y_val = Y[train_idx], Y[val_idx]
 
-        fold_model = XGBClassifier(**xgb_params)
-        fold_model.fit(X_train, y_train)
+        model = _build_estimator(num_class)
+        model.fit(X_train, Y_train)
+        Y_val_pred = model.predict(X_val)
+        Y_cv_pred[val_idx] = Y_val_pred
 
-        y_val_pred = fold_model.predict(X_val)
-        fold_acc = accuracy_score(y_val, y_val_pred)
-        fold_accuracies.append(fold_acc)
-        print(f"  Fold {fold_idx}: accuracy = {fold_acc:.4f}  "
-              f"(train={len(train_idx)}, val={len(val_idx)})")
+        # Per-area metrics for this fold
+        per_area_acc = []
+        for ai, area in enumerate(TARGET_COLUMNS):
+            acc = accuracy_score(Y_val[:, ai], Y_val_pred[:, ai])
+            f1 = f1_score(
+                Y_val[:, ai], Y_val_pred[:, ai],
+                average="macro", zero_division=0,
+            )
+            fold_accs[area].append(acc)
+            fold_f1s[area].append(f1)
+            per_area_acc.append(f"{area.split('_')[0]}={acc:.3f}")
 
-    mean_acc = np.mean(fold_accuracies)
-    std_acc = np.std(fold_accuracies)
-    print(f"\n  Mean CV Accuracy: {mean_acc:.4f} (+/- {std_acc:.4f})")
+        # Exact-match: all 4 areas predicted correctly
+        exact_match = np.mean(np.all(Y_val == Y_val_pred, axis=1))
+        fold_exact_match.append(exact_match)
 
-    # Cross-val predictions for full classification report
-    cv_model = XGBClassifier(**xgb_params)
-    y_cv_pred = cross_val_predict(cv_model, X, y, cv=skf)
+        print(
+            f"  Fold {fold_idx}: exact-match={exact_match:.4f}  "
+            f"({', '.join(per_area_acc)})  "
+            f"(train={len(train_idx)}, val={len(val_idx)})"
+        )
 
-    target_names = list(label_encoder.classes_)
-
-    print(f"\nOverall CV Accuracy: {accuracy_score(y, y_cv_pred):.4f}\n")
-
-    print("Classification Report (cross-validated):")
-    print(classification_report(y, y_cv_pred, target_names=target_names))
-
-    # Confusion matrix from CV predictions
-    print("Confusion Matrix (cross-validated):")
-    cm = confusion_matrix(y, y_cv_pred)
-    # Print with labels for readability
-    print(f"{'':>25s}", end="")
-    for name in target_names:
-        print(f"{name[:12]:>14s}", end="")
-    print()
-    for i, row in enumerate(cm):
-        print(f"{target_names[i]:>25s}", end="")
-        for val in row:
-            print(f"{val:>14d}", end="")
-        print()
-    print()
-
-    # ── 5. Train final model on full dataset ─────────────────────────
-    print("-" * 60)
-    print("Training final model on full dataset...")
+    # ── 3. Aggregate CV metrics ─────────────────────────────────
+    print("\n" + "-" * 60)
+    print("Cross-Validation Summary (5 folds)")
     print("-" * 60)
 
-    final_model = XGBClassifier(**xgb_params)
-    final_model.fit(X, y)
-    print("Training complete.\n")
-
-    # ── 6. Feature importance ────────────────────────────────────────
-    importances = final_model.feature_importances_
-    importance_pairs = sorted(
-        zip(feature_cols, importances),
-        key=lambda x: x[1],
-        reverse=True,
+    print(
+        f"\n  Exact-match accuracy (all 4 areas correct): "
+        f"{np.mean(fold_exact_match):.4f} (+/- {np.std(fold_exact_match):.4f})"
     )
 
-    print("Feature Importance (sorted):")
-    for fname, imp in importance_pairs:
-        bar = "#" * int(imp * 50)
-        print(f"  {fname:<40s} {imp:.4f}  {bar}")
-    print()
+    print("\n  Per-area metrics (mean over folds):")
+    print(f"    {'Area':<22s} {'Accuracy':>14s} {'Macro-F1':>14s}")
+    for area in TARGET_COLUMNS:
+        ma = np.mean(fold_accs[area])
+        sa = np.std(fold_accs[area])
+        mf = np.mean(fold_f1s[area])
+        sf = np.std(fold_f1s[area])
+        print(
+            f"    {area:<22s} {ma:.4f} \u00b1 {sa:.3f}  "
+            f"{mf:.4f} \u00b1 {sf:.3f}"
+        )
 
-    # ── 7. Save artifacts ────────────────────────────────────────────
-    # Save the trained model
+    # ── 4. Per-area classification reports + confusion matrices ────────
+    print("\n" + "-" * 60)
+    print("Per-Area Classification Reports (cross-validated)")
+    print("-" * 60)
+
+    target_names = [LEVEL_NAMES[i] for i in (0, 1, 2)]
+    for ai, area in enumerate(TARGET_COLUMNS):
+        print(f"\n[{area}]")
+        print(
+            classification_report(
+                Y[:, ai], Y_cv_pred[:, ai],
+                labels=[0, 1, 2],
+                target_names=target_names,
+                zero_division=0,
+            )
+        )
+        cm = confusion_matrix(Y[:, ai], Y_cv_pred[:, ai], labels=[0, 1, 2])
+        _print_confusion_matrix(cm, area)
+
+    # ── 5. Train final model on full dataset ───────────────────────
+    print("\n" + "-" * 60)
+    print("Training final MultiOutputClassifier on full dataset...")
+    print("-" * 60)
+
+    final_model = _build_estimator(num_class)
+    final_model.fit(X, Y)
+    print("Training complete.")
+
+    # ── 6. Feature importance per area ────────────────────────────
+    print("\nTop feature importances per area:")
+    for ai, area in enumerate(TARGET_COLUMNS):
+        sub_estimator = final_model.estimators_[ai]
+        importances = sub_estimator.feature_importances_
+        ranked = sorted(
+            zip(feature_cols, importances),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        print(f"\n  [{area}]")
+        for fname, imp in ranked[:5]:
+            bar = "#" * int(imp * 50)
+            print(f"    {fname:<40s} {imp:.4f}  {bar}")
+
+    # ── 7. Save artifacts ─────────────────────────────────────
     joblib.dump(final_model, MODEL_OUTPUT)
-    print(f"Model saved to:          {MODEL_OUTPUT}")
+    print(f"\nModel saved to:          {MODEL_OUTPUT}")
 
-    # Save the label encoder
-    joblib.dump(label_encoder, ENCODER_OUTPUT)
-    print(f"Label encoder saved to:  {ENCODER_OUTPUT}")
-
-    # Save feature names as JSON
     with open(FEATURES_OUTPUT, "w") as f:
         json.dump(feature_cols, f, indent=2)
     print(f"Feature names saved to:  {FEATURES_OUTPUT}")
 
+    with open(LEVEL_NAMES_OUTPUT, "w") as f:
+        # JSON keys must be strings
+        json.dump({str(k): v for k, v in LEVEL_NAMES.items()}, f, indent=2)
+    print(f"Level names saved to:    {LEVEL_NAMES_OUTPUT}")
+
+    with open(TARGET_NAMES_OUTPUT, "w") as f:
+        json.dump(TARGET_COLUMNS, f, indent=2)
+    print(f"Target names saved to:   {TARGET_NAMES_OUTPUT}")
+
     print("\n" + "=" * 60)
-    print("Training pipeline complete! You can now start the API server:")
-    print("  uvicorn app.main:app --reload")
+    print("Training pipeline complete. Next: update model_loader / API.")
     print("=" * 60)
 
 
