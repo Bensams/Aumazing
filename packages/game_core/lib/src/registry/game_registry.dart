@@ -7,6 +7,7 @@ import '../games/copy_me/copy_me_game.dart';
 import '../games/do_what_i_say/do_what_i_say_game.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_game.dart';
 import '../games/sari_sari_sort/sari_sari_sort_game.dart';
+import '../games/trace_it/trace_it_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -264,6 +265,49 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'trace_it',
+      name: 'Trace It',
+      description: 'Trace the letter or number with your finger!',
+      icon: Icons.gesture_rounded,
+      categories: [SkillCategory.playSkills],
+      gradientColors: [
+        const Color(0xFFD4E8FA),
+        const Color(0xFFFFF3D4),
+        const Color(0xFFE8DEFA),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return TraceItGame(
+          totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
