@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../providers/child_provider.dart';
+import '../../services/screen_time_service.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 
@@ -54,6 +55,14 @@ class SettingsScreen extends StatelessWidget {
           subtitle: 'Avatar, theme, game difficulty, language, rewards',
           onTap: () =>
               _push(context, _ChildPreferencesScreen(palette: palette)),
+        ),
+        _CategoryTile(
+          icon: Icons.timer_rounded,
+          color: const Color(0xFFDD9B4A),
+          title: 'Screen Time',
+          subtitle: 'Daily play limit, age-based recommendation',
+          onTap: () =>
+              _push(context, _ScreenTimeSettingsScreen(palette: palette)),
         ),
         if (isGuest)
           _CategoryTile(
@@ -826,6 +835,164 @@ class _ThemeOption extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Screen Time
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Parent controls for the daily screen-time limit (FR: set daily limits;
+/// gameplay pauses when exceeded).
+///
+/// The recommendation follows AAP/WHO guidance (≤1 hour/day of quality
+/// content for ages 2–5, less is better at age 2) adjusted conservatively
+/// for ASD learners — see [ScreenTimeService.recommendedMinutesForAge].
+class _ScreenTimeSettingsScreen extends StatefulWidget {
+  const _ScreenTimeSettingsScreen({required this.palette});
+
+  final GamePalette palette;
+
+  @override
+  State<_ScreenTimeSettingsScreen> createState() =>
+      _ScreenTimeSettingsScreenState();
+}
+
+class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
+  static const _options = [15, 20, 30, 45, 60, 90];
+
+  @override
+  void initState() {
+    super.initState();
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId != null) ScreenTimeService.instance.load(childId);
+  }
+
+  int? _childAgeYears() {
+    final birthDate = context.read<ChildProvider>().profile?.birthDate;
+    if (birthDate == null) return null;
+    final now = DateTime.now();
+    var age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final age = _childAgeYears();
+    final recommended =
+        age == null ? null : ScreenTimeService.recommendedMinutesForAge(age);
+
+    return _SettingsScaffold(
+      title: 'Screen Time',
+      icon: Icons.timer_rounded,
+      palette: widget.palette,
+      children: [
+        ListenableBuilder(
+          listenable: ScreenTimeService.instance,
+          builder: (context, _) {
+            final screenTime = ScreenTimeService.instance;
+            final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
+            final limit = screenTime.limitMinutes;
+
+            return _SettingsCard(
+              children: [
+                const _SectionLabel('Today'),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    const Icon(Icons.hourglass_bottom_rounded,
+                        size: 18, color: AppColors.primaryPurple),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        limit == null
+                            ? '$usedMin min played today (no limit set)'
+                            : '$usedMin of $limit min played today',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: AppColors.textPrimary),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => screenTime.resetToday(),
+                      child: const Text('Reset'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const _SectionLabel('Daily Limit'),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Off'),
+                      selected: limit == null,
+                      selectedColor: AppColors.primaryPurple,
+                      labelStyle: AppTextStyles.bodySmall.copyWith(
+                        color: limit == null
+                            ? AppColors.white
+                            : AppColors.textPrimary,
+                      ),
+                      onSelected: (_) => screenTime.setLimitMinutes(null),
+                    ),
+                    for (final minutes in _options)
+                      ChoiceChip(
+                        label: Text(minutes == recommended
+                            ? '$minutes min ★'
+                            : '$minutes min'),
+                        selected: limit == minutes,
+                        selectedColor: AppColors.primaryPurple,
+                        labelStyle: AppTextStyles.bodySmall.copyWith(
+                          color: limit == minutes
+                              ? AppColors.white
+                              : AppColors.textPrimary,
+                        ),
+                        onSelected: (_) =>
+                            screenTime.setLimitMinutes(minutes),
+                      ),
+                  ],
+                ),
+                if (recommended != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          size: 16, color: Color(0xFFDD9B4A)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Recommended for age $age: $recommended minutes '
+                          'per day. Based on AAP/WHO guidance (at most 1 '
+                          'hour of quality screen time for ages 2–5), set '
+                          'conservatively for children with ASD. Short, '
+                          'purposeful sessions work best.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'When the limit is reached, play pauses gently and your '
+                  'child is invited to take a break. You can add 15 extra '
+                  'minutes from the break screen.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
