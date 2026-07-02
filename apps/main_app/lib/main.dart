@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,8 +15,33 @@ import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
 
+/// True for transient network failures (offline, DNS, unreachable host) —
+/// expected in an offline-first app and never worth an unhandled-crash dump.
+bool _isTransientNetworkError(Object error) {
+  if (error is AuthRetryableFetchException) return true;
+  final text = error.toString();
+  return text.contains('SocketException') ||
+      text.contains('Failed host lookup') ||
+      text.contains('Connection refused') ||
+      text.contains('Network is unreachable') ||
+      text.contains('Connection reset') ||
+      text.contains('Connection timed out');
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Offline-first: transient network errors from background work (token
+  // refresh, sync retries) are expected while offline. Log one quiet line
+  // instead of an unhandled-exception dump; let real errors through.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (_isTransientNetworkError(error)) {
+      debugPrint('[Offline] Suppressed transient network error: '
+          '${error.runtimeType}');
+      return true; // handled
+    }
+    return false; // let the default handler report it
+  };
 
   // Force landscape orientation globally
   await SystemChrome.setPreferredOrientations([
