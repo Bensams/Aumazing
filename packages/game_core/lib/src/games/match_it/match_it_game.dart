@@ -133,63 +133,65 @@ class MatchItGame extends FlameGame
   /// repetition. Resets when the pool is exhausted.
   final Set<int> _usedPairIndices = {};
 
+  // True, natural colors (not pastel tints) so the color a child matches
+  // here is the same color they'll name and see in the real world.
   static const List<MatchPairData> _allPairs = [
     // Stars — 3 colour variants
     MatchPairData(
-        shape: ShapeType.star, color: Color(0xFFF5C842), label: 'Gold Star'),
+        shape: ShapeType.star, color: Color(0xFFFFB300), label: 'Gold Star'),
     MatchPairData(
-        shape: ShapeType.star, color: Color(0xFFFF8C42), label: 'Orange Star'),
+        shape: ShapeType.star, color: Color(0xFFFB8C00), label: 'Orange Star'),
     MatchPairData(
-        shape: ShapeType.star, color: Color(0xFFFF5252), label: 'Red Star'),
+        shape: ShapeType.star, color: Color(0xFFE53935), label: 'Red Star'),
     // Hearts — 3 colour variants
     MatchPairData(
-        shape: ShapeType.heart, color: Color(0xFFE86B6B), label: 'Red Heart'),
+        shape: ShapeType.heart, color: Color(0xFFE53935), label: 'Red Heart'),
     MatchPairData(
         shape: ShapeType.heart,
-        color: Color(0xFFC76BD1),
+        color: Color(0xFF8E24AA),
         label: 'Purple Heart'),
     MatchPairData(
         shape: ShapeType.heart,
-        color: Color(0xFFFF6B9D),
+        color: Color(0xFFEC407A),
         label: 'Pink Heart'),
     // Circles — 3 colour variants
     MatchPairData(
         shape: ShapeType.circle,
-        color: Color(0xFF5DAF8E),
+        color: Color(0xFF43A047),
         label: 'Green Circle'),
     MatchPairData(
         shape: ShapeType.circle,
-        color: Color(0xFF42B4E8),
+        color: Color(0xFF1E88E5),
         label: 'Blue Circle'),
     MatchPairData(
         shape: ShapeType.circle,
-        color: Color(0xFFFFB74D),
+        color: Color(0xFFFB8C00),
         label: 'Orange Circle'),
     // Diamonds — 3 colour variants
     MatchPairData(
         shape: ShapeType.diamond,
-        color: Color(0xFF5B9BD5),
+        color: Color(0xFF1E88E5),
         label: 'Blue Diamond'),
     MatchPairData(
         shape: ShapeType.diamond,
-        color: Color(0xFF7ED957),
+        color: Color(0xFF43A047),
         label: 'Green Diamond'),
     MatchPairData(
         shape: ShapeType.diamond,
-        color: Color(0xFFE040FB),
+        color: Color(0xFFD500F9),
         label: 'Magenta Diamond'),
     // Triangles — 3 colour variants
     MatchPairData(
         shape: ShapeType.triangle,
-        color: Color(0xFF9B82C4),
+        color: Color(0xFF8E24AA),
         label: 'Purple Triangle'),
     MatchPairData(
         shape: ShapeType.triangle,
-        color: Color(0xFF26C6DA),
+        color: Color(0xFF00ACC1),
         label: 'Teal Triangle'),
     MatchPairData(
         shape: ShapeType.triangle,
-        color: Color(0xFFFFCA28),
+        color: Color(0xFFFDD835),
         label: 'Yellow Triangle'),
   ];
 

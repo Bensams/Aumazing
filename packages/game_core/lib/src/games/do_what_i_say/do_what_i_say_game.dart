@@ -124,13 +124,16 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   bool get _hintBudgetLeft =>
       _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
+  // True, natural colors — the spoken color word must match what a child
+  // sees in the real world ("red" is real red, not a pale tint), so the
+  // color concept generalizes beyond the app.
   static const _colorOptions = [
-    (Color(0xFFE88888), 'red'),
-    (Color(0xFF88B8E8), 'blue'),
-    (Color(0xFF88E8A8), 'green'),
-    (Color(0xFFE8D888), 'yellow'),
-    (Color(0xFFD8A8E8), 'purple'),
-    (Color(0xFFE8A888), 'orange'),
+    (Color(0xFFE53935), 'red'),
+    (Color(0xFF1E88E5), 'blue'),
+    (Color(0xFF43A047), 'green'),
+    (Color(0xFFFDD835), 'yellow'),
+    (Color(0xFF8E24AA), 'purple'),
+    (Color(0xFFFB8C00), 'orange'),
   ];
 
   static const _shapeTypes = ['circle', 'star', 'triangle', 'diamond'];
