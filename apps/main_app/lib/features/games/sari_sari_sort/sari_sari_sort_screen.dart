@@ -87,6 +87,9 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       itemsPerRound: config.itemsPerRound,
       childId: childId,
       strings: config.strings,
+      // Hint policy per difficulty tier (Easy: unlimited + guided demo,
+      // Medium: small budget, Hard: no answer hints).
+      profile: DifficultyProfile.forLevel(config.difficulty),
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectDrop: _onCorrectDrop,

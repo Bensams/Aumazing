@@ -5,8 +5,12 @@
 library game_core;
 
 // Configuration
+export 'src/config/difficulty_profile.dart';
 export 'src/config/game_config.dart';
 export 'src/config/game_motion.dart';
+
+// Shared game components
+export 'src/games/shared/ghost_hand.dart';
 
 // Games — Match It
 export 'src/games/match_it/match_it_game.dart';

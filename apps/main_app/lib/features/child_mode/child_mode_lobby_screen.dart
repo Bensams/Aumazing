@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../model/area_level.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../games/copy_me/copy_me_screen.dart';
@@ -51,6 +54,37 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   bool get _inView => _selected != null || _viewingAll;
 
   int _difficultyFromLevel(int level) => level.clamp(1, 3);
+
+  /// AI per-area keys for each skill category (matches the on-device model's
+  /// area names: communication / social / play / attention).
+  static const _areaKeyForCategory = {
+    SkillCategory.playSkills: 'play',
+    SkillCategory.communication: 'communication',
+    SkillCategory.socialInteraction: 'social',
+  };
+
+  /// Difficulty for one game from the AI's per-area levels.
+  ///
+  /// Each game uses the level of its own skill area(s) — a child can play
+  /// Easy in communication games while playing Hard in play-skills games.
+  /// `needs_support` (0) → 1 Easy, `emerging` (1) → 2 Medium,
+  /// `strength` (2) → 3 Hard. For games spanning multiple areas the weakest
+  /// area wins (more support). Falls back to [fallback] (the overall level)
+  /// when no AI result is available.
+  int _difficultyForGame(
+    GameEntry entry,
+    Map<String, AreaLevel> areaLevels,
+    int fallback,
+  ) {
+    int? weakest;
+    for (final cat in entry.categories) {
+      final area = areaLevels[_areaKeyForCategory[cat]];
+      if (area == null) continue;
+      weakest = weakest == null ? area.levelInt : math.min(weakest, area.levelInt);
+    }
+    if (weakest == null) return _difficultyFromLevel(fallback);
+    return weakest + 1; // 0/1/2 → 1/2/3
+  }
 
   /// All supported games, deduplicated (used by the "All" view/button).
   List<GameEntry> _allGames() => GameRegistry.games
@@ -117,8 +151,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.watch<ChildProvider>().activePalette;
-    final level = context.watch<AssessmentProvider>().recommendedLevel;
-    final difficulty = _difficultyFromLevel(level);
+    final assessment = context.watch<AssessmentProvider>();
+    final level = assessment.recommendedLevel;
+    final areaLevels =
+        assessment.aiPrediction?.areaLevels ?? const <String, AreaLevel>{};
 
     return Scaffold(
       body: Container(
@@ -131,7 +167,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
               Expanded(
                 child: !_inView
                     ? _buildCategoryButtons(palette)
-                    : _buildGamesRow(difficulty, palette),
+                    : _buildGamesRow(areaLevels, level, palette),
               ),
             ],
           ),
@@ -259,7 +295,11 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
 
   // ── Step 2: games in a single horizontal row ───────────────────────────
 
-  Widget _buildGamesRow(int difficulty, GamePalette palette) {
+  Widget _buildGamesRow(
+    Map<String, AreaLevel> areaLevels,
+    int fallbackLevel,
+    GamePalette palette,
+  ) {
     final games = _viewingAll ? _allGames() : _gamesFor(_selected!);
     if (games.isEmpty) {
       return Center(
@@ -277,10 +317,16 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           itemCount: games.length,
           separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-          itemBuilder: (_, i) => _GameCard(
-            entry: games[i],
-            onTap: () => _launch(games[i].id, difficulty),
-          ),
+          itemBuilder: (_, i) {
+            // Per-game difficulty from the AI's per-area assessment levels.
+            final difficulty =
+                _difficultyForGame(games[i], areaLevels, fallbackLevel);
+            return _GameCard(
+              entry: games[i],
+              difficulty: difficulty,
+              onTap: () => _launch(games[i].id, difficulty),
+            );
+          },
         ),
       ),
     );
@@ -365,10 +411,25 @@ class _CategoryButton extends StatelessWidget {
 
 /// A game card shown in the horizontal row (step 2).
 class _GameCard extends StatelessWidget {
-  const _GameCard({required this.entry, required this.onTap});
+  const _GameCard({
+    required this.entry,
+    required this.difficulty,
+    required this.onTap,
+  });
 
   final GameEntry entry;
+
+  /// 1 Easy / 2 Medium / 3 Hard — from the child's per-area AI level.
+  final int difficulty;
+
   final VoidCallback onTap;
+
+  static const _tierLabels = {1: 'Easy', 2: 'Medium', 3: 'Hard'};
+  static const _tierColors = {
+    1: Color(0xFF6FAE97), // sage — gentle
+    2: Color(0xFFDD9B4A), // amber — moderate
+    3: Color(0xFFC96B6B), // clay — challenge
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -400,15 +461,38 @@ class _GameCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.white.withAlpha(200),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(entry.icon,
-                      color: AppColors.primaryPurple, size: 30),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppColors.white.withAlpha(200),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(entry.icon,
+                          color: AppColors.primaryPurple, size: 30),
+                    ),
+                    const Spacer(),
+                    // Per-game difficulty tier from the child's AI level.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.white.withAlpha(210),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _tierLabels[difficulty] ?? 'Medium',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: _tierColors[difficulty] ??
+                              _tierColors[2],
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
