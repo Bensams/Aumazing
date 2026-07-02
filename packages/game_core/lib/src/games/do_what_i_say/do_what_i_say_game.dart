@@ -6,8 +6,11 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/instruction_shape.dart';
+import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/adaptive_difficulty.dart';
+import '../../config/difficulty_profile.dart';
 
 /// Do What I Say — instruction-following game with XGBoost-ready analytics.
 ///
@@ -21,6 +24,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     required this.onInstructionChanged,
     required this.childId,
     this.gameVersion,
+    this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
@@ -44,6 +48,11 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   final int totalRounds;
   final String childId;
   final String? gameVersion;
+
+  /// Hint/guidance policy for the selected difficulty tier (ABA prompt
+  /// hierarchy - see [DifficultyProfile]).
+  final DifficultyProfile profile;
+
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
@@ -100,6 +109,21 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   int _hintCount = 0;
   int _consecutiveErrors = 0;
 
+  // Difficulty-tier hint state (see DifficultyProfile).
+  int _hintsUsedThisRound = 0;
+  int _idleRepeats = 0;
+  GhostHand? _ghostHand;
+
+  /// Within-round adaptive stepping: 2 consecutive errors temporarily step
+  /// the tier down (more support) for the remainder of the round.
+  late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
+
+  /// The tier in effect right now (base, or one step easier after struggles).
+  DifficultyProfile get _tier => _adaptive.effective;
+
+  bool get _hintBudgetLeft =>
+      _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
+
   static const _colorOptions = [
     (Color(0xFFE88888), 'red'),
     (Color(0xFF88B8E8), 'blue'),
@@ -146,6 +170,9 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     // Reset per-round counters
     _hintCount = 0;
     _consecutiveErrors = 0;
+    _hintsUsedThisRound = 0;
+    _idleRepeats = 0;
+    _adaptive.startRound(); // any step-down only lasts one round
 
     final rng = math.Random();
     final count = 4 + (_currentRound ~/ 2).clamp(0, 2); // 4-6 shapes
@@ -235,7 +262,12 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
-    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+    // Hard tier (or a spent Medium budget) waits longer between neutral
+    // instruction repeats; Easy/Medium hint sooner.
+    final delay = (_tier.noHints || !_hintBudgetLeft)
+        ? _tier.reorientDelay
+        : _tier.idleHintDelay;
+    _noResponseTimer = Timer(delay, () {
       if (!isMounted) return;
       _onIdleTimeout();
     });
@@ -254,16 +286,42 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     }
 
     _hintCount++;
+    _idleRepeats++;
     analyticsRecordHint(hintType: 'idle_voice_over_repeat');
     analyticsRecordPrompt(promptType: 'voice_over_repeat_idle');
 
-    // If hint count >= 3, also show visual guide
-    if (_hintCount >= 3) {
-      _showVisualGuide();
+    // Answer hints (target highlight / tap demo) follow the tier's budget:
+    // the voice-over repeat above is a neutral re-orientation allowed at
+    // every tier, but revealing the target is not.
+    if (_hintBudgetLeft && !_tier.noHints) {
+      // Easy: highlight quickly (2nd idle repeat); Medium: 3rd as before.
+      final guideThreshold = _tier.guidedDemo ? 2 : 3;
+      if (_idleRepeats >= guideThreshold) {
+        _showVisualGuide();
+        // Easy tier: still idle -> escalate to the tap demo on the target.
+        if (_tier.guidedDemo && _idleRepeats > guideThreshold) {
+          _showTapDemo();
+        }
+      }
     }
 
     // Restart timer for further repeats
     _startNoResponseTimer();
+  }
+
+  /// Tap demo for the Easy tier: the ghost hand taps the target shape.
+  void _showTapDemo() {
+    if (_targetIndex < 0 || _targetIndex >= _shapes.length) return;
+    final target = _shapes[_targetIndex];
+
+    _ghostHand?.removeFromParent(); // never more than one demo at a time
+    final hand = GhostHand.tap(
+      at: target.position + target.size / 2,
+      handSize: target.size.x * 0.7,
+    );
+    _ghostHand = hand;
+    add(hand);
+    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   // ── Visual guide ────────────────────────────────────────────────────
@@ -273,6 +331,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
     // Show pulsing hint on the correct target shape
     _shapes[_targetIndex].isHint = true;
+    _hintsUsedThisRound++;
 
     analyticsRecordHint(hintType: 'visual_guide');
     analyticsRecordPrompt(promptType: 'visual_guide_target_highlight');
@@ -307,6 +366,8 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       // Correct!
       _score++;
       _consecutiveErrors = 0; // Reset on correct
+      _adaptive.recordCorrect();
+      _idleRepeats = 0;
 
       // Record valid action on first tap
       analyticsRecordValidAction();
@@ -397,6 +458,12 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       _errorCount++;
       _consecutiveErrors++;
 
+      // Adaptive stepping: repeated struggle steps the tier down (more
+      // support) for the rest of this round.
+      if (_adaptive.recordError()) {
+        analyticsAddRoundData('difficulty_step_down', _tier.level);
+      }
+
       // Play wrong SFX and voice-over
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
@@ -419,19 +486,23 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
       _shapes[index].showWrong();
 
-      // After 3 consecutive errors, replay voice-over and escalate hints
-      if (_consecutiveErrors >= 3) {
+      // Error escalation follows the tier: Easy escalates after 2 errors
+      // (visual guide + tap demo), Medium after 3 (guide gated by the hint
+      // budget), Hard only re-plays the voice-over.
+      final errorThreshold = _tier.guidedDemo ? 2 : 3;
+      if (_consecutiveErrors >= errorThreshold) {
         _consecutiveErrors = 0; // Reset counter
         _hintCount++;
         analyticsRecordHint(hintType: 'error_voice_over_repeat');
         analyticsRecordPrompt(promptType: 'voice_over_repeat_errors');
 
-        // If hint count >= 3, immediately show visual guide on target
-        if (_hintCount >= 3) {
+        if (_hintBudgetLeft && !_tier.noHints) {
           _showVisualGuide();
+          // Easy tier: show exactly where to tap.
+          if (_tier.guidedDemo) _showTapDemo();
         }
 
-        // Start a 10-second timer — the voice-over will replay when it fires
+        // The idle timer replays the voice-over when it fires
         _startNoResponseTimer();
       } else {
         // Restart idle timer after wrong tap

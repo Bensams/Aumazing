@@ -20,6 +20,7 @@ class DifficultyProfile {
     required this.idleHintDelay,
     required this.guidedDemo,
     required this.reorientDelay,
+    this.adaptiveSteppingEnabled = true,
   });
 
   /// Difficulty tier: 1 (Easy) … 3 (Hard).
@@ -37,6 +38,11 @@ class DifficultyProfile {
   /// Idle time before the instruction is re-played when answer hints are
   /// unavailable (Hard tier, or a spent Medium budget).
   final Duration reorientDelay;
+
+  /// Whether within-round adaptive stepping may apply (see
+  /// AdaptiveDifficulty). Disabled for assessment so hint behaviour stays
+  /// constant and never contaminates the scores that drive the AI levels.
+  final bool adaptiveSteppingEnabled;
 
   static const easy = DifficultyProfile(
     level: 1,
@@ -60,6 +66,19 @@ class DifficultyProfile {
     idleHintDelay: Duration(seconds: 8), // unused when hintsPerRound == 0
     guidedDemo: false,
     reorientDelay: Duration(seconds: 20),
+  );
+
+  /// Assessment profile: mirrors the games' original (pre-tier) hint
+  /// behaviour — unlimited hints, 10s idle, no gesture demos, no adaptive
+  /// stepping — so assessment telemetry stays comparable across children
+  /// and unaffected by the practice-mode difficulty system.
+  static const assessment = DifficultyProfile(
+    level: 2,
+    hintsPerRound: null,
+    idleHintDelay: Duration(seconds: 10),
+    guidedDemo: false,
+    reorientDelay: Duration(seconds: 10),
+    adaptiveSteppingEnabled: false,
   );
 
   /// The profile for a 1–3 difficulty value (clamped; defaults to Medium).

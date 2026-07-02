@@ -8,8 +8,11 @@ import 'package:flutter/painting.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'components/game_piece.dart';
 import 'components/turn_slot.dart';
+import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/adaptive_difficulty.dart';
+import '../../config/difficulty_profile.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
@@ -28,6 +31,7 @@ class MyTurnYourTurnGame extends FlameGame
     required this.childId,
     this.avatar = '⭐',
     this.gameVersion,
+    this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
@@ -112,6 +116,25 @@ class MyTurnYourTurnGame extends FlameGame
   Timer? _noResponseTimer;
   int _hintCount = 0;
 
+  /// Hint/guidance policy for the selected difficulty tier (ABA prompt
+  /// hierarchy - see [DifficultyProfile]).
+  final DifficultyProfile profile;
+
+  // Difficulty-tier hint state (see DifficultyProfile).
+  int _hintsUsedThisRound = 0;
+  int _consecutiveIdleHints = 0;
+  GhostHand? _ghostHand;
+
+  /// Within-round adaptive stepping: 2 consecutive errors temporarily step
+  /// the tier down (more support) for the remainder of the round.
+  late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
+
+  /// The tier in effect right now (base, or one step easier after struggles).
+  DifficultyProfile get _tier => _adaptive.effective;
+
+  bool get _hintBudgetLeft =>
+      _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
+
   static const Color _buddyColor = AppColors.skyBlue;
   static const Color _childColor = AppColors.mint;
 
@@ -161,6 +184,9 @@ class MyTurnYourTurnGame extends FlameGame
     _selectedPiece = null;
     _turnsInRound = 0;
     _hintCount = 0;
+    _hintsUsedThisRound = 0;
+    _consecutiveIdleHints = 0;
+    _adaptive.startRound(); // any step-down only lasts one round
 
     analyticsStartRound(roundNumber: _currentRound + 1);
     analyticsAddRoundData('slots_per_round', _slotsPerRound);
@@ -380,6 +406,9 @@ class MyTurnYourTurnGame extends FlameGame
       onPlayCorrectVo?.call();
       onCorrectMatch?.call();
 
+      _adaptive.recordCorrect();
+      _consecutiveIdleHints = 0;
+
       analyticsRecordValidAction();
       analyticsRecordCorrect(extraData: {
         'slot_index': slot.slotIndex,
@@ -403,6 +432,13 @@ class MyTurnYourTurnGame extends FlameGame
     final slot = _slots[index];
     _earlyTaps++;
     _errorCount++;
+
+    // Adaptive stepping: repeated impulse errors step the tier down (more
+    // support) for the rest of this round.
+    if (_adaptive.recordError()) {
+      analyticsAddRoundData('difficulty_step_down', _tier.level);
+    }
+
     onPlayWrongSfx?.call();
     onPlayWrongVo?.call();
     analyticsRecordOffTaskAction(actionType: 'early_tap_slot_buddy_turn');
@@ -477,7 +513,12 @@ class MyTurnYourTurnGame extends FlameGame
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
-    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+    // Hard tier (or a spent Medium budget) waits longer and re-orients with
+    // the "your turn" VO instead of revealing a slot.
+    final delay = (_tier.noHints || !_hintBudgetLeft)
+        ? _tier.reorientDelay
+        : _tier.idleHintDelay;
+    _noResponseTimer = Timer(delay, () {
       if (!isMounted || _isBuddyTurn) return;
       _showVisualGuide();
     });
@@ -492,16 +533,51 @@ class MyTurnYourTurnGame extends FlameGame
   void _showVisualGuide() {
     final emptySlots = _slots.where((s) => !s.isFilled).toList();
     if (emptySlots.isEmpty) return;
+
+    // No answer hints available (Hard, or Medium budget spent): re-play the
+    // "your turn" cue to re-orient attention, but never reveal a slot.
+    if (_tier.noHints || !_hintBudgetLeft) {
+      onPlayYourTurnVo?.call();
+      analyticsRecordHint(hintType: 'reorient_instruction');
+      _startNoResponseTimer();
+      return;
+    }
+
+    _consecutiveIdleHints++;
+
     final targetSlot = emptySlots.first;
     targetSlot.showHint();
     _hintCount++;
+    _hintsUsedThisRound++;
     analyticsRecordHint(hintType: 'idle_visual_guide');
     analyticsRecordPrompt(promptType: 'visual_guide_idle_slot');
+
+    // Easy tier: still idle after a slot hint -> ghost hand demonstrates
+    // dragging a tray piece into the highlighted slot.
+    if (_tier.guidedDemo &&
+        _consecutiveIdleHints >= 2 &&
+        _childPieces.isNotEmpty) {
+      _showDragDemo(_childPieces.first, targetSlot);
+    }
+
     Future.delayed(const Duration(seconds: 3), () {
       if (!isMounted) return;
       targetSlot.hideHint();
       if (!_isBuddyTurn) _startNoResponseTimer();
     });
+  }
+
+  /// Ghost-hand demo dragging [piece] from the tray into [slot] (Easy tier).
+  void _showDragDemo(GamePiece piece, TurnSlot slot) {
+    _ghostHand?.removeFromParent(); // never more than one demo at a time
+    final hand = GhostHand.drag(
+      from: piece.position + piece.size / 2,
+      to: slot.position + slot.size / 2,
+      handSize: piece.size.x * 0.8,
+    );
+    _ghostHand = hand;
+    add(hand);
+    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   void _hideVisualHints() {

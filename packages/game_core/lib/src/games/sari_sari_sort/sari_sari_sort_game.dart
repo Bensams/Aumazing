@@ -11,6 +11,7 @@ import 'components/draggable_item.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 
 /// The three sari-sari store categories the child sorts items into.
@@ -132,8 +133,15 @@ class SariSariSortGame extends FlameGame
   int _errorsSinceLastCorrect = 0;
   GhostHand? _ghostHand;
 
+  /// Within-round adaptive stepping: 2 consecutive errors temporarily step
+  /// the tier down (more support) for the remainder of the round.
+  late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
+
+  /// The tier in effect right now (base, or one step easier after struggles).
+  DifficultyProfile get _tier => _adaptive.effective;
+
   bool get _hintBudgetLeft =>
-      profile.unlimitedHints || _hintsUsedThisRound < (profile.hintsPerRound ?? 0);
+      _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
   final List<CategoryBin> _bins = [];
   final List<DraggableItem> _items = [];
@@ -227,6 +235,7 @@ class SariSariSortGame extends FlameGame
     _hintsUsedThisRound = 0;
     _consecutiveIdleHints = 0;
     _errorsSinceLastCorrect = 0;
+    _adaptive.startRound(); // any step-down only lasts one round
 
     final roundItems = _pickRoundItems();
 
@@ -350,6 +359,7 @@ class SariSariSortGame extends FlameGame
       _score++;
       _totalResponseTimeMs += responseTime;
       _errorsSinceLastCorrect = 0;
+      _adaptive.recordCorrect();
 
       analyticsRecordCorrect(extraData: {
         'item': item.data.name,
@@ -378,6 +388,12 @@ class SariSariSortGame extends FlameGame
       _errorCount++;
       _errorsSinceLastCorrect++;
 
+      // Adaptive stepping: repeated struggle steps the tier down (more
+      // support) for the rest of this round.
+      if (_adaptive.recordError()) {
+        analyticsAddRoundData('difficulty_step_down', _tier.level);
+      }
+
       analyticsRecordWrong(extraData: {
         'item': item.data.name,
         'expected_category': item.data.category.slug,
@@ -398,7 +414,7 @@ class SariSariSortGame extends FlameGame
           _showCorrectBinHint(item.data.category);
           // Easy tier: after repeated errors, escalate to the guided
           // gesture demo showing exactly how to drag this item.
-          if (profile.guidedDemo && _errorsSinceLastCorrect >= 2) {
+          if (_tier.guidedDemo && _errorsSinceLastCorrect >= 2) {
             _showGestureDemo(item);
           }
         }
@@ -457,9 +473,9 @@ class SariSariSortGame extends FlameGame
     _cancelNoResponseTimer();
     // Hard tier (or a spent Medium budget) waits longer and re-orients with
     // the instruction VO instead of revealing the answer.
-    final delay = (profile.noHints || !_hintBudgetLeft)
-        ? profile.reorientDelay
-        : profile.idleHintDelay;
+    final delay = (_tier.noHints || !_hintBudgetLeft)
+        ? _tier.reorientDelay
+        : _tier.idleHintDelay;
     _noResponseTimer = Timer(delay, () {
       if (!isMounted) return;
       _showIdleHint();
@@ -476,7 +492,7 @@ class SariSariSortGame extends FlameGame
 
     // No answer hints available (Hard, or Medium budget spent): re-play the
     // instruction to re-orient attention, but never reveal the answer.
-    if (profile.noHints || !_hintBudgetLeft) {
+    if (_tier.noHints || !_hintBudgetLeft) {
       onPlayInstructionVo?.call();
       analyticsRecordHint(hintType: 'reorient_instruction');
       _startNoResponseTimer();
@@ -491,7 +507,7 @@ class SariSariSortGame extends FlameGame
 
     // Easy tier: still idle after a glow hint → escalate to the guided
     // gesture demo (ghost hand dragging the item into its bin).
-    if (profile.guidedDemo && _consecutiveIdleHints >= 2) {
+    if (_tier.guidedDemo && _consecutiveIdleHints >= 2) {
       _showGestureDemo(item);
     }
 

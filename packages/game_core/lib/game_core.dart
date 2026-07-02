@@ -5,6 +5,7 @@
 library game_core;
 
 // Configuration
+export 'src/config/adaptive_difficulty.dart';
 export 'src/config/difficulty_profile.dart';
 export 'src/config/game_config.dart';
 export 'src/config/game_motion.dart';

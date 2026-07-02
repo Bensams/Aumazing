@@ -75,6 +75,12 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
     _game = MyTurnYourTurnGame(
       totalRounds: _totalRounds,
       childId: childId,
+      // Hint policy per difficulty tier (Easy: unlimited + guided demo,
+      // Medium: small budget, Hard: no answer hints). Assessment keeps the
+      // fixed legacy behaviour so its telemetry stays comparable.
+      profile: widget.assessmentContext == 'practice'
+          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+          : DifficultyProfile.assessment,
       // Child pieces + filled slots use the child's chosen avatar.
       avatar: context.read<ChildProvider>().profile?.avatarEmoji ?? '⭐',
       // Audio SFX callbacks

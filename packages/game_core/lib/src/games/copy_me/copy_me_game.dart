@@ -7,8 +7,11 @@ import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 import 'components/sequence_shape.dart';
+import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/adaptive_difficulty.dart';
+import '../../config/difficulty_profile.dart';
 
 /// Copy Me — a "Simon Says" style sequence memory game with XGBoost-ready analytics.
 ///
@@ -21,6 +24,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     required this.onGameComplete,
     required this.childId,
     this.gameVersion,
+    this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
@@ -45,6 +49,11 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   final int totalRounds;
   final String childId;
   final String? gameVersion;
+
+  /// Hint/guidance policy for the selected difficulty tier (ABA prompt
+  /// hierarchy - see [DifficultyProfile]).
+  final DifficultyProfile profile;
+
   final void Function(int currentStep) onStepChanged;
   final void Function({
     required int score,
@@ -94,6 +103,21 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   bool _demonstrating = false;
   bool _inputPhase = false;
   Timer? _noResponseTimer;
+
+  // Difficulty-tier hint state (see DifficultyProfile).
+  int _hintsUsedThisRound = 0;
+  int _idleGuides = 0;
+  GhostHand? _ghostHand;
+
+  /// Within-round adaptive stepping: 2 consecutive errors temporarily step
+  /// the tier down (more support) for the remainder of the round.
+  late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
+
+  /// The tier in effect right now (base, or one step easier after struggles).
+  DifficultyProfile get _tier => _adaptive.effective;
+
+  bool get _hintBudgetLeft =>
+      _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
   /// Notify Flutter layer about phase changes
   void Function(bool isDemoPhase)? onPhaseChanged;
@@ -176,6 +200,9 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     _inputIndex = 0;
     _inputPhase = false;
     _consecutiveErrors = 0; // Reset consecutive errors for new round
+    _hintsUsedThisRound = 0;
+    _idleGuides = 0;
+    _adaptive.startRound(); // any step-down only lasts one round
 
     // Build sequence: length = round + 1 (round 0 → 1 item, etc.)
     final rng = math.Random();
@@ -248,6 +275,8 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
     if (index == _sequence[_inputIndex]) {
       // Correct
+      _adaptive.recordCorrect();
+      _idleGuides = 0;
       _shapes[index].showCorrect();
 
       // Play position-based shimmer SFX for this correct tap
@@ -351,6 +380,12 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
       _retries++;
       _consecutiveErrors++; // Track consecutive errors
 
+      // Adaptive stepping: repeated struggle steps the tier down (more
+      // support) for the rest of this round.
+      if (_adaptive.recordError()) {
+        analyticsAddRoundData('difficulty_step_down', _tier.level);
+      }
+
       // Record wrong response with details
       analyticsRecordWrong(extraData: {
         'tapped_shape': _shapeData[index].$3,
@@ -360,8 +395,16 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
       });
 
       // Check if we should show visual guide after 3 consecutive errors
-      if (_consecutiveErrors >= 3) {
+      // Sequence replay follows the tier: Easy replays after 2 errors
+      // (plus a tap demo on the next expected shape), Medium after 3 while
+      // the hint budget lasts, Hard never replays (independence).
+      final errorThreshold = _tier.guidedDemo ? 2 : 3;
+      if (_consecutiveErrors >= errorThreshold &&
+          _hintBudgetLeft &&
+          !_tier.noHints) {
         _showSequentialVisualGuide();
+        // Easy tier: after the replay, show exactly where to tap next.
+        if (_tier.guidedDemo) _showTapDemo();
         _consecutiveErrors = 0; // Reset after showing guide
       } else {
         // Record retry
@@ -376,10 +419,41 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
-    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+    // Hard tier (or a spent Medium budget) waits longer and re-orients with
+    // the "your turn" VO instead of replaying the sequence.
+    final delay = (_tier.noHints || !_hintBudgetLeft)
+        ? _tier.reorientDelay
+        : _tier.idleHintDelay;
+    _noResponseTimer = Timer(delay, () {
       if (!isMounted || !_inputPhase) return;
+      if (_tier.noHints || !_hintBudgetLeft) {
+        // Neutral re-orientation: never replays the answer.
+        onPlayYourTurnVo?.call();
+        analyticsRecordHint(hintType: 'reorient_instruction');
+        _startNoResponseTimer();
+        return;
+      }
+      _idleGuides++;
       _showSequentialVisualGuide();
+      // Easy tier: still idle after a replay -> tap demo on the next shape.
+      if (_tier.guidedDemo && _idleGuides >= 2) _showTapDemo();
     });
+  }
+
+  /// Tap demo for the Easy tier: the ghost hand taps the next expected
+  /// shape in the sequence.
+  void _showTapDemo() {
+    if (_inputIndex < 0 || _inputIndex >= _sequence.length) return;
+    final target = _shapes[_sequence[_inputIndex]];
+
+    _ghostHand?.removeFromParent(); // never more than one demo at a time
+    final hand = GhostHand.tap(
+      at: target.position + target.size / 2,
+      handSize: target.size.x * 0.7,
+    );
+    _ghostHand = hand;
+    add(hand);
+    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   void _cancelNoResponseTimer() {
@@ -425,6 +499,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     _hideVisualHint();
     
     // Record the sequential visual guide prompt
+    _hintsUsedThisRound++;
     analyticsRecordPrompt(promptType: 'visual_guide_sequential_highlight');
     analyticsRecordHint(hintType: 'sequential_visual_guide');
     

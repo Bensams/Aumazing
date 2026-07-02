@@ -83,6 +83,12 @@ class _MatchItScreenState extends State<MatchItScreen> {
     _game = MatchItGame(
       totalRounds: _totalRounds,
       childId: childId,
+      // Hint policy per difficulty tier (Easy: unlimited + guided demo,
+      // Medium: small budget, Hard: no answer hints). Assessment keeps the
+      // fixed legacy behaviour so its telemetry stays comparable.
+      profile: widget.assessmentContext == 'practice'
+          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+          : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectMatch: _onCorrectMatch,

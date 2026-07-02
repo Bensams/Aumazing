@@ -1308,6 +1308,71 @@ class SettingsModal extends StatelessWidget {
                 },
               ),
 
+              // Game Difficulty Section
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              Consumer<ChildProvider>(
+                builder: (context, childProv, _) {
+                  const tiers = [(1, 'Easy'), (2, 'Medium'), (3, 'Hard')];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Game Difficulty',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        childProv.isDifficultyOverridden
+                            ? 'Manually set — applies to all practice games.'
+                            : 'Following the assessment (per skill area).',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: 8,
+                        children: tiers.map((tier) {
+                          final selected =
+                              childProv.difficultyOverride == tier.$1;
+                          return ChoiceChip(
+                            label: Text(tier.$2),
+                            selected: selected,
+                            selectedColor: AppColors.primaryPurple,
+                            labelStyle: AppTextStyles.bodySmall.copyWith(
+                              color: selected
+                                  ? AppColors.white
+                                  : AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            onSelected: (_) =>
+                                childProv.setDifficultyOverride(tier.$1),
+                          );
+                        }).toList(),
+                      ),
+                      if (childProv.isDifficultyOverridden)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () =>
+                                childProv.clearDifficultyOverride(),
+                            icon: const Icon(Icons.restart_alt_rounded,
+                                size: 16),
+                            label: const Text('Auto from assessment'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+
               // Language Section
               const SizedBox(height: AppSpacing.md),
               const Divider(height: 1),

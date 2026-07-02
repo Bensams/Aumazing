@@ -6,8 +6,11 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/matchable_shape.dart';
+import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/adaptive_difficulty.dart';
+import '../../config/difficulty_profile.dart';
 
 /// Data for a single match pair used in the Match It game.
 class MatchPairData {
@@ -40,6 +43,7 @@ class MatchItGame extends FlameGame
     required this.childId,
     this.totalRounds = 5,
     this.gameVersion,
+    this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
@@ -87,6 +91,10 @@ class MatchItGame extends FlameGame
   final String childId;
   final String? gameVersion;
 
+  /// Hint/guidance policy for the selected difficulty tier (ABA prompt
+  /// hierarchy — see [DifficultyProfile]).
+  final DifficultyProfile profile;
+
   // ── Game state ───────────────────────────────────────────────────────
   int _currentRound = 0;
   int _score = 0;
@@ -101,6 +109,22 @@ class MatchItGame extends FlameGame
   // ── Hint / idle timer state ──────────────────────────────────────────
   Timer? _noResponseTimer;
   int _hintCount = 0;
+
+  // Difficulty-tier hint state (see DifficultyProfile).
+  int _hintsUsedThisRound = 0;
+  int _consecutiveIdleHints = 0;
+  int _errorsSinceLastCorrect = 0;
+  GhostHand? _ghostHand;
+
+  /// Within-round adaptive stepping: 2 consecutive errors temporarily step
+  /// the tier down (more support) for the remainder of the round.
+  late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
+
+  /// The tier in effect right now (base, or one step easier after struggles).
+  DifficultyProfile get _tier => _adaptive.effective;
+
+  bool get _hintBudgetLeft =>
+      _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
@@ -210,6 +234,10 @@ class MatchItGame extends FlameGame
 
     // Reset hint count per round
     _hintCount = 0;
+    _hintsUsedThisRound = 0;
+    _consecutiveIdleHints = 0;
+    _errorsSinceLastCorrect = 0;
+    _adaptive.startRound(); // any step-down only lasts one round
 
     final rng = math.Random();
 
@@ -315,6 +343,7 @@ class MatchItGame extends FlameGame
   void _onLeftSelected(int index) {
     _cancelNoResponseTimer();
     _hideVisualHints();
+    _consecutiveIdleHints = 0; // child re-engaged
 
     // Deselect previous
     for (final s in _leftShapes) {
@@ -334,6 +363,7 @@ class MatchItGame extends FlameGame
   void _onRightSelected(int index) {
     _cancelNoResponseTimer();
     _hideVisualHints();
+    _consecutiveIdleHints = 0; // child re-engaged
 
     // Deselect previous
     for (final s in _rightShapes) {
@@ -359,6 +389,7 @@ class MatchItGame extends FlameGame
     if (shape.isMatched) return;
     _cancelNoResponseTimer();
     _hideVisualHints();
+    _consecutiveIdleHints = 0; // child re-engaged
 
     final isLeft = _leftShapes.contains(shape);
     final opposite = isLeft ? _rightShapes : _leftShapes;
@@ -416,6 +447,9 @@ class MatchItGame extends FlameGame
       // Correct match!
       _score++;
       _totalResponseTimeMs += responseTime;
+      _adaptive.recordCorrect();
+      _consecutiveIdleHints = 0;
+      _errorsSinceLastCorrect = 0;
 
       // Record correct response with details
       analyticsRecordCorrect(extraData: {
@@ -492,6 +526,13 @@ class MatchItGame extends FlameGame
     } else {
       // Wrong match
       _errorCount++;
+      _errorsSinceLastCorrect++;
+
+      // Adaptive stepping: repeated struggle steps the tier down (more
+      // support) for the rest of this round.
+      if (_adaptive.recordError()) {
+        analyticsAddRoundData('difficulty_step_down', _tier.level);
+      }
 
       // Play wrong SFX and voice-over
       onPlayWrongSfx?.call();
@@ -522,8 +563,16 @@ class MatchItGame extends FlameGame
         _firstInputRecorded = false;
         analyticsShowStimulus();
 
-        // Show visual hint highlighting the correct match
-        _showMatchHint(hintLeftIndex);
+        // Answer hint only when the tier's budget allows it (Easy: always;
+        // Medium: while budget lasts; Hard: never).
+        if (_hintBudgetLeft) {
+          _showMatchHint(hintLeftIndex);
+          // Easy tier: repeated errors escalate to the tap demo showing the
+          // pair to tap (left shape, then its right match).
+          if (_tier.guidedDemo && _errorsSinceLastCorrect >= 2) {
+            _showTapDemo(hintLeftIndex);
+          }
+        }
 
         // Auto-hide hints after 3 seconds and restart timer
         Future.delayed(const Duration(seconds: 3), () {
@@ -539,7 +588,12 @@ class MatchItGame extends FlameGame
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
-    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+    // Hard tier (or a spent Medium budget) waits longer and re-orients with
+    // the instruction VO instead of revealing the answer.
+    final delay = (_tier.noHints || !_hintBudgetLeft)
+        ? _tier.reorientDelay
+        : _tier.idleHintDelay;
+    _noResponseTimer = Timer(delay, () {
       if (!isMounted) return;
       _showIdleHint();
     });
@@ -548,6 +602,46 @@ class MatchItGame extends FlameGame
   void _cancelNoResponseTimer() {
     _noResponseTimer?.cancel();
     _noResponseTimer = null;
+  }
+
+  /// Tap demo for the Easy tier: the ghost hand taps the left shape, then
+  /// its correct right-side match — showing the child the full gesture.
+  void _showTapDemo(int leftIndex) {
+    if (leftIndex < 0 || leftIndex >= _leftShapes.length) return;
+    final leftShape = _leftShapes[leftIndex];
+    if (leftShape.isMatched) return;
+
+    MatchableShape? rightMatch;
+    for (final s in _rightShapes) {
+      if (!s.isMatched &&
+          s.shapeType == leftShape.shapeType &&
+          s.shapeColor.value == leftShape.shapeColor.value) {
+        rightMatch = s;
+        break;
+      }
+    }
+    if (rightMatch == null) return;
+    final rightTarget = rightMatch;
+
+    _ghostHand?.removeFromParent(); // never more than one demo at a time
+    final hand = GhostHand.tap(
+      at: leftShape.position + leftShape.size / 2,
+      handSize: leftShape.size.x * 0.7,
+    );
+    _ghostHand = hand;
+    add(hand);
+    // Second tap on the matching right shape once the first demo ends.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!isMounted || rightTarget.isMatched) return;
+      _ghostHand?.removeFromParent();
+      final second = GhostHand.tap(
+        at: rightTarget.position + rightTarget.size / 2,
+        handSize: rightTarget.size.x * 0.7,
+      );
+      _ghostHand = second;
+      add(second);
+    });
+    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   /// Show visual hint for the correct match of a given left shape index.
@@ -572,15 +666,37 @@ class MatchItGame extends FlameGame
     }
 
     _hintCount++;
+    _hintsUsedThisRound++;
     analyticsRecordHint(hintType: 'incorrect_match_hint');
   }
 
   /// Show visual hint for the first unmatched pair.
-  /// Called when the idle timer fires (10 seconds of no interaction).
+  /// Called when the idle timer fires (tier-dependent inactivity).
   void _showIdleHint() {
     // Guard: ensure there are still unmatched shapes
     final hasUnmatched = _leftShapes.any((s) => !s.isMatched);
     if (!hasUnmatched) return;
+
+    // No answer hints available (Hard, or Medium budget spent): re-play the
+    // instruction to re-orient attention, but never reveal the answer.
+    if (_tier.noHints || !_hintBudgetLeft) {
+      onPlayInstructionVo?.call();
+      analyticsRecordHint(hintType: 'reorient_instruction');
+      _startNoResponseTimer();
+      return;
+    }
+
+    _consecutiveIdleHints++;
+
+    // Easy tier: still idle after a glow hint → escalate to the tap demo.
+    if (_tier.guidedDemo && _consecutiveIdleHints >= 2) {
+      for (var i = 0; i < _leftShapes.length; i++) {
+        if (!_leftShapes[i].isMatched) {
+          _showTapDemo(i);
+          break;
+        }
+      }
+    }
 
     // Find the first unmatched left shape and its correct right match
     for (final leftShape in _leftShapes) {
@@ -603,6 +719,7 @@ class MatchItGame extends FlameGame
     }
 
     _hintCount++;
+    _hintsUsedThisRound++;
     analyticsRecordHint(hintType: 'idle_match_hint');
 
     // Auto-hide hints after 3 seconds and restart timer
