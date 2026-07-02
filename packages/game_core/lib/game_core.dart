@@ -34,6 +34,10 @@ export 'src/games/sari_sari_sort/sari_sari_sort_game.dart';
 export 'src/games/sari_sari_sort/components/draggable_item.dart';
 export 'src/games/sari_sari_sort/components/category_bin.dart';
 
+// Games — Trace It
+export 'src/games/trace_it/trace_it_game.dart';
+export 'src/games/trace_it/trace_glyphs.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
