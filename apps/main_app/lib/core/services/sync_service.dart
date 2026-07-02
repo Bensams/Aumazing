@@ -556,6 +556,9 @@ class SyncService {
       'child_id': local['child_id'],
       'game_id': local['game_id'],
       'context': local['context'],
+      // Remote schema requires session_type (NOT NULL); mirror context. A DB
+      // trigger also defaults it server-side for older builds.
+      'session_type': local['context'] ?? 'practice',
       'assessment_run_id': local['assessment_run_id'],
       'score': local['score'],
       'total_items': local['total_items'],
