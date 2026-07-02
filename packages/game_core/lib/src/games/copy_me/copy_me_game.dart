@@ -5,7 +5,6 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
-import 'package:shared_ui/shared_ui.dart';
 import 'components/sequence_shape.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
@@ -133,11 +132,14 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     }
   }
 
+  // True, natural colors (not pastel tints) so the shapes a child copies
+  // carry real-world color concepts: green circle, yellow star, red heart,
+  // blue diamond.
   static const _shapeData = [
-    (CopyMeShapeType.circle, AppColors.mint, 'Circle'),
-    (CopyMeShapeType.star, AppColors.butterYellow, 'Star'),
-    (CopyMeShapeType.heart, AppColors.peach, 'Heart'),
-    (CopyMeShapeType.diamond, AppColors.skyBlue, 'Diamond'),
+    (CopyMeShapeType.circle, Color(0xFF43A047), 'Circle'),
+    (CopyMeShapeType.star, Color(0xFFFDD835), 'Star'),
+    (CopyMeShapeType.heart, Color(0xFFE53935), 'Heart'),
+    (CopyMeShapeType.diamond, Color(0xFF1E88E5), 'Diamond'),
   ];
 
   @override
