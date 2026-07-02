@@ -8,8 +8,10 @@ import 'package:shared_ui/shared_ui.dart';
 
 import 'components/category_bin.dart';
 import 'components/draggable_item.dart';
+import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../../config/difficulty_profile.dart';
 
 /// The three sari-sari store categories the child sorts items into.
 ///
@@ -50,6 +52,7 @@ class SariSariSortGame extends FlameGame
     this.itemsPerRound = 3,
     this.gameVersion,
     this.strings = const AppStrings(GameLanguage.english),
+    this.profile = DifficultyProfile.medium,
     this.onCorrectDrop,
     // Audio event callbacks (optional, wired by screen wrappers).
     this.onPlayCorrectSfx,
@@ -98,6 +101,10 @@ class SariSariSortGame extends FlameGame
   /// Localized strings (English / Tagalog / Cebuano) for on-screen labels.
   final AppStrings strings;
 
+  /// Hint/guidance policy for the selected difficulty tier (ABA prompt
+  /// hierarchy — see [DifficultyProfile]).
+  final DifficultyProfile profile;
+
   /// The localized basket label for a category, following [strings].
   String _binLabel(StoreCategory category) {
     switch (category) {
@@ -118,6 +125,15 @@ class SariSariSortGame extends FlameGame
   int _hintCount = 0;
   DateTime? _itemStartTime;
   bool _firstInputRecorded = false;
+
+  // Difficulty-tier hint state (see DifficultyProfile).
+  int _hintsUsedThisRound = 0;
+  int _consecutiveIdleHints = 0;
+  int _errorsSinceLastCorrect = 0;
+  GhostHand? _ghostHand;
+
+  bool get _hintBudgetLeft =>
+      profile.unlimitedHints || _hintsUsedThisRound < (profile.hintsPerRound ?? 0);
 
   final List<CategoryBin> _bins = [];
   final List<DraggableItem> _items = [];
@@ -208,6 +224,9 @@ class SariSariSortGame extends FlameGame
     _items.clear();
     _firstInputRecorded = false;
     _hintCount = 0;
+    _hintsUsedThisRound = 0;
+    _consecutiveIdleHints = 0;
+    _errorsSinceLastCorrect = 0;
 
     final roundItems = _pickRoundItems();
 
@@ -293,6 +312,7 @@ class SariSariSortGame extends FlameGame
   void _onItemPickedUp(DraggableItem item) {
     _cancelNoResponseTimer();
     _hideHints();
+    _consecutiveIdleHints = 0; // child re-engaged — reset hint escalation
     onPlayDragSfx?.call();
   }
 
@@ -329,6 +349,7 @@ class SariSariSortGame extends FlameGame
     if (correct) {
       _score++;
       _totalResponseTimeMs += responseTime;
+      _errorsSinceLastCorrect = 0;
 
       analyticsRecordCorrect(extraData: {
         'item': item.data.name,
@@ -355,6 +376,7 @@ class SariSariSortGame extends FlameGame
       }
     } else {
       _errorCount++;
+      _errorsSinceLastCorrect++;
 
       analyticsRecordWrong(extraData: {
         'item': item.data.name,
@@ -370,7 +392,16 @@ class SariSariSortGame extends FlameGame
       Future.delayed(const Duration(milliseconds: 450), () {
         if (!isMounted) return;
         item.returnHome();
-        _showCorrectBinHint(item.data.category);
+        // Answer hint only when the difficulty tier's budget allows it
+        // (Easy: always; Medium: while budget lasts; Hard: never).
+        if (_hintBudgetLeft) {
+          _showCorrectBinHint(item.data.category);
+          // Easy tier: after repeated errors, escalate to the guided
+          // gesture demo showing exactly how to drag this item.
+          if (profile.guidedDemo && _errorsSinceLastCorrect >= 2) {
+            _showGestureDemo(item);
+          }
+        }
         _itemStartTime = DateTime.now();
         Future.delayed(const Duration(seconds: 3), () {
           if (!isMounted) return;
@@ -424,7 +455,12 @@ class SariSariSortGame extends FlameGame
 
   void _startNoResponseTimer() {
     _cancelNoResponseTimer();
-    _noResponseTimer = Timer(const Duration(seconds: 10), () {
+    // Hard tier (or a spent Medium budget) waits longer and re-orients with
+    // the instruction VO instead of revealing the answer.
+    final delay = (profile.noHints || !_hintBudgetLeft)
+        ? profile.reorientDelay
+        : profile.idleHintDelay;
+    _noResponseTimer = Timer(delay, () {
       if (!isMounted) return;
       _showIdleHint();
     });
@@ -437,8 +473,28 @@ class SariSariSortGame extends FlameGame
 
   void _showIdleHint() {
     if (_items.isEmpty) return;
+
+    // No answer hints available (Hard, or Medium budget spent): re-play the
+    // instruction to re-orient attention, but never reveal the answer.
+    if (profile.noHints || !_hintBudgetLeft) {
+      onPlayInstructionVo?.call();
+      analyticsRecordHint(hintType: 'reorient_instruction');
+      _startNoResponseTimer();
+      return;
+    }
+
+    _consecutiveIdleHints++;
+
     // Hint the correct bin for the first remaining item.
-    _showCorrectBinHint(_items.first.data.category);
+    final item = _items.first;
+    _showCorrectBinHint(item.data.category);
+
+    // Easy tier: still idle after a glow hint → escalate to the guided
+    // gesture demo (ghost hand dragging the item into its bin).
+    if (profile.guidedDemo && _consecutiveIdleHints >= 2) {
+      _showGestureDemo(item);
+    }
+
     Future.delayed(const Duration(seconds: 3), () {
       if (!isMounted) return;
       _hideHints();
@@ -454,7 +510,30 @@ class SariSariSortGame extends FlameGame
       }
     }
     _hintCount++;
+    _hintsUsedThisRound++;
     analyticsRecordHint(hintType: 'category_bin_hint');
+  }
+
+  /// Ghost-hand demo dragging [item] from its tray slot into the correct bin.
+  void _showGestureDemo(DraggableItem item) {
+    CategoryBin? bin;
+    for (final b in _bins) {
+      if (b.category == item.data.category) {
+        bin = b;
+        break;
+      }
+    }
+    if (bin == null) return;
+
+    _ghostHand?.removeFromParent(); // never more than one demo at a time
+    final hand = GhostHand.drag(
+      from: item.position + item.size / 2,
+      to: bin.position + bin.size / 2,
+      handSize: item.size.x * 0.7,
+    );
+    _ghostHand = hand;
+    add(hand);
+    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   void _hideHints() {
