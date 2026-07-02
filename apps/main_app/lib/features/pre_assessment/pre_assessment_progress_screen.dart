@@ -61,12 +61,22 @@ class _PreAssessmentProgressScreenState
   /// The analyzed sensory preference result (populated after all games).
   SensoryPreferenceResult? _sensoryPreferenceResult;
 
+  /// Countdown timer for auto-launching the current game.
+  Timer? _countdownTimer;
+
+  /// Current countdown value displayed on the transition screen.
+  int _countdown = 7;
+
+  /// Guard flag to prevent multiple game launches from orphaned timers.
+  bool _gameLaunched = false;
+
   @override
   void initState() {
     super.initState();
     _initSensoryController();
     _saveSensoryConsent();
     _startAssessmentRun();
+    _startCountdown();
   }
 
   /// Create an assessment run record so all sessions and results
@@ -118,8 +128,30 @@ class _PreAssessmentProgressScreenState
     );
   }
 
+  /// Starts (or restarts) the 7-second countdown timer for the transition
+  /// screen. Cancels any previously running timer first.
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdown = 7;
+    _gameLaunched = false;
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdown > 1) {
+        setState(() => _countdown--);
+      } else {
+        timer.cancel();
+        _launchGame(_gameOrder[_currentGameIndex]);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     // Restore original audio/haptic settings before disposing
     _sensoryController.dispose();
     super.dispose();
@@ -273,6 +305,7 @@ class _PreAssessmentProgressScreenState
   void _advanceToNextGame() {
     if (_currentGameIndex < _gameOrder.length - 1) {
       setState(() => _currentGameIndex++);
+      _startCountdown(); // Restart countdown for the next game's transition screen
     } else {
       _finishAssessment();
     }
@@ -526,97 +559,77 @@ class _PreAssessmentProgressScreenState
             const BoxDecoration(gradient: AppGradients.parentLavenderMint),
         child: SafeArea(
           child: Center(
-            child: StatefulBuilder(
-              builder: (context, setState) {
-                int countdown = 7;
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Progress
+                  Text(
+                    'Game ${_currentGameIndex + 1} of ${_gameOrder.length}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
 
-                // Countdown timer - updates every second
-                Timer.periodic(const Duration(seconds: 1), (timer) {
-                  if (!mounted || ModalRoute.of(context)?.isCurrent != true) {
-                    timer.cancel();
-                    return;
-                  }
-                  if (countdown > 1) {
-                    setState(() => countdown--);
-                  } else {
-                    timer.cancel();
-                    _launchGame(gameId);
-                  }
-                });
-
-                return SingleChildScrollView(
-                  child: Column(
+                  // Progress dots
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                    // Progress
-                    Text(
-                      'Game ${_currentGameIndex + 1} of ${_gameOrder.length}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    children: List.generate(_gameOrder.length, (i) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i < _currentGameIndex
+                              ? AppColors.mint
+                              : i == _currentGameIndex
+                                  ? AppColors.primaryPurple
+                                  : AppColors.lavenderLight,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 24),
 
-                    // Progress dots
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(_gameOrder.length, (i) {
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: i < _currentGameIndex
-                                ? AppColors.mint
-                                : i == _currentGameIndex
-                                    ? AppColors.primaryPurple
-                                    : AppColors.lavenderLight,
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 24),
+                  Text(emoji, style: const TextStyle(fontSize: 56)),
+                  const SizedBox(height: 12),
 
-                    Text(emoji, style: const TextStyle(fontSize: 56)),
-                    const SizedBox(height: 12),
+                  Text(
+                    gameName,
+                    style: AppTextStyles.headlineLarge.copyWith(
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
 
-                    Text(
-                      gameName,
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: AppColors.primaryPurple,
-                      ),
+                  Text(
+                    'Ready to play?',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: AppColors.mutedForeground,
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 32),
 
-                    Text(
-                      'Ready to play?',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
+                  SizedBox(
+                    width: 220,
+                    child: AppPrimaryButton(
+                      label: 'Play!',
+                      icon: Icons.play_arrow_rounded,
+                      onPressed: () => _launchGame(gameId),
                     ),
-                    const SizedBox(height: 32),
-
-                    SizedBox(
-                      width: 220,
-                      child: AppPrimaryButton(
-                        label: 'Play!',
-                        icon: Icons.play_arrow_rounded,
-                        onPressed: () => _launchGame(gameId),
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Starting in $_countdown...',
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.primaryPurple,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Starting in $countdown...',
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.primaryPurple,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-              },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -625,6 +638,11 @@ class _PreAssessmentProgressScreenState
   }
 
   void _launchGame(String gameId) {
+    // Cancel the countdown timer and guard against duplicate launches
+    _countdownTimer?.cancel();
+    if (_gameLaunched) return;
+    _gameLaunched = true;
+
     Widget screen;
     switch (gameId) {
       case 'copy_me':

@@ -96,6 +96,26 @@ def save_assessment_result(
         "support_level": result.get("support_level"),
         "notes": result.get("summary"),
     }
+
+    # Path B per-area columns. Only included when present in `result` so this
+    # call still works against schemas that have not yet run the
+    # `20260512_per_area_levels.sql` migration. If the columns don't exist
+    # yet, the upsert will fail and the caller (main.py) logs and continues.
+    area_levels = result.get("area_levels") or {}
+    if area_levels:
+        col_map = {
+            "communication": ("communication_level", "communication_confidence"),
+            "social": ("social_level", "social_confidence"),
+            "play": ("play_level", "play_confidence"),
+            "attention": ("attention_level", "attention_confidence"),
+        }
+        for area, (level_col, conf_col) in col_map.items():
+            data = area_levels.get(area)
+            if not data:
+                continue
+            row[level_col] = data.get("level_int")
+            row[conf_col] = data.get("confidence")
+
     response = client.table("assessment_results").upsert(row).execute()
     logger.info(
         "Saved assessment result for child=%s, run=%s",
