@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,7 +10,9 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/screen_time_service.dart';
 import 'game_launcher.dart';
+import 'time_up_dialog.dart';
 
 /// Child Mode Lobby.
 ///
@@ -49,6 +53,11 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   /// Admin-enabled game ids; null until loaded (path shown once known).
   Set<String>? _activeGameIds;
 
+  /// Screen-time usage ticker — runs for the whole child-mode session
+  /// (this lobby stays mounted underneath the game screens).
+  Timer? _screenTimeTicker;
+  static const _tickSeconds = 15;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +65,37 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     ActiveGamesService.instance.activeGameIds.then((ids) {
       if (mounted) setState(() => _activeGameIds = ids);
     });
+    _startScreenTimeTracking();
+  }
+
+  Future<void> _startScreenTimeTracking() async {
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId == null) return;
+    final screenTime = ScreenTimeService.instance;
+    await screenTime.load(childId);
+    if (!mounted) return;
+
+    // Already out of time when entering child mode → gentle goodbye now.
+    if (screenTime.isExhausted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) TimeUpDialog.show(context);
+      });
+    }
+
+    _screenTimeTicker =
+        Timer.periodic(const Duration(seconds: _tickSeconds), (_) async {
+      if (!mounted) return;
+      await screenTime.addUsage(_tickSeconds);
+      if (mounted && screenTime.isExhausted) {
+        TimeUpDialog.show(context);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _screenTimeTicker?.cancel();
+    super.dispose();
   }
 
   /// The AI-recommended learning path (empty when no assessment yet, all
