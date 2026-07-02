@@ -926,6 +926,10 @@ class LocalDbService {
     String newOwnerId,
   ) async {
     final db = await database;
+    // Only the children table has a user_id column; every other sync table
+    // tracks ownership via owner_id alone. Referencing user_id on those
+    // tables is a SQLITE_ERROR that aborts the whole guest backfill.
+    final hasUserId = table == LocalTables.children;
     // Match by prefix as well as exactly: guest ids are minted as
     // `guest_<uuid>`, but callers backfill with the generic 'guest' prefix
     // (see SyncService.onUserAuthenticated) — exact matching alone would
@@ -934,12 +938,16 @@ class LocalDbService {
       table,
       {
         'owner_id': newOwnerId,
-        'user_id': newOwnerId,
+        if (hasUserId) 'user_id': newOwnerId,
         'updated_at': DateTime.now().toIso8601String(),
         'sync_status': SyncStatus.pending.value,
       },
-      where: 'owner_id = ? OR user_id = ? OR owner_id LIKE ? OR user_id LIKE ?',
-      whereArgs: [oldOwnerId, oldOwnerId, '$oldOwnerId%', '$oldOwnerId%'],
+      where: hasUserId
+          ? 'owner_id = ? OR user_id = ? OR owner_id LIKE ? OR user_id LIKE ?'
+          : 'owner_id = ? OR owner_id LIKE ?',
+      whereArgs: hasUserId
+          ? [oldOwnerId, oldOwnerId, '$oldOwnerId%', '$oldOwnerId%']
+          : [oldOwnerId, '$oldOwnerId%'],
     );
     debugPrint(
       '[LocalDbService] Updated owner_id in $table: $oldOwnerId -> $newOwnerId',
