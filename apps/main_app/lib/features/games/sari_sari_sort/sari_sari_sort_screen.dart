@@ -88,8 +88,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       childId: childId,
       strings: config.strings,
       // Hint policy per difficulty tier (Easy: unlimited + guided demo,
-      // Medium: small budget, Hard: no answer hints).
-      profile: DifficultyProfile.forLevel(config.difficulty),
+      // Medium: small budget, Hard: no answer hints). Assessment keeps the
+      // fixed legacy behaviour so its telemetry stays comparable.
+      profile: widget.assessmentContext == 'practice'
+          ? DifficultyProfile.forLevel(config.difficulty)
+          : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectDrop: _onCorrectDrop,

@@ -87,6 +87,12 @@ class _CopyMeScreenState extends State<CopyMeScreen>
     _game = CopyMeGame(
       totalRounds: _totalRounds,
       childId: childId,
+      // Hint policy per difficulty tier (Easy: unlimited + guided demo,
+      // Medium: small budget, Hard: no answer hints). Assessment keeps the
+      // fixed legacy behaviour so its telemetry stays comparable.
+      profile: widget.assessmentContext == 'practice'
+          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+          : DifficultyProfile.assessment,
       // Audio SFX callbacks
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
       onPlayWrongSfx: () => audioService.playWrongSfx(),

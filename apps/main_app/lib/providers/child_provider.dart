@@ -24,6 +24,12 @@ class ChildProvider extends ChangeNotifier {
   GameLanguage _language = GameLanguage.english;
   static const _languageKeyPrefix = 'language_';
 
+  /// Parent's manual difficulty override (1 Easy / 2 Medium / 3 Hard). When
+  /// null, practice difficulty follows the AI's per-area assessment levels.
+  /// Persisted locally per child (no DB migration).
+  int? _difficultyOverride;
+  static const _difficultyOverrideKeyPrefix = 'difficulty_override_';
+
   /// Graphics quality / performance tier (device-level). Lower tiers drop the
   /// video backgrounds and reward particles to ease device heat and sensory
   /// load. Defaults to High.
@@ -68,6 +74,49 @@ class ChildProvider extends ChangeNotifier {
 
   /// The full color palette for the [activeTheme] (game + dashboard).
   GamePalette get activePalette => GamePalettes.of(activeTheme);
+
+  // ── Difficulty override ───────────────────────────────────────────────
+
+  /// The parent's manual difficulty override (1–3), or null when practice
+  /// difficulty follows the AI's per-area levels.
+  int? get difficultyOverride => _difficultyOverride;
+
+  /// Whether difficulty comes from a manual override (vs. auto-from-AI).
+  bool get isDifficultyOverridden => _difficultyOverride != null;
+
+  /// Sets a manual difficulty override (clamped to 1–3) and persists it.
+  Future<void> setDifficultyOverride(int difficulty) async {
+    _difficultyOverride = difficulty.clamp(1, 3);
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+          '$_difficultyOverrideKeyPrefix$id', _difficultyOverride!);
+    }
+  }
+
+  /// Clears the override so difficulty follows the AI assessment again.
+  Future<void> clearDifficultyOverride() async {
+    _difficultyOverride = null;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_difficultyOverrideKeyPrefix$id');
+    }
+  }
+
+  /// Loads any persisted difficulty override for the current child.
+  Future<void> _loadDifficultyOverride() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _difficultyOverride = null;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    _difficultyOverride = prefs.getInt('$_difficultyOverrideKeyPrefix$id');
+  }
 
   // ── Language ──────────────────────────────────────────────────────────
 
@@ -127,6 +176,7 @@ class ChildProvider extends ChangeNotifier {
       _profile = children.isEmpty ? null : children.first;
       await _loadThemeOverride();
       await _loadLanguage();
+      await _loadDifficultyOverride();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
@@ -270,6 +320,7 @@ class ChildProvider extends ChangeNotifier {
   void clear() {
     _profile = null;
     _themeOverride = null;
+    _difficultyOverride = null;
     _language = GameLanguage.english;
     _graphicsQuality = GraphicsQuality.high;
     notifyListeners();
