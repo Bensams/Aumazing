@@ -458,16 +458,30 @@ const _kDebounceInterval = Duration(milliseconds: 300);
 /// Uses [AssetSource] for playback which works reliably on both Android and
 /// iOS.
 ///
+/// Supports multiple languages via [languageCode]. Voice-over assets are
+/// loaded from language-specific subdirectories:
+///   `voice_over/{languageCode}/{category}/{CueName}.wav`
+///
+/// Supported language codes: `'en'` (English), `'tl'` (Tagalog),
+/// `'ceb'` (Cebuano/Bisaya).
+///
 /// Usage:
 /// ```dart
-/// final voiceOver = VoiceOverService();
+/// final voiceOver = VoiceOverService(languageCode: 'tl');
 /// await voiceOver.play(VoiceOverCue.greatJob);
 /// await voiceOver.playCorrectPraise(); // random from Core Praise
+/// await voiceOver.setLanguage('ceb');  // switch language at runtime
 /// voiceOver.setEnabled(false);         // master toggle
 /// ```
 class VoiceOverService {
   /// Asset prefix for package-based assets.
   static const String _assetPrefix = 'packages/shared_audio/assets/audio';
+
+  /// Supported language codes for voice-over playback.
+  static const List<String> supportedLanguages = ['en', 'tl', 'ceb'];
+
+  /// Current language code for voice-over asset resolution.
+  String _languageCode;
 
   /// Pool of players for voice-over playback.
   final List<AudioPlayer> _players = [];
@@ -494,10 +508,14 @@ class VoiceOverService {
   bool _sequenceCancelled = false;
 
   VoiceOverService({
+    String languageCode = 'en',
     bool enabled = true,
     double volume = 1.0,
     Random? random,
-  })  : _enabled = enabled,
+  })  : _languageCode = supportedLanguages.contains(languageCode)
+            ? languageCode
+            : 'en',
+        _enabled = enabled,
         _volume = volume.clamp(0.0, 1.0),
         _random = random ?? Random() {
     // Create the player pool.
@@ -523,6 +541,9 @@ class VoiceOverService {
   /// Whether voice-over playback is enabled.
   bool get isEnabled => _enabled;
 
+  /// Current language code for voice-over playback.
+  String get languageCode => _languageCode;
+
   /// Current volume level (0.0 – 1.0).
   double get volume => _volume;
 
@@ -535,6 +556,26 @@ class VoiceOverService {
     _volume = volume.clamp(0.0, 1.0);
     for (final player in _players) {
       player.setVolume(_enabled ? _volume : 0.0);
+    }
+  }
+
+  /// Change the voice-over language at runtime.
+  ///
+  /// Stops any currently playing cue and updates the language.
+  /// Falls back to `'en'` if [languageCode] is not in
+  /// [supportedLanguages].
+  Future<void> setLanguage(String languageCode) async {
+    if (!supportedLanguages.contains(languageCode)) {
+      debugPrint(
+          '[VoiceOverService] ⚠ Unsupported language: $languageCode, '
+          'falling back to en');
+      languageCode = 'en';
+    }
+    if (_languageCode != languageCode) {
+      await stop();
+      _languageCode = languageCode;
+      debugPrint(
+          '[VoiceOverService] 🌐 Language changed to: $_languageCode');
     }
   }
 
@@ -609,7 +650,12 @@ class VoiceOverService {
       return;
     }
 
-    final assetPath = '$_assetPrefix/$relativePath';
+    // Insert language folder: voice_over/{lang}/category/File.wav
+    final langPath = relativePath.replaceFirst(
+      'voice_over/',
+      'voice_over/$_languageCode/',
+    );
+    final assetPath = '$_assetPrefix/$langPath';
 
     try {
       // Stop all currently playing players (fire-and-forget).
@@ -625,7 +671,8 @@ class VoiceOverService {
       player.setReleaseMode(ReleaseMode.stop);
       await player.setVolume(_volume);
 
-      debugPrint('[VoiceOverService] 🗣 Playing: ${cue.name} (vol=$_volume)');
+      debugPrint('[VoiceOverService] 🗣 Playing: ${cue.name} '
+          '(lang=$_languageCode, vol=$_volume)');
 
       if (awaitCompletion) {
         // Wait for the clip to finish playing before returning.

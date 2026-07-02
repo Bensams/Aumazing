@@ -17,14 +17,39 @@ flutter:
     - assets/audio/
     - assets/audio/sfx/
     - assets/audio/sfx/rewards/
-    - assets/audio/voice_over/assessment_style/
-    - assets/audio/voice_over/attention_and_regulation/
-    - assets/audio/voice_over/core_praise/
-    - assets/audio/voice_over/gently_retry/
-    - assets/audio/voice_over/instruction/
-    - assets/audio/voice_over/reward_and_celebration/
-    - assets/audio/voice_over/transition/
-    - assets/audio/voice_over/turn_taking/
-    - assets/audio/voice_over/dynamic/
-    - assets/audio/voice_over/colors/
-    - assets/audio/voice_over/shapes/
+    # ── English voice-overs ──────────────────────────────────────────
+    - assets/audio/voice_over/en/assessment_style/
+    - assets/audio/voice_over/en/attention_and_regulation/
+    - assets/audio/voice_over/en/core_praise/
+    - assets/audio/voice_over/en/gently_retry/
+    - assets/audio/voice_over/en/instruction/
+    - assets/audio/voice_over/en/reward_and_celebration/
+    - assets/audio/voice_over/en/transition/
+    - assets/audio/voice_over/en/turn_taking/
+    - assets/audio/voice_over/en/dynamic/
+    - assets/audio/voice_over/en/colors/
+    - assets/audio/voice_over/en/shapes/
+    # ── Tagalog voice-overs ──────────────────────────────────────────
+    - assets/audio/voice_over/tl/assessment_style/
+    - assets/audio/voice_over/tl/attention_and_regulation/
+    - assets/audio/voice_over/tl/core_praise/
+    - assets/audio/voice_over/tl/gently_retry/
+    - assets/audio/voice_over/tl/instruction/
+    - assets/audio/voice_over/tl/reward_and_celebration/
+    - assets/audio/voice_over/tl/transition/
+    - assets/audio/voice_over/tl/turn_taking/
+    - assets/audio/voice_over/tl/dynamic/
+    - assets/audio/voice_over/tl/colors/
+    - assets/audio/voice_over/tl/shapes/
+    # ── Cebuano (Bisaya) voice-overs ─────────────────────────────────
+    - assets/audio/voice_over/ceb/assessment_style/
+    - assets/audio/voice_over/ceb/attention_and_regulation/
+    - assets/audio/voice_over/ceb/core_praise/
+    - assets/audio/voice_over/ceb/gently_retry/
+    - assets/audio/voice_over/ceb/instruction/
+    - assets/audio/voice_over/ceb/reward_and_celebration/
+    - assets/audio/voice_over/ceb/transition/
+    - assets/audio/voice_over/ceb/turn_taking/
+    - assets/audio/voice_over/ceb/dynamic/
+    - assets/audio/voice_over/ceb/colors/
+    - assets/audio/voice_over/ceb/shapes/
