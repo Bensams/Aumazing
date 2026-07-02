@@ -7,7 +7,6 @@ import 'package:flutter/painting.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 import 'components/sequence_shape.dart';
-import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
@@ -106,8 +105,6 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
   // Difficulty-tier hint state (see DifficultyProfile).
   int _hintsUsedThisRound = 0;
-  int _idleGuides = 0;
-  GhostHand? _ghostHand;
 
   /// Within-round adaptive stepping: 2 consecutive errors temporarily step
   /// the tier down (more support) for the remainder of the round.
@@ -201,7 +198,6 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     _inputPhase = false;
     _consecutiveErrors = 0; // Reset consecutive errors for new round
     _hintsUsedThisRound = 0;
-    _idleGuides = 0;
     _adaptive.startRound(); // any step-down only lasts one round
 
     // Build sequence: length = round + 1 (round 0 → 1 item, etc.)
@@ -276,8 +272,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     if (index == _sequence[_inputIndex]) {
       // Correct
       _adaptive.recordCorrect();
-      _idleGuides = 0;
-      _shapes[index].showCorrect();
+        _shapes[index].showCorrect();
 
       // Play position-based shimmer SFX for this correct tap
       onPlaySequenceHighlightSfx?.call(_inputIndex);
@@ -394,17 +389,16 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
         'consecutive_errors': _consecutiveErrors,
       });
 
-      // Check if we should show visual guide after 3 consecutive errors
-      // Sequence replay follows the tier: Easy replays after 2 errors
-      // (plus a tap demo on the next expected shape), Medium after 3 while
-      // the hint budget lasts, Hard never replays (independence).
+      // Sequence replay follows the tier: Easy replays after 2 errors,
+      // Medium after 3 while the hint budget lasts, Hard never replays
+      // (independence). No ghost-hand demo here — Copy Me is a memory task,
+      // and pointing at the next shape would confuse the sequence; the
+      // replay itself is the visual guide.
       final errorThreshold = _tier.guidedDemo ? 2 : 3;
       if (_consecutiveErrors >= errorThreshold &&
           _hintBudgetLeft &&
           !_tier.noHints) {
         _showSequentialVisualGuide();
-        // Easy tier: after the replay, show exactly where to tap next.
-        if (_tier.guidedDemo) _showTapDemo();
         _consecutiveErrors = 0; // Reset after showing guide
       } else {
         // Record retry
@@ -433,27 +427,8 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
         _startNoResponseTimer();
         return;
       }
-      _idleGuides++;
       _showSequentialVisualGuide();
-      // Easy tier: still idle after a replay -> tap demo on the next shape.
-      if (_tier.guidedDemo && _idleGuides >= 2) _showTapDemo();
     });
-  }
-
-  /// Tap demo for the Easy tier: the ghost hand taps the next expected
-  /// shape in the sequence.
-  void _showTapDemo() {
-    if (_inputIndex < 0 || _inputIndex >= _sequence.length) return;
-    final target = _shapes[_sequence[_inputIndex]];
-
-    _ghostHand?.removeFromParent(); // never more than one demo at a time
-    final hand = GhostHand.tap(
-      at: target.position + target.size / 2,
-      handSize: target.size.x * 0.7,
-    );
-    _ghostHand = hand;
-    add(hand);
-    analyticsRecordHint(hintType: 'gesture_demo');
   }
 
   void _cancelNoResponseTimer() {
