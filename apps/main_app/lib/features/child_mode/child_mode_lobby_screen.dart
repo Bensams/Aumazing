@@ -1,19 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../model/area_level.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
-import '../games/copy_me/copy_me_screen.dart';
-import '../games/do_what_i_say/do_what_i_say_screen.dart';
-import '../games/match_it/match_it_screen.dart';
-import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
-import '../games/sari_sari_sort/sari_sari_sort_screen.dart';
+import 'game_launcher.dart';
 
 /// Child Mode Lobby.
 ///
@@ -30,15 +23,6 @@ class ChildModeLobbyScreen extends StatefulWidget {
 }
 
 class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
-  /// Games that have a main_app practice screen wired up.
-  static const _supportedGameIds = {
-    'match_it',
-    'copy_me',
-    'do_what_i_say',
-    'my_turn_your_turn',
-    'sari_sari_sort',
-  };
-
   static const _categoryOrder = [
     SkillCategory.playSkills,
     SkillCategory.communication,
@@ -53,69 +37,13 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
 
   bool get _inView => _selected != null || _viewingAll;
 
-  int _difficultyFromLevel(int level) => level.clamp(1, 3);
-
-  /// AI per-area keys for each skill category (matches the on-device model's
-  /// area names: communication / social / play / attention).
-  static const _areaKeyForCategory = {
-    SkillCategory.playSkills: 'play',
-    SkillCategory.communication: 'communication',
-    SkillCategory.socialInteraction: 'social',
-  };
-
-  /// Difficulty for one game from the AI's per-area levels.
-  ///
-  /// Each game uses the level of its own skill area(s) — a child can play
-  /// Easy in communication games while playing Hard in play-skills games.
-  /// `needs_support` (0) → 1 Easy, `emerging` (1) → 2 Medium,
-  /// `strength` (2) → 3 Hard. For games spanning multiple areas the weakest
-  /// area wins (more support). Falls back to [fallback] (the overall level)
-  /// when no AI result is available.
-  int _difficultyForGame(
-    GameEntry entry,
-    Map<String, AreaLevel> areaLevels,
-    int fallback,
-  ) {
-    // A parent's manual override (settings) wins over the AI-derived level.
-    final override = context.read<ChildProvider>().difficultyOverride;
-    if (override != null) return override.clamp(1, 3);
-
-    int? weakest;
-    for (final cat in entry.categories) {
-      final area = areaLevels[_areaKeyForCategory[cat]];
-      if (area == null) continue;
-      weakest = weakest == null ? area.levelInt : math.min(weakest, area.levelInt);
-    }
-    if (weakest == null) return _difficultyFromLevel(fallback);
-    return weakest + 1; // 0/1/2 → 1/2/3
-  }
-
   /// All supported games, deduplicated (used by the "All" view/button).
-  List<GameEntry> _allGames() => GameRegistry.games
-      .where((g) => _supportedGameIds.contains(g.id))
-      .toList();
+  List<GameEntry> _allGames() => GameLauncher.supportedGames();
 
   void _launch(String gameId, int difficulty) {
-    Widget? screen;
-    switch (gameId) {
-      case 'match_it':
-        screen = MatchItScreen(
-            assessmentContext: 'practice', difficulty: difficulty);
-      case 'copy_me':
-        screen =
-            CopyMeScreen(assessmentContext: 'practice', difficulty: difficulty);
-      case 'do_what_i_say':
-        screen = DoWhatISayScreen(
-            assessmentContext: 'practice', difficulty: difficulty);
-      case 'my_turn_your_turn':
-        screen = MyTurnYourTurnScreen(
-            assessmentContext: 'practice', difficulty: difficulty);
-      case 'sari_sari_sort':
-        screen = SariSariSortScreen(
-            assessmentContext: 'practice', difficulty: difficulty);
-    }
+    final screen = GameLauncher.screenFor(gameId, difficulty);
     if (screen == null) return;
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen!));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   Future<void> _exitToParent() async {
@@ -149,16 +77,16 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
 
   List<GameEntry> _gamesFor(SkillCategory cat) =>
       GameRegistry.gamesForCategory(cat)
-          .where((g) => _supportedGameIds.contains(g.id))
+          .where((g) => GameLauncher.supportedGameIds.contains(g.id))
           .toList();
 
   @override
   Widget build(BuildContext context) {
     final palette = context.watch<ChildProvider>().activePalette;
-    final assessment = context.watch<AssessmentProvider>();
-    final level = assessment.recommendedLevel;
-    final areaLevels =
-        assessment.aiPrediction?.areaLevels ?? const <String, AreaLevel>{};
+    // Watched so difficulty chips refresh when the AI result or the parent's
+    // override changes.
+    final level = context.watch<AssessmentProvider>().recommendedLevel;
+    context.watch<ChildProvider>().difficultyOverride;
 
     return Scaffold(
       body: Container(
@@ -171,7 +99,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
               Expanded(
                 child: !_inView
                     ? _buildCategoryButtons(palette)
-                    : _buildGamesRow(areaLevels, level, palette),
+                    : _buildGamesRow(level, palette),
               ),
             ],
           ),
@@ -299,11 +227,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
 
   // ── Step 2: games in a single horizontal row ───────────────────────────
 
-  Widget _buildGamesRow(
-    Map<String, AreaLevel> areaLevels,
-    int fallbackLevel,
-    GamePalette palette,
-  ) {
+  Widget _buildGamesRow(int fallbackLevel, GamePalette palette) {
     final games = _viewingAll ? _allGames() : _gamesFor(_selected!);
     if (games.isEmpty) {
       return Center(
@@ -322,9 +246,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
           itemCount: games.length,
           separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
           itemBuilder: (_, i) {
-            // Per-game difficulty from the AI's per-area assessment levels.
-            final difficulty =
-                _difficultyForGame(games[i], areaLevels, fallbackLevel);
+            // Per-game difficulty: parent override → AI per-area → fallback.
+            final difficulty = GameLauncher.difficultyFor(
+              context,
+              games[i],
+              fallback: fallbackLevel,
+            );
             return _GameCard(
               entry: games[i],
               difficulty: difficulty,

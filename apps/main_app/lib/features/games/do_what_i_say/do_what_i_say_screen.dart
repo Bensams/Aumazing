@@ -12,6 +12,7 @@ import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
+import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
 
 /// Screen wrapper for the Do What I Say game during pre-assessment.
@@ -254,7 +255,13 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           showContinueButton: false, // pop-to-advance; no text button
           onComplete: () {
             Navigator.of(dialogContext).pop(); // Close reward overlay
-            Navigator.of(context).pop(); // Back to the lobby
+            if (widget.assessmentContext == 'practice') {
+              // Post-reward choice: play the next game or back to the lobby.
+              GameEndChoiceDialog.show(context,
+                  currentGameId: 'do_what_i_say');
+            } else {
+              Navigator.of(context).pop(); // Back to the lobby
+            }
           },
         ),
       ),
