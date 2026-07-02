@@ -1,6 +1,7 @@
 import 'package:aumazing/core/services/auth_service.dart';
-import 'package:aumazing/features/home/home_screen.dart'
-    show BindAccountModal, HomeScreen, SettingsModal;
+import 'package:aumazing/features/home/home_screen.dart' show HomeScreen;
+import 'package:aumazing/features/settings/bind_account_modal.dart';
+import 'package:aumazing/features/settings/settings_screen.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
@@ -44,6 +45,10 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(childProvider.loadCalls, 1);
+
+      // Let the home screen's delayed music-verification timer fire so no
+      // timer outlives the test.
+      await tester.pump(const Duration(milliseconds: 700));
     },
   );
 
@@ -127,7 +132,7 @@ Widget _buildSettingsTestApp({required AuthService authService}) {
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: SettingsModal(authService: authService)),
+      home: Scaffold(body: SettingsScreen(authService: authService)),
     ),
   );
 }
