@@ -17,6 +17,7 @@ export 'section_title.dart';
 export 'status_pill_badge.dart';
 export 'voice_over_prompt_bubble.dart';
 export 'game_celebration_overlay.dart';
+export 'game_completion_dialog.dart';
 export 'three_star_sparkle.dart';
 export 'ui_tap_sfx_provider.dart';
 export 'reward_sfx_provider.dart';

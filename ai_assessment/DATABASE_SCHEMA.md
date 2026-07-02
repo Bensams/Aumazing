@@ -158,6 +158,8 @@ Granular event tracking within sessions.
 ### 10. `assessment_results`
 Stores results/scores from assessments.
 
+#### Base columns (original)
+
 | Column | Description (inferred) |
 |--------|----------------------|
 | `id` | Primary key |
@@ -167,6 +169,39 @@ Stores results/scores from assessments.
 | `notes` | Free-text notes |
 | `assessment_run_id` | FK → `assessment_runs.id` |
 | `sensory_score` | Computed sensory score |
+
+#### Legacy single-profile AI columns (added 2026-04-24)
+
+Added by `supabase/migrations/20260424_ai_assessment_columns.sql`. **Retained** for backwards compatibility but are now derived fields populated alongside the per-area columns below.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `predicted_profile` | TEXT | Legacy 5-class label (`communication_support` / `social_support` / `play_support` / `attention_support` / `balanced_profile`). Derived from per-area levels via tie-break in `app/rules.py`. |
+| `confidence` | REAL | Confidence of the dominant area's prediction (0.0–1.0). |
+| `support_level` | TEXT | `high` / `moderate` / `low` derived from `confidence`. |
+| `type` | TEXT | `pre` / `post` / `progress` (defaults to `pre`). |
+| `game_id` | TEXT | Optional game identifier when the row reflects a single game. |
+| `score`, `total_items`, `error_count`, `avg_response_time_ms` | INT | Per-game raw metrics when applicable. |
+| `raw_metrics` | JSONB | Free-form JSON for additional metrics. |
+
+#### Per-area ordinal columns (added 2026-05-12 — Path B)
+
+Added by `supabase/migrations/20260512_per_area_levels.sql`. **These are now the canonical AI output.** Each level column stores `0` (Needs Support), `1` (Emerging), or `2` (Strength) for the corresponding developmental skill area.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `communication_level` | SMALLINT | Ordinal level for the Communication skill area. |
+| `social_level` | SMALLINT | Ordinal level for the Social Interaction skill area. |
+| `play_level` | SMALLINT | Ordinal level for the Play Skills area. |
+| `attention_level` | SMALLINT | Ordinal level for the Attention & Focus area. |
+| `communication_confidence` | REAL | Model confidence for `communication_level` (0.0–1.0). |
+| `social_confidence` | REAL | Model confidence for `social_level`. |
+| `play_confidence` | REAL | Model confidence for `play_level`. |
+| `attention_confidence` | REAL | Model confidence for `attention_level`. |
+
+Constraints enforce `level ∈ {0, 1, 2}` and `confidence ∈ [0, 1]`. Indexes exist on each individual level column and on the composite `(communication_level, social_level, play_level, attention_level)` tuple to support analytical queries (e.g., "all children with two or more areas at Needs Support").
+
+The semantics of the four levels are documented in `ai_assessment/training/LABELING_RUBRIC.md` (the single source of truth for the labeling scheme).
 
 ---
 
