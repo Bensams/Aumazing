@@ -11,6 +11,7 @@ import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/sari_sari_sort/sari_sari_sort_screen.dart';
+import '../games/trace_it/trace_it_screen.dart';
 
 /// Shared launcher for practice (non-assessment) games.
 ///
@@ -29,6 +30,7 @@ class GameLauncher {
     'do_what_i_say',
     'my_turn_your_turn',
     'sari_sari_sort',
+    'trace_it',
   };
 
   /// AI per-area keys for each skill category (matches the on-device model's
@@ -54,9 +56,11 @@ class GameLauncher {
     return games[(i + 1) % games.length];
   }
 
-  /// Difficulty for one game: the parent's manual override wins; otherwise
-  /// the AI's per-area level for the game's skill area(s) (weakest area =
-  /// more support); otherwise [fallback] (the overall recommended level).
+  /// Difficulty for one game: the parent's manual override wins; then the
+  /// AI's recommended starting level for this exact module (matches the
+  /// "AI Recommended Activities" list and the learning path); then the AI's
+  /// per-area level for the game's skill area(s) (weakest area = more
+  /// support); otherwise [fallback] (the overall recommended level).
   static int difficultyFor(
     BuildContext context,
     GameEntry entry, {
@@ -66,6 +70,15 @@ class GameLauncher {
     if (override != null) return override.clamp(1, 3);
 
     final assessment = context.read<AssessmentProvider>();
+
+    // Per-module starting level from the AI recommendation, when this game
+    // was recommended — keeps every difficulty chip consistent with the
+    // learning path.
+    final modules = assessment.aiPrediction?.moduleDetails ?? const [];
+    for (final module in modules) {
+      if (module.gameId == entry.id) return module.startingLevel.clamp(1, 3);
+    }
+
     final areaLevels =
         assessment.aiPrediction?.areaLevels ?? const <String, AreaLevel>{};
 
@@ -99,6 +112,9 @@ class GameLauncher {
             assessmentContext: 'practice', difficulty: difficulty);
       case 'sari_sari_sort':
         return SariSariSortScreen(
+            assessmentContext: 'practice', difficulty: difficulty);
+      case 'trace_it':
+        return TraceItScreen(
             assessmentContext: 'practice', difficulty: difficulty);
     }
     return null;

@@ -7,6 +7,7 @@ import 'package:onnxruntime/onnxruntime.dart';
 import '../model/ai_assessment_response.dart';
 import '../model/area_level.dart';
 import '../model/gameplay_session.dart';
+import 'local_recommendation_rules.dart';
 import 'on_device_feature_aggregator.dart';
 
 /// Runs the XGBoost developmental classifier **on-device** via ONNX Runtime
@@ -189,12 +190,20 @@ class OnDeviceAiAssessmentService {
         : areaLevels.values.map((a) => a.confidence).reduce((a, b) => a + b) /
             areaLevels.length;
 
+    // Local port of the cloud recommender: same module details, starting
+    // levels, and summary text — fully offline.
+    final moduleDetails = LocalRecommendationRules.deriveModuleDetails(
+      areaLevels,
+      featureValues: features,
+    );
+
     return AiAssessmentResponse(
       predictedProfile: predictedProfile,
       confidence: avgConfidence,
-      summary: 'On-device assessment complete.',
+      summary: LocalRecommendationRules.buildSummaryText(areaLevels),
       supportLevel: supportLevel,
-      recommendedModules: const [], // module selection handled by local rules
+      recommendedModules: moduleDetails.map((m) => m.name).toList(),
+      moduleDetails: moduleDetails,
       featureValues: features,
       skillAreas: areaLevels.keys.toList(),
       areaLevels: areaLevels,

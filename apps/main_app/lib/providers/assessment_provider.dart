@@ -1,11 +1,17 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:game_core/game_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../model/ai_assessment_response.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
+import '../model/area_level.dart';
 import '../services/ai_assessment_service.dart';
+import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
 import '../services/assessment_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
@@ -89,11 +95,44 @@ class AssessmentProvider extends ChangeNotifier {
       if (_preResults.isNotEmpty) {
         _recommendation = _assessmentService.recommendModule(_preResults);
       }
+
+      // Restore the last AI prediction (area levels drive the learning path
+      // and per-game difficulty; it only lives in memory otherwise).
+      await _restoreAiPrediction(childId);
+      await _restorePathProgress(childId);
     } catch (e) {
       debugPrint('[AssessmentProvider] loadAssessments error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  static String _aiPredictionKey(String childId) => 'ai_prediction_$childId';
+
+  Future<void> _persistAiPrediction(
+      String childId, AiAssessmentResponse prediction) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persistAiPrediction failed: $e');
+    }
+  }
+
+  Future<void> _restoreAiPrediction(String childId) async {
+    if (_aiPrediction != null) return; // in-memory result wins
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_aiPredictionKey(childId));
+      if (raw == null) return;
+      _aiPrediction = AiAssessmentResponse.fromJson(
+          jsonDecode(raw) as Map<String, dynamic>);
+      debugPrint('[AssessmentProvider] Restored persisted AI prediction '
+          'for child=$childId');
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restoreAiPrediction failed: $e');
     }
   }
 
@@ -145,7 +184,56 @@ class AssessmentProvider extends ChangeNotifier {
     );
 
     _currentSessions.add(session);
+
+    // Practice completions advance the learning path (sequential unlock).
+    if (context == 'practice') {
+      await markPathGameCompleted(childId, gameId);
+    }
     notifyListeners();
+  }
+
+  // ── Learning-path progress (sequential unlock) ─────────────────────────
+
+  /// Game ids the child has completed on the current learning path.
+  Set<String> get pathCompletedGameIds => Set.unmodifiable(_pathCompleted);
+  Set<String> _pathCompleted = {};
+
+  static String _pathProgressKey(String childId) => 'path_progress_$childId';
+
+  /// Marks a path game as completed and persists the progress.
+  Future<void> markPathGameCompleted(String childId, String gameId) async {
+    if (!_pathCompleted.add(gameId)) return; // already recorded
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+          _pathProgressKey(childId), _pathCompleted.toList());
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persist path progress failed: $e');
+    }
+  }
+
+  Future<void> _restorePathProgress(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _pathCompleted =
+          (prefs.getStringList(_pathProgressKey(childId)) ?? const [])
+              .toSet();
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restore path progress failed: $e');
+    }
+  }
+
+  /// Clears path progress — called when a new assessment produces a new
+  /// path, so the child starts the new sequence from step 1.
+  Future<void> _resetPathProgress(String childId) async {
+    _pathCompleted = {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pathProgressKey(childId));
+    } catch (e) {
+      debugPrint('[AssessmentProvider] reset path progress failed: $e');
+    }
   }
 
   /// Set sensory round metrics collected during the sensory experiment.
@@ -350,8 +438,24 @@ class AssessmentProvider extends ChangeNotifier {
           sessions: _currentSessions,
         );
       }
+
+      // Last resort: synthesize the prediction from the rubric labels so a
+      // completed assessment ALWAYS yields area levels and a learning path,
+      // even when the ONNX assets fail and no cloud server exists.
+      if (prediction == null && _rubricResult != null) {
+        modelSource = 'rubric_based';
+        prediction = _predictionFromRubric(_rubricResult!);
+        debugPrint('[AssessmentProvider] ⚠️ AI unavailable — synthesized '
+            'prediction from rubric labels');
+      }
       _aiPrediction = prediction;
       if (prediction != null) {
+        // Persist so the learning path and per-game difficulty survive app
+        // restarts (the prediction otherwise only lives in memory).
+        await _persistAiPrediction(childId, prediction);
+        // New assessment → new path → the sequence restarts at step 1.
+        await _resetPathProgress(childId);
+
         // Mark all pre-assessment results as AI-assessed so they can be
         // distinguished from rubric-only results.
         _preResults = _preResults
@@ -380,6 +484,58 @@ class AssessmentProvider extends ChangeNotifier {
       // Clear sessions now that both finalization and AI prediction are done
       _currentSessions.clear();
     }
+  }
+
+  /// Builds an [AiAssessmentResponse] from rubric labels (Strength=2,
+  /// Emerging=1, Needs Support=0) with locally derived module details —
+  /// the offline fallback when neither the ONNX model nor a cloud API is
+  /// available.
+  AiAssessmentResponse _predictionFromRubric(RubricResult rubric) {
+    int perf(PerformanceLabel label) => switch (label) {
+          PerformanceLabel.strength => 2,
+          PerformanceLabel.emerging => 1,
+          PerformanceLabel.needsSupport => 0,
+        };
+    final attentionInt = switch (rubric.behaviorAttentionLabel) {
+      AttentionLabel.sustainedAttention => 2,
+      AttentionLabel.variableAttention => 1,
+      AttentionLabel.needsAttentionSupport => 0,
+    };
+
+    AreaLevel area(int levelInt) => AreaLevel(
+          level: const ['needs_support', 'emerging', 'strength'][levelInt],
+          levelInt: levelInt,
+          levelName: const ['Needs Support', 'Emerging', 'Strength'][levelInt],
+          confidence: 0.5, // rubric-derived — moderate confidence
+        );
+
+    final areaLevels = <String, AreaLevel>{
+      'communication': area(perf(rubric.communicationLabel)),
+      'social': area(perf(rubric.socialInteractionLabel)),
+      'play': area(perf(rubric.playSkillsLabel)),
+      'attention': area(attentionInt),
+    };
+
+    final minLevel =
+        areaLevels.values.map((a) => a.levelInt).reduce(math.min);
+    final needsSupportCount =
+        areaLevels.values.where((a) => a.levelInt == 0).length;
+    final moduleDetails =
+        LocalRecommendationRules.deriveModuleDetails(areaLevels);
+
+    return AiAssessmentResponse(
+      predictedProfile: minLevel >= 2 ? 'balanced_profile' : 'mixed_support',
+      confidence: 0.5,
+      summary: LocalRecommendationRules.buildSummaryText(areaLevels),
+      supportLevel: needsSupportCount >= 2
+          ? 'high'
+          : (needsSupportCount == 1 || minLevel <= 1 ? 'moderate' : 'low'),
+      recommendedModules: moduleDetails.map((m) => m.name).toList(),
+      moduleDetails: moduleDetails,
+      skillAreas: areaLevels.keys.toList(),
+      areaLevels: areaLevels,
+      onDevice: true,
+    );
   }
 
   /// Export a single XGBoost-ready data row for the current assessment.

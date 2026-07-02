@@ -169,6 +169,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Opens the child lobby directly on the AI-recommended learning path
+  /// (from the Recommended Module card).
+  void _openLearningPath() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ChildModeLobbyScreen(openPath: true),
+      ),
+    );
+  }
+
   void _toggleLeftPanel() {
     setState(() {
       _isLeftPanelExpanded = !_isLeftPanelExpanded;
@@ -610,52 +620,62 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        // Show recommendation
+        // Show recommendation — tapping opens the child lobby directly on
+        // the AI-recommended learning path.
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.statusSuccessBg,
-                      borderRadius: BorderRadius.circular(12),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _openLearningPath,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.statusSuccessBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.recommend_rounded,
+                        color: AppColors.statusSuccessDark,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.recommend_rounded,
-                      color: AppColors.statusSuccessDark,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recommended Module',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.textPrimary,
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Recommended Module',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          assessProv.recommendedModuleName ?? 'Basic Skills',
-                          style: AppTextStyles.headlineSmall.copyWith(
-                            color: AppColors.textPrimary,
+                          const SizedBox(height: 2),
+                          Text(
+                            assessProv.recommendedModuleName ?? 'Basic Skills',
+                            style: AppTextStyles.headlineSmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  StatusPillBadge(
-                    label: 'Level ${assessProv.recommendedLevel}',
-                    level: StatusLevel.info,
-                    compact: true,
-                  ),
-                ],
+                    StatusPillBadge(
+                      label: 'Level ${assessProv.recommendedLevel}',
+                      level: StatusLevel.info,
+                      compact: true,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ),
               ),
               if (assessProv.hasPostAssessment) ...[
                 const SizedBox(height: AppSpacing.sm),

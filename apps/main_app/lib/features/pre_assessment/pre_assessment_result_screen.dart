@@ -6,6 +6,7 @@ import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../services/active_games_service.dart';
+import '../../services/learning_path_service.dart';
 import '../../services/recommendation_filter.dart';
 
 /// Displays the pre-assessment results with a developmental profile
@@ -37,6 +38,9 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   /// `null` means "still loading"; non-null means "ready to display".
   FilteredRecommendations? _filtered;
 
+  /// Active game ids fetched with the filter (for path-ordered display).
+  Set<String>? _activeIds;
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +59,10 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     final activeIds = await ActiveGamesService.instance.activeGameIds;
     final filtered = RecommendationFilter.filter(ai, activeIds);
     if (mounted) {
-      setState(() => _filtered = filtered);
+      setState(() {
+        _filtered = filtered;
+        _activeIds = activeIds;
+      });
     }
   }
 
@@ -170,15 +177,23 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
     bool allFilteredOut = false;
 
     if (_filtered != null) {
-      if (_filtered!.isEmpty) {
-        allFilteredOut = true;
-      } else if (_filtered!.moduleDetails.isNotEmpty) {
-        for (final mod in _filtered!.moduleDetails) {
+      // Display in learning-path order so this list matches the child's
+      // "My Path" games and difficulties exactly.
+      final path = LearningPathService.buildPath(
+        areaLevels: aiResponse!.areaLevels,
+        serverModules: aiResponse!.moduleDetails,
+        featureValues: aiResponse!.featureValues,
+        activeGameIds: _activeIds,
+      );
+      if (path.isNotEmpty) {
+        for (final step in path) {
           modules.add(ResultModule(
-            name: mod.name,
-            startingLevel: mod.startingLevel,
+            name: step.game.name,
+            startingLevel: step.difficulty,
           ));
         }
+      } else if (_filtered!.isEmpty) {
+        allFilteredOut = true;
       } else if (_filtered!.recommendedModules.isNotEmpty) {
         moduleNames.addAll(_filtered!.recommendedModules);
       }

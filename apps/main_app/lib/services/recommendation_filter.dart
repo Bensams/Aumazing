@@ -40,6 +40,8 @@ class RecommendationFilter {
     'Do What I Say': 'do_what_i_say',
     'My Turn, Your Turn': 'my_turn_your_turn',
     'Match It': 'match_it',
+    'Sari-Sari Store Sorting': 'sari_sari_sort',
+    'Trace It': 'trace_it',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose

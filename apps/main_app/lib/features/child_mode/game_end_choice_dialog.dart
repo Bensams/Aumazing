@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../services/active_games_service.dart';
+import '../../services/learning_path_service.dart';
 import 'game_launcher.dart';
 
 /// Post-reward choice for practice (non-assessment) games: play the next
@@ -26,7 +29,26 @@ class GameEndChoiceDialog {
     BuildContext context, {
     required String currentGameId,
   }) async {
-    final next = GameLauncher.nextEntry(currentGameId);
+    // Prefer the AI learning path's order; fall back to registry order when
+    // the child isn't on a path (no assessment yet, or game not on it).
+    final activeIds = await ActiveGamesService.instance.activeGameIds;
+    if (!context.mounted) return;
+    final path =
+        LearningPathService.fromContext(context, activeGameIds: activeIds);
+    var pathNext = LearningPathService.nextOnPath(path, currentGameId);
+    if (pathNext != null) {
+      // Sequential unlock: only offer the next step if it's actually open
+      // (it normally is — finishing the current game just unlocked it).
+      final completed =
+          context.read<AssessmentProvider>().pathCompletedGameIds;
+      final nextIndex =
+          path.indexWhere((e) => e.game.id == pathNext!.game.id);
+      if (!LearningPathService.isUnlocked(path, nextIndex, completed)) {
+        pathNext = null;
+      }
+    }
+    final next = pathNext?.game ??
+        (path.isEmpty ? GameLauncher.nextEntry(currentGameId) : null);
     final palette = context.read<ChildProvider>().activePalette;
 
     final playNext = await showDialog<bool>(
@@ -42,7 +64,10 @@ class GameEndChoiceDialog {
     if (!context.mounted) return;
 
     if (playNext == true && next != null) {
-      final difficulty = GameLauncher.difficultyFor(context, next);
+      final override = context.read<ChildProvider>().difficultyOverride;
+      final difficulty = override?.clamp(1, 3) ??
+          pathNext?.difficulty ??
+          GameLauncher.difficultyFor(context, next);
       final screen = GameLauncher.screenFor(next.id, difficulty);
       if (screen != null) {
         Navigator.of(context).pushReplacement(
