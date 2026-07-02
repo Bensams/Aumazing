@@ -60,6 +60,12 @@ class OfflineFirstIntegration {
     // 2. Initialize connectivity monitoring
     await connectivityService.initialize();
 
+    // 2b. Pause Supabase's token auto-refresh while offline. Without this it
+    //     retries every few seconds against an unreachable host, throwing an
+    //     unhandled AuthRetryableFetchException each time (log spam + battery).
+    _applyAutoRefreshPolicy(connectivityService.isOnline);
+    connectivityService.onConnectivityChanged.listen(_applyAutoRefreshPolicy);
+
     // 3. Initialize sync service (listens for connectivity changes)
     await syncService.initialize();
 
@@ -70,6 +76,18 @@ class OfflineFirstIntegration {
 
     _initialized = true;
     debugPrint('[OfflineFirst] Initialization complete');
+  }
+
+  /// Start/stop Supabase's session auto-refresh to match connectivity.
+  static void _applyAutoRefreshPolicy(bool online) {
+    final client = Supabase.instance.client;
+    if (online) {
+      client.auth.startAutoRefresh();
+      debugPrint('[OfflineFirst] Online — auth auto-refresh resumed');
+    } else {
+      client.auth.stopAutoRefresh();
+      debugPrint('[OfflineFirst] Offline — auth auto-refresh paused');
+    }
   }
 
   /// Handle authentication state changes
