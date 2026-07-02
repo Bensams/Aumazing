@@ -47,12 +47,31 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   sqflite_common_ffi: ^2.3.4+4
+  flutter_launcher_icons: ^0.14.1
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
+# App launcher icon (star + child + puzzle rainbow artwork).
+# Regenerate with: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon_full.png
+  android: true
+  # Adaptive icon: white background, padded artwork in the safe zone so
+  # circular masks don't crop the star or the puzzle rainbow.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  ios: true
+  remove_alpha_ios: true
+  windows:
+    generate: true
+    image_path: assets/icon/app_icon_full.png
+  linux:
+    generate: true
+    image_path: assets/icon/app_icon_full.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
