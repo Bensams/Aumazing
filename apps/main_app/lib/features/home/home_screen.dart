@@ -10,8 +10,11 @@ import '../../core/services/auth_service.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../../services/active_games_service.dart';
+import '../../services/learning_path_service.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
+import '../post_assessment/post_assessment_progress_screen.dart';
 import '../pre_assessment/assessment_dashboard_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
@@ -167,6 +170,20 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => const ChildModeLobbyScreen(),
       ),
     );
+  }
+
+  /// True when the child has finished every step of the learning path and
+  /// hasn't taken the post-assessment yet — time to measure improvement.
+  bool _postAssessmentReady(AssessmentProvider assessProv) {
+    if (assessProv.aiPrediction == null) return false;
+    if (assessProv.hasPostAssessment) return false;
+    final path = LearningPathService.fromContext(
+      context,
+      activeGameIds: ActiveGamesService.instance.cachedActiveGameIds,
+    );
+    if (path.isEmpty) return false;
+    final done = assessProv.pathCompletedGameIds;
+    return path.every((e) => done.contains(e.game.id));
   }
 
   /// Opens the child lobby directly on the AI-recommended learning path
@@ -694,6 +711,45 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.statusSuccessDark,
                       ),
+                    ),
+                  ],
+                ),
+              ],
+              // Learning path finished → offer the post-assessment so the
+              // improvement can be measured (Use Case 7).
+              if (_postAssessmentReady(assessProv)) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const Divider(),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.emoji_events_rounded,
+                      size: 18,
+                      color: AppColors.primaryPurple,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Learning path complete! Measure the progress with '
+                        'a post-assessment.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    AppPrimaryButton(
+                      label: 'Start Post-Assessment',
+                      icon: Icons.play_arrow_rounded,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const PostAssessmentProgressScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

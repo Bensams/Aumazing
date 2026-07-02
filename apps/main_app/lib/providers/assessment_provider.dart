@@ -24,8 +24,15 @@ import '../services/rubric/rubric.dart';
 /// data is written with `sync_status = 'pending'` and automatically synced
 /// to Supabase by the [SyncService].
 class AssessmentProvider extends ChangeNotifier {
-  final AssessmentService _assessmentService;
-  final core_db.LocalDbService _localDb;
+  // Lazily constructed so the provider can be created in widget tests
+  // without a live Supabase instance (the defaults touch Supabase).
+  AssessmentService? _assessmentServiceOverride;
+  core_db.LocalDbService? _localDbOverride;
+
+  AssessmentService get _assessmentService =>
+      _assessmentServiceOverride ??= AssessmentService();
+  core_db.LocalDbService get _localDb =>
+      _localDbOverride ??= core_db.localDbService;
 
   List<AssessmentResult> _preResults = [];
   List<AssessmentResult> _postResults = [];
@@ -50,8 +57,8 @@ class AssessmentProvider extends ChangeNotifier {
   AssessmentProvider({
     AssessmentService? assessmentService,
     core_db.LocalDbService? localDb,
-  })  : _assessmentService = assessmentService ?? AssessmentService(),
-        _localDb = localDb ?? core_db.localDbService;
+  })  : _assessmentServiceOverride = assessmentService,
+        _localDbOverride = localDb;
 
   List<AssessmentResult> get preResults => _preResults;
   List<AssessmentResult> get postResults => _postResults;
@@ -396,7 +403,31 @@ class AssessmentProvider extends ChangeNotifier {
         );
       }
 
-      _currentSessions.clear();
+      // Re-score the rubric from the post sessions so the AI fallback and
+      // profile reflect the child's NEW performance, not the pre-assessment.
+      try {
+        const rubricScorer = RubricScoringService();
+        _rubricResult = RubricResult(
+          playSkillsLabel: rubricScorer.scorePlaySkills(_currentSessions),
+          communicationLabel:
+              rubricScorer.scoreCommunication(_currentSessions),
+          socialInteractionLabel:
+              rubricScorer.scoreSocialInteraction(_currentSessions),
+          behaviorAttentionLabel:
+              rubricScorer.scoreBehaviorAttention(_currentSessions),
+          sensoryPreferenceLabel: _rubricResult?.sensoryPreferenceLabel ??
+              SensoryPreferenceLabel.noSensorySupportNeeded,
+          recommendedModule: _rubricResult?.recommendedModule ?? '',
+          overallSummary: 'Post-assessment rubric scoring.',
+        );
+      } catch (e) {
+        debugPrint('[AssessmentProvider] post rubric scoring failed: $e');
+      }
+
+      // NOTE: _currentSessions is intentionally NOT cleared here — the
+      // subsequent predictWithAI call needs the post sessions for the new
+      // AI prediction and clears them itself (same contract as the pre
+      // flow's finalizePreAssessment → predictWithAI sequence).
 
       return _assessmentService.compareAssessments(
         preResults: _preResults,
