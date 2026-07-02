@@ -6,6 +6,8 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../services/active_games_service.dart';
+import '../../services/learning_path_service.dart';
 import 'game_launcher.dart';
 
 /// Child Mode Lobby.
@@ -16,7 +18,11 @@ import 'game_launcher.dart';
 /// non-assessment (practice) mode, but difficulty follows the child's current
 /// level from the latest assessment.
 class ChildModeLobbyScreen extends StatefulWidget {
-  const ChildModeLobbyScreen({super.key});
+  const ChildModeLobbyScreen({super.key, this.openPath = false});
+
+  /// When true, opens directly on the "My Path" view (used by the parent
+  /// dashboard's Recommended Module card).
+  final bool openPath;
 
   @override
   State<ChildModeLobbyScreen> createState() => _ChildModeLobbyScreenState();
@@ -35,7 +41,27 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   /// True when the child tapped "All" (show every game).
   bool _viewingAll = false;
 
-  bool get _inView => _selected != null || _viewingAll;
+  /// True when the child tapped "My Path" (AI-recommended order).
+  bool _viewingPath = false;
+
+  bool get _inView => _selected != null || _viewingAll || _viewingPath;
+
+  /// Admin-enabled game ids; null until loaded (path shown once known).
+  Set<String>? _activeGameIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewingPath = widget.openPath;
+    ActiveGamesService.instance.activeGameIds.then((ids) {
+      if (mounted) setState(() => _activeGameIds = ids);
+    });
+  }
+
+  /// The AI-recommended learning path (empty when no assessment yet, all
+  /// areas are at Strength, or active games are still loading).
+  List<LearningPathEntry> _learningPath() =>
+      LearningPathService.fromContext(context, activeGameIds: _activeGameIds);
 
   /// All supported games, deduplicated (used by the "All" view/button).
   List<GameEntry> _allGames() => GameLauncher.supportedGames();
@@ -111,9 +137,11 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   // ── Header ─────────────────────────────────────────────────────────────
 
   Widget _buildHeader(GamePalette palette, int level) {
-    final title = _viewingAll
-        ? 'All Games'
-        : (_selected?.displayName ?? 'Choose a Game');
+    final title = _viewingPath
+        ? 'My Path'
+        : _viewingAll
+            ? 'All Games'
+            : (_selected?.displayName ?? 'Choose a Game');
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
@@ -129,6 +157,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
                   onPressed: () => setState(() {
                     _selected = null;
                     _viewingAll = false;
+                    _viewingPath = false;
                   }),
                   icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
                   tooltip: 'Back',
@@ -194,7 +223,17 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   // ── Step 1: category buttons ───────────────────────────────────────────
 
   Widget _buildCategoryButtons(GamePalette palette) {
+    final path = _learningPath();
     final buttons = <Widget>[
+      // AI-recommended path first — the child's suggested starting point.
+      if (path.isNotEmpty)
+        _CategoryButton(
+          label: 'My Path',
+          icon: Icons.route_rounded,
+          gradient: const [Color(0xFFC7B4EC), Color(0xFFA9E3CC)], // lavender → mint
+          count: path.length,
+          onTap: () => setState(() => _viewingPath = true),
+        ),
       _CategoryButton(
         label: 'All',
         icon: Icons.apps_rounded,
@@ -228,6 +267,8 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   // ── Step 2: games in a single horizontal row ───────────────────────────
 
   Widget _buildGamesRow(int fallbackLevel, GamePalette palette) {
+    if (_viewingPath) return _buildPathRow();
+
     final games = _viewingAll ? _allGames() : _gamesFor(_selected!);
     if (games.isEmpty) {
       return Center(
@@ -256,6 +297,54 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
               entry: games[i],
               difficulty: difficulty,
               onTap: () => _launch(games[i].id, difficulty),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// The AI-recommended path: same cards, in recommended order, numbered,
+  /// each starting at the difficulty the assessment suggested. Steps unlock
+  /// sequentially — the child must finish a game to open the next one.
+  Widget _buildPathRow() {
+    final path = _learningPath();
+    if (path.isEmpty) {
+      return Center(
+        child: Text('Finish an assessment to get your path!',
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.mutedForeground)),
+      );
+    }
+    // Watched so cards re-render (unlock) when a game completes.
+    final completed =
+        context.watch<AssessmentProvider>().pathCompletedGameIds;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: SizedBox(
+        height: 200,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          itemCount: path.length,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+          itemBuilder: (_, i) {
+            final step = path[i];
+            final unlocked = LearningPathService.isUnlocked(path, i, completed);
+            final done = completed.contains(step.game.id);
+            // The parent's manual override still wins over the path level.
+            final override =
+                context.read<ChildProvider>().difficultyOverride;
+            final difficulty = (override ?? step.difficulty).clamp(1, 3);
+            return _GameCard(
+              entry: step.game,
+              difficulty: difficulty,
+              stepNumber: i + 1,
+              locked: !unlocked,
+              completed: done,
+              onTap: unlocked
+                  ? () => _launch(step.game.id, difficulty)
+                  : null,
             );
           },
         ),
@@ -346,6 +435,9 @@ class _GameCard extends StatelessWidget {
     required this.entry,
     required this.difficulty,
     required this.onTap,
+    this.stepNumber,
+    this.locked = false,
+    this.completed = false,
   });
 
   final GameEntry entry;
@@ -353,7 +445,16 @@ class _GameCard extends StatelessWidget {
   /// 1 Easy / 2 Medium / 3 Hard — from the child's per-area AI level.
   final int difficulty;
 
-  final VoidCallback onTap;
+  /// 1-based position on the learning path; shows a numbered badge.
+  final int? stepNumber;
+
+  /// Sequential unlock: locked steps are muted and not tappable.
+  final bool locked;
+
+  /// Completed steps show a checkmark (still replayable).
+  final bool completed;
+
+  final VoidCallback? onTap;
 
   static const _tierLabels = {1: 'Easy', 2: 'Medium', 3: 'Hard'};
   static const _tierColors = {
@@ -366,65 +467,94 @@ class _GameCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 230,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: entry.gradientColors,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: entry.gradientColors.first.withAlpha(90),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+      child: Opacity(
+        // Locked steps are visibly muted (and not tappable).
+        opacity: locked ? 0.45 : 1.0,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: entry.gradientColors,
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: entry.gradientColors.first.withAlpha(90),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withAlpha(200),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                            locked ? Icons.lock_rounded : entry.icon,
+                            color: AppColors.primaryPurple,
+                            size: 30),
                       ),
-                      child: Icon(entry.icon,
-                          color: AppColors.primaryPurple, size: 30),
-                    ),
-                    const Spacer(),
-                    // Per-game difficulty tier from the child's AI level.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withAlpha(210),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _tierLabels[difficulty] ?? 'Medium',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: _tierColors[difficulty] ??
-                              _tierColors[2],
-                          fontWeight: FontWeight.w800,
+                      if (stepNumber != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: completed
+                                ? const Color(0xFF43A047) // done — green
+                                : AppColors.primaryPurple,
+                            shape: BoxShape.circle,
+                          ),
+                          child: completed
+                              ? const Icon(Icons.check_rounded,
+                                  size: 18, color: AppColors.white)
+                              : Text(
+                                  '$stepNumber',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                        ),
+                      ],
+                      const Spacer(),
+                      // Per-game difficulty tier from the child's AI level.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withAlpha(210),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _tierLabels[difficulty] ?? 'Medium',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: _tierColors[difficulty] ??
+                                _tierColors[2],
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   entry.name,
@@ -449,6 +579,7 @@ class _GameCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

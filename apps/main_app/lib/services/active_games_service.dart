@@ -30,6 +30,8 @@ class ActiveGamesService {
     'Do What I Say': 'do_what_i_say',
     'My Turn, Your Turn': 'my_turn_your_turn',
     'Match It': 'match_it',
+    'Sari-Sari Store Sorting': 'sari_sari_sort',
+    'Trace It': 'trace_it',
   };
 
   /// Returns the set of active game IDs (e.g. `{'copy_me', 'match_it'}`).
@@ -79,6 +81,11 @@ class ActiveGamesService {
       return _cache!;
     }
   }
+
+  /// The cached active set, or null when it hasn't been fetched yet.
+  /// Synchronous — for widgets that can't await (they should treat null as
+  /// "all active").
+  Set<String>? get cachedActiveGameIds => _cache;
 
   /// Force-refresh the cache on the next access (e.g. after an admin
   /// enables/disables a game and the parent pulls-to-refresh).
