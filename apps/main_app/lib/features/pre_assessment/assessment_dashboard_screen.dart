@@ -8,6 +8,8 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../services/active_games_service.dart';
+import '../../services/learning_path_service.dart';
 import '../../services/scoring_service.dart';
 import 'pre_assessment_intro_screen.dart';
 
@@ -283,63 +285,86 @@ class _DashboardBody extends StatelessWidget {
           _RecRow(Icons.visibility_off_rounded, 'Mode', 'Low-stim'),
         if (profile.turnTakingPractice)
           _RecRow(Icons.people_rounded, 'Practice', 'Turn-taking'),
-        // Show AI recommended modules if available
-        if (aiPrediction != null &&
-            aiPrediction!.moduleDetails.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          const Divider(height: 1),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded,
-                  size: 13, color: AppColors.lavender),
-              const SizedBox(width: 4),
-              Text(
-                'AI Recommended Activities',
-                style: AppTextStyles.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          ...aiPrediction!.moduleDetails.map((mod) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Row(
+        // Show AI recommended modules if available — rendered from the
+        // learning-path builder so this list always matches the child's
+        // "My Path" games, order, and difficulties exactly.
+        if (aiPrediction != null) ...[
+          Builder(builder: (context) {
+            final path = LearningPathService.buildPath(
+              areaLevels: aiPrediction!.areaLevels,
+              serverModules: aiPrediction!.moduleDetails,
+              featureValues: aiPrediction!.featureValues,
+              activeGameIds:
+                  ActiveGamesService.instance.cachedActiveGameIds,
+            );
+            if (path.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 6),
+                const Divider(height: 1),
+                const SizedBox(height: 6),
+                Row(
                   children: [
-                    Icon(Icons.play_circle_outline_rounded,
-                        size: 12, color: AppColors.mint),
+                    Icon(Icons.auto_awesome_rounded,
+                        size: 13, color: AppColors.lavender),
                     const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        mod.name,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 11,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.lavenderLight.withAlpha(80),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'Lvl ${mod.startingLevel}',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryPurple,
-                        ),
+                    Text(
+                      'AI Recommended Activities',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],
                 ),
-              )),
+                const SizedBox(height: 4),
+                ...path.asMap().entries.map((entry) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${entry.key + 1}.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryPurple,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              entry.value.game.name,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                fontSize: 11,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.lavenderLight.withAlpha(80),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Lvl ${entry.value.difficulty}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryPurple,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+            );
+          }),
         ],
       ],
     );
