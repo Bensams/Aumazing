@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/child_profile_policy.dart';
 import '../../../core/repositories/child_repository.dart';
+import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
 
@@ -40,6 +41,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   // Reward preference state
   RewardPreference _selectedRewardPreference = RewardPreference.bubbles;
   bool _useRandomReward = false;
+
+  // Daily screen-time limit (minutes); null = off. Pre-filled with the
+  // age-based recommendation once the birth date is known.
+  int? _screenTimeLimitMinutes;
+  bool _screenTimeTouched = false;
+  static const _screenTimeOptions = [15, 20, 30, 45, 60, 90];
 
   static const _avatars = [
     _AvatarOption('🐻', 'Bear', Color(0xFFE8DEFA)),
@@ -103,7 +110,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
     try {
       final repository = widget._childRepository ?? childRepository;
-      await repository.createChild(
+      final profile = await repository.createChild(
         displayName: _nameController.text.trim(),
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
@@ -111,6 +118,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         rewardPreference: _selectedRewardPreference,
         useRandomReward: _useRandomReward,
       );
+
+      // Save the daily screen-time limit chosen during setup (can be
+      // changed later in Settings → Screen Time).
+      await ScreenTimeService.instance.load(profile.id);
+      await ScreenTimeService.instance
+          .setLimitMinutes(_screenTimeLimitMinutes);
 
       if (mounted) {
         // Log audio state before navigation
@@ -262,6 +275,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                   onSkip: _skipRewardPreference,
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                _buildScreenTimeSelector(),
+                const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
                   label: 'Continue to Dashboard',
                   onPressed: _isLoading ? null : _saveProfile,
@@ -332,6 +347,14 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       return;
     }
 
+    // Default the screen-time limit to the age-based recommendation
+    // (AAP/WHO guidance, ASD-adjusted) unless the parent already chose.
+    if (!_screenTimeTouched) {
+      _screenTimeLimitMinutes = ScreenTimeService.recommendedMinutesForAge(
+        calculateAgeYears(_selectedBirthDate!),
+      );
+    }
+
     setState(() => _currentStep = 1);
   }
 
@@ -378,6 +401,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             onSkip: _skipRewardPreference,
           ),
           const SizedBox(height: AppSpacing.xl),
+          _buildScreenTimeSelector(),
+          const SizedBox(height: AppSpacing.xl),
           AppPrimaryButton(
             label: 'Continue to Dashboard',
             onPressed: _isLoading ? null : _saveProfile,
@@ -391,6 +416,75 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           ),
         ],
         const SizedBox(height: AppSpacing.xxl),
+      ],
+    );
+  }
+
+  /// Compact daily screen-time selector for the setup flow. The age-based
+  /// recommendation (AAP/WHO, ASD-adjusted) is pre-selected and starred.
+  Widget _buildScreenTimeSelector() {
+    final birthDate = _selectedBirthDate;
+    final recommended = birthDate == null
+        ? null
+        : ScreenTimeService.recommendedMinutesForAge(
+            calculateAgeYears(birthDate));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Daily Screen Time',
+          style: AppTextStyles.titleMedium.copyWith(
+            color: AppColors.foreground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        if (recommended != null)
+          Text(
+            'Recommended for age ${calculateAgeYears(birthDate!)}: '
+            '$recommended minutes per day (AAP/WHO guidance, adjusted '
+            'for children with ASD).',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Off'),
+              selected: _screenTimeLimitMinutes == null,
+              selectedColor: AppColors.primaryPurple,
+              labelStyle: AppTextStyles.bodySmall.copyWith(
+                color: _screenTimeLimitMinutes == null
+                    ? AppColors.white
+                    : AppColors.textPrimary,
+              ),
+              onSelected: (_) => setState(() {
+                _screenTimeLimitMinutes = null;
+                _screenTimeTouched = true;
+              }),
+            ),
+            for (final minutes in _screenTimeOptions)
+              ChoiceChip(
+                label: Text(
+                    minutes == recommended ? '$minutes min ★' : '$minutes min'),
+                selected: _screenTimeLimitMinutes == minutes,
+                selectedColor: AppColors.primaryPurple,
+                labelStyle: AppTextStyles.bodySmall.copyWith(
+                  color: _screenTimeLimitMinutes == minutes
+                      ? AppColors.white
+                      : AppColors.textPrimary,
+                ),
+                onSelected: (_) => setState(() {
+                  _screenTimeLimitMinutes = minutes;
+                  _screenTimeTouched = true;
+                }),
+              ),
+          ],
+        ),
       ],
     );
   }
