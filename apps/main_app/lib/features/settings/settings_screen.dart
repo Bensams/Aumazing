@@ -982,9 +982,10 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                 ],
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'When the limit is reached, play pauses gently and your '
-                  'child is invited to take a break. You can add 15 extra '
-                  'minutes from the break screen.',
+                  'When the limit is reached, the screen fades to a plain '
+                  'rest screen with no messages or buttons for your child. '
+                  'Only the parent lock in the top-right corner unlocks it '
+                  '(add 15 minutes or exit child mode).',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.mutedForeground),
                 ),

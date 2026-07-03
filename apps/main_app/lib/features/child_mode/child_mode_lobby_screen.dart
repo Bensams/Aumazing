@@ -85,6 +85,8 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     _screenTimeTicker =
         Timer.periodic(const Duration(seconds: _tickSeconds), (_) async {
       if (!mounted) return;
+      // The lock screen is up — stop counting until the parent unlocks.
+      if (TimeUpDialog.isShowing) return;
       await screenTime.addUsage(_tickSeconds);
       // Never interrupt a game in progress — a mid-activity cutoff is
       // distressing for ASD children. Only enforce while the lobby itself
