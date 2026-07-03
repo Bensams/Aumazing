@@ -11,8 +11,10 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../../services/active_games_service.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
+import '../premium/premium_upgrade_screen.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
 import '../post_assessment/post_assessment_progress_screen.dart';
@@ -247,12 +249,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildHeader(),
                       const SizedBox(height: AppSpacing.md),
                       _buildActionButtons(),
+                      _buildPremiumBanner(),
                       _buildScreenTimeStatus(),
                       const SizedBox(height: AppSpacing.md),
                       _buildAssessmentStatus(),
                       const SizedBox(height: AppSpacing.md),
                       _buildProgressSection(),
                       const SizedBox(height: AppSpacing.md),
+                      _buildAdvancedTrends(),
                       _buildRecentActivity(),
                     ],
                   ),
@@ -595,6 +599,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Freemium gateway (FR-10): upgrade banner for Free parents; hidden
+  /// once Premium is active. Rebuilds live when the entitlement changes.
+  Widget _buildPremiumBanner() {
+    return ListenableBuilder(
+      listenable: EntitlementService.instance,
+      builder: (context, _) {
+        if (EntitlementService.instance.isPremium) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: AppCard(
+            child: Row(
+              children: [
+                const Text('⭐', style: TextStyle(fontSize: 28)),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Aumazing Premium',
+                        style: AppTextStyles.titleMedium
+                            .copyWith(color: AppColors.textPrimary),
+                      ),
+                      Text(
+                        'Interactive therapy locator, skill trends, and '
+                        'fresh AI recommendations — ₱149/month.',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                AppPrimaryButton(
+                  label: 'Upgrade',
+                  icon: Icons.star_rounded,
+                  width: 140,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PremiumUpgradeScreen(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Compact "screen time today" monitor for the parent (FR: parents
   /// monitor screen time from the dashboard). Hidden when no limit is set.
   Widget _buildScreenTimeStatus() {
@@ -809,6 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     AppPrimaryButton(
                       label: 'Start Post-Assessment',
                       icon: Icons.play_arrow_rounded,
+                      width: 230,
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -931,6 +989,203 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  // ── Advanced Trends (Premium dashboard) ─────────────────────────────
+
+  /// The Advanced Parent Dashboard (Premium): historical pre → post skill
+  /// trends. Free users see a locked teaser; Premium users see the
+  /// per-game improvement once a post-assessment exists. Rebuilds live when
+  /// the entitlement changes.
+  Widget _buildAdvancedTrends() {
+    return ListenableBuilder(
+      listenable: EntitlementService.instance,
+      builder: (context, _) {
+        final isPremium = EntitlementService.instance.isPremium;
+        if (!isPremium) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: AppCard(
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_rounded,
+                      color: AppColors.mutedForeground),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Advanced Trends',
+                            style: AppTextStyles.titleMedium
+                                .copyWith(color: AppColors.textPrimary)),
+                        Text(
+                          'See how skills improve across assessment cycles '
+                          '— a Premium feature.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppPrimaryButton(
+                    label: 'Unlock',
+                    icon: Icons.star_rounded,
+                    width: 130,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PremiumUpgradeScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Consumer<AssessmentProvider>(
+          builder: (context, assessProv, _) {
+            if (!assessProv.hasPostAssessment) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppCard(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.insights_rounded,
+                          color: AppColors.primaryPurple),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          'Complete a post-assessment to see pre → post '
+                          'progress trends here.',
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textPrimary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // Match pre and post results by game for a paired comparison.
+            final postByGame = {
+              for (final r in assessProv.postResults) r.gameId: r,
+            };
+            final rows = <(String, double, double)>[];
+            for (final pre in assessProv.preResults) {
+              final post = postByGame[pre.gameId];
+              if (post == null) continue;
+              rows.add((
+                pre.gameId.replaceAll('_', ' '),
+                pre.adjustedAccuracy * 100,
+                post.adjustedAccuracy * 100,
+              ));
+            }
+            if (rows.isEmpty) return const SizedBox.shrink();
+
+            final avgDelta = rows
+                    .map((r) => r.$3 - r.$2)
+                    .reduce((a, b) => a + b) /
+                rows.length;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Advanced Trends',
+                            style: AppTextStyles.titleMedium
+                                .copyWith(color: AppColors.textPrimary)),
+                        const Spacer(),
+                        Icon(
+                          avgDelta >= 0
+                              ? Icons.trending_up_rounded
+                              : Icons.trending_down_rounded,
+                          size: 18,
+                          color: avgDelta >= 0
+                              ? AppColors.statusSuccessDark
+                              : AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${avgDelta >= 0 ? '+' : ''}'
+                          '${avgDelta.toStringAsFixed(0)}% overall',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: avgDelta >= 0
+                                ? AppColors.statusSuccessDark
+                                : AppColors.mutedForeground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text('Pre vs Post accuracy per activity',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.mutedForeground)),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (final (label, pre, post) in rows)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 96,
+                              child: Text(label,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.textPrimary),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Stack(
+                                  children: [
+                                    LinearProgressIndicator(
+                                      value: pre / 100,
+                                      minHeight: 12,
+                                      backgroundColor: AppColors.lavenderLight,
+                                      valueColor: const AlwaysStoppedAnimation(
+                                          AppColors.lavender),
+                                    ),
+                                    LinearProgressIndicator(
+                                      value: post / 100,
+                                      minHeight: 12,
+                                      backgroundColor: Colors.transparent,
+                                      valueColor: const AlwaysStoppedAnimation(
+                                          AppColors.primaryPurple),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${(post - pre) >= 0 ? '+' : ''}'
+                              '${(post - pre).toStringAsFixed(0)}%',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: (post - pre) >= 0
+                                    ? AppColors.statusSuccessDark
+                                    : AppColors.mutedForeground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

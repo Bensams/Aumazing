@@ -14,6 +14,7 @@ import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
+import 'services/entitlement_service.dart';
 
 /// True for transient network failures (offline, DNS, unreachable host) —
 /// expected in an offline-first app and never worth an unhandled-crash dump.
@@ -68,6 +69,10 @@ Future<void> main() async {
 
   // Initialize offline-first services (guest mode, connectivity monitoring, sync)
   await OfflineFirstIntegration.initialize();
+
+  // Premium entitlement: cached state loads immediately, backend refresh
+  // and auth-change reloads happen in the background (never blocks launch).
+  EntitlementService.instance.init();
 
   runApp(const MyApp());
 }

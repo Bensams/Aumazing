@@ -7,15 +7,19 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/therapy_center.dart';
 import '../../providers/child_provider.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/therapy_center_service.dart';
+import '../premium/premium_upgrade_screen.dart';
 
 /// Therapy Center Directory + Interactive Locator (Use Cases 11, 15, 16).
 ///
-/// Shows registered Davao City therapy/SPED centers. "Find near me"
-/// requests a just-in-time GPS fix, ranks the list with the Haversine
-/// formula, and shows distances; the position lives only in this screen's
-/// state and is discarded with it (privacy FR — never persisted).
-/// "Directions" hands off to the device's native maps app.
+/// Freemium gate (FR-09 vs FR-12/13): Free parents see the directory at
+/// the city level only — center name and city. Premium unlocks the full
+/// details (address, services, contact), "Find near me" GPS ranking, and
+/// the Directions hand-off. "Find near me" requests a just-in-time GPS
+/// fix, ranks the list with the Haversine formula, and shows distances;
+/// the position lives only in this screen's state and is discarded with
+/// it (privacy FR — never persisted).
 class TherapyDirectoryScreen extends StatefulWidget {
   const TherapyDirectoryScreen({super.key});
 
@@ -110,33 +114,47 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     await launchUrl(webUri, mode: LaunchMode.externalApplication);
   }
 
+  void _openUpgrade() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.watch<ChildProvider>().activePalette;
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(gradient: palette.parentBackground),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(palette),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _centers.isEmpty
-                        ? _buildEmpty()
-                        : _buildList(),
+    // Rebuilds when the entitlement changes (e.g. returning from a
+    // successful upgrade), unlocking the locator in place.
+    return ListenableBuilder(
+      listenable: EntitlementService.instance,
+      builder: (context, _) {
+        final isPremium = EntitlementService.instance.isPremium;
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(gradient: palette.parentBackground),
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHeader(palette, isPremium),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _centers.isEmpty
+                            ? _buildEmpty()
+                            : _buildList(isPremium),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(GamePalette palette) {
+  Widget _buildHeader(GamePalette palette, bool isPremium) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
@@ -164,19 +182,31 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
                   ),
                 ),
                 Text(
-                  'SPED and therapy centers in Davao City',
+                  isPremium
+                      ? 'SPED and therapy centers in Davao City'
+                      : 'City-level directory — Premium unlocks details '
+                          'and distance',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.mutedForeground),
                 ),
               ],
             ),
           ),
-          AppPrimaryButton(
-            label: _ranked == null ? 'Find near me' : 'Update location',
-            icon: Icons.my_location_rounded,
-            isLoading: _locating,
-            onPressed: _locating ? null : _findNearMe,
-          ),
+          if (isPremium)
+            AppPrimaryButton(
+              label: _ranked == null ? 'Find near me' : 'Update location',
+              icon: Icons.my_location_rounded,
+              width: 180,
+              isLoading: _locating,
+              onPressed: _locating ? null : _findNearMe,
+            )
+          else
+            AppPrimaryButton(
+              label: 'Unlock locator',
+              icon: Icons.star_rounded,
+              width: 180,
+              onPressed: _openUpgrade,
+            ),
         ],
       ),
     );
@@ -194,8 +224,10 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     );
   }
 
-  Widget _buildList() {
-    final ranked = _ranked;
+  Widget _buildList(bool isPremium) {
+    // A ranked list from an earlier Premium session is ignored once the
+    // entitlement lapses — Free never shows distances.
+    final ranked = isPremium ? _ranked : null;
     final itemCount = ranked?.length ?? _centers.length;
 
     return Column(
@@ -220,6 +252,7 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
               return _CenterCard(
                 center: center,
                 distanceKm: distanceKm,
+                locked: !isPremium,
                 onDirections: () => _openDirections(center),
               );
             },
@@ -235,10 +268,16 @@ class _CenterCard extends StatelessWidget {
     required this.center,
     required this.onDirections,
     this.distanceKm,
+    this.locked = false,
   });
 
   final TherapyCenter center;
   final double? distanceKm;
+
+  /// Free tier (FR-09): name and city only — address, services, and the
+  /// Directions hand-off stay hidden until Premium.
+  final bool locked;
+
   final VoidCallback onDirections;
 
   @override
@@ -291,11 +330,12 @@ class _CenterCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  center.address,
+                  locked ? center.city : center.address,
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.mutedForeground),
                 ),
-                if (center.description != null &&
+                if (!locked &&
+                    center.description != null &&
                     center.description!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
@@ -304,7 +344,7 @@ class _CenterCard extends StatelessWidget {
                         .copyWith(color: AppColors.mutedForeground),
                   ),
                 ],
-                if (center.services.isNotEmpty) ...[
+                if (!locked && center.services.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -328,15 +368,17 @@ class _CenterCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xs),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: onDirections,
-                    icon: const Icon(Icons.directions_rounded, size: 18),
-                    label: const Text('Directions'),
+                if (!locked) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onDirections,
+                      icon: const Icon(Icons.directions_rounded, size: 18),
+                      label: const Text('Directions'),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
