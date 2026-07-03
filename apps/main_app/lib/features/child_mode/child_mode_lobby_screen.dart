@@ -86,7 +86,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
         Timer.periodic(const Duration(seconds: _tickSeconds), (_) async {
       if (!mounted) return;
       await screenTime.addUsage(_tickSeconds);
-      if (mounted && screenTime.isExhausted) {
+      // Never interrupt a game in progress — a mid-activity cutoff is
+      // distressing for ASD children. Only enforce while the lobby itself
+      // is visible; game endings are handled by GameEndChoiceDialog.
+      if (mounted &&
+          screenTime.isExhausted &&
+          (ModalRoute.of(context)?.isCurrent ?? true)) {
         TimeUpDialog.show(context);
       }
     });
