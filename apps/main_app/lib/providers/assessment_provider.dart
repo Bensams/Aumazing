@@ -88,16 +88,32 @@ class AssessmentProvider extends ChangeNotifier {
   int get recommendedLevel =>
       (_recommendation?['starting_level'] as int?) ?? 1;
 
+  /// Newest result per game — the local DB keeps every run's rows for
+  /// history/sync, but the app should only ever score and display the
+  /// latest run. A retake replaces results; it never stacks them.
+  static List<AssessmentResult> latestPerGame(
+      List<AssessmentResult> results) {
+    final byGame = <String, AssessmentResult>{};
+    for (final result in results) {
+      final existing = byGame[result.gameId];
+      if (existing == null ||
+          result.completedAt.isAfter(existing.completedAt)) {
+        byGame[result.gameId] = result;
+      }
+    }
+    return byGame.values.toList();
+  }
+
   /// Loads all assessment data for a child.
   Future<void> loadAssessments(String childId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      _preResults =
-          await _localDb.getAssessmentResults(childId: childId, type: 'pre');
-      _postResults =
-          await _localDb.getAssessmentResults(childId: childId, type: 'post');
+      _preResults = latestPerGame(
+          await _localDb.getAssessmentResults(childId: childId, type: 'pre'));
+      _postResults = latestPerGame(await _localDb.getAssessmentResults(
+          childId: childId, type: 'post'));
 
       if (_preResults.isNotEmpty) {
         _recommendation = _assessmentService.recommendModule(_preResults);
@@ -272,6 +288,8 @@ class AssessmentProvider extends ChangeNotifier {
         );
         _preResults.add(result);
       }
+      // Retake: the new run's results replace the previous run's.
+      _preResults = latestPerGame(_preResults);
 
       _recommendation = _assessmentService.recommendModule(_preResults);
 
@@ -395,6 +413,8 @@ class AssessmentProvider extends ChangeNotifier {
         );
         _postResults.add(result);
       }
+      // Retake: the new run's results replace the previous run's.
+      _postResults = latestPerGame(_postResults);
 
       // Mark the assessment run as completed
       if (_currentAssessmentRunId != null) {
