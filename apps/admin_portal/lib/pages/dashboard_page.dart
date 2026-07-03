@@ -38,6 +38,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ('game_sessions', 'Game Sessions', Icons.sports_esports_rounded),
     ('active_modules', 'Active Modules', Icons.extension_rounded),
     ('therapy_centers', 'Therapy Centers', Icons.local_hospital_rounded),
+    ('premium_users', 'Premium Subscribers', Icons.star_rounded),
   ];
 
   @override
