@@ -1,19 +1,35 @@
+/// Backend + OAuth configuration, injected at build time.
+///
+/// Values come from `--dart-define` / `--dart-define-from-file` so no
+/// credential lives in source control:
+///
+///   flutter run --dart-define-from-file=env/dev.json
+///   flutter build apk --release --dart-define-from-file=env/dev.json
+///
+/// Copy `env/dev.example.json` to `env/dev.json` (gitignored) and fill in
+/// the project's values. The Supabase anon key is public-by-design (RLS
+/// enforces access) but is still kept out of the repo as good hygiene.
 class SupabaseConfig {
-  // TODO: Replace with your Supabase project credentials from
-  // https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
-  static const String supabaseUrl = 'https://lzvvjlcfoyczikaszrbp.supabase.co';
-  static const String supabaseAnonKey = 'sb_publishable_LmDmXen9C_J8G_SDMi-LCA_sD23uwZv';
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const String supabaseAnonKey =
+      String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  // TODO: Replace with your Google OAuth Web Client ID from
-  // https://console.cloud.google.com/apis/credentials
-  // This is the **Web** client ID (not Android), required by Supabase OAuth flow.
-  static const String googleWebClientId = '200541942189-dqsgoge37md2umri21qu8p699qr26rjd.apps.googleusercontent.com';
+  /// Google OAuth **Web** client ID (not Android) — required by the
+  /// Supabase OAuth flow.
+  static const String googleWebClientId =
+      String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
-  // TODO: Replace with your Google OAuth iOS Client ID (only needed for iOS).
-  static const String googleIosClientId = 'YOUR_GOOGLE_IOS_CLIENT_ID';
+  /// Google OAuth iOS client ID (only needed for iOS builds).
+  static const String googleIosClientId =
+      String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
   // ── Facebook OAuth ───────────────────────────────────────────────────
-  // TODO: Replace with your Facebook App ID from https://developers.facebook.com/apps
-  static const String facebookAppId = '4458074451092574';
-  static const String facebookClientToken = '594a43ec476f200bd4f77bad8b160006';
+  static const String facebookAppId =
+      String.fromEnvironment('FACEBOOK_APP_ID');
+  static const String facebookClientToken =
+      String.fromEnvironment('FACEBOOK_CLIENT_TOKEN');
+
+  /// True when the required backend values were provided at build time.
+  static bool get isConfigured =>
+      supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 }

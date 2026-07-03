@@ -52,6 +52,15 @@ Future<void> main() async {
   // Enable fullscreen mode to hide mobile header/status bar
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+  // Credentials are injected at build time; fail fast with a clear message
+  // instead of an opaque Supabase error when the define file is missing.
+  assert(
+    SupabaseConfig.isConfigured,
+    'Missing backend config. Run with '
+    '--dart-define-from-file=env/dev.json '
+    '(copy env/dev.example.json and fill in the values).',
+  );
+
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
