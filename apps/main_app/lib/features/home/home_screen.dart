@@ -17,6 +17,7 @@ import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
 import '../post_assessment/post_assessment_progress_screen.dart';
 import '../pre_assessment/assessment_dashboard_screen.dart';
+import '../therapy/therapy_directory_screen.dart';
 import '../pre_assessment/pre_assessment_intro_screen.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
 import '../splash/auth/login_screen.dart';
@@ -572,6 +573,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: 'Hand device to child',
                 color: AppColors.mint,
                 onTap: _enterChildMode,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.location_on_rounded,
+                label: 'Therapy Directory',
+                subtitle: 'Centers near you',
+                color: AppColors.peach,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TherapyDirectoryScreen(),
+                  ),
+                ),
               ),
             ),
           ],
