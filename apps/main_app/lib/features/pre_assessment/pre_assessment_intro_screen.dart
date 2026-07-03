@@ -58,6 +58,36 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                           color: AppColors.mutedForeground,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      // Disclaimer note (System Limitations FR: the app
+                      // does not diagnose and does not replace clinicians).
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withAlpha(150),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline_rounded,
+                                size: 16, color: AppColors.mutedForeground),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'This activity is an educational screening '
+                                'aid — not a medical diagnosis, and not a '
+                                'substitute for licensed therapists, '
+                                'developmental pediatricians, or SPED '
+                                'professionals.',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -102,6 +132,13 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                           label: 'Let\'s Start!',
                           icon: Icons.play_arrow_rounded,
                           onPressed: () async {
+                            // Parent must acknowledge the disclaimer before
+                            // any assessment runs (backlog: disclaimer +
+                            // parent consent note).
+                            final acknowledged =
+                                await _DisclaimerDialog.show(context);
+                            if (!acknowledged || !context.mounted) return;
+
                             // Show sensory consent dialog before starting
                             final consent =
                                 await SensoryConsentDialog.show(context);
@@ -128,7 +165,8 @@ class PreAssessmentIntroScreen extends StatelessWidget {
     );
   }
 
-  Widget _stepRow(IconData icon, String text, {bool completed = false}) {
+  static Widget _stepRow(IconData icon, String text,
+      {bool completed = false}) {
     return Row(
       children: [
         Icon(
@@ -154,5 +192,65 @@ class PreAssessmentIntroScreen extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// Parent acknowledgment shown before every assessment run: the app is an
+/// educational screening aid, never a diagnosis (System Limitations FRs).
+class _DisclaimerDialog {
+  _DisclaimerDialog._();
+
+  static Future<bool> show(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.privacy_tip_rounded,
+                color: AppColors.primaryPurple),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Before you begin',
+                style: AppTextStyles.titleLarge
+                    .copyWith(color: AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(
+            'This assessment is a gamified educational screening aid. It '
+            'does NOT diagnose Autism Spectrum Disorder or any medical, '
+            'psychological, or developmental condition, and it does not '
+            'replace licensed therapists, developmental pediatricians, '
+            'psychologists, or SPED teachers.\n\n'
+            'Results only guide the learning activities inside this app. '
+            'For any concerns about your child\'s development, please '
+            'consult a qualified professional.',
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.mutedForeground),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryPurple,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('I understand'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 }

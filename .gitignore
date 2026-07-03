@@ -57,3 +57,6 @@ ai_assessment/.venv/
 docs/aumazing-*.json
 *-service-account*.json
 **/service-account*.json
+
+# Build-time env config (dart-define-from-file) — real values never commit
+apps/main_app/env/dev.json
