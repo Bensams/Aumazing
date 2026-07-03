@@ -7,7 +7,9 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/screen_time_service.dart';
 import 'game_launcher.dart';
+import 'time_up_dialog.dart';
 
 /// Post-reward choice for practice (non-assessment) games: play the next
 /// game or go back to the lobby.
@@ -29,6 +31,14 @@ class GameEndChoiceDialog {
     BuildContext context, {
     required String currentGameId,
   }) async {
+    // Screen-time enforcement happens here — at the natural boundary after
+    // a game finishes (never mid-game). Out of time → gentle break screen
+    // instead of offering the next game.
+    if (ScreenTimeService.instance.isExhausted) {
+      await TimeUpDialog.show(context);
+      return;
+    }
+
     // Prefer the AI learning path's order; fall back to registry order when
     // the child isn't on a path (no assessment yet, or game not on it).
     final activeIds = await ActiveGamesService.instance.activeGameIds;
