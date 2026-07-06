@@ -1,18 +1,24 @@
 /// Backend + OAuth configuration, injected at build time.
 ///
-/// Values come from `--dart-define` / `--dart-define-from-file` so no
-/// credential lives in source control:
+/// Prefer `--dart-define-from-file` so secrets stay out of source control:
 ///
 ///   flutter run --dart-define-from-file=env/dev.json
 ///   flutter build apk --release --dart-define-from-file=env/dev.json
 ///
-/// Copy `env/dev.example.json` to `env/dev.json` (gitignored) and fill in
-/// the project's values. The Supabase anon key is public-by-design (RLS
-/// enforces access) but is still kept out of the repo as good hygiene.
+/// The Supabase URL and anon (publishable) key have safe defaults so the
+/// app runs even without the define file — they are public by design (RLS
+/// enforces all data access), mirroring [ApiConfig.aiAssessmentBaseUrl].
+/// The sensitive OAuth values (Facebook token) have NO default and must be
+/// supplied via the define file for social login to work.
 class SupabaseConfig {
-  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const String supabaseAnonKey =
-      String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://lzvvjlcfoyczikaszrbp.supabase.co',
+  );
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'sb_publishable_LmDmXen9C_J8G_SDMi-LCA_sD23uwZv',
+  );
 
   /// Google OAuth **Web** client ID (not Android) — required by the
   /// Supabase OAuth flow.
