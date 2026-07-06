@@ -199,15 +199,28 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _navigateBasedOnAuth() async {
-    final result = await _bootstrapService.bootstrap();
+    // The loading screen must never dead-end: if bootstrap (which touches
+    // Supabase/auth) throws — bad config, backend down, or an offline cold
+    // start — fall back to the login screen instead of hanging on the logo.
+    BootstrapResult result;
+    try {
+      result = await _bootstrapService.bootstrap();
+    } catch (e) {
+      debugPrint('[LoadingScreen] bootstrap failed, routing to login: $e');
+      result = const BootstrapResult(
+        destination: BootstrapDestination.login,
+      );
+    }
     if (!mounted) return;
 
     // First open / fresh install: until the Data Privacy Notice is accepted,
     // always land on the login page (which shows the mandatory notice) so the
     // parent cannot skip straight to child profile setup or home.
-    final prefs = await SharedPreferences.getInstance();
-    final hasConsent =
-        prefs.getString('privacy_consent_accepted_at') != null;
+    bool hasConsent = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      hasConsent = prefs.getString('privacy_consent_accepted_at') != null;
+    } catch (_) {}
     if (!mounted) return;
 
     final Widget destination;
