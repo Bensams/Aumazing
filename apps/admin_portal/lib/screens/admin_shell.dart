@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../pages/audit_page.dart';
+import '../pages/beta_page.dart';
 import '../pages/centers_page.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/modules_page.dart';
@@ -23,6 +24,7 @@ class _AdminShellState extends State<AdminShell> {
 
   static const _pages = [
     DashboardPage(),
+    BetaPage(),
     UsersPage(),
     ModulesPage(),
     CentersPage(),
@@ -101,6 +103,10 @@ class _AdminShellState extends State<AdminShell> {
               NavigationRailDestination(
                 icon: Icon(Icons.dashboard_rounded),
                 label: Text('Dashboard'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.science_rounded),
+                label: Text('Beta Review'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.people_rounded),

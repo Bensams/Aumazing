@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/child_provider.dart';
+import '../../services/research_consent_service.dart';
 import 'pre_assessment_progress_screen.dart';
+import 'research_consent_dialog.dart';
 import 'sensory/sensory.dart';
 
 /// Welcome screen for the pre-assessment flow.
@@ -138,6 +140,24 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                             final acknowledged =
                                 await _DisclaimerDialog.show(context);
                             if (!acknowledged || !context.mounted) return;
+
+                            // Beta research consent — asked once per child
+                            // (and again if the consent text version
+                            // changes). Optional either way: declining
+                            // never blocks the assessment.
+                            final childId =
+                                context.read<ChildProvider>().profile?.id;
+                            if (childId != null) {
+                              final status = await ResearchConsentService
+                                  .instance
+                                  .statusFor(childId);
+                              if (!context.mounted) return;
+                              if (!status.answered) {
+                                await ResearchConsentDialog.show(context,
+                                    childId: childId);
+                                if (!context.mounted) return;
+                              }
+                            }
 
                             // Show sensory consent dialog before starting
                             final consent =

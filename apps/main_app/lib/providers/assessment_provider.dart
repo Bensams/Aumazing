@@ -13,6 +13,7 @@ import '../model/area_level.dart';
 import '../services/ai_assessment_service.dart';
 import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
+import '../services/research_consent_service.dart';
 import '../services/assessment_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
@@ -591,9 +592,15 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Export a single XGBoost-ready data row for the current assessment.
   ///
-  /// Returns `null` if rubric scoring has not been performed or no sessions
-  /// are available.
+  /// Returns `null` if rubric scoring has not been performed, no sessions
+  /// are available, or — the ethics gate — the parent has not opted this
+  /// child in to AI-training data use (deny by default).
   Map<String, dynamic>? exportXGBoostRow(String childId) {
+    if (!ResearchConsentService.instance.aiTrainingOptInSync(childId)) {
+      debugPrint('[AssessmentProvider] XGBoost export blocked: no '
+          'AI-training consent for child $childId');
+      return null;
+    }
     if (_rubricResult == null || _currentSessions.isEmpty) return null;
     const exporter = XGBoostExportService();
     return exporter.generateRow(
