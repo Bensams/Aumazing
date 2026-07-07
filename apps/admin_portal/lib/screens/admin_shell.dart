@@ -5,6 +5,8 @@ import '../pages/audit_page.dart';
 import '../pages/centers_page.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/modules_page.dart';
+import '../pages/rubric_page.dart';
+import '../pages/users_page.dart';
 
 /// Main admin layout: verifies allowlist membership, then shows a
 /// navigation rail with the portal's sections.
@@ -21,8 +23,10 @@ class _AdminShellState extends State<AdminShell> {
 
   static const _pages = [
     DashboardPage(),
+    UsersPage(),
     ModulesPage(),
     CentersPage(),
+    RubricPage(),
     AuditPage(),
   ];
 
@@ -99,12 +103,20 @@ class _AdminShellState extends State<AdminShell> {
                 label: Text('Dashboard'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.people_rounded),
+                label: Text('Accounts'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.extension_rounded),
                 label: Text('Games'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.local_hospital_rounded),
                 label: Text('Centers'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.tune_rounded),
+                label: Text('Rubric'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.receipt_long_rounded),

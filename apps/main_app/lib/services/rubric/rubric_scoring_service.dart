@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'rubric_labels.dart';
 import 'rubric_result.dart';
+import 'rubric_threshold_service.dart';
+import 'rubric_thresholds.dart';
 import '../../model/gameplay_session.dart';
 
 /// Stateless service that converts telemetry data into rubric labels.
@@ -10,9 +12,19 @@ import '../../model/gameplay_session.dart';
 /// It takes raw [GameplaySession] data and produces categorical labels
 /// for each developmental area, which are later used for module
 /// recommendations and XGBoost training data.
+///
+/// The label cutoffs are admin-configurable (web portal → Rubric page →
+/// `rubric_thresholds` table); by default the current values are taken
+/// from [RubricThresholdService], or pass [thresholds] explicitly (tests).
 class RubricScoringService {
   /// Creates a const instance of [RubricScoringService].
-  const RubricScoringService();
+  const RubricScoringService({this.thresholds});
+
+  /// Explicit cutoffs; null = the live admin-configured values.
+  final RubricThresholds? thresholds;
+
+  RubricThresholds get _t =>
+      thresholds ?? RubricThresholdService.instance.current;
 
   // ── Game ID constants ──────────────────────────────────────────────────
 
@@ -21,25 +33,14 @@ class RubricScoringService {
   static const _doWhatISay = 'do_what_i_say';
   static const _myTurnYourTurn = 'my_turn_your_turn';
 
-  // ── Thresholds ─────────────────────────────────────────────────────────
+  // ── Fixed thresholds (not admin-configurable) ──────────────────────────
 
-  static const _strengthAccuracy = 0.80;
-  static const _emergingAccuracy = 0.50;
-  static const _strengthCompletionRate = 0.80;
-  static const _emergingCompletionRate = 0.50;
-  static const _strengthMaxPromptDependency = 0.2;
   static const _strengthMaxRetries = 2.0;
   static const _promptDependencyThreshold = 0.5;
-  static const _strengthTurnTaking = 0.80;
-  static const _emergingTurnTaking = 0.50;
   static const _strengthMaxInterruptions = 2;
   static const _needsSupportInterruptions = 5;
-  static const _sustainedMaxIdle = 5.0;
   static const _sustainedMaxRandomTouch = 2.0;
-  static const _sustainedMinCompletion = 0.80;
-  static const _variableMaxIdle = 15.0;
   static const _variableMaxRandomTouch = 5.0;
-  static const _variableMinCompletion = 0.50;
 
   /// Main entry point: takes all game sessions from a pre-assessment
   /// and returns a complete [RubricResult].
@@ -97,15 +98,15 @@ class RubricScoringService {
       final avgPromptDependency = _meanPromptDependency(valid);
       final avgRetryCount = _meanDouble(valid, (s) => s.retryCount.toDouble());
 
-      if (avgAccuracy >= _strengthAccuracy &&
-          avgCompletionRate >= _strengthCompletionRate &&
-          avgPromptDependency <= _strengthMaxPromptDependency &&
+      if (avgAccuracy >= _t.strengthAccuracy &&
+          avgCompletionRate >= _t.strengthCompletion &&
+          avgPromptDependency <= _t.strengthMaxPromptDependency &&
           avgRetryCount <= _strengthMaxRetries) {
         return PerformanceLabel.strength;
       }
 
-      if (avgAccuracy >= _emergingAccuracy ||
-          avgCompletionRate >= _emergingCompletionRate) {
+      if (avgAccuracy >= _t.emergingAccuracy ||
+          avgCompletionRate >= _t.emergingCompletion) {
         return PerformanceLabel.emerging;
       }
 
@@ -132,12 +133,12 @@ class RubricScoringService {
       final avgAccuracy = _meanAccuracy(valid);
       final avgPromptDependency = _meanPromptDependency(valid);
 
-      if (avgAccuracy >= _strengthAccuracy &&
-          avgPromptDependency <= _strengthMaxPromptDependency) {
+      if (avgAccuracy >= _t.strengthAccuracy &&
+          avgPromptDependency <= _t.strengthMaxPromptDependency) {
         return PerformanceLabel.strength;
       }
 
-      if (avgAccuracy < _emergingAccuracy ||
+      if (avgAccuracy < _t.emergingAccuracy ||
           avgPromptDependency >= _promptDependencyThreshold) {
         return PerformanceLabel.needsSupport;
       }
@@ -166,12 +167,12 @@ class RubricScoringService {
       final avgTurnTaking = _meanTurnTakingSuccessRate(valid);
       final avgInterruptions = _meanInt(valid, (s) => s.interruptionCount ?? 0);
 
-      if (avgTurnTaking >= _strengthTurnTaking &&
+      if (avgTurnTaking >= _t.strengthTurnTaking &&
           avgInterruptions <= _strengthMaxInterruptions) {
         return PerformanceLabel.strength;
       }
 
-      if (avgTurnTaking < _emergingTurnTaking ||
+      if (avgTurnTaking < _t.emergingTurnTaking ||
           avgInterruptions > _needsSupportInterruptions) {
         return PerformanceLabel.needsSupport;
       }
@@ -200,15 +201,17 @@ class RubricScoringService {
           _meanDouble(valid, (s) => s.randomTouchCount.toDouble());
       final avgCompletionRate = _meanCompletionRate(valid);
 
-      if (avgIdle <= _sustainedMaxIdle &&
+      // Attention completion floors reuse the strength/emerging completion
+      // cutoffs so one admin knob governs completion everywhere.
+      if (avgIdle <= _t.sustainedMaxIdleSeconds &&
           avgRandomTouch <= _sustainedMaxRandomTouch &&
-          avgCompletionRate >= _sustainedMinCompletion) {
+          avgCompletionRate >= _t.strengthCompletion) {
         return AttentionLabel.sustainedAttention;
       }
 
-      if (avgIdle <= _variableMaxIdle &&
+      if (avgIdle <= _t.variableMaxIdleSeconds &&
           avgRandomTouch <= _variableMaxRandomTouch &&
-          avgCompletionRate >= _variableMinCompletion) {
+          avgCompletionRate >= _t.emergingCompletion) {
         return AttentionLabel.variableAttention;
       }
 
