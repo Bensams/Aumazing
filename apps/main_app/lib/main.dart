@@ -15,6 +15,7 @@ import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
 import 'services/entitlement_service.dart';
+import 'services/rubric/rubric_threshold_service.dart';
 
 /// True for transient network failures (offline, DNS, unreachable host) —
 /// expected in an offline-first app and never worth an unhandled-crash dump.
@@ -73,6 +74,10 @@ Future<void> main() async {
   // Premium entitlement: cached state loads immediately, backend refresh
   // and auth-change reloads happen in the background (never blocks launch).
   EntitlementService.instance.init();
+
+  // Admin-configured rubric thresholds: cache-first with hardcoded
+  // defaults, so scoring works offline; refreshed in the background.
+  RubricThresholdService.instance.load();
 
   runApp(const MyApp());
 }
