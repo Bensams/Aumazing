@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
@@ -32,7 +33,8 @@ class ChildModeLobbyScreen extends StatefulWidget {
   State<ChildModeLobbyScreen> createState() => _ChildModeLobbyScreenState();
 }
 
-class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
+class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
+    with SingleTickerProviderStateMixin {
   static const _categoryOrder = [
     SkillCategory.playSkills,
     SkillCategory.communication,
@@ -58,6 +60,25 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   Timer? _screenTimeTicker;
   static const _tickSeconds = 15;
 
+  // ── Guided start (ABA-style lobby prompting) ─────────────────────────
+  // On entry with a recommendation: voice welcome + a pointing hand at
+  // "My Path". After 30s idle: the hand appears at the next tap target
+  // and a guiding voice line repeats every ~7s until the child taps.
+  late final VoiceOverService _lobbyVo;
+  late final AnimationController _bobController;
+  final GlobalKey _stackKey = GlobalKey();
+  final GlobalKey _pathButtonKey = GlobalKey();
+  final GlobalKey _allButtonKey = GlobalKey();
+  final GlobalKey _guideCardKey = GlobalKey();
+  Timer? _idleGuideTimer;
+  Timer? _voRepeatTimer;
+  Timer? _entryHideTimer;
+  bool _guideVisible = false;
+  Offset? _guideAnchor; // stack-local center of the target
+  bool _voAlternate = false;
+  static const _idleGuideDelay = Duration(seconds: 30);
+  static const _voRepeatInterval = Duration(seconds: 7); // within 5–8s
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +87,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
       if (mounted) setState(() => _activeGameIds = ids);
     });
     _startScreenTimeTracking();
+
+    _lobbyVo = VoiceOverService(
+        languageCode: context.read<ChildProvider>().language.slug);
+    _bobController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startEntryGuidance());
+    _restartIdleTimer();
   }
 
   Future<void> _startScreenTimeTracking() async {
@@ -102,7 +132,134 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
   @override
   void dispose() {
     _screenTimeTicker?.cancel();
+    _idleGuideTimer?.cancel();
+    _voRepeatTimer?.cancel();
+    _entryHideTimer?.cancel();
+    _bobController.dispose();
+    _lobbyVo.dispose();
     super.dispose();
+  }
+
+  // ── Guided start ───────────────────────────────────────────────────────
+
+  /// Guidance only runs while the lobby itself is what the child sees.
+  bool get _lobbyActive =>
+      mounted &&
+      !TimeUpDialog.isShowing &&
+      (ModalRoute.of(context)?.isCurrent ?? true);
+
+  /// Entry guidance: when a recommended module (learning path) exists, the
+  /// voice welcomes the child and the hand shows where to start.
+  Future<void> _startEntryGuidance() async {
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!_lobbyActive) return;
+    if (_learningPath().isEmpty) return; // guided start needs a recommendation
+    _lobbyVo.play(VoiceOverCue.letsBegin);
+    _showGuide();
+    // The entry pointer is a short nudge, not a fixture.
+    _entryHideTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) _hideGuide(restartIdle: false);
+    });
+  }
+
+  /// The widget the hand should point at right now.
+  GlobalKey _currentGuideKey() {
+    if (!_inView) {
+      return _learningPath().isNotEmpty ? _pathButtonKey : _allButtonKey;
+    }
+    return _guideCardKey; // set on the recommended card in the visible row
+  }
+
+  /// Positions (or repositions) the pointing hand over the current target.
+  void _showGuide() {
+    final targetContext = _currentGuideKey().currentContext;
+    final stackContext = _stackKey.currentContext;
+    if (targetContext == null || stackContext == null) return;
+    final targetBox = targetContext.findRenderObject() as RenderBox?;
+    final stackBox = stackContext.findRenderObject() as RenderBox?;
+    if (targetBox == null || stackBox == null || !targetBox.attached) return;
+
+    final centerGlobal = targetBox.localToGlobal(
+        Offset(targetBox.size.width / 2, targetBox.size.height / 2));
+    setState(() {
+      _guideAnchor = stackBox.globalToLocal(centerGlobal);
+      _guideVisible = true;
+    });
+  }
+
+  void _hideGuide({required bool restartIdle}) {
+    _entryHideTimer?.cancel();
+    _voRepeatTimer?.cancel();
+    _voRepeatTimer = null;
+    if (_guideVisible && mounted) setState(() => _guideVisible = false);
+    if (restartIdle) _restartIdleTimer();
+  }
+
+  /// Any touch means the child is engaged — hide guidance, rearm the timer.
+  void _onUserInteraction(PointerDownEvent _) {
+    _hideGuide(restartIdle: true);
+  }
+
+  void _restartIdleTimer() {
+    _idleGuideTimer?.cancel();
+    _idleGuideTimer = Timer(_idleGuideDelay, _onIdle);
+  }
+
+  /// 30s without a tap: point at the next place to tap and repeat a short
+  /// guiding voice line every ~7s until the child interacts.
+  void _onIdle() {
+    if (!_lobbyActive) {
+      // Mid-game or locked — check again later instead of talking over it.
+      _restartIdleTimer();
+      return;
+    }
+    _showGuide();
+    _speakGuidance();
+    _voRepeatTimer = Timer.periodic(_voRepeatInterval, (_) {
+      if (!_lobbyActive) return;
+      _showGuide(); // re-anchor in case the view changed
+      _speakGuidance();
+    });
+  }
+
+  /// Alternates two short cues so the repetition stays gentle.
+  void _speakGuidance() {
+    _voAlternate = !_voAlternate;
+    _lobbyVo.play(
+        _voAlternate ? VoiceOverCue.tapHere : VoiceOverCue.letsBegin);
+  }
+
+  /// The bobbing pointing hand (static halo under reduced motion).
+  Widget _buildGuidePointer() {
+    final reduced = context.read<ChildProvider>().reducedMotion;
+    final anchor = _guideAnchor!;
+    return Positioned(
+      left: anchor.dx - 36,
+      top: anchor.dy - 12,
+      child: IgnorePointer(
+        child: ListenableBuilder(
+          listenable: _bobController,
+          builder: (_, child) => Transform.translate(
+            offset:
+                reduced ? Offset.zero : Offset(0, 8 * _bobController.value),
+            child: child,
+          ),
+          child: Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 12),
+              ],
+            ),
+            child: const Text('👆', style: TextStyle(fontSize: 40)),
+          ),
+        ),
+      ),
+    );
   }
 
   /// The AI-recommended learning path (empty when no assessment yet, all
@@ -165,16 +322,28 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: palette.gameBackground),
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(palette, level),
-              Expanded(
-                child: !_inView
-                    ? _buildCategoryButtons(palette)
-                    : _buildGamesRow(level, palette),
-              ),
-            ],
+          // Any touch counts as engagement for the guided-start idle timer.
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: _onUserInteraction,
+            child: Stack(
+              key: _stackKey,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(palette, level),
+                    Expanded(
+                      child: !_inView
+                          ? _buildCategoryButtons(palette)
+                          : _buildGamesRow(level, palette),
+                    ),
+                  ],
+                ),
+                if (_guideVisible && _guideAnchor != null)
+                  _buildGuidePointer(),
+              ],
+            ),
           ),
         ),
       ),
@@ -273,20 +442,27 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     final path = _learningPath();
     final buttons = <Widget>[
       // AI-recommended path first — the child's suggested starting point.
+      // Keys anchor the guided-start pointing hand.
       if (path.isNotEmpty)
-        _CategoryButton(
-          label: 'My Path',
-          icon: Icons.route_rounded,
-          gradient: const [Color(0xFFC7B4EC), Color(0xFFA9E3CC)], // lavender → mint
-          count: path.length,
-          onTap: () => setState(() => _viewingPath = true),
+        KeyedSubtree(
+          key: _pathButtonKey,
+          child: _CategoryButton(
+            label: 'My Path',
+            icon: Icons.route_rounded,
+            gradient: const [Color(0xFFC7B4EC), Color(0xFFA9E3CC)], // lavender → mint
+            count: path.length,
+            onTap: () => setState(() => _viewingPath = true),
+          ),
         ),
-      _CategoryButton(
-        label: 'All',
-        icon: Icons.apps_rounded,
-        gradient: const [Color(0xFFFBD89A), Color(0xFFA9E3CC)], // amber → mint
-        count: _allGames().length,
-        onTap: () => setState(() => _viewingAll = true),
+      KeyedSubtree(
+        key: _allButtonKey,
+        child: _CategoryButton(
+          label: 'All',
+          icon: Icons.apps_rounded,
+          gradient: const [Color(0xFFFBD89A), Color(0xFFA9E3CC)], // amber → mint
+          count: _allGames().length,
+          onTap: () => setState(() => _viewingAll = true),
+        ),
       ),
       for (final cat in _categoryOrder)
         _CategoryButton(
@@ -340,11 +516,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
               games[i],
               fallback: fallbackLevel,
             );
-            return _GameCard(
+            final card = _GameCard(
               entry: games[i],
               difficulty: difficulty,
               onTap: () => _launch(games[i].id, difficulty),
             );
+            // First card anchors the guided-start pointing hand.
+            return i == 0
+                ? KeyedSubtree(key: _guideCardKey, child: card)
+                : card;
           },
         ),
       ),
@@ -366,6 +546,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
     // Watched so cards re-render (unlock) when a game completes.
     final completed =
         context.watch<AssessmentProvider>().pathCompletedGameIds;
+    // The guided-start hand points at the step the child should play next:
+    // the first incomplete step (always unlocked by the sequence rule).
+    var guideIndex = path.indexWhere((e) => !completed.contains(e.game.id));
+    if (guideIndex < 0) guideIndex = 0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: SizedBox(
@@ -383,7 +567,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
             final override =
                 context.read<ChildProvider>().difficultyOverride;
             final difficulty = (override ?? step.difficulty).clamp(1, 3);
-            return _GameCard(
+            final card = _GameCard(
               entry: step.game,
               difficulty: difficulty,
               stepNumber: i + 1,
@@ -393,6 +577,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen> {
                   ? () => _launch(step.game.id, difficulty)
                   : null,
             );
+            return i == guideIndex
+                ? KeyedSubtree(key: _guideCardKey, child: card)
+                : card;
           },
         ),
       ),
