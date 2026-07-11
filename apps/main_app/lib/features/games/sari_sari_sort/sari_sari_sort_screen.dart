@@ -68,7 +68,8 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
     ]);
 
     _sessionStartTime = DateTime.now();
-    _voiceOverService = VoiceOverService();
+    _voiceOverService = VoiceOverService(
+        languageCode: context.read<ChildProvider>().language.slug);
 
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id ?? 'unknown';
