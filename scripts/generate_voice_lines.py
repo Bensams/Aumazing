@@ -1,39 +1,67 @@
 #!/usr/bin/env python3
 """
-Batch-generate voice-over WAV files for Aumazing using Meta MMS (VITS).
+Batch-generate EMOTIONAL voice-over WAV files for Aumazing (en/tl/ceb).
 
-This script reads voice line definitions (English, Tagalog, Cebuano) and
-generates corresponding .wav files using facebook/mms-tts-* models from
-Hugging Face.
+Engine: Microsoft Edge neural TTS (edge-tts) with per-category emotion
+profiles — praise sounds proud, celebration sounds excited, regulation
+sounds calm and slow, instructions sound clear and friendly. Each cue's
+category selects a prosody profile (rate/pitch) applied to an already
+expressive neural voice.
+
+Voices:
+  en  → en-US-AnaNeural       (Microsoft's child voice — warm, kid-friendly)
+  tl  → fil-PH-BlessicaNeural (natural Filipino female)
+  ceb → fil-PH-BlessicaNeural (no neural TTS supports Cebuano; the
+        Filipino voice reads the Cebuano text — phonetics overlap
+        closely, so pronunciation stays intelligible. Documented
+        limitation for the manuscript.)
 
 Usage:
-  pip install transformers torch scipy
-  python scripts/generate_voice_lines.py
+  pip install edge-tts imageio-ffmpeg
+  python scripts/generate_voice_lines.py            # all languages
+  python scripts/generate_voice_lines.py tl ceb     # subset
 
 Output:
   packages/shared_audio/assets/audio/voice_over/{lang}/{category}/{CueName}.wav
+  (24 kHz mono WAV — the format the app's VoiceOverService expects.)
 """
 
-import os
+import asyncio
+import subprocess
 import sys
 import time
 from pathlib import Path
-
-import scipy.io.wavfile
-import torch
-from transformers import VitsModel, AutoTokenizer
 
 # ── Project root (relative to this script) ───────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 OUTPUT_ROOT = PROJECT_ROOT / "packages" / "shared_audio" / "assets" / "audio" / "voice_over"
 
-# ── Language → HuggingFace model mapping ─────────────────────────────
+# ── Language → Edge neural voice mapping ─────────────────────────────
 LANGUAGE_MODELS = {
-    "en":  "facebook/mms-tts-eng",
-    "tl":  "facebook/mms-tts-tgl",
-    "ceb": "facebook/mms-tts-ceb",
+    "en":  "en-US-AnaNeural",
+    "tl":  "fil-PH-BlessicaNeural",
+    "ceb": "fil-PH-BlessicaNeural",
 }
+
+# ── Emotion profiles per cue category ────────────────────────────────
+# Emotional register is delivered through prosody (rate/pitch) on top of
+# the neural voice's natural expressiveness. Calibrated for ASD listeners:
+# celebration is bright but never shrill; regulation is slow and low.
+EMOTION_PROFILES = {
+    "core_praise":              {"rate": "+8%",  "pitch": "+18Hz"},  # happy, proud
+    "reward_and_celebration":   {"rate": "+12%", "pitch": "+25Hz"},  # excited, joyful
+    "gently_retry":             {"rate": "-12%", "pitch": "+5Hz"},   # gentle, encouraging
+    "attention_and_regulation": {"rate": "-20%", "pitch": "-8Hz"},   # calm, soothing
+    "instruction":              {"rate": "-8%",  "pitch": "+8Hz"},   # clear, friendly
+    "assessment_style":         {"rate": "-8%",  "pitch": "+10Hz"},  # warm, inviting
+    "transition":               {"rate": "+0%",  "pitch": "+12Hz"},  # upbeat
+    "turn_taking":              {"rate": "-5%",  "pitch": "+8Hz"},   # warm, social
+    "colors":                   {"rate": "-15%", "pitch": "+10Hz"},  # slow word-teaching
+    "shapes":                   {"rate": "-15%", "pitch": "+10Hz"},  # slow word-teaching
+    "dynamic":                  {"rate": "-12%", "pitch": "+8Hz"},   # clear fragments
+}
+DEFAULT_PROFILE = {"rate": "-5%", "pitch": "+8Hz"}
 
 # ── Voice line definitions ───────────────────────────────────────────
 # Structure: { "CueName": { "category": "...", "en": "...", "tl": "...", "ceb": "..." } }
@@ -664,79 +692,96 @@ VOICE_LINES = {
 }
 
 
-def generate_all(languages=None):
-    """Generate WAV files for all voice lines across specified languages.
+def _ffmpeg_exe() -> str:
+    """Bundled ffmpeg (no system install needed)."""
+    import imageio_ffmpeg
 
-    Args:
-        languages: List of language codes to generate. Defaults to all.
-    """
-    if languages is None:
-        languages = list(LANGUAGE_MODELS.keys())
+    return imageio_ffmpeg.get_ffmpeg_exe()
 
-    total_files = len(VOICE_LINES) * len(languages)
-    generated = 0
-    errors = []
 
-    for lang_code in languages:
-        model_name = LANGUAGE_MODELS.get(lang_code)
-        if not model_name:
-            print(f"[WARN] Unknown language code: {lang_code}, skipping.")
-            continue
+async def _synthesize_one(
+    semaphore: "asyncio.Semaphore",
+    ffmpeg: str,
+    lang_code: str,
+    cue_name: str,
+    cue_data: dict,
+) -> tuple[str, str, str | None]:
+    """Generate one emotional WAV. Returns (lang, cue, error-or-None)."""
+    import edge_tts
 
-        print(f"\n{'='*60}")
-        print(f"Loading model for [{lang_code}]: {model_name}")
-        print(f"{'='*60}")
+    text = cue_data.get(lang_code) or cue_data["en"]
+    category = cue_data["category"]
+    profile = EMOTION_PROFILES.get(category, DEFAULT_PROFILE)
+    voice = LANGUAGE_MODELS[lang_code]
 
-        try:
-            model = VitsModel.from_pretrained(model_name)
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-        except Exception as e:
-            print(f"[ERR] Failed to load model {model_name}: {e}")
-            errors.append((lang_code, "MODEL_LOAD", str(e)))
-            continue
+    out_dir = OUTPUT_ROOT / lang_code / category
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fname = cue_data.get("filename", cue_name)
+    wav_path = out_dir / f"{fname}.wav"
+    mp3_path = out_dir / f"{fname}.tmp.mp3"
 
-        for cue_name, cue_data in VOICE_LINES.items():
-            text = cue_data.get(lang_code, cue_data["en"])  # Fallback to English
-            category = cue_data["category"]
-
-            # Prepare output path
-            out_dir = OUTPUT_ROOT / lang_code / category
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{cue_data.get('filename', cue_name)}.wav"
-
+    async with semaphore:
+        last_error = None
+        for attempt in range(3):  # the free Edge endpoint can rate-limit
             try:
-                # Generate speech
-                inputs = tokenizer(text, return_tensors="pt")
-                with torch.no_grad():
-                    output = model(**inputs)
+                communicate = edge_tts.Communicate(
+                    text,
+                    voice,
+                    rate=profile["rate"],
+                    pitch=profile["pitch"],
+                )
+                await communicate.save(str(mp3_path))
 
-                waveform = output.waveform[0].cpu().numpy()
-                sample_rate = model.config.sampling_rate
+                # mp3 → 24 kHz mono WAV (the format VoiceOverService expects)
+                result = subprocess.run(
+                    [ffmpeg, "-y", "-i", str(mp3_path),
+                     "-ar", "24000", "-ac", "1", str(wav_path)],
+                    capture_output=True,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f"ffmpeg: {result.stderr.decode(errors='ignore')[-200:]}")
 
-                scipy.io.wavfile.write(str(out_path), rate=sample_rate, data=waveform)
-                generated += 1
-                fname = cue_data.get('filename', cue_name)
-                print(f"  [OK] [{lang_code}] {category}/{fname}.wav")
+                print(f"  [OK] [{lang_code}] {category}/{fname}.wav "
+                      f"(rate {profile['rate']}, pitch {profile['pitch']})")
+                return (lang_code, cue_name, None)
+            except Exception as e:  # noqa: BLE001 — retried, then reported
+                last_error = str(e)
+                await asyncio.sleep(1.5 * (attempt + 1))
+            finally:
+                mp3_path.unlink(missing_ok=True)
 
-            except Exception as e:
-                print(f"  [ERR] [{lang_code}] {category}/{cue_name}.wav - ERROR: {e}")
-                errors.append((lang_code, cue_name, str(e)))
+        print(f"  [ERR] [{lang_code}] {category}/{fname}.wav — {last_error}")
+        return (lang_code, cue_name, last_error)
 
-    # ── Summary ──────────────────────────────────────────────────────
+
+async def generate_all_async(languages):
+    ffmpeg = _ffmpeg_exe()
+    # Gentle concurrency: fast enough for 300 files, kind to the endpoint.
+    semaphore = asyncio.Semaphore(4)
+
+    tasks = [
+        _synthesize_one(semaphore, ffmpeg, lang, cue_name, cue_data)
+        for lang in languages
+        for cue_name, cue_data in VOICE_LINES.items()
+    ]
+    results = await asyncio.gather(*tasks)
+
+    errors = [(l, c, e) for (l, c, e) in results if e is not None]
     print(f"\n{'='*60}")
-    print(f"[DONE] Generation complete!")
-    print(f"   Generated: {generated}/{total_files} files")
+    print("[DONE] Emotional voice-over generation complete!")
+    print(f"   Generated: {len(results) - len(errors)}/{len(results)} files")
     print(f"   Output:    {OUTPUT_ROOT}")
     if errors:
         print(f"   Errors:    {len(errors)}")
         for lang, cue, err in errors:
             print(f"     - [{lang}] {cue}: {err}")
     print(f"{'='*60}")
+    return len(errors)
 
 
 def main():
     """Entry point with optional language filtering via CLI args."""
-    # Allow filtering: python generate_voice_lines.py en tl
     languages = sys.argv[1:] if len(sys.argv) > 1 else None
 
     if languages:
@@ -747,12 +792,14 @@ def main():
             sys.exit(1)
         print(f"Generating for languages: {languages}")
     else:
-        print(f"Generating for ALL languages: {list(LANGUAGE_MODELS.keys())}")
+        languages = list(LANGUAGE_MODELS.keys())
+        print(f"Generating for ALL languages: {languages}")
 
     start = time.time()
-    generate_all(languages)
+    error_count = asyncio.run(generate_all_async(languages))
     elapsed = time.time() - start
     print(f"\nTotal time: {elapsed:.1f}s")
+    sys.exit(1 if error_count else 0)
 
 
 if __name__ == "__main__":

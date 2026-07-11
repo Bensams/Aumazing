@@ -73,7 +73,8 @@ class _MatchItScreenState extends State<MatchItScreen> {
     ]);
 
     _sessionStartTime = DateTime.now();
-    _voiceOverService = VoiceOverService();
+    _voiceOverService = VoiceOverService(
+        languageCode: context.read<ChildProvider>().language.slug);
 
     // Apply sensory config for round 1 at game initialization (pre-assessment only)
     widget.sensoryController?.applyRoundConfig(1);

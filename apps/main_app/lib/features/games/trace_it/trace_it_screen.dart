@@ -71,7 +71,8 @@ class _TraceItScreenState extends State<TraceItScreen> {
     ]);
 
     _sessionStartTime = DateTime.now();
-    _voiceOverService = VoiceOverService();
+    _voiceOverService = VoiceOverService(
+        languageCode: context.read<ChildProvider>().language.slug);
 
     widget.sensoryController?.applyRoundConfig(1);
 
