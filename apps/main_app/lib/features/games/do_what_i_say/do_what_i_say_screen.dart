@@ -83,7 +83,8 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
     // Apply sensory config for round 1 at game initialization (pre-assessment only)
     widget.sensoryController?.applyRoundConfig(1);
 
-    _voiceOverService = VoiceOverService();
+    _voiceOverService = VoiceOverService(
+        languageCode: context.read<ChildProvider>().language.slug);
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
