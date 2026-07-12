@@ -42,10 +42,11 @@ class AssessmentSummaryService {
     required List<String> recommendations,
     required String fallback,
     List<Map<String, String>>? previousAreas,
+    String languageCode = 'en',
   }) async {
     final isProgress = previousAreas != null && previousAreas.isNotEmpty;
-    final cacheKey =
-        _cacheKey(areas, overallPct, supportLevel, previousAreas);
+    final cacheKey = _cacheKey(
+        areas, overallPct, supportLevel, previousAreas, languageCode);
 
     // 1) Cached AI summary → instant, works offline.
     final cached = await _readCache(cacheKey);
@@ -61,6 +62,7 @@ class AssessmentSummaryService {
             'overall_pct': overallPct,
             'support_level': supportLevel,
             'recommendations': recommendations,
+            'language': languageCode,
             if (isProgress) 'previous_areas': previousAreas,
             'mode': isProgress ? 'progress' : 'snapshot',
           })
@@ -88,15 +90,19 @@ class AssessmentSummaryService {
     int overallPct,
     String supportLevel, [
     List<Map<String, String>>? previousAreas,
+    String languageCode = 'en',
   ]) {
     final areaPart =
         areas.map((a) => '${a['name']}:${a['level']}').join('|');
     // The pre levels are part of the key so a post (progress) summary
-    // caches separately from a snapshot with the same current levels.
+    // caches separately from a snapshot with the same current levels; the
+    // language is included so each language caches (and re-generates)
+    // independently.
     final prevPart = (previousAreas ?? const [])
         .map((a) => '${a['name']}:${a['level']}')
         .join('|');
-    return 'ai_summary_${areaPart}_${overallPct}_${supportLevel}_$prevPart'
+    return 'ai_summary_${areaPart}_${overallPct}_${supportLevel}_'
+            '${prevPart}_$languageCode'
         .hashCode
         .toString();
   }
@@ -126,6 +132,7 @@ class AssessmentSummaryService {
     int overallPct,
     String supportLevel, [
     List<Map<String, String>>? previousAreas,
+    String languageCode = 'en',
   ]) =>
-      _cacheKey(areas, overallPct, supportLevel, previousAreas);
+      _cacheKey(areas, overallPct, supportLevel, previousAreas, languageCode);
 }

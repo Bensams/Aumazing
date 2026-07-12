@@ -49,6 +49,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
           results: results,
           profile: profile,
           aiPrediction: aiPrediction,
+          languageCode: childProv.language.slug,
           onRetake: () {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -67,6 +68,7 @@ class _DashboardBody extends StatelessWidget {
     required this.results,
     required this.profile,
     required this.onRetake,
+    required this.languageCode,
     this.aiPrediction,
   });
 
@@ -74,6 +76,7 @@ class _DashboardBody extends StatelessWidget {
   final SupportProfile profile;
   final VoidCallback onRetake;
   final AiAssessmentResponse? aiPrediction;
+  final String languageCode;
 
   int get _totalCorrect => results.fold(0, (sum, r) => sum + r.score);
   int get _totalItems => results.fold(0, (sum, r) => sum + r.totalItems);
@@ -160,6 +163,7 @@ class _DashboardBody extends StatelessWidget {
                   supportLevel: aiPrediction?.supportLevel ?? 'moderate',
                   recommendations: aiPrediction?.recommendedModules ??
                       const <String>[],
+                  languageCode: languageCode,
                   fallback: _fallbackSummary(),
                 ),
                 const SizedBox(height: 6),
@@ -486,6 +490,7 @@ class _AiSummaryBand extends StatefulWidget {
     required this.overallPct,
     required this.supportLevel,
     required this.recommendations,
+    required this.languageCode,
     required this.fallback,
   });
 
@@ -493,6 +498,7 @@ class _AiSummaryBand extends StatefulWidget {
   final int overallPct;
   final String supportLevel;
   final List<String> recommendations;
+  final String languageCode;
   final String fallback;
 
   @override
@@ -516,6 +522,7 @@ class _AiSummaryBandState extends State<_AiSummaryBand> {
       overallPct: widget.overallPct,
       supportLevel: widget.supportLevel,
       recommendations: widget.recommendations,
+      languageCode: widget.languageCode,
       fallback: widget.fallback,
     );
     if (mounted) {

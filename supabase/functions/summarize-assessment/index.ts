@@ -65,6 +65,17 @@ Deno.serve(async (req: Request) => {
       ? body.recommendations.slice(0, 8)
       : [];
 
+    // Localize the summary to the parent's chosen language.
+    const languageNames: Record<string, string> = {
+      en: 'English',
+      tl: 'Tagalog (Filipino)',
+      ceb: 'Cebuano (Bisaya)',
+    };
+    const language = languageNames[body.language as string] ?? 'English';
+    const langInstruction =
+      `\nWrite your ENTIRE response in ${language}. Use warm, simple, `
+      + 'everyday words a parent would use — not formal or technical.';
+
     const areaLines = areas
       .map((a: Record<string, unknown>) => `- ${a.name}: ${a.level}`)
       .join('\n');
@@ -100,6 +111,7 @@ Deno.serve(async (req: Request) => {
         recommendations.length
           ? `Suggested next activities: ${recommendations.join(', ')}`
           : '',
+        langInstruction,
       ].join('\n');
     } else {
       prompt = [
@@ -124,6 +136,7 @@ Deno.serve(async (req: Request) => {
         recommendations.length
           ? `Suggested next activities: ${recommendations.join(', ')}`
           : '',
+        langInstruction,
       ].join('\n');
     }
 
