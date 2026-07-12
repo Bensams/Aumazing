@@ -15,7 +15,7 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 };
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -97,7 +97,10 @@ Deno.serve(async (req: Request) => {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 200,
+            maxOutputTokens: 300,
+            // gemini-2.5-flash spends output tokens on internal "thinking";
+            // a 3-sentence summary needs none, so disable it (also faster).
+            thinkingConfig: { thinkingBudget: 0 },
           },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
