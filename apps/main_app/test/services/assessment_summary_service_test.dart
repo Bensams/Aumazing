@@ -34,5 +34,21 @@ void main() {
       final b = AssessmentSummaryService.debugCacheKey(areas, 80, 'moderate');
       expect(a, isNot(b));
     });
+
+    test('a progress key (with previous areas) differs from a snapshot',
+        () {
+      final snapshot =
+          AssessmentSummaryService.debugCacheKey(areas, 72, 'moderate');
+      final progress = AssessmentSummaryService.debugCacheKey(
+        areas,
+        72,
+        'moderate',
+        [
+          {'name': 'Communication', 'level': 'Needs Support'},
+          {'name': 'Play Skills', 'level': 'Emerging'},
+        ],
+      );
+      expect(snapshot, isNot(progress));
+    });
   });
 }
