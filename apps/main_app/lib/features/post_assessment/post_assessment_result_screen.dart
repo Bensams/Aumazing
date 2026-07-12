@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/area_level.dart';
+import '../../services/assessment_summary_service.dart';
 
 /// Parent-facing post-assessment results: overall improvement plus a
 /// per-area comparison of the AI levels before and after the learning
@@ -37,6 +38,30 @@ class PostAssessmentResultScreen extends StatelessWidget {
   double get _accuracyDelta =>
       (improvement['accuracy_improvement'] as num?)?.toDouble() ?? 0.0;
 
+  /// Converts an area-level map into the summarizer's [{name, level}] shape.
+  List<Map<String, String>> _areasFrom(Map<String, AreaLevel> levels) => [
+        for (final area in _areaTitles.keys)
+          if (levels.containsKey(area))
+            {'name': _areaTitles[area]!, 'level': levels[area]!.levelName},
+      ];
+
+  /// Local progress sentence shown while (or instead of) the AI summary.
+  String _fallbackProgress() {
+    var improved = 0;
+    for (final area in postAreaLevels.keys) {
+      final pre = preAreaLevels[area]?.levelInt;
+      final post = postAreaLevels[area]!.levelInt;
+      if (pre != null && post > pre) improved++;
+    }
+    if (improved > 0) {
+      return 'Your child grew in $improved skill '
+          '${improved == 1 ? 'area' : 'areas'} since the first assessment — '
+          'wonderful progress! Keep practicing together.';
+    }
+    return 'Your child completed the follow-up activities. Every child '
+        'grows at their own pace — keep playing and practicing together.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,6 +87,19 @@ class PostAssessmentResultScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
+                    if (postAreaLevels.isNotEmpty) ...[
+                      _ProgressSummaryBand(
+                        areas: _areasFrom(postAreaLevels),
+                        previousAreas: _areasFrom(preAreaLevels),
+                        overallPct:
+                            (improvement['post_accuracy'] as num?) != null
+                                ? ((improvement['post_accuracy'] as num) * 100)
+                                    .round()
+                                : 0,
+                        fallback: _fallbackProgress(),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
                     if (_hasData) _buildOverallCard(),
                     const SizedBox(height: AppSpacing.md),
                     if (postAreaLevels.isNotEmpty) _buildAreaComparisonCard(),
@@ -179,6 +217,84 @@ class PostAssessmentResultScreen extends StatelessWidget {
                 pre: preAreaLevels[area],
                 post: postAreaLevels[area]!,
               ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progress summary band: shows the local progress sentence immediately,
+/// then swaps in the Gemini "how your child has grown" narrative when the
+/// summarizer is reachable. Never blocks or errors (offline-safe).
+class _ProgressSummaryBand extends StatefulWidget {
+  const _ProgressSummaryBand({
+    required this.areas,
+    required this.previousAreas,
+    required this.overallPct,
+    required this.fallback,
+  });
+
+  final List<Map<String, String>> areas;
+  final List<Map<String, String>> previousAreas;
+  final int overallPct;
+  final String fallback;
+
+  @override
+  State<_ProgressSummaryBand> createState() => _ProgressSummaryBandState();
+}
+
+class _ProgressSummaryBandState extends State<_ProgressSummaryBand> {
+  late AssessmentSummary _summary =
+      AssessmentSummary(text: widget.fallback, isAi: false);
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final result = await AssessmentSummaryService.instance.summarize(
+      areas: widget.areas,
+      previousAreas: widget.previousAreas,
+      overallPct: widget.overallPct,
+      supportLevel: 'moderate',
+      recommendations: const [],
+      fallback: widget.fallback,
+    );
+    if (mounted) {
+      setState(() {
+        _summary = result;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_summary.isAi ? '✨' : '🌱',
+              style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _summary.text,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.textPrimary, height: 1.35),
+            ),
+          ),
+          if (_loading) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
         ],
       ),
     );

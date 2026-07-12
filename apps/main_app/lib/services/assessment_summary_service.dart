@@ -31,6 +31,9 @@ class AssessmentSummaryService {
   /// Builds a summary for one assessment.
   ///
   /// [areas] — [{'name': 'Communication', 'level': 'Emerging'}, ...]
+  /// [previousAreas] — the same shape from the earlier (pre) assessment;
+  /// when provided, the summary narrates PROGRESS (before → after) instead
+  /// of a single snapshot.
   /// [fallback] — the local rubric summary shown when AI is unavailable.
   Future<AssessmentSummary> summarize({
     required List<Map<String, String>> areas,
@@ -38,8 +41,11 @@ class AssessmentSummaryService {
     required String supportLevel,
     required List<String> recommendations,
     required String fallback,
+    List<Map<String, String>>? previousAreas,
   }) async {
-    final cacheKey = _cacheKey(areas, overallPct, supportLevel);
+    final isProgress = previousAreas != null && previousAreas.isNotEmpty;
+    final cacheKey =
+        _cacheKey(areas, overallPct, supportLevel, previousAreas);
 
     // 1) Cached AI summary → instant, works offline.
     final cached = await _readCache(cacheKey);
@@ -55,6 +61,8 @@ class AssessmentSummaryService {
             'overall_pct': overallPct,
             'support_level': supportLevel,
             'recommendations': recommendations,
+            if (isProgress) 'previous_areas': previousAreas,
+            'mode': isProgress ? 'progress' : 'snapshot',
           })
           .timeout(_timeout);
 
@@ -78,11 +86,18 @@ class AssessmentSummaryService {
   static String _cacheKey(
     List<Map<String, String>> areas,
     int overallPct,
-    String supportLevel,
-  ) {
+    String supportLevel, [
+    List<Map<String, String>>? previousAreas,
+  ]) {
     final areaPart =
         areas.map((a) => '${a['name']}:${a['level']}').join('|');
-    return 'ai_summary_${areaPart}_${overallPct}_$supportLevel'.hashCode
+    // The pre levels are part of the key so a post (progress) summary
+    // caches separately from a snapshot with the same current levels.
+    final prevPart = (previousAreas ?? const [])
+        .map((a) => '${a['name']}:${a['level']}')
+        .join('|');
+    return 'ai_summary_${areaPart}_${overallPct}_${supportLevel}_$prevPart'
+        .hashCode
         .toString();
   }
 
@@ -109,7 +124,8 @@ class AssessmentSummaryService {
   static String debugCacheKey(
     List<Map<String, String>> areas,
     int overallPct,
-    String supportLevel,
-  ) =>
-      _cacheKey(areas, overallPct, supportLevel);
+    String supportLevel, [
+    List<Map<String, String>>? previousAreas,
+  ]) =>
+      _cacheKey(areas, overallPct, supportLevel, previousAreas);
 }
