@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/area_level.dart';
+import '../../providers/child_provider.dart';
 import '../../services/assessment_summary_service.dart';
 
 /// Parent-facing post-assessment results: overall improvement plus a
@@ -96,6 +98,8 @@ class PostAssessmentResultScreen extends StatelessWidget {
                                 ? ((improvement['post_accuracy'] as num) * 100)
                                     .round()
                                 : 0,
+                        languageCode:
+                            context.read<ChildProvider>().language.slug,
                         fallback: _fallbackProgress(),
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -231,12 +235,14 @@ class _ProgressSummaryBand extends StatefulWidget {
     required this.areas,
     required this.previousAreas,
     required this.overallPct,
+    required this.languageCode,
     required this.fallback,
   });
 
   final List<Map<String, String>> areas;
   final List<Map<String, String>> previousAreas;
   final int overallPct;
+  final String languageCode;
   final String fallback;
 
   @override
@@ -261,6 +267,7 @@ class _ProgressSummaryBandState extends State<_ProgressSummaryBand> {
       overallPct: widget.overallPct,
       supportLevel: 'moderate',
       recommendations: const [],
+      languageCode: widget.languageCode,
       fallback: widget.fallback,
     );
     if (mounted) {
