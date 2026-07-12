@@ -9,6 +9,7 @@ import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
+import '../../services/assessment_summary_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/scoring_service.dart';
 import 'pre_assessment_intro_screen.dart';
@@ -80,6 +81,42 @@ class _DashboardBody extends StatelessWidget {
   int get _overallPct =>
       _totalItems > 0 ? ((_totalCorrect / _totalItems) * 100).round() : 0;
 
+  /// Area → level pairs sent to the summarizer. Prefers the AI's per-area
+  /// levels; falls back to the rubric profile labels.
+  List<Map<String, String>> _summaryAreas() {
+    final levels = aiPrediction?.areaLevels;
+    if (levels != null && levels.isNotEmpty) {
+      const titles = {
+        'communication': 'Communication',
+        'social': 'Social Interaction',
+        'play': 'Play Skills',
+        'attention': 'Attention',
+      };
+      return [
+        for (final entry in levels.entries)
+          {
+            'name': titles[entry.key] ?? entry.key,
+            'level': entry.value.levelName,
+          },
+      ];
+    }
+    return [
+      {'name': 'Communication', 'level': profile.communication},
+      {'name': 'Social Interaction', 'level': profile.socialInteraction},
+      {'name': 'Play Skills', 'level': profile.playSkills},
+      {'name': 'Attention', 'level': profile.attention},
+    ];
+  }
+
+  /// The local summary shown while (or instead of) the AI summary.
+  String _fallbackSummary() {
+    final aiSummary = aiPrediction?.summary;
+    if (aiSummary != null && aiSummary.trim().isNotEmpty) return aiSummary;
+    return 'Your child completed all the activities. Review each skill area '
+        'below to see where they shine and where a little more practice '
+        'will help.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,6 +150,17 @@ class _DashboardBody extends StatelessWidget {
                     const Spacer(),
                     _OverallBadge(pct: _overallPct),
                   ],
+                ),
+                const SizedBox(height: 6),
+
+                // ── AI summary band (Gemini, offline-safe fallback) ──
+                _AiSummaryBand(
+                  areas: _summaryAreas(),
+                  overallPct: _overallPct,
+                  supportLevel: aiPrediction?.supportLevel ?? 'moderate',
+                  recommendations: aiPrediction?.recommendedModules ??
+                      const <String>[],
+                  fallback: _fallbackSummary(),
                 ),
                 const SizedBox(height: 6),
 
@@ -428,6 +476,128 @@ class _DashboardBody extends StatelessWidget {
 }
 
 // ─── Reusable sub-widgets ──────────────────────────────────────────────
+
+/// A slim summary band. Shows the local rubric summary immediately, then
+/// swaps in the Gemini-written narrative if the summarizer is reachable.
+/// Never blocks or errors: offline/timeout/no-key all keep the fallback.
+class _AiSummaryBand extends StatefulWidget {
+  const _AiSummaryBand({
+    required this.areas,
+    required this.overallPct,
+    required this.supportLevel,
+    required this.recommendations,
+    required this.fallback,
+  });
+
+  final List<Map<String, String>> areas;
+  final int overallPct;
+  final String supportLevel;
+  final List<String> recommendations;
+  final String fallback;
+
+  @override
+  State<_AiSummaryBand> createState() => _AiSummaryBandState();
+}
+
+class _AiSummaryBandState extends State<_AiSummaryBand> {
+  late AssessmentSummary _summary =
+      AssessmentSummary(text: widget.fallback, isAi: false);
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final result = await AssessmentSummaryService.instance.summarize(
+      areas: widget.areas,
+      overallPct: widget.overallPct,
+      supportLevel: widget.supportLevel,
+      recommendations: widget.recommendations,
+      fallback: widget.fallback,
+    );
+    if (mounted) {
+      setState(() {
+        _summary = result;
+        _loading = false;
+      });
+    }
+  }
+
+  void _showFull() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Text(_summary.isAi ? '✨' : '📋',
+                style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            const Text('Summary'),
+          ],
+        ),
+        content: Text(_summary.text, style: AppTextStyles.bodyMedium),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.white.withAlpha(150),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _showFull,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Text(_summary.isAi ? '✨' : '📋',
+                  style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _summary.text,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.3,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_loading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                StatusPillBadge(
+                  label: _summary.isAi ? 'AI Summary' : 'Summary',
+                  level: _summary.isAi
+                      ? StatusLevel.info
+                      : StatusLevel.warning,
+                  compact: true,
+                  fontSize: 9,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _OverallBadge extends StatelessWidget {
   const _OverallBadge({required this.pct});
