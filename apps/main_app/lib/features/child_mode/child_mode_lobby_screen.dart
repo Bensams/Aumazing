@@ -12,6 +12,7 @@ import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
+import '../../widgets/bps_mascot.dart';
 import 'game_launcher.dart';
 import 'time_up_dialog.dart';
 
@@ -78,6 +79,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   bool _voAlternate = false;
   static const _idleGuideDelay = Duration(seconds: 30);
   static const _voRepeatInterval = Duration(seconds: 7); // within 5–8s
+
+  /// Bumped whenever the guidance voice speaks so BPS waves along with it.
+  int _mascotWave = 0;
 
   @override
   void initState() {
@@ -155,6 +159,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     if (!_lobbyActive) return;
     if (_learningPath().isEmpty) return; // guided start needs a recommendation
     _lobbyVo.play(VoiceOverCue.letsBegin);
+    setState(() => _mascotWave++);
     _showGuide();
     // The entry pointer is a short nudge, not a fixture.
     _entryHideTimer = Timer(const Duration(seconds: 6), () {
@@ -227,6 +232,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _voAlternate = !_voAlternate;
     _lobbyVo.play(
         _voAlternate ? VoiceOverCue.tapHere : VoiceOverCue.letsBegin);
+    setState(() => _mascotWave++);
   }
 
   /// The bobbing pointing hand (static halo under reduced motion).
@@ -339,6 +345,19 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
                           : _buildGamesRow(level, palette),
                     ),
                   ],
+                ),
+                // BPS keeps the child company from the corner, waving hello
+                // on entry and whenever the guidance voice speaks.
+                Positioned(
+                  left: AppSpacing.md,
+                  bottom: AppSpacing.sm,
+                  child: IgnorePointer(
+                    child: BpsMascot(
+                      height: 92,
+                      waveTrigger: _mascotWave,
+                      semanticLabel: 'BPS the mascot',
+                    ),
+                  ),
                 ),
                 if (_guideVisible && _guideAnchor != null)
                   _buildGuidePointer(),
