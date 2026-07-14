@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
+import '../../widgets/bps_mascot.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -302,6 +303,26 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
     return widgets;
   }
 
+  /// The BPS mascot: waves hello when this phase appears, then rests with a
+  /// gentle breathing idle. Falls back to the celebration-emoji circle while
+  /// the sprite sheets are still loading (or if they fail to load).
+  Widget _buildMascot(BuildContext context) {
+    return BpsMascot(
+      height: 140,
+      fallback: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: AppColors.lavenderLight.withAlpha(150),
+          shape: BoxShape.circle,
+        ),
+        child: const Center(
+          child: Text('🎉', style: TextStyle(fontSize: 40)),
+        ),
+      ),
+    );
+  }
+
   // ── Waiting-for-parent phase (original content) ─────────────────────
 
   Widget _buildWaitingContent(BuildContext context) {
@@ -317,18 +338,7 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Celebration icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.lavenderLight.withAlpha(150),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text('🎉', style: TextStyle(fontSize: 40)),
-                  ),
-                ),
+                _buildMascot(context),
                 const SizedBox(height: 16),
 
                 Text(

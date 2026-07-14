@@ -5,6 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/child_provider.dart';
 import '../../services/research_consent_service.dart';
+import '../../widgets/bps_mascot.dart';
 import 'pre_assessment_progress_screen.dart';
 import 'research_consent_dialog.dart';
 import 'sensory/sensory.dart';
@@ -35,7 +36,13 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('🌟', style: TextStyle(fontSize: 52)),
+                      // BPS greets the child with a wave, then breathes.
+                      const BpsMascot(
+                        height: 110,
+                        fallback:
+                            Text('🌟', style: TextStyle(fontSize: 52)),
+                        semanticLabel: 'BPS the mascot says hello',
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'Let\'s Get to Know You!',

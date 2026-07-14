@@ -8,6 +8,7 @@ export 'app_info_card.dart';
 export 'app_primary_button.dart';
 export 'app_secondary_button.dart';
 export 'calm_mascot.dart';
+export 'character_sprites.dart';
 export 'child_mode_top_bar.dart';
 export 'large_game_object_card.dart';
 export 'parent_mode_icon_button.dart';
