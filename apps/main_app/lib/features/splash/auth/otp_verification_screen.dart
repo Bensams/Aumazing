@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/network_errors.dart';
 import '../loading_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -110,7 +111,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       _showError(e.message);
       _clearFields();
     } catch (e) {
-      _showError('Verification failed. Please try again.');
+      _showError(friendly(
+        e,
+        fallback: 'Verification failed. Please try again.',
+      ));
       _clearFields();
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -126,7 +130,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Failed to resend code. Please try again.');
+      _showError(friendly(
+        e,
+        fallback: 'Failed to resend code. Please try again.',
+      ));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

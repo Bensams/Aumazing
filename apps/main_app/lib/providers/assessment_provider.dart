@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -15,6 +16,7 @@ import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
 import '../services/research_consent_service.dart';
 import '../services/assessment_service.dart';
+import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
 
@@ -124,6 +126,12 @@ class AssessmentProvider extends ChangeNotifier {
       // and per-game difficulty; it only lives in memory otherwise).
       await _restoreAiPrediction(childId);
       await _restorePathProgress(childId);
+
+      // A rubric-synthesized prediction is provisional — try to replace it
+      // with a real model prediction in the background now that we may be
+      // back online. Fire-and-forget: the dashboard renders with the rubric
+      // result and refreshes via notifyListeners() if the upgrade lands.
+      unawaited(upgradeRubricPredictionIfOnline(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] loadAssessments error: $e');
     } finally {
@@ -133,15 +141,89 @@ class AssessmentProvider extends ChangeNotifier {
   }
 
   static String _aiPredictionKey(String childId) => 'ai_prediction_$childId';
+  static String _aiPredictionSourceKey(String childId) =>
+      'ai_prediction_source_$childId';
+  static String _aiPredictionRunKey(String childId) =>
+      'ai_prediction_run_$childId';
 
   Future<void> _persistAiPrediction(
-      String childId, AiAssessmentResponse prediction) async {
+      String childId, AiAssessmentResponse prediction, String modelSource) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
           _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
+      // Remember which model produced it (and from which run's sessions) so
+      // a rubric fallback can be upgraded to a real prediction later.
+      await prefs.setString(_aiPredictionSourceKey(childId), modelSource);
+      final runId = _currentAssessmentRunId;
+      if (runId != null) {
+        await prefs.setString(_aiPredictionRunKey(childId), runId);
+      }
     } catch (e) {
       debugPrint('[AssessmentProvider] persistAiPrediction failed: $e');
+    }
+  }
+
+  /// Upgrades a rubric-synthesized prediction to a real model prediction.
+  ///
+  /// When an assessment finishes offline, [predictWithAI] falls back to
+  /// labels derived from the rubric (`modelSource == 'rubric_based'`) and
+  /// that fallback would otherwise stick forever. Called on dashboard open
+  /// ([loadAssessments]): when online, it re-runs the prediction over the
+  /// original run's persisted sessions and replaces the stored fallback.
+  /// No-op when the stored prediction already came from a real model, when
+  /// still offline, or when the run's sessions can't be found. Path progress
+  /// is kept — the upgrade refines levels, it isn't a new assessment.
+  Future<void> upgradeRubricPredictionIfOnline(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_aiPredictionSourceKey(childId)) != 'rubric_based') {
+        return;
+      }
+      final runId = prefs.getString(_aiPredictionRunKey(childId));
+      if (runId == null) return;
+      if (!await connectivityService.checkConnectivity()) return;
+
+      final sessions = (await _localDb.getGameSessions(childId: childId))
+          .where((s) => s.assessmentRunId == runId)
+          .toList();
+      if (sessions.isEmpty) return;
+
+      final onDevice = OnDeviceAiAssessmentService();
+      final service = AiAssessmentService();
+      try {
+        var modelSource = 'xgboost_onnx';
+        var prediction = await onDevice.predictFromSessions(
+          childId: childId,
+          sessions: sessions,
+        );
+        if (prediction == null) {
+          modelSource = 'xgboost';
+          prediction = await service.predictFromSessions(
+            childId: childId,
+            sessions: sessions,
+          );
+        }
+        // Still unreachable — keep the rubric fallback and retry on the
+        // next dashboard open.
+        if (prediction == null) return;
+
+        _aiPrediction = prediction;
+        await prefs.setString(
+            _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
+        await prefs.setString(_aiPredictionSourceKey(childId), modelSource);
+        _preResults = _preResults
+            .map((r) => r.copyWithRubric(modelSource: modelSource))
+            .toList();
+        debugPrint('[AssessmentProvider] ⬆️ Upgraded rubric_based prediction '
+            'to $modelSource for child=$childId (run=$runId)');
+        notifyListeners();
+      } finally {
+        onDevice.dispose();
+        service.dispose();
+      }
+    } catch (e) {
+      debugPrint('[AssessmentProvider] upgradeRubricPrediction failed: $e');
     }
   }
 
@@ -504,7 +586,7 @@ class AssessmentProvider extends ChangeNotifier {
       if (prediction != null) {
         // Persist so the learning path and per-game difficulty survive app
         // restarts (the prediction otherwise only lives in memory).
-        await _persistAiPrediction(childId, prediction);
+        await _persistAiPrediction(childId, prediction, modelSource);
         // New assessment → new path → the sequence restarts at step 1.
         await _resetPathProgress(childId);
 

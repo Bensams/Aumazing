@@ -4,6 +4,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/sync_service.dart';
+import '../../core/utils/network_errors.dart';
 
 /// Bind Account modal for guest users to link their progress
 class BindAccountModal extends StatefulWidget {
@@ -75,7 +76,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
         );
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      setState(() => _errorMessage = friendly(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -118,7 +119,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
         );
       }
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      setState(() => _errorMessage = friendly(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
