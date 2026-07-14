@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/utils/network_errors.dart';
 import 'reset_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -51,7 +52,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Failed to send reset code. Please try again.');
+      _showError(friendly(
+        e,
+        fallback: 'Failed to send reset code. Please try again.',
+      ));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

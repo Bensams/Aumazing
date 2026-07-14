@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,6 +12,8 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../core/utils/network_errors.dart';
 import '../../../providers/child_provider.dart';
 import '../loading_screen.dart';
 import 'forgot_password_screen.dart';
@@ -32,6 +36,11 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   bool _musicOn = true;
   bool _hasExistingGuestAccount = false;
+
+  /// Whether the device currently has no network — drives the offline banner
+  /// and the visual promotion of guest mode (which works fully offline).
+  bool _isOffline = false;
+  StreamSubscription<bool>? _connectivitySub;
 
   /// Whether the parent has accepted the Data Privacy Notice (register only).
   bool _privacyAccepted = false;
@@ -69,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     _initVideoPlayer();
     _checkForExistingGuestAccount();
+    _watchConnectivity();
     // Music already started by LoadingScreen, just verify it's playing
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verifyMusicPlaying();
@@ -94,6 +104,19 @@ class _LoginScreenState extends State<LoginScreen>
     await prefs.setString(
       'privacy_consent_accepted_at',
       DateTime.now().toIso8601String(),
+    );
+  }
+
+  /// Tracks connectivity so the UI can steer offline users toward guest mode
+  /// (the only path that works with no network).
+  void _watchConnectivity() {
+    connectivityService.checkConnectivity().then((online) {
+      if (mounted) setState(() => _isOffline = !online);
+    });
+    _connectivitySub = connectivityService.onConnectivityChanged.listen(
+      (online) {
+        if (mounted) setState(() => _isOffline = !online);
+      },
     );
   }
 
@@ -213,6 +236,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     unlockParentOrientation();
+    _connectivitySub?.cancel();
     _logoAnimController.dispose();
     _videoController?.dispose();
     _nameController.dispose();
@@ -229,19 +253,6 @@ class _LoginScreenState extends State<LoginScreen>
       MaterialPageRoute(builder: (_) => const LoadingScreen()),
       (_) => false,
     );
-  }
-
-  /// Converts raw exceptions into friendly messages (esp. offline/network).
-  String _friendlyError(Object error) {
-    final text = error.toString();
-    if (text.contains('SocketException') ||
-        text.contains('Failed host lookup') ||
-        text.contains('No address associated') ||
-        text.contains('Network is unreachable') ||
-        text.contains('Connection refused')) {
-      return 'No internet connection. Please check your network and try again.';
-    }
-    return text;
   }
 
   void _showError(String message, {String title = 'Something went wrong'}) {
@@ -343,7 +354,10 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       debugPrint('Unexpected error: $e');
-      _showError('An unexpected error occurred. Please try again.');
+      _showError(friendly(
+        e,
+        fallback: 'An unexpected error occurred. Please try again.',
+      ));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -379,7 +393,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Google Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError(_friendlyError(e), title: 'Google Sign-In Error');
+      _showError(friendly(e), title: 'Google Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -399,7 +413,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Facebook Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError(_friendlyError(e), title: 'Facebook Sign-In Error');
+      _showError(friendly(e), title: 'Facebook Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -434,7 +448,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e, stackTrace) {
       debugPrint('Guest Sign-In error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showError(_friendlyError(e), title: 'Guest Sign-In Error');
+      _showError(friendly(e), title: 'Guest Sign-In Error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -456,6 +470,46 @@ class _LoginScreenState extends State<LoginScreen>
   <path fill="#FFF" d="M33.346 30.938 34.41 24h-6.66v-4.497c0-1.898.93-3.748 3.908-3.748h3.024v-5.91s-2.744-.469-5.37-.469c-5.484 0-9.066 3.32-9.066 9.338V24h-6.09v6.938h6.09v16.77a24.13 24.13 0 0 0 7.5 0v-16.77h5.64z"/>
 </svg>
 ''';
+
+  /// Dims online-only controls when offline. They stay tappable — their own
+  /// error handling explains the failure — but visually recede so the
+  /// guest option reads as the way forward.
+  Widget _dimIfOffline(Widget child) =>
+      _isOffline ? Opacity(opacity: 0.55, child: child) : child;
+
+  /// Banner shown while offline, steering parents toward guest mode
+  /// (which works fully without a network).
+  Widget _buildOfflineBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.butterLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.statusWarningDark.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.wifi_off_rounded,
+            size: 18,
+            color: AppColors.statusWarningDark,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              "You're offline — you can continue as Guest and sign in later.",
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.statusWarningDark,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -560,8 +614,14 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: AppSpacing.md),
 
+                            // ── Offline banner ─────────────────────
+                            if (_isOffline) ...[
+                              _buildOfflineBanner(),
+                              const SizedBox(height: AppSpacing.sm),
+                            ],
+
                             // ── Form ───────────────────────────────
-                            Form(
+                            _dimIfOffline(Form(
                               key: _formKey,
                               child: Column(
                                 children: [
@@ -627,7 +687,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ],
                               ),
-                            ),
+                            )),
 
                             if (_isLogin)
                               Align(
@@ -653,14 +713,14 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
 
                             // ── Submit button ──────────────────────
-                            AppPrimaryButton(
+                            _dimIfOffline(AppPrimaryButton(
                               label: _isLogin ? 'Log In' : 'Sign Up',
                               onPressed: (_isLoading ||
                                       (!_isLogin && !_privacyAccepted))
                                   ? null
                                   : _submitForm,
                               isLoading: _isLoading,
-                            ),
+                            )),
 
                             const SizedBox(height: AppSpacing.sm),
 
@@ -682,7 +742,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: AppSpacing.sm),
 
                             // ── Google sign-in ─────────────────────
-                            SizedBox(
+                            _dimIfOffline(SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
                                 onPressed:
@@ -714,12 +774,12 @@ class _LoginScreenState extends State<LoginScreen>
                                   ],
                                 ),
                               ),
-                            ),
+                            )),
 
                             const SizedBox(height: AppSpacing.xs),
 
                             // ── Facebook sign-in ───────────────────
-                            SizedBox(
+                            _dimIfOffline(SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
                                 onPressed:
@@ -753,7 +813,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   ],
                                 ),
                               ),
-                            ),
+                            )),
 
                             const SizedBox(height: AppSpacing.sm),
 
@@ -767,12 +827,22 @@ class _LoginScreenState extends State<LoginScreen>
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12,
                                   ),
-                                  foregroundColor: AppColors.mutedForeground,
+                                  foregroundColor: _isOffline
+                                      ? AppColors.primaryPurple
+                                      : AppColors.mutedForeground,
+                                  // Offline, guest is the recommended path —
+                                  // give it primary-button weight.
+                                  backgroundColor: _isOffline
+                                      ? AppColors.lavenderLight
+                                      : null,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   side: BorderSide(
-                                    color: AppColors.border,
+                                    color: _isOffline
+                                        ? AppColors.primaryPurple
+                                        : AppColors.border,
+                                    width: _isOffline ? 1.5 : 1,
                                   ),
                                 ),
                                 child: Row(
@@ -783,9 +853,10 @@ class _LoginScreenState extends State<LoginScreen>
                                           ? Icons.restore
                                           : Icons.person_outline,
                                       size: 18,
-                                      color: _hasExistingGuestAccount
-                                          ? AppColors.primaryPurple
-                                          : AppColors.mutedForeground,
+                                      color:
+                                          _hasExistingGuestAccount || _isOffline
+                                              ? AppColors.primaryPurple
+                                              : AppColors.mutedForeground,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
@@ -794,9 +865,13 @@ class _LoginScreenState extends State<LoginScreen>
                                           : 'Continue as Guest',
                                       style: AppTextStyles.labelLarge.copyWith(
                                         fontSize: 13,
-                                        color: _hasExistingGuestAccount
-                                            ? AppColors.primaryPurple
-                                            : null,
+                                        fontWeight:
+                                            _isOffline ? FontWeight.w700 : null,
+                                        color:
+                                            _hasExistingGuestAccount ||
+                                                    _isOffline
+                                                ? AppColors.primaryPurple
+                                                : null,
                                       ),
                                     ),
                                   ],
