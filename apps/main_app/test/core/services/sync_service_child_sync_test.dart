@@ -6,15 +6,19 @@ import 'package:aumazing/core/services/supabase_service.dart';
 import 'package:aumazing/core/services/sync_service.dart';
 import 'package:aumazing/core/sync/sync_status.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('SyncService child sync', () {
     late _SyncTestLocalDb localDb;
     late _FakeSupabaseService supabase;
     late SyncService service;
 
     setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
       localDb = _SyncTestLocalDb();
@@ -134,6 +138,86 @@ void main() {
         expect(service.currentState.lastSuccessfulSync, isFalse);
       },
     );
+
+    test(
+      'hydrateFromCloud pulls remote-only rows as synced and never '
+      'overwrites existing local rows',
+      () async {
+        final db = await localDb.database;
+        // Local run with unsynced edits — hydration must not touch it
+        await db.insert(LocalTables.assessmentRuns, {
+          'id': 'run-local',
+          'child_id': 'sync-child',
+          'type': 'pre',
+          'started_at': '2026-04-20T13:00:00.000',
+          'status': 'in_progress',
+          'sync_status': SyncStatus.pending.value,
+          'updated_at': '2026-04-20T13:00:00.000',
+          'local_created_at': '2026-04-20T13:00:00.000',
+        });
+
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            // Same id as the local row, different content — must lose
+            'id': 'run-local',
+            'child_id': 'sync-child',
+            'type': 'pre',
+            'started_at': '2026-04-20T13:00:00.000',
+            'completed_at': '2026-04-20T13:20:00.000',
+            'status': 'completed',
+            'created_at': '2026-04-20T13:00:00.000',
+            'updated_at': '2026-04-20T13:20:00.000',
+          },
+          {
+            // Cloud-only row (e.g. from another device) — must be pulled
+            'id': 'run-remote',
+            'child_id': 'sync-child',
+            'type': 'post',
+            'started_at': '2026-05-01T10:00:00.000',
+            'completed_at': '2026-05-01T10:15:00.000',
+            'status': 'completed',
+            'created_at': '2026-05-01T10:00:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+
+        final pulled = await service.hydrateFromCloud();
+
+        expect(pulled, 1);
+        final rows = await db.query(LocalTables.assessmentRuns);
+        final byId = {for (final r in rows) r['id']: r};
+        expect(byId, hasLength(2));
+        // Local row untouched (still pending, still in_progress)
+        expect(byId['run-local']!['status'], 'in_progress');
+        expect(byId['run-local']!['sync_status'], SyncStatus.pending.value);
+        // Remote row inserted as already-synced
+        expect(byId['run-remote']!['status'], 'completed');
+        expect(byId['run-remote']!['sync_status'], SyncStatus.synced.value);
+      },
+    );
+
+    test(
+      'hydrateFromCloud runs once per user unless forced',
+      () async {
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            'id': 'run-once',
+            'child_id': 'sync-child',
+            'type': 'pre',
+            'started_at': '2026-04-20T13:00:00.000',
+            'status': 'completed',
+            'created_at': '2026-04-20T13:00:00.000',
+            'updated_at': '2026-04-20T13:00:00.000',
+          },
+        ];
+
+        expect(await service.hydrateFromCloud(), 1);
+        // Second call is a no-op (flag set)
+        expect(await service.hydrateFromCloud(), 0);
+        // Forced re-run fetches again, but existing rows still win
+        expect(await service.hydrateFromCloud(force: true), 0);
+      },
+    );
   });
 }
 
@@ -167,8 +251,30 @@ class _SyncTestLocalDb extends LocalDbService {
           )
         ''');
 
+        // Full schema for assessment runs so hydration can be exercised
+        await db.execute('''
+          CREATE TABLE ${LocalTables.assessmentRuns} (
+            id TEXT PRIMARY KEY,
+            child_id TEXT NOT NULL,
+            type TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            sync_status TEXT NOT NULL DEFAULT 'pending',
+            sync_error TEXT,
+            sync_attempts INTEGER NOT NULL DEFAULT 0,
+            last_synced_at TEXT,
+            deleted_at TEXT,
+            updated_at TEXT NOT NULL,
+            local_created_at TEXT NOT NULL,
+            owner_id TEXT
+          )
+        ''');
+
         for (final table in SyncOrder.dependencyOrder.where(
-          (table) => table != LocalTables.children,
+          (table) =>
+              table != LocalTables.children &&
+              table != LocalTables.assessmentRuns,
         )) {
           await db.execute('''
             CREATE TABLE $table (
@@ -199,6 +305,19 @@ class _FakeSupabaseService implements SupabaseService {
 
   /// Record ids that reject any upsert containing them (poison rows)
   final Set<String> failIds = {};
+
+  /// Remote rows served by fetchRowsByColumn, keyed by remote table name
+  final Map<String, List<Map<String, dynamic>>> remoteRows = {};
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchRowsByColumn(
+    String remoteTable,
+    String column,
+    List<String> values,
+  ) async => [
+        for (final r in remoteRows[remoteTable] ?? const [])
+          if (values.contains(r[column])) Map<String, dynamic>.from(r),
+      ];
 
   @override
   Future<void> upsertBatch(
