@@ -79,6 +79,61 @@ void main() {
         });
       },
     );
+
+    test(
+      'resetStuckSyncing recovers records stranded mid-sync so they are '
+      'picked up again',
+      () async {
+        final db = await localDb.database;
+        await db.insert(LocalTables.gameSessions, {
+          'id': 'stuck-session',
+          'sync_status': SyncStatus.syncing.value,
+          'local_created_at': '2026-04-20T12:00:00.000',
+        });
+
+        expect(
+          await localDb.getPendingRecords(LocalTables.gameSessions),
+          isEmpty,
+        );
+
+        final recovered = await localDb.resetStuckSyncing();
+
+        expect(recovered, 1);
+        final pending =
+            await localDb.getPendingRecords(LocalTables.gameSessions);
+        expect(pending, hasLength(1));
+        expect(pending.single['id'], 'stuck-session');
+      },
+    );
+
+    test(
+      'falls back to per-record upserts when a batch fails, so one bad row '
+      'does not poison the batch',
+      () async {
+        final db = await localDb.database;
+        await db.insert(LocalTables.gameSessions, {
+          'id': 'good-session',
+          'sync_status': SyncStatus.pending.value,
+          'local_created_at': '2026-04-20T12:00:00.000',
+        });
+        await db.insert(LocalTables.gameSessions, {
+          'id': 'bad-session',
+          'sync_status': SyncStatus.pending.value,
+          'local_created_at': '2026-04-20T12:01:00.000',
+        });
+        supabase.failIds.add('bad-session');
+
+        await service.startSync();
+
+        final rows = await db.query(LocalTables.gameSessions);
+        final byId = {for (final r in rows) r['id']: r};
+        expect(byId['good-session']!['sync_status'], SyncStatus.synced.value);
+        expect(byId['bad-session']!['sync_status'], SyncStatus.failed.value);
+        expect(byId['bad-session']!['sync_attempts'], 1);
+        expect(service.currentState.failedCount, 1);
+        expect(service.currentState.lastSuccessfulSync, isFalse);
+      },
+    );
   });
 }
 
@@ -102,6 +157,8 @@ class _SyncTestLocalDb extends LocalDbService {
             vibration_enabled INTEGER NOT NULL DEFAULT 1,
             comfort_settings TEXT,
             sync_status TEXT NOT NULL DEFAULT 'pending',
+            sync_error TEXT,
+            sync_attempts INTEGER NOT NULL DEFAULT 0,
             last_synced_at TEXT,
             deleted_at TEXT,
             updated_at TEXT NOT NULL,
@@ -117,8 +174,11 @@ class _SyncTestLocalDb extends LocalDbService {
             CREATE TABLE $table (
               id TEXT PRIMARY KEY,
               sync_status TEXT NOT NULL DEFAULT 'pending',
+              sync_error TEXT,
+              sync_attempts INTEGER NOT NULL DEFAULT 0,
               deleted_at TEXT,
-              local_created_at TEXT NOT NULL
+              local_created_at TEXT NOT NULL,
+              last_synced_at TEXT
             )
           ''');
         }
@@ -136,6 +196,24 @@ class _SyncTestLocalDb extends LocalDbService {
 
 class _FakeSupabaseService implements SupabaseService {
   final List<Map<String, dynamic>> upsertedChildren = [];
+
+  /// Record ids that reject any upsert containing them (poison rows)
+  final Set<String> failIds = {};
+
+  @override
+  Future<void> upsertBatch(
+    String remoteTable,
+    List<Map<String, dynamic>> records,
+  ) async {
+    if (records.any((r) => failIds.contains(r['id']))) {
+      throw Exception('upsert rejected');
+    }
+    if (remoteTable == RemoteTables.children) {
+      upsertedChildren.addAll(
+        records.map((r) => Map<String, dynamic>.from(r)),
+      );
+    }
+  }
 
   @override
   bool get isAuthenticated => true;

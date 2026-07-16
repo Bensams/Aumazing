@@ -47,18 +47,19 @@ void main() {
     );
 
     test(
-      'excludes legacy child rows with null birth dates from child sync pending reads',
+      'includes legacy child rows with null birth dates in child sync pending reads',
       () async {
         final pendingChildren = await localDb.getPendingChildRecords();
         final pendingCounts = await localDb.getPendingCounts();
 
-        expect(pendingChildren, isEmpty);
-        expect(pendingCounts[LocalTables.children], 0);
+        expect(pendingChildren, hasLength(1));
+        expect(pendingChildren.single['id'], 'legacy-child');
+        expect(pendingCounts[LocalTables.children], 1);
       },
     );
 
     test(
-      'excludes deleted legacy child rows with null birth dates from delete propagation',
+      'includes deleted legacy child rows with null birth dates in delete propagation',
       () async {
         await localDb.seedChildRow({
           'id': 'deleted-legacy-child',
@@ -95,8 +96,11 @@ void main() {
           LocalTables.children,
         );
 
-        expect(deletedChildren, hasLength(1));
-        expect(deletedChildren.single['id'], 'deleted-canonical-child');
+        expect(deletedChildren, hasLength(2));
+        expect(
+          deletedChildren.map((row) => row['id']),
+          containsAll(['deleted-legacy-child', 'deleted-canonical-child']),
+        );
       },
     );
 
@@ -186,6 +190,8 @@ class _TestLocalDbService extends LocalDbService {
             vibration_enabled INTEGER NOT NULL DEFAULT 1,
             comfort_settings TEXT,
             sync_status TEXT NOT NULL DEFAULT 'pending',
+            sync_error TEXT,
+            sync_attempts INTEGER NOT NULL DEFAULT 0,
             last_synced_at TEXT,
             deleted_at TEXT,
             updated_at TEXT NOT NULL,
@@ -201,8 +207,11 @@ class _TestLocalDbService extends LocalDbService {
             CREATE TABLE $table (
               id TEXT PRIMARY KEY,
               sync_status TEXT NOT NULL DEFAULT 'pending',
+              sync_error TEXT,
+              sync_attempts INTEGER NOT NULL DEFAULT 0,
               deleted_at TEXT,
-              local_created_at TEXT NOT NULL
+              local_created_at TEXT NOT NULL,
+              last_synced_at TEXT
             )
           ''');
         }
