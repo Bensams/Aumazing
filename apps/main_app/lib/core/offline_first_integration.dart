@@ -26,6 +26,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/research_consent_service.dart';
 import 'repositories/child_repository.dart';
 import 'repositories/assessment_repository.dart';
 import 'services/auth_service.dart';
@@ -68,6 +69,12 @@ class OfflineFirstIntegration {
 
     // 3. Initialize sync service (listens for connectivity changes)
     await syncService.initialize();
+
+    // 3b. Research consent bypasses the sync engine (SharedPreferences +
+    //     direct upsert), so flush its pending pushes on reconnect too.
+    connectivityService.onConnectivityChanged.listen((online) {
+      if (online) ResearchConsentService.instance.retryPendingPushes();
+    });
 
     // 4. Listen for auth changes to trigger backfill and sync
     Supabase.instance.client.auth.onAuthStateChange.listen((state) {
