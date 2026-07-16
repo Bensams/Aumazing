@@ -874,6 +874,62 @@ class LocalDbService {
     );
   }
 
+  /// IDs of non-deleted children owned by [userId] (cheap, model-free)
+  Future<List<String>> getChildIds(String userId) async {
+    final db = await database;
+    final rows = await db.query(
+      LocalTables.children,
+      columns: ['id'],
+      where: 'user_id = ? AND deleted_at IS NULL',
+      whereArgs: [userId],
+    );
+    return [for (final r in rows) r['id'] as String];
+  }
+
+  /// Insert cloud rows that don't exist locally, marked as already synced.
+  ///
+  /// Existing local rows always win — hydration must never clobber pending
+  /// local edits or resurrect locally deleted records. Returns how many
+  /// rows were actually inserted.
+  Future<int> hydrateRecords(
+    String table,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (rows.isEmpty) return 0;
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    var inserted = 0;
+
+    for (var i = 0; i < rows.length; i += _idChunkSize) {
+      final chunk = rows.sublist(
+        i,
+        i + _idChunkSize > rows.length ? rows.length : i + _idChunkSize,
+      );
+      final ids = [for (final r in chunk) r['id'] as String];
+      final placeholders = List.filled(ids.length, '?').join(',');
+      final existing = await db.query(
+        table,
+        columns: ['id'],
+        where: 'id IN ($placeholders)',
+        whereArgs: ids,
+      );
+      final existingIds = {for (final r in existing) r['id'] as String};
+
+      final batch = db.batch();
+      for (final row in chunk) {
+        if (existingIds.contains(row['id'])) continue;
+        batch.insert(table, {
+          ...row,
+          'sync_status': SyncStatus.synced.value,
+          'last_synced_at': now,
+        });
+        inserted++;
+      }
+      await batch.commit(noResult: true);
+    }
+    return inserted;
+  }
+
   /// Recover records stranded in 'syncing' by a crash or kill mid-sync.
   ///
   /// Pending queries only select pending/failed, so without this a record

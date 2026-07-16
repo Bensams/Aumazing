@@ -243,6 +243,13 @@ class _FakeSupabaseService implements SupabaseService {
   ) async {}
 
   @override
+  Future<List<Map<String, dynamic>>> fetchRowsByColumn(
+    String remoteTable,
+    String column,
+    List<String> values,
+  ) async => const [];
+
+  @override
   Future<void> upsertAssessmentRun(Map<String, dynamic> data, String id) async {}
 
   @override

@@ -35,6 +35,32 @@ class SupabaseService {
     }
   }
 
+  /// Fetch all rows from [remoteTable] whose [column] matches one of
+  /// [values], chunked to keep the PostgREST IN filter bounded.
+  Future<List<Map<String, dynamic>>> fetchRowsByColumn(
+    String remoteTable,
+    String column,
+    List<String> values,
+  ) async {
+    const chunkSize = 100;
+    final rows = <Map<String, dynamic>>[];
+    try {
+      for (var i = 0; i < values.length; i += chunkSize) {
+        final chunk = values.sublist(
+          i,
+          i + chunkSize > values.length ? values.length : i + chunkSize,
+        );
+        final response =
+            await _client.from(remoteTable).select().inFilter(column, chunk);
+        rows.addAll(List<Map<String, dynamic>>.from(response));
+      }
+      return rows;
+    } catch (e) {
+      debugPrint('[SupabaseService] fetchRowsByColumn($remoteTable) error: $e');
+      rethrow;
+    }
+  }
+
   // ─── Children ─────────────────────────────────────────────────────────
 
   /// Upsert a child record to Supabase

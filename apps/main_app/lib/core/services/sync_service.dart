@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../model/child_profile.dart';
 import '../sync/sync_status.dart';
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
@@ -598,6 +601,353 @@ class SyncService {
       debugPrint('[SyncService] Failed to refresh reference cache: $e');
     }
   }
+
+  // ─── Cloud → Local Hydration ──────────────────────────────────────────
+
+  /// Pull the signed-in user's data from Supabase into the local DB.
+  ///
+  /// Covers reinstall and second-device sign-in, where the cloud has data
+  /// the local DB doesn't. Rows are inserted as already-synced; existing
+  /// local rows always win (pending edits are never overwritten, deleted
+  /// records are never resurrected). Runs once per user per install unless
+  /// [force] is true. Returns the number of records pulled.
+  Future<int> hydrateFromCloud({bool force = false}) async {
+    if (!_connectivity.isOnline || !_supabase.isAuthenticated) return 0;
+    final userId = _supabase.currentUserId;
+    if (userId == null) return 0;
+
+    final prefs = await SharedPreferences.getInstance();
+    final flagKey = 'cloud_hydrated_v1_$userId';
+    if (!force && (prefs.getBool(flagKey) ?? false)) return 0;
+
+    debugPrint('[SyncService] Hydrating local DB from cloud for $userId');
+    var pulled = 0;
+    try {
+      // 1. Children — reuse the bootstrap upsert path (not marked pending)
+      final remoteChildren = await _supabase.getChildren(userId);
+      for (final remote in remoteChildren) {
+        if (remote['deleted_at'] != null) continue;
+        await _localDb.upsertChild(
+          ChildProfile.fromSupabase(remote),
+          ownerId: userId,
+          markPending: false,
+        );
+      }
+
+      // 2. Child-scoped tables (remote + local child ids, deduped)
+      final childIds = <String>{
+        for (final r in remoteChildren)
+          if (r['deleted_at'] == null) r['id'] as String,
+        ...await _localDb.getChildIds(userId),
+      }.toList();
+
+      if (childIds.isNotEmpty) {
+        pulled += await _hydrateTable(
+          LocalTables.assessmentRuns, 'child_id', childIds,
+          _mapAssessmentRunToLocal,
+        );
+
+        // Game sessions feed the session-scoped tables below
+        final remoteSessions = await _supabase.fetchRowsByColumn(
+          RemoteTables.gameSessions, 'child_id', childIds,
+        );
+        pulled += await _hydrateRows(
+          LocalTables.gameSessions, remoteSessions, _mapGameSessionToLocal,
+        );
+
+        final sessionIds = [
+          for (final s in remoteSessions)
+            if (s['deleted_at'] == null) s['id'] as String,
+        ];
+        if (sessionIds.isNotEmpty) {
+          pulled += await _hydrateTable(
+            LocalTables.gameRounds, 'session_id', sessionIds,
+            _mapGameRoundToLocal,
+          );
+          pulled += await _hydrateTable(
+            LocalTables.sessionEvents, 'session_id', sessionIds,
+            _mapSessionEventToLocal,
+          );
+        }
+
+        pulled += await _hydrateTable(
+          LocalTables.caregiverQuestionnaires, 'child_id', childIds,
+          _mapQuestionnaireToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.assessmentResults, 'child_id', childIds,
+          _mapAssessmentResultToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.moduleRecommendations, 'child_id', childIds,
+          _mapRecommendationToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.assessmentComparisons, 'child_id', childIds,
+          _mapComparisonToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.sensoryConsent, 'child_id', childIds,
+          _mapSensoryConsentToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.sensoryRoundMetrics, 'child_id', childIds,
+          _mapSensoryRoundMetricsToLocal,
+        );
+        pulled += await _hydrateTable(
+          LocalTables.sensoryPreferences, 'child_id', childIds,
+          _mapSensoryPreferencesToLocal,
+        );
+      }
+
+      await prefs.setBool(flagKey, true);
+      debugPrint('[SyncService] Hydration complete: $pulled records pulled');
+    } catch (e) {
+      // Leave the flag unset so the next sign-in/app start retries
+      debugPrint('[SyncService] Hydration failed: $e');
+    }
+    return pulled;
+  }
+
+  /// Fetch one remote table scoped by [fkColumn] and insert missing rows
+  Future<int> _hydrateTable(
+    String localTable,
+    String fkColumn,
+    List<String> ids,
+    Map<String, dynamic> Function(Map<String, dynamic>) toLocal,
+  ) async {
+    final remoteTable = SyncOrder.getRemoteTable(localTable)!;
+    final rows = await _supabase.fetchRowsByColumn(remoteTable, fkColumn, ids);
+    return _hydrateRows(localTable, rows, toLocal);
+  }
+
+  Future<int> _hydrateRows(
+    String localTable,
+    List<Map<String, dynamic>> remoteRows,
+    Map<String, dynamic> Function(Map<String, dynamic>) toLocal,
+  ) async {
+    final mapped = [
+      for (final r in remoteRows)
+        if (r['deleted_at'] == null) toLocal(r),
+    ];
+    return _localDb.hydrateRecords(localTable, mapped);
+  }
+
+  // ─── Cloud → Local Mapping Helpers ────────────────────────────────────
+
+  static String _nowIso() => DateTime.now().toIso8601String();
+
+  /// Remote bool (or int) → SQLite int
+  static int _asInt(dynamic v, {int fallback = 0}) {
+    if (v == null) return fallback;
+    if (v is bool) return v ? 1 : 0;
+    if (v is int) return v == 0 ? 0 : 1;
+    return fallback;
+  }
+
+  /// Remote jsonb (Map/List) or text → SQLite TEXT
+  static String? _asJsonText(dynamic v) {
+    if (v == null) return null;
+    if (v is String) return v;
+    return jsonEncode(v);
+  }
+
+  /// Sync metadata every hydrated local row needs (NOT NULL columns)
+  static Map<String, dynamic> _localMeta(Map<String, dynamic> r) => {
+        'updated_at': r['updated_at'] ?? r['created_at'] ?? _nowIso(),
+        'local_created_at': r['created_at'] ?? _nowIso(),
+      };
+
+  Map<String, dynamic> _mapAssessmentRunToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'type': r['type'] ?? 'pre',
+        'started_at': r['started_at'] ?? _nowIso(),
+        'completed_at': r['completed_at'],
+        'status': r['status'] ?? 'in_progress',
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapGameSessionToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'game_id': r['game_id'],
+        'context': r['context'] ?? r['session_type'] ?? 'practice',
+        'assessment_run_id': r['assessment_run_id'],
+        'score': r['score'] ?? 0,
+        'total_items': r['total_items'] ?? 0,
+        'error_count': r['error_count'] ?? 0,
+        'total_response_time_ms': r['total_response_time_ms'] ?? 0,
+        'retry_count': r['retry_count'] ?? 0,
+        'hint_count': r['hint_count'] ?? 0,
+        'prompt_count': r['prompt_count'] ?? 0,
+        'idle_time_seconds': r['idle_time_seconds'] ?? 0.0,
+        'random_touch_count': r['random_touch_count'] ?? 0,
+        'avg_response_time': r['avg_response_time'] ?? 0.0,
+        'avg_valid_response_time': r['avg_valid_response_time'] ?? 0.0,
+        'off_task_action_count': r['off_task_action_count'] ?? 0,
+        'improvement_score': r['improvement_score'] ?? 0.0,
+        'consistency_score': r['consistency_score'] ?? 0.0,
+        'bg_music_enabled': _asInt(r['bg_music_enabled'], fallback: 1),
+        'haptic_feedback_enabled':
+            _asInt(r['haptic_feedback_enabled'], fallback: 1),
+        'task_completion_rate': r['task_completion_rate'],
+        'prompt_dependency_score': r['prompt_dependency_score'],
+        'turn_taking_success_rate': r['turn_taking_success_rate'],
+        'interruption_count': r['interruption_count'],
+        'waiting_tolerance_seconds': r['waiting_tolerance_seconds'],
+        'time_to_first_touch': r['time_to_first_touch'],
+        'time_to_first_valid_action': r['time_to_first_valid_action'],
+        'time_to_completion': r['time_to_completion'],
+        'sensory_condition': r['sensory_condition'],
+        'started_at': r['started_at'] ?? _nowIso(),
+        'ended_at': r['ended_at'] ?? r['started_at'] ?? _nowIso(),
+        'settings_snapshot': _asJsonText(r['settings_snapshot']),
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapGameRoundToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'session_id': r['session_id'],
+        'round_no': r['round_no'] ?? 0,
+        'stimulus_type': r['stimulus_type'],
+        'valid_action_type': r['valid_action_type'],
+        'correct': r['correct'] == null ? null : _asInt(r['correct']),
+        'response_time': r['response_time'],
+        'valid_response_time': r['valid_response_time'],
+        'time_to_first_hint': r['time_to_first_hint'],
+        'retry_count': r['retry_count'] ?? 0,
+        'hint_count': r['hint_count'] ?? 0,
+        'prompt_count': r['prompt_count'] ?? 0,
+        'random_touch_count': r['random_touch_count'] ?? 0,
+        'strong_prompt_triggered': _asInt(r['strong_prompt_triggered']),
+        'guided_assist_triggered': _asInt(r['guided_assist_triggered']),
+        'completed': _asInt(r['completed']),
+        'music_enabled': _asInt(r['music_enabled'], fallback: 1),
+        'haptic_enabled': _asInt(r['haptic_enabled'], fallback: 1),
+        'created_at': r['created_at'],
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapSessionEventToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'session_id': r['session_id'],
+        'event_type': r['event_type'] ?? 'unknown',
+        'event_data': _asJsonText(r['event_data']),
+        'occurred_at': r['occurred_at'] ?? _nowIso(),
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapQuestionnaireToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'questionnaire_type': r['questionnaire_type'] ?? 'unknown',
+        'responses': _asJsonText(r['responses']) ?? '{}',
+        'completed_at': r['completed_at'],
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapAssessmentResultToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'],
+        'game_id': r['game_id'] ?? 'unknown',
+        'type': r['type'] ?? 'pre',
+        'score': r['score'] ?? 0,
+        'total_items': r['total_items'] ?? 0,
+        'error_count': r['error_count'] ?? 0,
+        'random_touch_count': r['random_touch_count'] ?? 0,
+        'avg_response_time_ms': r['avg_response_time_ms'] ?? 0,
+        'completed_at': r['completed_at'],
+        'raw_metrics': _asJsonText(r['raw_metrics']),
+        'play_skills_label': r['play_skills_label'],
+        'communication_label': r['communication_label'],
+        'social_interaction_label': r['social_interaction_label'],
+        'behavior_attention_label': r['behavior_attention_label'],
+        'sensory_preference_label': r['sensory_preference_label'],
+        'recommended_module': r['recommended_module'],
+        'overall_summary': r['overall_summary'],
+        'model_source': r['model_source'] ?? 'rubric_based',
+        'xgboost_ready': _asInt(r['xgboost_ready'], fallback: 1),
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapRecommendationToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'] ?? '',
+        'module_id': r['module_id'] ?? 'unknown',
+        'module_name': r['module_name'] ?? 'Unknown',
+        'starting_level': r['starting_level'] ?? 1,
+        'confidence': r['confidence'],
+        'rationale': r['rationale'],
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapComparisonToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'pre_assessment_id': r['pre_assessment_id'] ?? '',
+        'post_assessment_id': r['post_assessment_id'] ?? '',
+        'accuracy_improvement': r['accuracy_improvement'],
+        'response_time_improvement_ms': r['response_time_improvement_ms'],
+        'overall_improvement_percent': r['overall_improvement_percent'],
+        'summary': r['summary'],
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapSensoryConsentToLocal(Map<String, dynamic> r) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'],
+        'consent_given': _asInt(r['consent_given']),
+        'created_at': r['created_at'] ?? _nowIso(),
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapSensoryRoundMetricsToLocal(
+    Map<String, dynamic> r,
+  ) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'],
+        'game_id': r['game_id'] ?? 'unknown',
+        'round_number': r['round_number'] ?? 0,
+        'music_enabled': _asInt(r['music_enabled']),
+        'haptic_enabled': _asInt(r['haptic_enabled']),
+        'sensory_purpose': r['sensory_purpose'] ?? 'unknown',
+        'correct_count': r['correct_count'] ?? 0,
+        'wrong_count': r['wrong_count'] ?? 0,
+        'accuracy': r['accuracy'] ?? 0.0,
+        'total_response_time_ms': r['total_response_time_ms'] ?? 0,
+        'avg_response_time_ms': r['avg_response_time_ms'] ?? 0.0,
+        'tap_count': r['tap_count'] ?? 0,
+        'idle_time_seconds': r['idle_time_seconds'] ?? 0.0,
+        'random_touch_count': r['random_touch_count'] ?? 0,
+        'time_to_first_touch_ms': r['time_to_first_touch_ms'] ?? 0.0,
+        'time_to_completion_ms': r['time_to_completion_ms'] ?? 0.0,
+        'hint_count': r['hint_count'] ?? 0,
+        'prompt_count': r['prompt_count'] ?? 0,
+        'retry_count': r['retry_count'] ?? 0,
+        'created_at': r['created_at'] ?? _nowIso(),
+        ..._localMeta(r),
+      };
+
+  Map<String, dynamic> _mapSensoryPreferencesToLocal(
+    Map<String, dynamic> r,
+  ) => {
+        'id': r['id'],
+        'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'],
+        'recommended_music_enabled': _asInt(r['recommended_music_enabled']),
+        'recommended_haptic_enabled': _asInt(r['recommended_haptic_enabled']),
+        'best_config': r['best_config'] ?? '',
+        'confidence': _asJsonText(r['confidence']) ?? '',
+        'config_scores': _asJsonText(r['config_scores']) ?? '{}',
+        'attention_summary': r['attention_summary'],
+        'analyzed_at': r['analyzed_at'] ?? _nowIso(),
+        ..._localMeta(r),
+      };
 
   /// Handle user authentication change (backfill guest data)
   Future<void> onUserAuthenticated(String userId) async {
