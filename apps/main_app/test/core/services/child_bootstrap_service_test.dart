@@ -237,6 +237,12 @@ class _FakeSupabaseService implements SupabaseService {
   Future<void> upsertChild(Map<String, dynamic> data, String id) async {}
 
   @override
+  Future<void> upsertBatch(
+    String remoteTable,
+    List<Map<String, dynamic>> records,
+  ) async {}
+
+  @override
   Future<void> upsertAssessmentRun(Map<String, dynamic> data, String id) async {}
 
   @override

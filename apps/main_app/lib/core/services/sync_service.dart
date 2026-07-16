@@ -33,6 +33,21 @@ class SyncService {
   bool _isSyncing = false;
   bool _isInitialized = false;
 
+  /// Consecutive retry passes since the last fully successful sync;
+  /// indexes into [_retryDelays] for exponential backoff.
+  int _retryAttempt = 0;
+
+  /// Escalating retry delays; the last entry repeats once reached.
+  static const _retryDelays = [
+    Duration(seconds: 30),
+    Duration(minutes: 1),
+    Duration(minutes: 5),
+    Duration(minutes: 15),
+  ];
+
+  /// Max records per remote upsert call, to bound payload size.
+  static const _uploadChunkSize = 200;
+
   // Expose state for UI
   final _syncStateController = StreamController<SyncState>.broadcast();
   SyncState _currentState = SyncState.idle();
@@ -60,6 +75,10 @@ class SyncService {
 
     await _connectivity.initialize();
 
+    // Recover records stranded in 'syncing' by a crash mid-sync — pending
+    // queries would otherwise never pick them up again.
+    await _localDb.resetStuckSyncing();
+
     // Listen for connectivity changes
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _onConnectivityChanged,
@@ -78,6 +97,7 @@ class SyncService {
   void _onConnectivityChanged(bool isOnline) {
     if (isOnline) {
       debugPrint('[SyncService] Online - scheduling sync');
+      _retryAttempt = 0; // fresh connection, restart backoff
       _scheduleSync();
     } else {
       debugPrint('[SyncService] Offline - sync paused');
@@ -116,35 +136,38 @@ class SyncService {
     _isSyncing = true;
     _updateState(const SyncState(status: SyncStatusEnum.syncing));
 
+    var synced = 0;
+    var failed = 0;
     try {
-      // Sync in dependency order
-      await _syncChildren();
-      await _syncAssessmentRuns();
-      await _syncGameSessions();
-      await _syncGameRounds();
-      await _syncSessionEvents();
-      await _syncCaregiverQuestionnaires();
-      await _syncAssessmentResults();
-      await _syncModuleRecommendations();
-      await _syncAssessmentComparisons();
-      await _syncSensoryConsent();
-      await _syncSensoryRoundMetrics();
-      await _syncSensoryPreferences();
+      // Sync in dependency order (parents before children — FK safety)
+      for (final spec in _tableSyncSpecs) {
+        final result = await _syncTable(spec);
+        synced += result.synced;
+        failed += result.failed;
+      }
 
       // Sync soft deletes last
       await _propagateDeletes();
 
+      if (failed == 0) _retryAttempt = 0;
       _updateState(
-        const SyncState(
+        SyncState(
           status: SyncStatusEnum.completed,
-          lastSuccessfulSync: true,
+          lastSuccessfulSync: failed == 0,
+          syncedCount: synced,
+          failedCount: failed,
         ),
       );
-      debugPrint('[SyncService] Sync completed successfully');
+      debugPrint('[SyncService] Sync completed: $synced synced, $failed failed');
     } catch (e) {
       debugPrint('[SyncService] Sync failed: $e');
       _updateState(
-        SyncState(status: SyncStatusEnum.error, error: e.toString()),
+        SyncState(
+          status: SyncStatusEnum.error,
+          error: e.toString(),
+          syncedCount: synced,
+          failedCount: failed,
+        ),
       );
     } finally {
       _isSyncing = false;
@@ -160,14 +183,15 @@ class SyncService {
     }
   }
 
-  /// Schedule a retry with exponential backoff
+  /// Schedule a retry with exponential backoff (30s → 1m → 5m → 15m)
   void _scheduleRetry() {
     _retryTimer?.cancel();
-    // Retry after 30 seconds
-    _retryTimer = Timer(const Duration(seconds: 30), () {
+    final delay = _retryDelays[_retryAttempt.clamp(0, _retryDelays.length - 1)];
+    _retryAttempt++;
+    _retryTimer = Timer(delay, () {
       startSync();
     });
-    debugPrint('[SyncService] Scheduled retry in 30s');
+    debugPrint('[SyncService] Scheduled retry in ${delay.inSeconds}s');
   }
 
   /// Update sync state and notify listeners
@@ -176,325 +200,98 @@ class SyncService {
     _syncStateController.add(state);
   }
 
-  // ─── Entity-Specific Sync Methods ─────────────────────────────────────
+  // ─── Generic Table Sync ───────────────────────────────────────────────
 
-  Future<void> _syncChildren() async {
-    final records = await _localDb.getPendingChildRecords();
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} children');
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.children, id);
-
-        // Convert local format to Supabase format
-        final supabaseData = _mapChildToSupabase(record);
-        await _supabase.upsertChild(supabaseData, id);
-
-        await _localDb.markSynced(LocalTables.children, id);
-      } catch (e) {
-        debugPrint('[SyncService] Failed to sync child $id: $e');
-        await _localDb.markSyncFailed(
-          LocalTables.children,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncAssessmentRuns() async {
-    final records = await _localDb.getPendingRecords(
-      LocalTables.assessmentRuns,
-    );
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} assessment runs');
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.assessmentRuns, id);
-        final supabaseData = _mapAssessmentRunToSupabase(record);
-        await _supabase.upsertAssessmentRun(supabaseData, id);
-        await _localDb.markSynced(LocalTables.assessmentRuns, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.assessmentRuns,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncGameSessions() async {
-    final records = await _localDb.getPendingRecords(LocalTables.gameSessions);
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} game sessions');
-
-    // Batch sync for better performance
-    final batch = <Map<String, dynamic>>[];
-    final ids = <String>[];
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      await _localDb.markSyncing(LocalTables.gameSessions, id);
-      batch.add(_mapGameSessionToSupabase(record));
-      ids.add(id);
-    }
-
-    try {
-      await _supabase.upsertGameSessionsBatch(batch);
-      for (final id in ids) {
-        await _localDb.markSynced(LocalTables.gameSessions, id);
-      }
-    } catch (e) {
-      // Fall back to individual syncs on batch failure
-      for (final id in ids) {
-        await _localDb.markSyncFailed(
-          LocalTables.gameSessions,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncGameRounds() async {
-    final records = await _localDb.getPendingRecords(LocalTables.gameRounds);
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} game rounds');
-
-    final batch = <Map<String, dynamic>>[];
-    final ids = <String>[];
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      await _localDb.markSyncing(LocalTables.gameRounds, id);
-      batch.add(_mapGameRoundToSupabase(record));
-      ids.add(id);
-    }
-
-    try {
-      await _supabase.upsertGameRoundsBatch(batch);
-      for (final id in ids) {
-        await _localDb.markSynced(LocalTables.gameRounds, id);
-      }
-    } catch (e) {
-      for (final id in ids) {
-        await _localDb.markSyncFailed(
-          LocalTables.gameRounds,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncSessionEvents() async {
-    final records = await _localDb.getPendingRecords(LocalTables.sessionEvents);
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} session events');
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.sessionEvents, id);
-        final supabaseData = _mapSessionEventToSupabase(record);
-        await _supabase.upsertSessionEvent(supabaseData, id);
-        await _localDb.markSynced(LocalTables.sessionEvents, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.sessionEvents,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncCaregiverQuestionnaires() async {
-    final records = await _localDb.getPendingRecords(
+  /// One spec per syncable table, in FK dependency order.
+  late final List<_TableSyncSpec> _tableSyncSpecs = [
+    _TableSyncSpec(LocalTables.children, _mapChildToSupabase),
+    _TableSyncSpec(LocalTables.assessmentRuns, _mapAssessmentRunToSupabase),
+    _TableSyncSpec(LocalTables.gameSessions, _mapGameSessionToSupabase),
+    _TableSyncSpec(LocalTables.gameRounds, _mapGameRoundToSupabase),
+    _TableSyncSpec(LocalTables.sessionEvents, _mapSessionEventToSupabase),
+    _TableSyncSpec(
       LocalTables.caregiverQuestionnaires,
-    );
-    if (records.isEmpty) return;
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.caregiverQuestionnaires, id);
-        final supabaseData = _mapQuestionnaireToSupabase(record);
-        await _supabase.upsertCaregiverQuestionnaire(supabaseData, id);
-        await _localDb.markSynced(LocalTables.caregiverQuestionnaires, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.caregiverQuestionnaires,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncAssessmentResults() async {
-    final records = await _localDb.getPendingRecords(
+      _mapQuestionnaireToSupabase,
+    ),
+    _TableSyncSpec(
       LocalTables.assessmentResults,
-    );
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} assessment results');
-
-    final batch = <Map<String, dynamic>>[];
-    final ids = <String>[];
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      await _localDb.markSyncing(LocalTables.assessmentResults, id);
-      batch.add(_mapAssessmentResultToSupabase(record));
-      ids.add(id);
-    }
-
-    try {
-      await _supabase.upsertAssessmentResultsBatch(batch);
-      for (final id in ids) {
-        await _localDb.markSynced(LocalTables.assessmentResults, id);
-      }
-    } catch (e) {
-      for (final id in ids) {
-        await _localDb.markSyncFailed(
-          LocalTables.assessmentResults,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncModuleRecommendations() async {
-    final records = await _localDb.getPendingRecords(
+      _mapAssessmentResultToSupabase,
+    ),
+    _TableSyncSpec(
       LocalTables.moduleRecommendations,
-    );
-    if (records.isEmpty) return;
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.moduleRecommendations, id);
-        final supabaseData = _mapRecommendationToSupabase(record);
-        await _supabase.upsertModuleRecommendation(supabaseData, id);
-        await _localDb.markSynced(LocalTables.moduleRecommendations, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.moduleRecommendations,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncAssessmentComparisons() async {
-    final records = await _localDb.getPendingRecords(
-      LocalTables.assessmentComparisons,
-    );
-    if (records.isEmpty) return;
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.assessmentComparisons, id);
-        final supabaseData = _mapComparisonToSupabase(record);
-        await _supabase.upsertAssessmentComparison(supabaseData, id);
-        await _localDb.markSynced(LocalTables.assessmentComparisons, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.assessmentComparisons,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncSensoryConsent() async {
-    final records = await _localDb.getPendingRecords(
-      LocalTables.sensoryConsent,
-    );
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} sensory consent records');
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.sensoryConsent, id);
-        final supabaseData = _mapSensoryConsentToSupabase(record);
-        await _supabase.upsertSensoryConsent(supabaseData, id);
-        await _localDb.markSynced(LocalTables.sensoryConsent, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.sensoryConsent,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncSensoryRoundMetrics() async {
-    final records = await _localDb.getPendingRecords(
+      _mapRecommendationToSupabase,
+    ),
+    _TableSyncSpec(LocalTables.assessmentComparisons, _mapComparisonToSupabase),
+    _TableSyncSpec(LocalTables.sensoryConsent, _mapSensoryConsentToSupabase),
+    _TableSyncSpec(
       LocalTables.sensoryRoundMetrics,
-    );
-    if (records.isEmpty) return;
-
-    debugPrint('[SyncService] Syncing ${records.length} sensory round metrics');
-
-    for (final record in records) {
-      final id = record['id'] as String;
-      try {
-        await _localDb.markSyncing(LocalTables.sensoryRoundMetrics, id);
-        final supabaseData = _mapSensoryRoundMetricsToSupabase(record);
-        await _supabase.upsertSensoryRoundMetrics(supabaseData, id);
-        await _localDb.markSynced(LocalTables.sensoryRoundMetrics, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.sensoryRoundMetrics,
-          id,
-          error: e.toString(),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncSensoryPreferences() async {
-    final records = await _localDb.getPendingRecords(
+      _mapSensoryRoundMetricsToSupabase,
+    ),
+    _TableSyncSpec(
       LocalTables.sensoryPreferences,
+      _mapSensoryPreferencesToSupabase,
+    ),
+  ];
+
+  /// Upload all pending records for one table: chunked batch upserts with a
+  /// per-record fallback so a single bad row can't poison the whole batch.
+  Future<_TableSyncResult> _syncTable(_TableSyncSpec spec) async {
+    // Children have extra eligibility rules (guest-owned rows stay local)
+    final records = spec.localTable == LocalTables.children
+        ? await _localDb.getPendingChildRecords()
+        : await _localDb.getPendingRecords(spec.localTable);
+    if (records.isEmpty) return const _TableSyncResult(0, 0);
+
+    final remoteTable = SyncOrder.getRemoteTable(spec.localTable)!;
+    debugPrint(
+      '[SyncService] Syncing ${records.length} records: ${spec.localTable}',
     );
-    if (records.isEmpty) return;
 
-    debugPrint('[SyncService] Syncing ${records.length} sensory preferences');
+    var synced = 0;
+    var failed = 0;
 
-    for (final record in records) {
-      final id = record['id'] as String;
+    for (var i = 0; i < records.length; i += _uploadChunkSize) {
+      final chunk = records.sublist(
+        i,
+        i + _uploadChunkSize > records.length
+            ? records.length
+            : i + _uploadChunkSize,
+      );
+      final ids = [for (final r in chunk) r['id'] as String];
+      final payload = [for (final r in chunk) spec.toSupabase(r)];
+
+      await _localDb.markSyncingBatch(spec.localTable, ids);
+
       try {
-        await _localDb.markSyncing(LocalTables.sensoryPreferences, id);
-        final supabaseData = _mapSensoryPreferencesToSupabase(record);
-        await _supabase.upsertSensoryPreferences(supabaseData, id);
-        await _localDb.markSynced(LocalTables.sensoryPreferences, id);
-      } catch (e) {
-        await _localDb.markSyncFailed(
-          LocalTables.sensoryPreferences,
-          id,
-          error: e.toString(),
+        await _supabase.upsertBatch(remoteTable, payload);
+        await _localDb.markSyncedBatch(spec.localTable, ids);
+        synced += ids.length;
+      } catch (batchError) {
+        // Batch rejected — retry per record so only the bad rows fail
+        debugPrint(
+          '[SyncService] Batch failed for ${spec.localTable}, '
+          'falling back to per-record: $batchError',
         );
+        final succeeded = <String>[];
+        for (var j = 0; j < ids.length; j++) {
+          try {
+            await _supabase.upsertBatch(remoteTable, [payload[j]]);
+            succeeded.add(ids[j]);
+          } catch (recordError) {
+            failed++;
+            await _localDb.markSyncFailed(
+              spec.localTable,
+              ids[j],
+              error: recordError.toString(),
+            );
+          }
+        }
+        await _localDb.markSyncedBatch(spec.localTable, succeeded);
+        synced += succeeded.length;
       }
     }
+
+    return _TableSyncResult(synced, failed);
   }
 
   /// Propagate soft deletes to Supabase
@@ -770,8 +567,11 @@ class SyncService {
 
   // ─── Public API ───────────────────────────────────────────────────────
 
-  /// Force a sync now (bypasses debounce)
-  Future<void> syncNow() => startSync();
+  /// Force a sync now (bypasses debounce and resets retry backoff)
+  Future<void> syncNow() {
+    _retryAttempt = 0;
+    return startSync();
+  }
 
   /// Get pending sync counts for all tables
   Future<Map<String, int>> getPendingCounts() => _localDb.getPendingCounts();
@@ -818,6 +618,22 @@ class SyncService {
   }
 }
 
+/// Configuration for syncing one local table to its remote counterpart
+class _TableSyncSpec {
+  final String localTable;
+  final Map<String, dynamic> Function(Map<String, dynamic>) toSupabase;
+
+  const _TableSyncSpec(this.localTable, this.toSupabase);
+}
+
+/// Outcome of one table's sync pass
+class _TableSyncResult {
+  final int synced;
+  final int failed;
+
+  const _TableSyncResult(this.synced, this.failed);
+}
+
 /// Sync state for UI feedback
 class SyncState {
   final SyncStatusEnum status;
@@ -825,11 +641,19 @@ class SyncState {
   final String? error;
   final DateTime? timestamp;
 
+  /// Records uploaded in the last completed pass
+  final int syncedCount;
+
+  /// Records that failed in the last completed pass (0 = clean sync)
+  final int failedCount;
+
   const SyncState({
     required this.status,
     this.lastSuccessfulSync = false,
     this.error,
     this.timestamp,
+    this.syncedCount = 0,
+    this.failedCount = 0,
   });
 
   factory SyncState.idle() =>
@@ -840,12 +664,16 @@ class SyncState {
     bool? lastSuccessfulSync,
     String? error,
     DateTime? timestamp,
+    int? syncedCount,
+    int? failedCount,
   }) {
     return SyncState(
       status: status ?? this.status,
       lastSuccessfulSync: lastSuccessfulSync ?? this.lastSuccessfulSync,
       error: error ?? this.error,
       timestamp: timestamp ?? this.timestamp,
+      syncedCount: syncedCount ?? this.syncedCount,
+      failedCount: failedCount ?? this.failedCount,
     );
   }
 
@@ -853,6 +681,10 @@ class SyncState {
   bool get isSyncing => status == SyncStatusEnum.syncing;
   bool get isOffline => status == SyncStatusEnum.offline;
   bool get hasError => status == SyncStatusEnum.error;
+
+  /// Completed, but some records failed and will be retried
+  bool get hasPartialFailure =>
+      status == SyncStatusEnum.completed && failedCount > 0;
 }
 
 enum SyncStatusEnum { idle, syncing, completed, offline, error }

@@ -109,6 +109,37 @@ class ResearchConsentService {
     }
   }
 
+  /// Re-push any decisions that failed to reach the backend (offline at the
+  /// time). Called when connectivity is restored so consents don't sit
+  /// unpushed until the next [statusFor] read.
+  Future<void> retryPendingPushes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith('research_consent_')) continue;
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        if (map['version'] != consentVersion) continue;
+        if (map['pending_sync'] != true) continue;
+
+        final childId = key.substring('research_consent_'.length);
+        final status = ResearchConsentStatus(
+          answered: true,
+          participate: map['participate'] == true,
+          aiTraining: map['ai_training'] == true,
+        );
+        if (await _pushToBackend(childId, status)) {
+          map['pending_sync'] = false;
+          await prefs.setString(key, jsonEncode(map));
+          debugPrint('[ResearchConsent] pending push flushed for $childId');
+        }
+      }
+    } catch (e) {
+      debugPrint('[ResearchConsent] retryPendingPushes failed: $e');
+    }
+  }
+
   Future<bool> _pushToBackend(
       String childId, ResearchConsentStatus status) async {
     try {

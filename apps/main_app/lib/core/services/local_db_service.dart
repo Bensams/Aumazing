@@ -94,7 +94,12 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 14; // v14: Add sync_error to syncable tables
+  static const _dbVersion = 15; // v15: Add sync_attempts to syncable tables
+
+  /// Records failing more than this many upload attempts are quarantined:
+  /// excluded from pending queries/counts so they stop driving the retry
+  /// loop. They keep sync_status='failed' + sync_error for diagnosis.
+  static const maxSyncAttempts = 10;
   static const _uuid = Uuid();
   static const _readableChildWhere = 'display_name IS NOT NULL';
 
@@ -132,6 +137,7 @@ class LocalDbService {
   static const String _syncColumns = '''
     sync_status TEXT NOT NULL DEFAULT 'pending',
     sync_error TEXT,
+    sync_attempts INTEGER NOT NULL DEFAULT 0,
     last_synced_at TEXT,
     deleted_at TEXT,
     updated_at TEXT NOT NULL,
@@ -822,16 +828,39 @@ class LocalDbService {
       }
       debugPrint('[LocalDbService] Added sync_error column to syncable tables (v14)');
     }
+
+    if (oldVersion < 15) {
+      // Migration from v14 to v15: Add sync_attempts to all syncable tables
+      // so permanently failing records can be quarantined instead of
+      // retrying forever.
+      for (final table in SyncOrder.dependencyOrder) {
+        try {
+          await db.execute(
+            'ALTER TABLE $table ADD COLUMN sync_attempts INTEGER NOT NULL DEFAULT 0',
+          );
+        } catch (_) {
+          // Table missing or column already present — safe to skip.
+        }
+      }
+      debugPrint('[LocalDbService] Added sync_attempts column to syncable tables (v15)');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
+
+  /// Shared predicate for records that still need uploading. Quarantined
+  /// records (sync_attempts >= [maxSyncAttempts]) are excluded so they stop
+  /// driving the retry loop.
+  static const _needsSyncWhere =
+      "sync_status IN ('pending', 'failed') AND deleted_at IS NULL "
+      'AND sync_attempts < $maxSyncAttempts';
 
   /// Get all pending records for a table
   Future<List<Map<String, dynamic>>> getPendingRecords(String table) async {
     final db = await database;
     return db.query(
       table,
-      where: "sync_status IN ('pending', 'failed') AND deleted_at IS NULL",
+      where: _needsSyncWhere,
       orderBy: 'local_created_at ASC',
     );
   }
@@ -840,10 +869,31 @@ class LocalDbService {
     final db = await database;
     return db.query(
       LocalTables.children,
-      where:
-          "sync_status IN ('pending', 'failed') AND deleted_at IS NULL AND $_syncableChildWhere",
+      where: '$_needsSyncWhere AND $_syncableChildWhere',
       orderBy: 'local_created_at ASC',
     );
+  }
+
+  /// Recover records stranded in 'syncing' by a crash or kill mid-sync.
+  ///
+  /// Pending queries only select pending/failed, so without this a record
+  /// marked 'syncing' when the app died would never be retried. Call once
+  /// on startup before the first sync.
+  Future<int> resetStuckSyncing() async {
+    final db = await database;
+    var recovered = 0;
+    for (final table in SyncOrder.dependencyOrder) {
+      recovered += await db.update(
+        table,
+        {'sync_status': SyncStatus.pending.value},
+        where: 'sync_status = ?',
+        whereArgs: [SyncStatus.syncing.value],
+      );
+    }
+    if (recovered > 0) {
+      debugPrint('[LocalDbService] Recovered $recovered stuck syncing records');
+    }
+    return recovered;
   }
 
   /// Get all soft-deleted records that need deletion propagated
@@ -869,6 +919,58 @@ class LocalDbService {
     );
   }
 
+  /// SQLite caps bound parameters (999 in older versions); chunk IN lists
+  /// well below it.
+  static const _idChunkSize = 500;
+
+  /// Mark many records as syncing in one UPDATE per chunk
+  Future<void> markSyncingBatch(String table, List<String> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    for (var i = 0; i < ids.length; i += _idChunkSize) {
+      final chunk = ids.sublist(
+        i,
+        i + _idChunkSize > ids.length ? ids.length : i + _idChunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      await db.update(
+        table,
+        {'sync_status': SyncStatus.syncing.value},
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+    }
+  }
+
+  /// Mark many records as synced in one UPDATE per chunk
+  Future<void> markSyncedBatch(
+    String table,
+    List<String> ids, {
+    DateTime? syncedAt,
+  }) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final timestamp = (syncedAt ?? DateTime.now()).toIso8601String();
+    for (var i = 0; i < ids.length; i += _idChunkSize) {
+      final chunk = ids.sublist(
+        i,
+        i + _idChunkSize > ids.length ? ids.length : i + _idChunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      await db.update(
+        table,
+        {
+          'sync_status': SyncStatus.synced.value,
+          'sync_error': null,
+          'sync_attempts': 0,
+          'last_synced_at': timestamp,
+        },
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+    }
+  }
+
   /// Mark a record as synced
   Future<void> markSynced(String table, String id, {DateTime? syncedAt}) async {
     final db = await database;
@@ -877,6 +979,7 @@ class LocalDbService {
       {
         'sync_status': SyncStatus.synced.value,
         'sync_error': null,
+        'sync_attempts': 0,
         'last_synced_at': (syncedAt ?? DateTime.now()).toIso8601String(),
       },
       where: 'id = ?',
@@ -887,14 +990,19 @@ class LocalDbService {
   /// Mark a record as failed
   Future<void> markSyncFailed(String table, String id, {String? error}) async {
     final db = await database;
-    await db.update(
-      table,
-      {
-        'sync_status': SyncStatus.failed.value,
-        if (error != null) 'sync_error': error,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
+    await db.rawUpdate(
+      '''
+      UPDATE $table
+      SET sync_status = ?,
+          sync_attempts = sync_attempts + 1
+          ${error != null ? ', sync_error = ?' : ''}
+      WHERE id = ?
+      ''',
+      [
+        SyncStatus.failed.value,
+        if (error != null) error,
+        id,
+      ],
     );
   }
 
@@ -962,7 +1070,7 @@ class LocalDbService {
     for (final table in SyncOrder.dependencyOrder) {
       final result = await db.rawQuery('''
         SELECT COUNT(*) as count FROM $table
-        WHERE sync_status IN ('pending', 'failed') AND deleted_at IS NULL
+        WHERE $_needsSyncWhere
         ${table == LocalTables.children ? 'AND $_syncableChildWhere' : ''}
       ''');
       counts[table] = Sqflite.firstIntValue(result) ?? 0;

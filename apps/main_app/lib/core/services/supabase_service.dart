@@ -16,6 +16,25 @@ import '../sync/sync_status.dart';
 class SupabaseService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  // ─── Generic Sync Upserts ─────────────────────────────────────────────
+
+  /// Upsert a batch of records into any remote table (conflict on id).
+  Future<void> upsertBatch(
+    String remoteTable,
+    List<Map<String, dynamic>> records,
+  ) async {
+    if (records.isEmpty) return;
+    try {
+      await _client.from(remoteTable).upsert(records, onConflict: 'id');
+      debugPrint(
+        '[SupabaseService] ${records.length} records upserted to $remoteTable',
+      );
+    } catch (e) {
+      debugPrint('[SupabaseService] upsertBatch($remoteTable) error: $e');
+      rethrow;
+    }
+  }
+
   // ─── Children ─────────────────────────────────────────────────────────
 
   /// Upsert a child record to Supabase
