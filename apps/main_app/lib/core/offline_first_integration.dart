@@ -116,8 +116,11 @@ class OfflineFirstIntegration {
           // 2. Clear guest mode
           auth.clearGuestMode();
 
-          // 3. Trigger sync of all pending data
-          syncService.syncNow();
+          // 3. Hydrate from the cloud first (reinstall / second device —
+          //    no-op after the first run per user), then push pending data
+          syncService
+              .hydrateFromCloud()
+              .whenComplete(() => syncService.syncNow());
 
           // 4. Refresh reference cache
           syncService.refreshReferenceCache();
@@ -160,6 +163,11 @@ class OfflineFirstIntegration {
 
   /// Force a sync operation (for manual refresh button)
   static Future<void> syncNow() => syncService.syncNow();
+
+  /// Re-pull the signed-in user's data from the cloud (e.g. a manual
+  /// "restore my data" action). Never overwrites local records.
+  static Future<int> hydrateFromCloud({bool force = false}) =>
+      syncService.hydrateFromCloud(force: force);
 
   /// Get count of pending records
   static Future<Map<String, int>> getPendingCounts() => syncService.getPendingCounts();
