@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
 
-    lockParentLandscape();
+    lockParentAdaptive();
 
     _logoAnimController = AnimationController(
       vsync: this,
@@ -514,6 +514,9 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
+    // Landscape (tablets) keeps the form in a left panel over the video.
+    // Portrait phones give the form the full width instead.
+    final isWide = screenSize.width >= screenSize.height;
 
     return Scaffold(
       body: Stack(
@@ -545,13 +548,14 @@ class _LoginScreenState extends State<LoginScreen>
           // ── Semi-transparent overlay for readability ──────────────
           Container(color: Colors.black.withValues(alpha: 0.15)),
 
-          // ── Main landscape layout ────────────────────────────────
+          // ── Main layout ──────────────────────────────────────────
           SafeArea(
             child: Row(
               children: [
-                // ── Left panel: Auth form ──────────────────────────
+                // ── Auth form: a left panel when wide, full width in
+                //    portrait so the fields are not squeezed. ────────
                 SizedBox(
-                  width: screenSize.width * 0.42,
+                  width: isWide ? screenSize.width * 0.42 : screenSize.width,
                   child: Center(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(
@@ -920,7 +924,7 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
 
-                const Expanded(child: SizedBox()),
+                if (isWide) const Expanded(child: SizedBox()),
               ],
             ),
           ),

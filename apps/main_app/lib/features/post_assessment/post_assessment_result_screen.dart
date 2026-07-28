@@ -66,7 +66,8 @@ class PostAssessmentResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ParentAdaptiveOrientation(
+      child: Scaffold(
       body: Container(
         decoration:
             const BoxDecoration(gradient: AppGradients.parentLavenderMint),
@@ -139,6 +140,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

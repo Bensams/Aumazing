@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_ui/shared_ui.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/services/auth_service.dart';
@@ -66,10 +67,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
           localDbService: localDbService,
         );
 
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // Same orientation as the splash before it and the parent screen after,
+    // so launching on a phone never rotates mid-flow.
+    lockParentAdaptive();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _initLoading();

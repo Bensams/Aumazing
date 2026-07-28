@@ -33,13 +33,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    lockParentLandscape();
+    lockParentAdaptive();
     _startResendTimer();
   }
 
   @override
   void dispose() {
-    lockParentLandscape();
+    lockParentAdaptive();
     _timer?.cancel();
     for (final c in _controllers) {
       c.dispose();

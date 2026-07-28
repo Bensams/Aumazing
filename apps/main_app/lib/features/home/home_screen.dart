@@ -40,12 +40,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final AuthService _authService;
   bool _isLeftPanelExpanded = true;
+  /// Portrait only: whether the child summary card is showing its details.
+  bool _isSummaryExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _authService = widget.authService ?? AuthService();
-    lockParentLandscape();
+    lockParentAdaptive();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         await _loadData();
@@ -157,23 +159,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Pushes a route that may lock landscape (child mode, the games, the
+  /// assessment activities) and re-applies the parent orientation when it
+  /// returns — HomeScreen's initState does not run again on pop.
+  Future<void> _pushChildFacing(Widget page) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => page),
+    );
+    if (mounted) lockParentAdaptive();
+  }
+
   void _startPreAssessment() {
     final hasAssessment = context.read<AssessmentProvider>().hasPreAssessment;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => hasAssessment
-            ? const AssessmentDashboardScreen()
-            : const PreAssessmentIntroScreen(),
-      ),
+    _pushChildFacing(
+      hasAssessment
+          ? const AssessmentDashboardScreen()
+          : const PreAssessmentIntroScreen(),
     );
   }
 
   void _enterChildMode() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ChildModeLobbyScreen(),
-      ),
-    );
+    _pushChildFacing(const ChildModeLobbyScreen());
   }
 
   /// True when the child has finished every step of the learning path and
@@ -193,11 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Opens the child lobby directly on the AI-recommended learning path
   /// (from the Recommended Module card).
   void _openLearningPath() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ChildModeLobbyScreen(openPath: true),
-      ),
-    );
+    _pushChildFacing(const ChildModeLobbyScreen(openPath: true));
   }
 
   void _toggleLeftPanel() {
@@ -222,50 +224,247 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient:
               context.watch<ChildProvider>().activePalette.parentBackground,
         ),
-        child: Row(
-          children: [
-            // ── Left Panel: Child Summary (no SafeArea, sticks to edge) ─────────────────────────
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              width: _isLeftPanelExpanded ? 280 : 56,
-              child: _buildChildPanel(),
-            ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Phones run this screen in portrait; tablets stay landscape.
+            return constraints.maxWidth >= constraints.maxHeight
+                ? _buildWideLayout()
+                : _buildPortraitLayout();
+          },
+        ),
+      ),
+    );
+  }
 
-            // ── Main Content ──────────────────────────────────────
-            Expanded(
-              child: SafeArea(
-                left: false,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.sm,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// Landscape: child summary in a collapsible left panel beside the content.
+  Widget _buildWideLayout() {
+    return Row(
+      children: [
+        // ── Left Panel: Child Summary (no SafeArea, sticks to edge) ────
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          width: _isLeftPanelExpanded ? 280 : 56,
+          child: _buildChildPanel(),
+        ),
+
+        // ── Main Content ──────────────────────────────────────
+        Expanded(
+          child: SafeArea(
+            left: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: AppSpacing.md),
+                  ..._buildDashboardSections(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Portrait: no room for a side panel, so the child summary folds into a
+  /// card at the top of the single scrolling column.
+  Widget _buildPortraitLayout() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildChildSummaryCard(),
+            const SizedBox(height: AppSpacing.md),
+            ..._buildDashboardSections(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The dashboard content itself — identical in both layouts; the sections
+  /// reflow on their own width.
+  List<Widget> _buildDashboardSections() {
+    return [
+      _buildActionButtons(),
+      _buildPremiumBanner(),
+      _buildScreenTimeStatus(),
+      const SizedBox(height: AppSpacing.md),
+      _buildAssessmentStatus(),
+      const SizedBox(height: AppSpacing.md),
+      _buildProgressSection(),
+      const SizedBox(height: AppSpacing.md),
+      _buildAdvancedTrends(),
+      _buildRecentActivity(),
+    ];
+  }
+
+  /// Portrait header: the side panel's child summary folded into a card.
+  /// Collapsed it says whose dashboard this is; expanding it reveals the
+  /// account email and the quick stats the panel shows in landscape.
+  Widget _buildChildSummaryCard() {
+    return Consumer<ChildProvider>(
+      builder: (context, childProv, _) {
+        final profile = childProv.profile;
+        final name = profile?.displayName ?? 'Child';
+        final age = profile?.birthDate != null ? profile!.ageYears() : '?';
+        final avatar = profile?.avatarEmoji ?? '🐻';
+        final email = _authService.currentUser?.email ?? '';
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.white.withAlpha(200),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => setState(
+                  () => _isSummaryExpanded = !_isSummaryExpanded,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Row(
                     children: [
-                      _buildHeader(),
-                      const SizedBox(height: AppSpacing.md),
-                      _buildActionButtons(),
-                      _buildPremiumBanner(),
-                      _buildScreenTimeStatus(),
-                      const SizedBox(height: AppSpacing.md),
-                      _buildAssessmentStatus(),
-                      const SizedBox(height: AppSpacing.md),
-                      _buildProgressSection(),
-                      const SizedBox(height: AppSpacing.md),
-                      _buildAdvancedTrends(),
-                      _buildRecentActivity(),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.lavenderLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            avatar,
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "$name's Dashboard",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleLarge.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Age $age',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_rounded),
+                        tooltip: 'Settings',
+                        onPressed: _showSettingsModal,
+                        color: AppColors.textSecondary,
+                      ),
+                      Icon(
+                        _isSummaryExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+              if (_isSummaryExpanded) ...[
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.sm),
+                if (email.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.email_outlined,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                _buildQuickStat(
+                  Icons.games_rounded,
+                  'Sessions',
+                  context.watch<ProgressProvider>().totalSessions.toString(),
+                ),
+                _buildQuickStat(
+                  Icons.trending_up_rounded,
+                  'Modules',
+                  '${context.watch<ProgressProvider>().completedModules} done',
+                ),
+                _buildQuickStat(
+                  Icons.assessment_rounded,
+                  'Assessment',
+                  context.watch<AssessmentProvider>().hasPreAssessment
+                      ? 'Completed'
+                      : 'Pending',
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      right: AppSpacing.sm,
+                      bottom: AppSpacing.xs,
+                    ),
+                    child: TextButton.icon(
+                      onPressed: _signOut,
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Sign Out'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -555,45 +754,61 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildActionButtons() {
     return Consumer<AssessmentProvider>(
       builder: (context, assessProv, _) {
-        return Row(
-          children: [
-            Expanded(
-              child: AppPrimaryButton(
-                label:
-                    assessProv.hasPreAssessment
-                        ? 'Assessment'
-                        : 'Start Pre-Assessment',
-                onPressed: _startPreAssessment,
-                icon: assessProv.hasPreAssessment
-                    ? Icons.assessment_rounded
-                    : Icons.play_circle_filled_rounded,
-              ),
+        final assessment = AppPrimaryButton(
+          label: assessProv.hasPreAssessment
+              ? 'Assessment'
+              : 'Start Pre-Assessment',
+          onPressed: _startPreAssessment,
+          icon: assessProv.hasPreAssessment
+              ? Icons.assessment_rounded
+              : Icons.play_circle_filled_rounded,
+        );
+        final childMode = _ActionCard(
+          icon: Icons.child_care_rounded,
+          label: 'Enter Child Mode',
+          subtitle: 'Hand device to child',
+          color: AppColors.mint,
+          onTap: _enterChildMode,
+        );
+        final therapy = _ActionCard(
+          icon: Icons.location_on_rounded,
+          label: 'Therapy Directory',
+          subtitle: 'Centers near you',
+          color: AppColors.peach,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const TherapyDirectoryScreen(),
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _ActionCard(
-                icon: Icons.child_care_rounded,
-                label: 'Enter Child Mode',
-                subtitle: 'Hand device to child',
-                color: AppColors.mint,
-                onTap: _enterChildMode,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _ActionCard(
-                icon: Icons.location_on_rounded,
-                label: 'Therapy Directory',
-                subtitle: 'Centers near you',
-                color: AppColors.peach,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const TherapyDirectoryScreen(),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
+        );
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Three across needs real width — a portrait phone gets one
+            // full-width action per row instead of three squeezed cards.
+            if (constraints.maxWidth < 540) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  assessment,
+                  const SizedBox(height: AppSpacing.md),
+                  childMode,
+                  const SizedBox(height: AppSpacing.md),
+                  therapy,
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: assessment),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: childMode),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: therapy),
+              ],
+            );
+          },
         );
       },
     );
@@ -611,40 +826,32 @@ class _HomeScreenState extends State<HomeScreen> {
         return Padding(
           padding: const EdgeInsets.only(top: AppSpacing.md),
           child: AppCard(
-            child: Row(
-              children: [
-                const Text('⭐', style: TextStyle(fontSize: 28)),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Aumazing Premium',
-                        style: AppTextStyles.titleMedium
-                            .copyWith(color: AppColors.textPrimary),
-                      ),
-                      Text(
-                        'Interactive therapy locator, skill trends, and '
-                        'fresh AI recommendations — ₱149/month.',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.mutedForeground),
-                      ),
-                    ],
+            child: _CtaBand(
+              leading: const Text('⭐', style: TextStyle(fontSize: 28)),
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aumazing Premium',
+                    style: AppTextStyles.titleMedium
+                        .copyWith(color: AppColors.textPrimary),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                AppPrimaryButton(
-                  label: 'Upgrade',
-                  icon: Icons.star_rounded,
-                  width: 140,
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PremiumUpgradeScreen(),
-                    ),
+                  Text(
+                    'Interactive therapy locator, skill trends, and '
+                    'fresh AI recommendations — ₱149/month.',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.mutedForeground),
                   ),
+                ],
+              ),
+              label: 'Upgrade',
+              icon: Icons.star_rounded,
+              buttonWidth: 140,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PremiumUpgradeScreen(),
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -728,23 +935,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Pre-Assessment Needed',
-                              style: AppTextStyles.titleMedium.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final title = Text(
+                            'Pre-Assessment Needed',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.textPrimary,
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          const StatusPillBadge(
-                            label: 'Pre-Assessment Needed',
-                            level: StatusLevel.warning,
-                            compact: true,
-                          ),
-                        ],
+                          );
+                          // The pill repeats the heading word for word. On a
+                          // narrow card there is no room for both, and the
+                          // heading already carries the message.
+                          if (constraints.maxWidth < 320) return title;
+                          return Row(
+                            children: [
+                              Expanded(child: title),
+                              const SizedBox(width: AppSpacing.sm),
+                              const StatusPillBadge(
+                                label: 'Pre-Assessment Needed',
+                                level: StatusLevel.warning,
+                                compact: true,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -830,10 +1044,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppColors.statusSuccessDark,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Post-assessment completed — view progress below',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.statusSuccessDark,
+                    Expanded(
+                      child: Text(
+                        'Post-assessment completed — view progress below',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.statusSuccessDark,
+                        ),
                       ),
                     ),
                   ],
@@ -845,38 +1061,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 const Divider(),
                 const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.emoji_events_rounded,
-                      size: 18,
-                      color: AppColors.primaryPurple,
+                _CtaBand(
+                  leading: const Icon(
+                    Icons.emoji_events_rounded,
+                    size: 18,
+                    color: AppColors.primaryPurple,
+                  ),
+                  content: Text(
+                    'Learning path complete! Measure the progress with '
+                    'a post-assessment.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Learning path complete! Measure the progress with '
-                        'a post-assessment.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    AppPrimaryButton(
-                      label: 'Start Post-Assessment',
-                      icon: Icons.play_arrow_rounded,
-                      width: 230,
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const PostAssessmentProgressScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                  ),
+                  label: 'Start Post-Assessment',
+                  icon: Icons.play_arrow_rounded,
+                  buttonWidth: 230,
+                  onPressed: () => _pushChildFacing(
+                    const PostAssessmentProgressScreen(),
+                  ),
                 ),
               ],
             ],
@@ -1009,39 +1212,31 @@ class _HomeScreenState extends State<HomeScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: AppCard(
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_rounded,
-                      color: AppColors.mutedForeground),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Advanced Trends',
-                            style: AppTextStyles.titleMedium
-                                .copyWith(color: AppColors.textPrimary)),
-                        Text(
-                          'See how skills improve across assessment cycles '
-                          '— a Premium feature.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.mutedForeground),
-                        ),
-                      ],
+              child: _CtaBand(
+                leading: const Icon(Icons.lock_rounded,
+                    color: AppColors.mutedForeground),
+                content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Advanced Trends',
+                        style: AppTextStyles.titleMedium
+                            .copyWith(color: AppColors.textPrimary)),
+                    Text(
+                      'See how skills improve across assessment cycles '
+                      '— a Premium feature.',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.mutedForeground),
                     ),
+                  ],
+                ),
+                label: 'Unlock',
+                icon: Icons.star_rounded,
+                buttonWidth: 130,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PremiumUpgradeScreen(),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppPrimaryButton(
-                    label: 'Unlock',
-                    icon: Icons.star_rounded,
-                    width: 130,
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PremiumUpgradeScreen(),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           );
@@ -1318,6 +1513,70 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ── Supporting Widgets ────────────────────────────────────────────────
+
+/// A card body that pairs a message with a call-to-action button. Side by
+/// side when the card is wide enough; on a portrait phone the button drops
+/// below the text at full width instead of squeezing it to nothing.
+class _CtaBand extends StatelessWidget {
+  const _CtaBand({
+    required this.leading,
+    required this.content,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    required this.buttonWidth,
+  });
+
+  final Widget leading;
+  final Widget content;
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final double buttonWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Below this the text column would be narrower than the button.
+        final stacked = constraints.maxWidth < buttonWidth * 2.6;
+        final button = AppPrimaryButton(
+          label: label,
+          icon: icon,
+          width: stacked ? null : buttonWidth,
+          onPressed: onPressed,
+        );
+        final message = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            leading,
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: content),
+          ],
+        );
+
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              message,
+              const SizedBox(height: AppSpacing.sm),
+              button,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: message),
+            const SizedBox(width: AppSpacing.sm),
+            button,
+          ],
+        );
+      },
+    );
+  }
+}
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({

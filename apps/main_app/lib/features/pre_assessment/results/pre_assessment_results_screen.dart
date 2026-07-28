@@ -20,22 +20,24 @@ class PreAssessmentResultsScreen extends StatelessWidget {
     final provider = context.watch<AssessmentProvider>();
     final rubric = provider.rubricResult;
 
-    return Scaffold(
-      body: AppGradientBackground(
-        gradient: AppGradients.parentLavenderMint,
-        child: SafeArea(
-          child: Column(
-            children: [
-              ParentModeTopBar(
-                title: 'Assessment Results',
-                onBack: () => Navigator.of(context).maybePop(),
-              ),
-              Expanded(
-                child: rubric == null
-                    ? _buildNoResults()
-                    : _buildResults(context, rubric),
-              ),
-            ],
+    return ParentAdaptiveOrientation(
+      child: Scaffold(
+        body: AppGradientBackground(
+          gradient: AppGradients.parentLavenderMint,
+          child: SafeArea(
+            child: Column(
+              children: [
+                ParentModeTopBar(
+                  title: 'Assessment Results',
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+                Expanded(
+                  child: rubric == null
+                      ? _buildNoResults()
+                      : _buildResults(context, rubric),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -73,6 +73,8 @@ class _PreAssessmentProgressScreenState
   @override
   void initState() {
     super.initState();
+    // The child performs these activities — landscape like the games.
+    lockParentLandscape();
     _initSensoryController();
     _saveSensoryConsent();
     _startAssessmentRun();

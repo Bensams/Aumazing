@@ -23,12 +23,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   void initState() {
     super.initState();
-    lockParentLandscape();
+    lockParentAdaptive();
   }
 
   @override
   void dispose() {
-    lockParentLandscape();
+    lockParentAdaptive();
     _emailController.dispose();
     super.dispose();
   }

@@ -53,6 +53,38 @@ void main() {
   );
 
   testWidgets(
+    'home screen lays out without overflow on a portrait phone',
+    (tester) async {
+      final authService = AuthService(supabaseAuth: _FakeSupabaseAuthClient());
+      final childProvider = _TestChildProvider(initialProfile: _profile);
+
+      // A phone in portrait — the parent orientation on mobile.
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(authService: authService, childProvider: childProvider),
+      );
+      await _settleUi(tester);
+      expect(tester.takeException(), isNull);
+
+      // The side panel is replaced by the collapsible summary card, which
+      // starts collapsed and reveals the quick stats when tapped.
+      expect(find.text("Test's Dashboard"), findsOneWidget);
+      expect(find.text('Sessions'), findsNothing);
+
+      await tester.tap(find.text("Test's Dashboard"));
+      await _settleUi(tester);
+
+      expect(find.text('Sessions'), findsOneWidget);
+      expect(find.text('Assessment'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    },
+  );
+
+  testWidgets(
     'settings and bind account dialogs stay stable in compact layout',
     (tester) async {
       final authService = AuthService(supabaseAuth: _FakeSupabaseAuthClient());
