@@ -61,6 +61,8 @@ class _PostAssessmentProgressScreenState
   @override
   void initState() {
     super.initState();
+    // The child performs these activities — landscape like the games.
+    lockParentLandscape();
     context.read<AssessmentProvider>().startAssessmentRun(
           childId: _childId,
           type: 'post',

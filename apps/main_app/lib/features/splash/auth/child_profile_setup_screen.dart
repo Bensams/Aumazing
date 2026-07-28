@@ -62,7 +62,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   @override
   void initState() {
     super.initState();
-    lockParentLandscape();
+    lockParentAdaptive();
     // Restore normal system overlays — the splash screen leaves the app
     // in edgeToEdge / immersiveSticky mode which causes Android's gesture
     // navigation to overlap app content and produce phantom touch events.

@@ -86,6 +86,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   @override
   void initState() {
     super.initState();
+    // Child mode is landscape on every device — the parent screen we came
+    // from is portrait on phones, so the lock has to be re-applied here.
+    lockParentLandscape();
     _viewingPath = widget.openPath;
     ActiveGamesService.instance.activeGameIds.then((ids) {
       if (mounted) setState(() => _activeGameIds = ids);

@@ -40,13 +40,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   void initState() {
     super.initState();
-    lockParentLandscape();
+    lockParentAdaptive();
     _startResendTimer();
   }
 
   @override
   void dispose() {
-    lockParentLandscape();
+    lockParentAdaptive();
     _timer?.cancel();
     _passwordController.dispose();
     _confirmPasswordController.dispose();

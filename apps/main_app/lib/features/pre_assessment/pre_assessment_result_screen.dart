@@ -44,6 +44,8 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
   @override
   void initState() {
     super.initState();
+    // Back to the parent: the child just finished the landscape activities.
+    lockParentAdaptive();
     debugPrint('[PreAssessmentResult] AI data received: '
         '${widget.aiResponse != null ? widget.aiResponse.toString() : "null (rule-based)"}');
 
