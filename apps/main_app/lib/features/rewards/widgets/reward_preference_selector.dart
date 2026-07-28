@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../model/child_profile.dart';
@@ -52,7 +54,13 @@ class RewardPreferenceSelector extends StatelessWidget {
             final crossAxisCount = constraints.maxWidth > 500 ? 3 : 2;
             final spacing = 12.0;
             final itemWidth = (constraints.maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
-            final itemHeight = itemWidth * 1.1;
+            // Cards share one fixed size so the grid stays even. The height
+            // has to clear the tallest card content — 60px icon, title, two
+            // description lines and the selection tick every card reserves
+            // room for — and grow with the text scale so large-font users
+            // don't overflow it on narrow phones.
+            final textScale = MediaQuery.textScalerOf(context).scale(1);
+            final itemHeight = math.max(itemWidth * 1.25, 116 + 60 * textScale);
 
             return Wrap(
               spacing: spacing,
@@ -203,16 +211,23 @@ class _RewardOptionCard extends StatelessWidget {
                 ),
               ),
 
-              // Selection indicator
-              if (isSelected)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
+              // Selection indicator. Its space is reserved on every card so
+              // selecting one doesn't make it taller than the others — that
+              // mismatch is what used to overflow the fixed-height card.
+              Visibility(
+                visible: isSelected,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: const Padding(
+                  padding: EdgeInsets.only(top: 8),
                   child: Icon(
                     Icons.check_circle,
-                    color: const Color(0xFF9B82C4),
+                    color: Color(0xFF9B82C4),
                     size: 20,
                   ),
                 ),
+              ),
             ],
           ),
         ),

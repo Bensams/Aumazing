@@ -53,6 +53,8 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
   @override
   void initState() {
     super.initState();
+    // Still a child-facing screen — stays landscape with the activities.
+    lockParentLandscape();
 
     // Trophy bounce-in animation
     _trophyScaleController = AnimationController(

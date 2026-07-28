@@ -122,87 +122,145 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration:
-            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Column(
-              children: [
-                // ── Top bar ──────────────────────────────────────
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      color: AppColors.primaryPurple,
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text('📊', style: TextStyle(fontSize: 22)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Assessment Summary',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: AppColors.primaryPurple,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSourceBadge(),
-                    const Spacer(),
-                    _OverallBadge(pct: _overallPct),
-                  ],
-                ),
-                const SizedBox(height: 6),
+    return ParentAdaptiveOrientation(
+      child: Scaffold(
+        body: Container(
+          decoration:
+              const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= constraints.maxHeight;
 
-                // ── AI summary band (Gemini, offline-safe fallback) ──
-                _AiSummaryBand(
-                  areas: _summaryAreas(),
-                  overallPct: _overallPct,
-                  supportLevel: aiPrediction?.supportLevel ?? 'moderate',
-                  recommendations: aiPrediction?.recommendedModules ??
-                      const <String>[],
-                  languageCode: languageCode,
-                  fallback: _fallbackSummary(),
-                ),
-                const SizedBox(height: 6),
-
-                // ── Main content: three columns ──────────────────
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  return Column(
                     children: [
-                      // Left: Game scores
-                      Expanded(
-                        flex: 3,
-                        child: _buildGameScoresCard(),
+                      _buildTopBar(context, stacked: !isWide),
+                      const SizedBox(height: 6),
+
+                      // ── AI summary band (Gemini, offline-safe fallback) ──
+                      _AiSummaryBand(
+                        areas: _summaryAreas(),
+                        overallPct: _overallPct,
+                        supportLevel: aiPrediction?.supportLevel ?? 'moderate',
+                        recommendations: aiPrediction?.recommendedModules ??
+                            const <String>[],
+                        languageCode: languageCode,
+                        fallback: _fallbackSummary(),
                       ),
-                      const SizedBox(width: 10),
-                      // Center: Profile (with AI info if available)
+                      const SizedBox(height: 6),
+
                       Expanded(
-                        flex: 3,
-                        child: _buildProfileCard(),
-                      ),
-                      const SizedBox(width: 10),
-                      // Right: Recommendations + Actions
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          children: [
-                            Expanded(child: _buildRecommendationsCard()),
-                            const SizedBox(height: 8),
-                            _buildActionButtons(context),
-                          ],
-                        ),
+                        child: isWide
+                            ? _buildThreeColumns(context)
+                            : _buildStackedCards(context),
                       ),
                     ],
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Back button, title and the score badges. On a portrait phone the title
+  /// row has no room for the badges, so they drop to a second line.
+  Widget _buildTopBar(BuildContext context, {required bool stacked}) {
+    final back = IconButton(
+      icon: const Icon(Icons.arrow_back_rounded),
+      color: AppColors.primaryPurple,
+      onPressed: () => Navigator.of(context).pop(),
+    );
+    final title = Text(
+      'Assessment Summary',
+      style: AppTextStyles.headlineMedium.copyWith(
+        color: AppColors.primaryPurple,
+      ),
+    );
+
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              back,
+              const SizedBox(width: 4),
+              const Text('📊', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 6),
+              Expanded(child: title),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _buildSourceBadge(),
+              const Spacer(),
+              _OverallBadge(pct: _overallPct),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        back,
+        const SizedBox(width: 4),
+        const Text('📊', style: TextStyle(fontSize: 22)),
+        const SizedBox(width: 6),
+        title,
+        const SizedBox(width: 8),
+        _buildSourceBadge(),
+        const Spacer(),
+        _OverallBadge(pct: _overallPct),
+      ],
+    );
+  }
+
+  /// Wide layout: game scores, profile and recommendations side by side,
+  /// each card scrolling its own body.
+  Widget _buildThreeColumns(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 3, child: _buildGameScoresCard()),
+        const SizedBox(width: 10),
+        Expanded(flex: 3, child: _buildProfileCard()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 3,
+          child: Column(
+            children: [
+              Expanded(child: _buildRecommendationsCard()),
+              const SizedBox(height: 8),
+              _buildActionButtons(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Portrait: the same three cards stacked, with the whole page scrolling.
+  Widget _buildStackedCards(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildGameScoresCard(fillHeight: false),
+          const SizedBox(height: 10),
+          _buildProfileCard(fillHeight: false),
+          const SizedBox(height: 10),
+          _buildRecommendationsCard(fillHeight: false),
+          const SizedBox(height: 10),
+          _buildActionButtons(context),
+          const SizedBox(height: AppSpacing.md),
+        ],
       ),
     );
   }
@@ -225,8 +283,9 @@ class _DashboardBody extends StatelessWidget {
     );
   }
 
-  Widget _buildGameScoresCard() {
+  Widget _buildGameScoresCard({bool fillHeight = true}) {
     return _Card(
+      fillHeight: fillHeight,
       title: 'Game Results',
       emoji: '🎮',
       children: [
@@ -248,8 +307,9 @@ class _DashboardBody extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildProfileCard({bool fillHeight = true}) {
     return _Card(
+      fillHeight: fillHeight,
       title: 'Developmental Profile',
       emoji: '📋',
       children: [
@@ -320,8 +380,9 @@ class _DashboardBody extends StatelessWidget {
     );
   }
 
-  Widget _buildRecommendationsCard() {
+  Widget _buildRecommendationsCard({bool fillHeight = true}) {
     return _Card(
+      fillHeight: fillHeight,
       title: 'Recommendations',
       emoji: '💡',
       children: [
@@ -794,14 +855,26 @@ class _Card extends StatelessWidget {
     required this.title,
     required this.emoji,
     required this.children,
+    this.fillHeight = true,
   });
 
   final String title;
   final String emoji;
   final List<Widget> children;
 
+  /// Wide layout: the card fills its column and scrolls its own body.
+  /// Portrait: the page scrolls instead, so the card wraps its content —
+  /// an unbounded height would make the [Expanded] below throw.
+  final bool fillHeight;
+
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+
     return Container(
       padding: AppSpacing.paddingLg,
       decoration: BoxDecoration(
@@ -811,29 +884,28 @@ class _Card extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: fillHeight ? MainAxisSize.max : MainAxisSize.min,
         children: [
           Row(
             children: [
               Text(emoji, style: const TextStyle(fontSize: 14)),
               const SizedBox(width: 6),
-              Text(
-                title,
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontSize: 13,
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
-              ),
-            ),
-          ),
+          if (fillHeight)
+            Expanded(child: SingleChildScrollView(child: body))
+          else
+            body,
         ],
       ),
     );
