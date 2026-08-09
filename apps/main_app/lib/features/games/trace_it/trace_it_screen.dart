@@ -83,6 +83,7 @@ class _TraceItScreenState extends State<TraceItScreen> {
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
+    GameObjectStyle.current = context.read<ChildProvider>().objectStyle;
     _game = TraceItGame(
       totalRounds: _totalRounds,
       childId: childId,

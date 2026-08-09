@@ -77,6 +77,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
+    GameObjectStyle.current = context.read<ChildProvider>().objectStyle;
     _game = MyTurnYourTurnGame(
       totalRounds: _totalRounds,
       childId: childId,

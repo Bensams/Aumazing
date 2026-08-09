@@ -88,6 +88,7 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
     _totalRounds = config.totalRounds;
 
     GameMotion.reduced = childProvider.reducedMotion;
+    GameObjectStyle.current = childProvider.objectStyle;
     _game = SariSariSortGame(
       totalRounds: config.totalRounds,
       itemsPerRound: config.itemsPerRound,
