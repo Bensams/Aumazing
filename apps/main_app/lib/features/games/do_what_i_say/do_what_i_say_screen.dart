@@ -91,6 +91,7 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
+    GameObjectStyle.current = context.read<ChildProvider>().objectStyle;
     _game = DoWhatISayGame(
       totalRounds: _totalRounds,
       childId: childId,
