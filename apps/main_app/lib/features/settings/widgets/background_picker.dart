@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import 'game_preview.dart';
+
 import '../../../providers/child_provider.dart';
 
 /// Parent-facing editor for the child's game-screen background.
@@ -122,7 +124,10 @@ class _BackgroundPickerState extends State<BackgroundPicker> {
         ),
         const SizedBox(height: AppSpacing.md),
 
-        _BackgroundPreview(background: _draft),
+        GamePreview(
+          background: _draft,
+          objectStyle: widget.childProv.objectStyle,
+        ),
         const SizedBox(height: AppSpacing.sm),
         _ContrastNote(background: _draft),
         const SizedBox(height: AppSpacing.md),
@@ -280,44 +285,6 @@ class _StopChip extends StatelessWidget {
               Text(label, style: AppTextStyles.labelLarge),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The chosen background with the real Match It shape colours sitting on it.
-class _BackgroundPreview extends StatelessWidget {
-  const _BackgroundPreview({required this.background});
-
-  final ChildBackground background;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Preview of the game background with sample game shapes',
-      image: true,
-      excludeSemantics: true,
-      child: Container(
-        height: 88,
-        decoration: BoxDecoration(
-          gradient: background.toGradient(),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        alignment: Alignment.center,
-        child: Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: [
-            for (final c in GameArtColors.matchItShapes)
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-              ),
-          ],
         ),
       ),
     );

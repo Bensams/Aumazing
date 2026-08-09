@@ -86,6 +86,9 @@ class ShapePainter3D {
     bool showBorder = false,
     ui.Color? borderColor,
     double borderWidth = 3.0,
+    // Lets the settings preview render a *draft* style without mutating the
+    // global the running games read. Games leave this null.
+    GameObjectStyle? styleOverride,
   }) {
     final rrect =
         ui.RRect.fromRectAndRadius(rect, ui.Radius.circular(cornerRadius));
@@ -112,7 +115,7 @@ class ShapePainter3D {
     // The alpha is still honoured as a *state* signal rather than a tint: a
     // matched card (alpha below the resting 40) fades back, everything else
     // paints solid.
-    final style = GameObjectStyle.current;
+    final style = styleOverride ?? GameObjectStyle.current;
     final override = style.cardColour;
     final baseColor = override != null
         ? override.withValues(alpha: alpha < 40 ? 0.45 : 1.0)

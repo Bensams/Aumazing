@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import 'game_preview.dart';
+
 import '../../../providers/child_provider.dart';
 
 /// Parent-facing editor for the cards behind game objects.
@@ -99,7 +101,7 @@ class _ObjectStylePickerState extends State<ObjectStylePicker> {
         ],
         const SizedBox(height: AppSpacing.sm),
 
-        _ObjectPreview(style: _draft, background: background),
+        GamePreview(background: background, objectStyle: _draft),
         const SizedBox(height: AppSpacing.xs),
         Text(
           _draft.hasOutline
@@ -185,101 +187,4 @@ class _CardColourRow extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Sample object cards drawn the way the games will draw them.
-class _ObjectPreview extends StatelessWidget {
-  const _ObjectPreview({required this.style, required this.background});
-
-  final GameObjectStyle style;
-  final ChildBackground background;
-
-  /// A light, a mid and a very light shape — the three cases that behave
-  /// differently. Gold is the one that vanishes without help.
-  static const _samples = [
-    Color(0xFFFFB300), // gold — the 1.00:1 case
-    Color(0xFF8E24AA), // purple — needs a light surround
-    Color(0xFF1E88E5), // blue
-    Color(0xFFFDD835), // yellow — needs a dark surround
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Preview of game object cards on the current background',
-      image: true,
-      excludeSemantics: true,
-      child: Container(
-        height: 96,
-        decoration: BoxDecoration(
-          gradient: background.toGradient(),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            for (final shape in _samples)
-              CustomPaint(
-                size: const Size(58, 58),
-                painter: _CardPreviewPainter(shape: shape, style: style),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Mirrors what `ShapePainter3D.drawCard3D` does, so the preview and the game
-/// cannot drift in the ways that matter: card fill, outline style, outline
-/// width, and the derived outline colour.
-class _CardPreviewPainter extends CustomPainter {
-  const _CardPreviewPainter({required this.shape, required this.style});
-
-  final Color shape;
-  final GameObjectStyle style;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(12));
-
-    // Same rule as the painter: a fixed card colour, or the object's own
-    // colour at alpha 40 when left on Auto.
-    final card = style.cardColour ?? shape.withAlpha(40);
-    canvas.drawRRect(rrect, Paint()..color = card);
-
-    if (style.hasOutline) {
-      final paint = Paint()
-        ..color = GameObjectStyle.outlineColourFor(card)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = style.effectiveWidth;
-      if (style.outline == ObjectOutline.dashed) {
-        final dash = (paint.strokeWidth * 2.5).clamp(6.0, 40.0);
-        final gap = (paint.strokeWidth * 1.5).clamp(4.0, 40.0);
-        for (final m in (Path()..addRRect(rrect)).computeMetrics()) {
-          var d = 0.0;
-          while (d < m.length) {
-            final end = (d + dash).clamp(0.0, m.length);
-            canvas.drawPath(m.extractPath(d, end), paint);
-            d = end + gap;
-          }
-        }
-      } else {
-        canvas.drawRRect(rrect, paint);
-      }
-    }
-
-    // The object itself.
-    canvas.drawCircle(
-      rect.center,
-      size.width * 0.26,
-      Paint()..color = shape,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_CardPreviewPainter old) =>
-      old.shape != shape || old.style != style;
 }
