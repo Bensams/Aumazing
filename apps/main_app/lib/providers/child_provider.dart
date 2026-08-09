@@ -20,6 +20,12 @@ class ChildProvider extends ChangeNotifier {
   GameTheme? _themeOverride;
   static const _themeOverrideKeyPrefix = 'theme_override_';
 
+  /// Parent's custom game-screen background. When null the child's game
+  /// screens use the [activeTheme] preset gradients. Persisted locally per
+  /// child (no DB migration).
+  ChildBackground? _customBackground;
+  static const _customBackgroundKeyPrefix = 'custom_background_';
+
   /// Parent's chosen scene for the child's "My Path" row. When null the path
   /// keeps its classic look. Persisted locally (no DB migration).
   WorldTheme? _worldOverride;
@@ -87,8 +93,24 @@ class ChildProvider extends ChangeNotifier {
   GameTheme get activeTheme =>
       _themeOverride ?? GameTheme.fromSexValue(_profile?.sex?.value);
 
+  /// The parent's custom game background, or null when using a preset theme.
+  ChildBackground? get customBackground => _customBackground;
+
+  bool get hasCustomBackground => _customBackground != null;
+
   /// The full color palette for the [activeTheme] (game + dashboard).
-  GamePalette get activePalette => GamePalettes.of(activeTheme);
+  ///
+  /// A custom background replaces only the *child* game background — the
+  /// parent dashboard keeps `parentBackground` from the preset theme, so the
+  /// dashboard's text and cards stay on the contrast they were designed
+  /// against.
+  GamePalette get activePalette {
+    final base = GamePalettes.of(activeTheme);
+    final custom = _customBackground;
+    return custom == null
+        ? base
+        : base.withGameBackground(custom.toGradient());
+  }
 
   // ── My Path world ─────────────────────────────────────────────────────
 
@@ -281,6 +303,7 @@ class ChildProvider extends ChangeNotifier {
       final children = await _localDb.getChildren(userId: userId);
       _profile = children.isEmpty ? null : children.first;
       await _loadThemeOverride();
+      await _loadCustomBackground();
       await _loadWorldOverride();
       await _loadLanguage();
       await _loadVoicePack();
@@ -387,6 +410,43 @@ class ChildProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final slug = prefs.getString('$_themeOverrideKeyPrefix$id');
     _themeOverride = slug == null ? null : GameTheme.fromSlug(slug);
+  }
+
+  /// Sets a custom child game background and persists it locally.
+  Future<void> setCustomBackground(ChildBackground background) async {
+    _customBackground = background;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          '$_customBackgroundKeyPrefix$id', background.encode());
+    }
+  }
+
+  /// Clears the custom background so the preset theme applies again.
+  Future<void> clearCustomBackground() async {
+    _customBackground = null;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_customBackgroundKeyPrefix$id');
+    }
+  }
+
+  /// Loads any persisted custom background for the current child.
+  Future<void> _loadCustomBackground() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _customBackground = null;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    // decode() returns null for anything unparseable, so a corrupt value
+    // degrades to the preset theme instead of failing startup.
+    _customBackground = ChildBackground.decode(
+        prefs.getString('$_customBackgroundKeyPrefix$id'));
   }
 
   /// Sets the "My Path" scene and persists it locally.

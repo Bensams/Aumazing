@@ -162,7 +162,12 @@ class MatchItGame extends FlameGame
 
   // True, natural colors (not pastel tints) so the color a child matches
   // here is the same color they'll name and see in the real world.
-  static const List<MatchPairData> _allPairs = [
+  //
+  // Public because the parent-facing background picker scores a chosen
+  // background against these colours; `GameArtColors.matchItShapes` in
+  // shared_ui mirrors the distinct set, and match_it_shape_colors_test keeps
+  // the two in step.
+  static const List<MatchPairData> allPairs = [
     // Stars — 3 colour variants
     MatchPairData(
         shape: ShapeType.star, color: Color(0xFFFFB300), label: 'Gold Star'),
@@ -271,13 +276,13 @@ class MatchItGame extends FlameGame
     final rng = math.Random();
 
     // Reset used-pair tracking when the pool is nearly exhausted.
-    if (_usedPairIndices.length > _allPairs.length - 3) {
+    if (_usedPairIndices.length > allPairs.length - 3) {
       _usedPairIndices.clear();
     }
 
     // Build a list of available (not-yet-used) pairs, shuffled.
     final available = <int>[];
-    for (var i = 0; i < _allPairs.length; i++) {
+    for (var i = 0; i < allPairs.length; i++) {
       if (!_usedPairIndices.contains(i)) available.add(i);
     }
     available.shuffle(rng);
@@ -288,7 +293,7 @@ class MatchItGame extends FlameGame
     final usedShapes = <ShapeType>{};
 
     for (final idx in available) {
-      final p = _allPairs[idx];
+      final p = allPairs[idx];
       if (usedShapes.contains(p.shape)) continue;
       usedShapes.add(p.shape);
       roundPairs.add(p);
@@ -299,11 +304,11 @@ class MatchItGame extends FlameGame
     // Fallback: if we still have < 3 (shouldn't happen with 15 pairs),
     // allow duplicates from the full pool.
     if (roundPairs.length < 3) {
-      final fallback = List<int>.generate(_allPairs.length, (i) => i)
+      final fallback = List<int>.generate(allPairs.length, (i) => i)
         ..shuffle(rng);
       for (final idx in fallback) {
         if (roundIndices.contains(idx)) continue;
-        roundPairs.add(_allPairs[idx]);
+        roundPairs.add(allPairs[idx]);
         roundIndices.add(idx);
         if (roundPairs.length == 3) break;
       }
@@ -372,7 +377,7 @@ class MatchItGame extends FlameGame
 
     // Add round-specific data
     analyticsAddRoundData('round_pairs_count', 3);
-    analyticsAddRoundData('shapes_available', _allPairs.length);
+    analyticsAddRoundData('shapes_available', allPairs.length);
 
     // Start idle timer for this round
     _startNoResponseTimer();

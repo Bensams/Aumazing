@@ -55,6 +55,28 @@ class GamePalette {
     this.backgroundTones = const [],
   });
 
+  /// Returns a copy with [gameBackground] replaced and [backgroundTones]
+  /// cleared, so every game shows the same background.
+  ///
+  /// This is how a parent's custom background reaches the game screens: they
+  /// all read `activePalette.gameBackground` / `gameBackgroundFor(...)`
+  /// already, so overriding here means no screen needs to know a custom
+  /// background exists. Clearing the tones is deliberate — [gameBackgroundFor]
+  /// falls back to [gameBackground] when fewer than two are defined, which
+  /// also drops the per-game variation. A parent who picks one colour should
+  /// get that colour everywhere, and a background that changes between games
+  /// is exactly the kind of unpredictability the child mode avoids.
+  GamePalette withGameBackground(LinearGradient background) => GamePalette(
+        theme: theme,
+        primary: primary,
+        accent: accent,
+        cardSurface: cardSurface,
+        onPrimary: onPrimary,
+        gameBackground: background,
+        parentBackground: parentBackground,
+        backgroundTones: const [],
+      );
+
   final GameTheme theme;
 
   /// Main brand color for this theme — buttons, headers, active states.

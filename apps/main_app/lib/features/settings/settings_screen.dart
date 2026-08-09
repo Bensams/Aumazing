@@ -12,6 +12,7 @@ import '../../services/screen_time_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
+import 'widgets/background_picker.dart';
 
 /// Full-screen Settings hub (the "main settings" page).
 ///
@@ -377,6 +378,28 @@ class _ChildPreferencesScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (childProv.hasCustomBackground)
+                      const _HintText(
+                        'A custom background is in use, so the theme above '
+                        'only sets the button and card colours.',
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // ── Custom background ─────────────────────────────────
+                _SettingsCard(
+                  children: [
+                    const _SectionLabel('Custom Background'),
+                    const SizedBox(height: 2),
+                    const _HintText(
+                      'Pick your own colour for your child\'s game screens, '
+                      'or blend two. This replaces the theme background above '
+                      'and is used for every game, so the screens stay '
+                      'predictable.',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    BackgroundPicker(childProv: childProv),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
