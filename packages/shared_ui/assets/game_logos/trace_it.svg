@@ -1,0 +1,49 @@
+<!--
+  Trace It — a dotted letter with the stroke half traced and the pencil still
+  on the line. No <text> anywhere: the letter is drawn as paths, because a
+  font that is not bundled would silently render as nothing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <clipPath id="tile"><rect width="240" height="240" rx="48"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93C9E8"/>
+      <stop offset="1" stop-color="#C3B6EC"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="240" height="240" rx="48" fill="url(#bg)"/>
+
+    <g fill="#FFFFFF" opacity="0.14">
+      <ellipse cx="28" cy="36" rx="10" ry="23" transform="rotate(-28 28 36)"/>
+      <ellipse cx="214" cy="72" rx="9" ry="20" transform="rotate(34 214 72)"/>
+      <ellipse cx="38" cy="210" rx="9" ry="20" transform="rotate(22 38 210)"/>
+    </g>
+
+    <!-- The guide: a wide soft channel, dotted down the middle -->
+    <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke-width="19" opacity="0.6">
+        <path d="M76,196 L120,58 L164,196"/>
+        <path d="M91,148 L149,148"/>
+      </g>
+      <g stroke-width="6" stroke-dasharray="1 22">
+        <path d="M76,196 L120,58 L164,196"/>
+        <path d="M91,148 L149,148"/>
+      </g>
+    </g>
+
+    <!-- Traced so far: down the right leg from the top, the way it is taught -->
+    <path d="M120,58 L150,152" fill="none" stroke="#F5B942" stroke-width="18"
+          stroke-linecap="round"/>
+
+    <!-- Pencil, tip resting where the trace stopped. Angled up and out to the
+         right so the body lies in empty tile rather than across the letter. -->
+    <g transform="translate(150 152) rotate(30)" stroke="#FFFFFF" stroke-width="3.5">
+      <polygon points="0,0 -12,-22 12,-22" fill="#F2DFC0"/>
+      <rect x="-12" y="-74" width="24" height="52" rx="4" fill="#F5B942"/>
+      <rect x="-12" y="-86" width="24" height="13" rx="3" fill="#CFC9DC"/>
+      <rect x="-12" y="-100" width="24" height="15" rx="7" fill="#F0A9A0"/>
+      <polygon points="0,0 -5,-9 5,-9" fill="#5A5A6B" stroke="none"/>
+    </g>
+  </g>
+</svg>

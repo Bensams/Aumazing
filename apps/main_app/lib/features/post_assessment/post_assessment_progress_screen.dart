@@ -14,6 +14,7 @@ import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
 import 'post_assessment_result_screen.dart';
+import '../../widgets/mascot_host.dart';
 
 /// Orchestrates the sequential post-assessment game flow.
 ///
@@ -133,7 +134,11 @@ class _PostAssessmentProgressScreenState
         return;
     }
 
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    // The mascot keeps the child company through post-assessment too; the
+    // host must sit above the game screen for its lookups to resolve.
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MascotHost(child: screen)),
+    );
   }
 
   void _onGameComplete() {

@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/child_profile_policy.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/widgets/sync_status_banner.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
@@ -85,8 +86,16 @@ class _HomeScreenState extends State<HomeScreen> {
         await Future.delayed(const Duration(milliseconds: 200));
         if (!audioService.isMusicPlaying) {
           debugPrint('[HomeScreen] Resume failed, starting fresh track...');
-          await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
+          await audioService.playCategoryMusic(childProvider.musicCategory);
         }
+      } else if (audioService.currentCategory != childProvider.musicCategory) {
+        // LoadingScreen and LoginScreen start the default category because no
+        // profile exists yet. Now that it is loaded, move to the child's own
+        // choice. This is the one place a track changes mid-run, and it
+        // happens before the child reaches any game.
+        debugPrint('[HomeScreen] Switching music to '
+            '${childProvider.musicCategory}');
+        await audioService.playCategoryMusic(childProvider.musicCategory);
       } else {
         debugPrint('[HomeScreen] Music already playing and enabled — OK');
       }
@@ -301,6 +310,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// reflow on their own width.
   List<Widget> _buildDashboardSections() {
     return [
+      // Hides itself when online with nothing pending, so it only costs
+      // space when there is genuinely something to say.
+      const SyncStatusBanner(),
       _buildActionButtons(),
       _buildPremiumBanner(),
       _buildScreenTimeStatus(),
@@ -825,31 +837,34 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return Padding(
           padding: const EdgeInsets.only(top: AppSpacing.md),
-          child: AppCard(
-            child: _CtaBand(
-              leading: const Text('⭐', style: TextStyle(fontSize: 28)),
-              content: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Aumazing Premium',
-                    style: AppTextStyles.titleMedium
-                        .copyWith(color: AppColors.textPrimary),
+          child: RainbowBorderCard(
+            child: AppCard(
+              child: _CtaBand(
+                leading: const Text('⭐', style: TextStyle(fontSize: 28)),
+                content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aumazing Premium',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.textPrimary),
+                    ),
+                    Text(
+                      'Interactive therapy locator, skill trends, and '
+                      'fresh AI recommendations — ₱149/month.',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+                label: 'Upgrade',
+                icon: Icons.star_rounded,
+                buttonWidth: 140,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PremiumUpgradeScreen(authService: _authService),
                   ),
-                  Text(
-                    'Interactive therapy locator, skill trends, and '
-                    'fresh AI recommendations — ₱149/month.',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.mutedForeground),
-                  ),
-                ],
-              ),
-              label: 'Upgrade',
-              icon: Icons.star_rounded,
-              buttonWidth: 140,
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const PremiumUpgradeScreen(),
                 ),
               ),
             ),
@@ -1234,7 +1249,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 buttonWidth: 130,
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const PremiumUpgradeScreen(),
+                    builder: (_) =>
+                        PremiumUpgradeScreen(authService: _authService),
                   ),
                 ),
               ),

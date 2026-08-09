@@ -42,8 +42,17 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
   /// Enabled only during the child's turn.
   bool interactive = false;
   bool selected = false;
+
+  /// The pointer is being tracked by the drag recognizer.
+  bool _pointerDown = false;
+
+  /// The pointer has travelled past [_tapSlop] — a real drag, not a tap.
   bool _dragging = false;
+  final Vector2 _dragTravel = Vector2.zero();
   late Vector2 _homePosition;
+
+  /// Pointer travel (game px) below which a release counts as a tap.
+  static const double _tapSlop = 14.0;
 
   late TextPaint _emojiPaint;
 
@@ -93,10 +102,15 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
     ));
   }
 
-  // ── Tap (select) — on tap-up so a drag doesn't also select ───────────
+  // ── Tap (select) ─────────────────────────────────────────────────────
+  // Flame's drag recognizer claims the pointer on its first movement, which
+  // knocks the tap recognizer out of the gesture arena — so onTapUp only
+  // fires for a perfectly still finger. Taps are therefore resolved in
+  // onDragEnd (see [_tapSlop]); this stays as the path for the rare tap the
+  // arena does award to the tap recognizer.
   @override
   void onTapUp(TapUpEvent event) {
-    if (isChild && interactive && !_dragging) onTapped?.call(this);
+    if (isChild && interactive && !_pointerDown) onTapped?.call(this);
   }
 
   // ── Drag (place) ─────────────────────────────────────────────────────
@@ -104,22 +118,43 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
     if (!isChild || !interactive) return;
-    _dragging = true;
-    priority = 300;
-    onPickedUp?.call(this);
-    add(ScaleEffect.to(Vector2.all(1.15), EffectController(duration: 0.1)));
+    _pointerDown = true;
+    _dragging = false;
+    _dragTravel.setZero();
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    if (!_dragging) return;
+    if (!_pointerDown) return;
+    _dragTravel.add(event.localDelta);
+
+    if (!_dragging) {
+      // Still tap-like: leave the piece in the tray so a shaky tap doesn't
+      // visibly nudge it.
+      if (_dragTravel.length < _tapSlop) return;
+      _dragging = true;
+      priority = 300;
+      onPickedUp?.call(this);
+      add(ScaleEffect.to(Vector2.all(1.15), EffectController(duration: 0.1)));
+      position += _dragTravel; // catch up on the travel so far
+      return;
+    }
+
     position += event.localDelta;
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (!_dragging) return;
+    if (!_pointerDown) return;
+    _pointerDown = false;
+
+    if (!_dragging) {
+      // Released without ever leaving the piece — that was a tap.
+      if (isChild && interactive) onTapped?.call(this);
+      return;
+    }
+
     _dragging = false;
     onDragEnded?.call(this, position.clone()); // anchor.center → position is centre
   }
@@ -127,6 +162,8 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
+    _pointerDown = false;
+    if (!_dragging) return;
     _dragging = false;
     returnHome();
   }

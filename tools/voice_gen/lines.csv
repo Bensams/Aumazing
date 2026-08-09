@@ -1,0 +1,164 @@
+path,text,carrier,exaggeration,cfg_weight,emotion
+assessment_style/CanYouCopyMe.wav,Can you copy me?,no,0.5,0.5,neutral
+assessment_style/CanYouMatchThis.wav,Can you match this?,no,0.5,0.5,neutral
+assessment_style/FindTheRightOne.wav,Find the right one.,no,0.5,0.5,neutral
+assessment_style/GoodListening.wav,Good listening.,no,0.5,0.5,neutral
+assessment_style/GoodLooking.wav,Good looking.,no,0.5,0.5,neutral
+assessment_style/LetSeeWhatYouCanDo.wav,Let's see what you can do!,no,0.5,0.5,neutral
+assessment_style/LetsTryTheNextTask.wav,Let's try the next task.,no,0.5,0.5,neutral
+assessment_style/ShowMe.wav,Show me.,no,0.5,0.5,neutral
+assessment_style/WhatComesNext.wav,What comes next?,no,0.5,0.5,neutral
+assessment_style/WhichOneIsTheSame.wav,Which one is the same?,no,0.5,0.5,neutral
+attention_and_regulation/CalmBody.wav,Calm body.,no,0.3,0.5,calm
+attention_and_regulation/EyesHere.wav,Eyes here.,no,0.3,0.5,calm
+attention_and_regulation/GoodCalmingDown.wav,Good calming down.,no,0.3,0.5,calm
+attention_and_regulation/ItsOkay.wav,It's okay.,no,0.3,0.5,calm
+attention_and_regulation/LetsContinue.wav,Let's continue.,no,0.3,0.5,calm
+attention_and_regulation/LetsSlowDown.wav,Let's slow down.,no,0.3,0.5,calm
+attention_and_regulation/ListenCarefully.wav,Listen carefully.,no,0.3,0.5,calm
+attention_and_regulation/ReadyAgain.wav,Ready again.,no,0.3,0.5,calm
+attention_and_regulation/TakeABreath.wav,Take a breath.,no,0.3,0.5,calm
+attention_and_regulation/YouAreSafe.wav,You are safe.,no,0.3,0.5,calm
+colors/Blue.wav,Blue.,yes,0.5,0.5,neutral
+colors/Gold.wav,Gold.,yes,0.5,0.5,neutral
+colors/Green.wav,Green.,yes,0.5,0.5,neutral
+colors/Magenta.wav,Magenta.,yes,0.5,0.5,neutral
+colors/Orange.wav,Orange.,yes,0.5,0.5,neutral
+colors/Pink.wav,Pink.,yes,0.5,0.5,neutral
+colors/Purple.wav,Purple.,yes,0.5,0.5,neutral
+colors/Red.wav,Red.,yes,0.5,0.5,neutral
+colors/Teal.wav,Teal.,yes,0.5,0.5,neutral
+colors/Yellow.wav,Yellow.,yes,0.5,0.5,neutral
+core_praise/Aumazing.wav,Aumazing!,no,0.6,0.5,happy
+core_praise/Ausome.wav,Ausome!,no,0.6,0.5,happy
+core_praise/Correct.wav,Correct!,no,0.6,0.5,happy
+core_praise/Excellent.wav,Excellent!,no,0.6,0.5,happy
+core_praise/GoodTry.wav,Good try!,no,0.6,0.5,happy
+core_praise/GreatJob.wav,Great job!,no,0.6,0.5,happy
+core_praise/NiceWork.wav,Nice work!,no,0.6,0.5,happy
+core_praise/ThatsRight.wav,That's right!,no,0.6,0.5,happy
+core_praise/VeryGood.wav,Very good!,no,0.6,0.5,happy
+core_praise/WellDone.wav,Well done!,no,0.6,0.5,happy
+core_praise/YayYouGotIt.wav,Yay! You got it!,no,0.6,0.5,happy
+core_praise/YouDidIt.wav,You did it!,no,0.6,0.5,happy
+dynamic/DragThe.wav,Drag the,yes,0.5,0.5,neutral
+dynamic/DropThe.wav,Drop the,yes,0.5,0.5,neutral
+dynamic/TapThe.wav,Tap the,yes,0.5,0.5,neutral
+gently_retry/AlmostThere.wav,Almost there.,no,0.5,0.5,gentle
+gently_retry/GiveItAnotherTry.wav,Give it another try.,no,0.5,0.5,gentle
+gently_retry/KeepGoing.wav,Keep going.,no,0.5,0.5,gentle
+gently_retry/LetsDoItOneMoreTime.wav,Let's do it one more time.,no,0.5,0.5,gentle
+gently_retry/LetsPracticeAgain.wav,Let's practice again.,no,0.5,0.5,gentle
+gently_retry/LetsTryAgain.wav,Let's try again.,no,0.5,0.5,gentle
+gently_retry/NiceTry.wav,Nice try.,no,0.5,0.5,gentle
+gently_retry/NotYet.wav,Not yet.,no,0.5,0.5,gentle
+gently_retry/TryAgain.wav,Try again.,no,0.5,0.5,gentle
+gently_retry/YouCanDoIt.wav,You can do it.,no,0.5,0.5,gentle
+instruction/ChooseOne.wav,Choose one.,no,0.5,0.5,neutral
+instruction/CopyMe.wav,Copy me.,no,0.5,0.5,neutral
+instruction/CountWithMe.wav,Count with me.,no,0.5,0.5,neutral
+instruction/DragIt.wav,Drag it.,no,0.5,0.5,neutral
+instruction/FindTheSame.wav,Find the same.,no,0.5,0.5,neutral
+instruction/FollowMe.wav,Follow me.,no,0.5,0.5,neutral
+instruction/LetsBegin.wav,Let's begin.,no,0.5,0.5,neutral
+instruction/Listen.wav,Listen.,no,0.5,0.5,neutral
+instruction/MatchIt.wav,Match it.,no,0.5,0.5,neutral
+instruction/MyTurn.wav,My turn.,no,0.5,0.5,neutral
+instruction/PickTheColor.wav,Pick the color.,no,0.5,0.5,neutral
+instruction/PickTheShape.wav,Pick the shape.,no,0.5,0.5,neutral
+instruction/TapHere.wav,Tap here.,no,0.5,0.5,neutral
+instruction/TouchThePicture.wav,Touch the picture.,no,0.5,0.5,neutral
+instruction/WatchCarefully.wav,Watch carefully.,no,0.5,0.5,neutral
+instruction/YourTurn.wav,Your turn!,no,0.5,0.5,neutral
+items/Biskwit.wav,Biskwit.,yes,0.5,0.5,neutral
+items/Gatas.wav,Gatas.,yes,0.5,0.5,neutral
+items/Juice.wav,Juice.,yes,0.5,0.5,neutral
+items/Kape.wav,Kape.,yes,0.5,0.5,neutral
+items/Kendi.wav,Kendi.,yes,0.5,0.5,neutral
+items/Mansanas.wav,Mansanas.,yes,0.5,0.5,neutral
+items/Sabon.wav,Sabon.,yes,0.5,0.5,neutral
+items/Saging.wav,Saging.,yes,0.5,0.5,neutral
+items/Sipilyo.wav,Sipilyo.,yes,0.5,0.5,neutral
+items/Softdrink.wav,Softdrink.,yes,0.5,0.5,neutral
+items/Syampu.wav,Syampu.,yes,0.5,0.5,neutral
+items/Tinapay.wav,Tinapay.,yes,0.5,0.5,neutral
+items/Tisyu.wav,Tisyu.,yes,0.5,0.5,neutral
+items/Tubig.wav,Tubig.,yes,0.5,0.5,neutral
+letters/A.wav,A.,yes,0.5,0.5,neutral
+letters/C.wav,C.,yes,0.5,0.5,neutral
+letters/E.wav,E.,yes,0.5,0.5,neutral
+letters/H.wav,H.,yes,0.5,0.5,neutral
+letters/L.wav,L.,yes,0.5,0.5,neutral
+letters/T.wav,T.,yes,0.5,0.5,neutral
+letters/U.wav,U.,yes,0.5,0.5,neutral
+letters/V.wav,V.,yes,0.5,0.5,neutral
+numbers/Five.wav,Five.,yes,0.5,0.5,neutral
+numbers/Four.wav,Four.,yes,0.5,0.5,neutral
+numbers/One.wav,One.,yes,0.5,0.5,neutral
+numbers/Seven.wav,Seven.,yes,0.5,0.5,neutral
+numbers/Three.wav,Three.,yes,0.5,0.5,neutral
+numbers/Two.wav,Two.,yes,0.5,0.5,neutral
+phrases/BlueCircle.wav,Blue circle.,no,0.5,0.5,neutral
+phrases/BlueDiamond.wav,Blue diamond.,no,0.5,0.5,neutral
+phrases/BlueStar.wav,Blue star.,no,0.5,0.5,neutral
+phrases/BlueTriangle.wav,Blue triangle.,no,0.5,0.5,neutral
+phrases/GoldStar.wav,Gold star.,no,0.5,0.5,neutral
+phrases/GreenCircle.wav,Green circle.,no,0.5,0.5,neutral
+phrases/GreenDiamond.wav,Green diamond.,no,0.5,0.5,neutral
+phrases/GreenStar.wav,Green star.,no,0.5,0.5,neutral
+phrases/GreenTriangle.wav,Green triangle.,no,0.5,0.5,neutral
+phrases/MagentaDiamond.wav,Magenta diamond.,no,0.5,0.5,neutral
+phrases/OrangeCircle.wav,Orange circle.,no,0.5,0.5,neutral
+phrases/OrangeDiamond.wav,Orange diamond.,no,0.5,0.5,neutral
+phrases/OrangeStar.wav,Orange star.,no,0.5,0.5,neutral
+phrases/OrangeTriangle.wav,Orange triangle.,no,0.5,0.5,neutral
+phrases/PinkHeart.wav,Pink heart.,no,0.5,0.5,neutral
+phrases/PurpleCircle.wav,Purple circle.,no,0.5,0.5,neutral
+phrases/PurpleDiamond.wav,Purple diamond.,no,0.5,0.5,neutral
+phrases/PurpleHeart.wav,Purple heart.,no,0.5,0.5,neutral
+phrases/PurpleStar.wav,Purple star.,no,0.5,0.5,neutral
+phrases/PurpleTriangle.wav,Purple triangle.,no,0.5,0.5,neutral
+phrases/RedCircle.wav,Red circle.,no,0.5,0.5,neutral
+phrases/RedDiamond.wav,Red diamond.,no,0.5,0.5,neutral
+phrases/RedHeart.wav,Red heart.,no,0.5,0.5,neutral
+phrases/RedStar.wav,Red star.,no,0.5,0.5,neutral
+phrases/RedTriangle.wav,Red triangle.,no,0.5,0.5,neutral
+phrases/TealTriangle.wav,Teal triangle.,no,0.5,0.5,neutral
+phrases/YellowCircle.wav,Yellow circle.,no,0.5,0.5,neutral
+phrases/YellowDiamond.wav,Yellow diamond.,no,0.5,0.5,neutral
+phrases/YellowStar.wav,Yellow star.,no,0.5,0.5,neutral
+phrases/YellowTriangle.wav,Yellow triangle.,no,0.5,0.5,neutral
+reward_and_celebration/AwesomeWorkToday.wav,Awesome work today!,no,0.6,0.5,excited
+reward_and_celebration/BigHighFive.wav,Big high five!,no,0.6,0.5,excited
+reward_and_celebration/Fantastic.wav,Fantastic!,no,0.6,0.5,excited
+reward_and_celebration/GreatPlaying.wav,Great playing!,no,0.6,0.5,excited
+reward_and_celebration/Hooray.wav,Hooray!,no,0.6,0.5,excited
+reward_and_celebration/SuperJob.wav,Super job!,no,0.6,0.5,excited
+reward_and_celebration/YouDidSoWell.wav,You did so well!,no,0.6,0.5,excited
+reward_and_celebration/YouFinishedIt.wav,You finished it!,no,0.6,0.5,excited
+reward_and_celebration/YoureAmazing.wav,You're amazing!,no,0.6,0.5,excited
+shapes/Circle.wav,Circle.,yes,0.5,0.5,neutral
+shapes/Diamond.wav,Diamond.,yes,0.5,0.5,neutral
+shapes/Heart.wav,Heart.,yes,0.5,0.5,neutral
+shapes/Star.wav,Star.,yes,0.5,0.5,neutral
+shapes/Triangle.wav,Triangle.,yes,0.5,0.5,neutral
+transition/GameFinished.wav,Game finished!,no,0.6,0.5,happy
+transition/GetReady.wav,Get ready!,no,0.6,0.5,happy
+transition/GoodJobMovingOn.wav,Good job moving on!,no,0.6,0.5,happy
+transition/LetsGo.wav,Let's go!,no,0.6,0.5,happy
+transition/LetsPlayAgain.wav,Let's play again!,no,0.6,0.5,happy
+transition/LevelComplete.wav,Level complete!,no,0.6,0.5,happy
+transition/NewGame.wav,New game!,no,0.6,0.5,happy
+transition/NextActivity.wav,Next activity!,no,0.6,0.5,happy
+transition/NextOne.wav,Next one!,no,0.6,0.5,happy
+transition/TimeForTheNextOne.wav,Time for the next one!,no,0.6,0.5,happy
+turn_taking/GoodWaiting.wav,Good waiting.,no,0.5,0.5,neutral
+turn_taking/HereWeGo.wav,Here we go.,no,0.5,0.5,neutral
+turn_taking/LetsTakeTurns.wav,Let's take turns.,no,0.5,0.5,neutral
+turn_taking/MyTurn.wav,My turn.,no,0.5,0.5,neutral
+turn_taking/NowYouTry.wav,Now you try.,no,0.5,0.5,neutral
+turn_taking/Ready.wav,Ready.,no,0.5,0.5,neutral
+turn_taking/ThankYouForWaiting.wav,Thank you for waiting.,no,0.5,0.5,neutral
+turn_taking/Wait.wav,Wait.,no,0.5,0.5,neutral
+turn_taking/WatchMeFirst.wav,Watch me first.,no,0.5,0.5,neutral
+turn_taking/YourTurn.wav,Your turn!,no,0.5,0.5,neutral

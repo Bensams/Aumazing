@@ -10,6 +10,7 @@ import '../../providers/child_provider.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/therapy_center_service.dart';
 import '../premium/premium_upgrade_screen.dart';
+import 'location_disclosure_dialog.dart';
 
 /// Therapy Center Directory + Interactive Locator (Use Cases 11, 15, 16).
 ///
@@ -52,6 +53,10 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
   /// Just-in-time GPS fix: permission is requested only when the parent
   /// taps "Find near me", and the position never leaves this method's
   /// scope except as ranked distances.
+  ///
+  /// A plain-language disclosure runs *before* the OS prompt whenever
+  /// permission isn't already granted, so the parent knows what the fix
+  /// is for and that it is never stored.
   Future<void> _findNearMe() async {
     setState(() {
       _locating = true;
@@ -65,11 +70,26 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
         return;
       }
       var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        final agreed = await LocationDisclosureDialog.show(context);
+        if (!agreed) {
+          setState(() => _locationMessage =
+              'No problem — the directory is shown without distances.');
+          return;
+        }
+      }
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _locationMessage =
+            'Location is blocked for Aumazing. Enable it in your phone\'s '
+            'app settings to rank centers by distance.');
+        return;
+      }
+      if (permission == LocationPermission.denied) {
         setState(() => _locationMessage =
             'Location permission is needed to rank centers by distance.');
         return;

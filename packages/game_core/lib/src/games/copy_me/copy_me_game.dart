@@ -6,10 +6,12 @@ import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
 import 'components/sequence_shape.dart';
+import '../shared/answer_label.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// Copy Me — a "Simon Says" style sequence memory game with XGBoost-ready analytics.
 ///
@@ -24,6 +26,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -65,6 +68,11 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
   final void Function()? onCorrectMatch;
 
+  /// Optional callback fired on each wrong tap, alongside the wrong SFX and the
+  /// encouraging voice line. The Flutter layer uses it for the mascot's
+  /// reaction, so the character answers a mistake the same way the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
@@ -73,7 +81,11 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+  /// Immediate feedback on each correct tap: the shape the child just hit, so
+  /// the app can name it back. Fires per tap rather than per completed
+  /// sequence — the point of naming is to land while the child is still
+  /// looking at what they touched. Praise waits for the end of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -174,11 +186,14 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
   void _layoutShapes() {
     final gameW = size.x;
     final gameH = size.y;
-    final cardSize = math.min(gameW / 5.5, gameH / 3.0);
+    final availH = gameH - kTopOverlayBand;
+    var cardSize = math.min(gameW / 5.5, gameH / 3.0);
+    if (cardSize > availH) cardSize = availH;
     final gap = cardSize * 0.22;
     final totalW = 4 * cardSize + 3 * gap;
     final startX = (gameW - totalW) / 2;
-    final centerY = gameH / 2 - cardSize / 2;
+    // Centred in the space below the overlay strip, not the whole screen.
+    final centerY = kTopOverlayBand + (availH - cardSize) / 2;
 
     for (var i = 0; i < 4; i++) {
       final data = _shapeData[i];
@@ -276,8 +291,10 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
       _adaptive.recordCorrect();
         _shapes[index].showCorrect();
 
-      // Play position-based shimmer SFX for this correct tap
+      // Play position-based shimmer SFX for this correct tap, then name the
+      // shape that was tapped.
       onPlaySequenceHighlightSfx?.call(_inputIndex);
+      onPlayCorrectVo?.call(AnswerLabel(shape: _shapeData[index].$3));
 
       // Notify Flutter layer of individual correct tap (for haptic feedback)
       onCorrectMatch?.call();
@@ -293,8 +310,6 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
 
       if (_inputIndex >= _sequence.length) {
         // Sequence complete — this round was successful
-        // Play praise voice-over only when the full sequence is completed
-        onPlayCorrectVo?.call();
         _score++;
         _consecutiveErrors = 0; // Reset consecutive errors on success
 
@@ -328,13 +343,16 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
           analyticsAddGameSpecificMetric('max_sequence_length',
             totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
 
-          // Play game-complete SFX immediately (uses AudioService — separate
-          // player pool from VoiceOverService, so no conflict with praise VO)
+          // Play game-complete SFX and the children's cheer immediately (uses
+          // AudioService — separate player pool from VoiceOverService, so no
+          // conflict with the voice-over).
           onPlayGameCompleteSfx?.call();
 
-          // Wait for praise VO to finish before playing celebration VO
-          // (both use VoiceOverService, so they would cut each other off)
-          Future.delayed(const Duration(milliseconds: 2000), () {
+          // Wait for the last shape's name to finish before the celebration VO
+          // (both use VoiceOverService, so they would cut each other off). One
+          // shape name is short, so this is much less than the two seconds the
+          // old full praise line needed.
+          Future.delayed(const Duration(milliseconds: 900), () {
             if (!isMounted) return;
             onPlayCelebrationVo?.call();
 
@@ -372,6 +390,7 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
       _shapes[index].showWrong();
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
+      onWrongAnswer?.call();
 
       _errorCount++;
       _retries++;
@@ -527,40 +546,9 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     );
   }
 
-  @override
-  void render(Canvas canvas) {
-    final fontSize = (size.x * 0.035).clamp(16.0, 24.0);
-    // Demo phase label
-    if (_demonstrating) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: 'Watch carefully…',
-          style: TextStyle(
-            color: Color(0xFF9B82C4),
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(size.x / 2 - tp.width / 2, 20));
-    } else if (_inputPhase) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: 'Your turn! Tap the shapes!',
-          style: TextStyle(
-            color: Color(0xFF5DAF8E),
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(size.x / 2 - tp.width / 2, 20));
-    }
-
-    super.render(canvas);
-  }
+  // No on-canvas phase labels: the "Watch carefully…" / "Your turn! Tap the
+  // shapes!" prompts belong to the VoiceOverPromptBubble overlay in the upper
+  // left, which also honours the child's showTextPrompts preference.
 
   @override
   void onRemove() {

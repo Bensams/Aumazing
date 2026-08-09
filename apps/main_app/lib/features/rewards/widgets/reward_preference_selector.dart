@@ -373,18 +373,26 @@ class RewardPreferenceDropdown extends StatelessWidget {
             ),
           ),
         ],
-        child: Row(
-          children: [
-            Text(
-              currentDisplay,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+        // PopupMenuButton sizes its hit area to this child, and a bare text
+        // row is only 24dp tall. The minimum height brings the whole control
+        // up to the 48dp touch target.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: kMinInteractiveDimension,
+          ),
+          child: Row(
+            children: [
+              Text(
+                currentDisplay,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_drop_down, color: Colors.grey.shade500),
-          ],
+              const Spacer(),
+              Icon(Icons.arrow_drop_down, color: Colors.grey.shade500),
+            ],
+          ),
         ),
       ),
     );

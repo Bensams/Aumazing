@@ -14,6 +14,8 @@ import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
+import '../../../widgets/mascot.dart';
+import '../../../widgets/mascot_host.dart';
 
 /// Child game screen: "Sari-Sari Store Sorting".
 ///
@@ -69,7 +71,9 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
 
     _sessionStartTime = DateTime.now();
     _voiceOverService = VoiceOverService(
-        languageCode: context.read<ChildProvider>().language.slug);
+      languageCode: context.read<ChildProvider>().voiceAssetFolder,
+      speed: context.read<ChildProvider>().voicePlaybackRate,
+    );
 
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id ?? 'unknown';
@@ -98,15 +102,25 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectDrop: _onCorrectDrop,
+      // A wrong answer gets a brief "oh, not quite" that resolves into an
+      // encouraging pose — the mascot never blames or despairs at the child.
+      onWrongAnswer: () => MascotHost.maybeOf(context)?.reassure(),
       // Audio SFX
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
       onPlayWrongSfx: () => audioService.playWrongSfx(),
       onPlayDragSfx: () => audioService.playDragSfx(),
       onPlayDropSfx: () => audioService.playDropSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
-      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteCelebration(),
       // Voice-over
-      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      // Immediate feedback names what was just answered ("red circle");
+      // praise is saved for the end-of-game reward.
+      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
+        color: label.color,
+        shape: label.shape,
+        letter: label.letter,
+        item: label.item,
+      ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
@@ -128,6 +142,9 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
   }
 
   void _onCorrectDrop() {
+    // Nod along with the child on each correct answer.
+    MascotHost.maybeOf(context)?.play(MascotGesture.nod);
+
     if (widget.sensoryController != null) {
       widget.sensoryController!.triggerHapticOnCorrect();
     } else if (context.read<ChildProvider>().vibrationEnabled) {
@@ -143,6 +160,10 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
     GameSessionMetrics? analytics,
   }) {
     setState(() => _gameComplete = true);
+
+    // Celebrate with the child before the reward overlay lands. The overlay
+    // and its barrier are transparent, so the mascot stays visible under it.
+    MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
 
     if (context.read<ChildProvider>().vibrationEnabled) {
       context.read<HapticService>().gameCompleteFeedback();
@@ -207,12 +228,19 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
   }
 
   void _retryGame() {
+    // Hold an encouraging pose while the child tries again.
+    MascotHost.maybeOf(context)?.flash(MascotPose.encourage);
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => SariSariSortScreen(
-          assessmentContext: widget.assessmentContext,
-          sensoryController: widget.sensoryController,
-          difficulty: widget.difficulty,
+        // A pushed route leaves the old host behind, so the replacement
+        // screen carries its own.
+        builder: (_) => MascotHost(
+          child: SariSariSortScreen(
+            assessmentContext: widget.assessmentContext,
+            sensoryController: widget.sensoryController,
+            difficulty: widget.difficulty,
+          ),
         ),
       ),
     );
@@ -276,10 +304,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
           ),
 
           Positioned(
-            bottom: 12,
-            left: 0,
-            right: 0,
+            // Inside the reserved band, hard into the upper-left corner.
+            top: MediaQuery.of(context).padding.top + 8,
+            left: AppSpacing.md,
             child: VoiceOverPromptBubble(
+              showText: context.watch<ChildProvider>().showTextPrompts,
               text: _gameComplete
                   ? 'Well done! You finished the game!'
                   : strings.sortInstruction,

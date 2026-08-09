@@ -653,15 +653,12 @@ class _GameCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.white.withAlpha(180),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(entry.icon,
-                        color: AppColors.primaryPurple, size: 24),
+                  GameLogo(
+                    asset: entry.logoAsset,
+                    size: 48,
+                    fallbackIcon: entry.icon,
+                    fallbackColor: AppColors.primaryPurple,
+                    semanticLabel: entry.name,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(

@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import 'voice_pack.dart';
+
 /// Categories of voice-over audio cues, matching the asset folder structure.
 enum VoiceOverCategory {
   assessmentStyle,
@@ -16,7 +18,11 @@ enum VoiceOverCategory {
   turnTaking,
   dynamic,    // Action words: "Tap the", "Drag the", "Drop the"
   colors,     // Color names: "Red", "Blue", etc.
+  phrases,    // Whole colour+shape phrases: "Purple circle" 
   shapes,     // Shape names: "Circle", "Star", etc.
+  letters,    // Letter names: "A", "C", etc. (Trace It)
+  numbers,    // Numeral names: "One", "Two", etc. (Trace It)
+  items,      // Sari-sari store item names: "Tinapay", "Gatas", etc.
 }
 
 /// Individual voice-over cues mapped to their .wav asset files.
@@ -139,12 +145,86 @@ enum VoiceOverCue {
   colorYellow,
   colorPurple,
   colorOrange,
+  colorGold,
+  colorPink,
+  colorMagenta,
+  colorTeal,
+
+
+  // ── Colour+shape phrase cues ───────────────────────────────────────
+  // Recorded as one utterance so the colour leads into the shape instead of
+  // ending like a sentence. Derived from the games' own palettes.
+  phraseBlueCircle,
+  phraseBlueDiamond,
+  phraseBlueStar,
+  phraseBlueTriangle,
+  phraseGoldStar,
+  phraseGreenCircle,
+  phraseGreenDiamond,
+  phraseGreenStar,
+  phraseGreenTriangle,
+  phraseMagentaDiamond,
+  phraseOrangeCircle,
+  phraseOrangeDiamond,
+  phraseOrangeStar,
+  phraseOrangeTriangle,
+  phrasePinkHeart,
+  phrasePurpleCircle,
+  phrasePurpleDiamond,
+  phrasePurpleHeart,
+  phrasePurpleStar,
+  phrasePurpleTriangle,
+  phraseRedCircle,
+  phraseRedDiamond,
+  phraseRedHeart,
+  phraseRedStar,
+  phraseRedTriangle,
+  phraseTealTriangle,
+  phraseYellowCircle,
+  phraseYellowDiamond,
+  phraseYellowStar,
+  phraseYellowTriangle,
 
   // ── Shape cues ─────────────────────────────────────────────────────
   shapeCircle,
   shapeStar,
   shapeTriangle,
   shapeDiamond,
+  shapeHeart,
+
+  // ── Letter cues (Trace It glyphs) ───────────────────────────────────
+  letterA,
+  letterC,
+  letterE,
+  letterH,
+  letterL,
+  letterT,
+  letterU,
+  letterV,
+
+  // ── Numeral cues (Trace It glyphs) ──────────────────────────────────
+  numberOne,
+  numberTwo,
+  numberThree,
+  numberFour,
+  numberFive,
+  numberSeven,
+
+  // ── Sari-Sari Sort item cues ────────────────────────────────────────
+  itemTinapay,
+  itemBiskwit,
+  itemKendi,
+  itemSaging,
+  itemMansanas,
+  itemTubig,
+  itemGatas,
+  itemJuice,
+  itemSoftdrink,
+  itemKape,
+  itemSabon,
+  itemSipilyo,
+  itemTisyu,
+  itemSyampu,
 }
 
 /// Maps each [VoiceOverCue] to its category.
@@ -264,12 +344,84 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.colorYellow: VoiceOverCategory.colors,
   VoiceOverCue.colorPurple: VoiceOverCategory.colors,
   VoiceOverCue.colorOrange: VoiceOverCategory.colors,
+  VoiceOverCue.colorGold: VoiceOverCategory.colors,
+  VoiceOverCue.colorPink: VoiceOverCategory.colors,
+  VoiceOverCue.colorMagenta: VoiceOverCategory.colors,
+  VoiceOverCue.colorTeal: VoiceOverCategory.colors,
+
+
+  // Colour+shape phrases
+  VoiceOverCue.phraseBlueCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseBlueDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseBlueStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseBlueTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseGoldStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseGreenCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseGreenDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseGreenStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseGreenTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseMagentaDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseOrangeCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseOrangeDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseOrangeStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseOrangeTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePinkHeart: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePurpleCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePurpleDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePurpleHeart: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePurpleStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phrasePurpleTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseRedCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseRedDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseRedHeart: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseRedStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseRedTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseTealTriangle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseYellowCircle: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseYellowDiamond: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseYellowStar: VoiceOverCategory.phrases,
+  VoiceOverCue.phraseYellowTriangle: VoiceOverCategory.phrases,
 
   // Shapes
   VoiceOverCue.shapeCircle: VoiceOverCategory.shapes,
   VoiceOverCue.shapeStar: VoiceOverCategory.shapes,
   VoiceOverCue.shapeTriangle: VoiceOverCategory.shapes,
   VoiceOverCue.shapeDiamond: VoiceOverCategory.shapes,
+  VoiceOverCue.shapeHeart: VoiceOverCategory.shapes,
+
+  // Letters
+  VoiceOverCue.letterA: VoiceOverCategory.letters,
+  VoiceOverCue.letterC: VoiceOverCategory.letters,
+  VoiceOverCue.letterE: VoiceOverCategory.letters,
+  VoiceOverCue.letterH: VoiceOverCategory.letters,
+  VoiceOverCue.letterL: VoiceOverCategory.letters,
+  VoiceOverCue.letterT: VoiceOverCategory.letters,
+  VoiceOverCue.letterU: VoiceOverCategory.letters,
+  VoiceOverCue.letterV: VoiceOverCategory.letters,
+
+  // Numbers
+  VoiceOverCue.numberOne: VoiceOverCategory.numbers,
+  VoiceOverCue.numberTwo: VoiceOverCategory.numbers,
+  VoiceOverCue.numberThree: VoiceOverCategory.numbers,
+  VoiceOverCue.numberFour: VoiceOverCategory.numbers,
+  VoiceOverCue.numberFive: VoiceOverCategory.numbers,
+  VoiceOverCue.numberSeven: VoiceOverCategory.numbers,
+
+  // Items
+  VoiceOverCue.itemTinapay: VoiceOverCategory.items,
+  VoiceOverCue.itemBiskwit: VoiceOverCategory.items,
+  VoiceOverCue.itemKendi: VoiceOverCategory.items,
+  VoiceOverCue.itemSaging: VoiceOverCategory.items,
+  VoiceOverCue.itemMansanas: VoiceOverCategory.items,
+  VoiceOverCue.itemTubig: VoiceOverCategory.items,
+  VoiceOverCue.itemGatas: VoiceOverCategory.items,
+  VoiceOverCue.itemJuice: VoiceOverCategory.items,
+  VoiceOverCue.itemSoftdrink: VoiceOverCategory.items,
+  VoiceOverCue.itemKape: VoiceOverCategory.items,
+  VoiceOverCue.itemSabon: VoiceOverCategory.items,
+  VoiceOverCue.itemSipilyo: VoiceOverCategory.items,
+  VoiceOverCue.itemTisyu: VoiceOverCategory.items,
+  VoiceOverCue.itemSyampu: VoiceOverCategory.items,
 };
 
 /// Maps each [VoiceOverCue] to its asset file path (relative to the package
@@ -416,12 +568,84 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.colorYellow: 'voice_over/colors/Yellow.wav',
   VoiceOverCue.colorPurple: 'voice_over/colors/Purple.wav',
   VoiceOverCue.colorOrange: 'voice_over/colors/Orange.wav',
+  VoiceOverCue.colorGold: 'voice_over/colors/Gold.wav',
+  VoiceOverCue.colorPink: 'voice_over/colors/Pink.wav',
+  VoiceOverCue.colorMagenta: 'voice_over/colors/Magenta.wav',
+  VoiceOverCue.colorTeal: 'voice_over/colors/Teal.wav',
+
+
+  // Colour+shape phrases
+  VoiceOverCue.phraseBlueCircle: 'voice_over/phrases/BlueCircle.wav',
+  VoiceOverCue.phraseBlueDiamond: 'voice_over/phrases/BlueDiamond.wav',
+  VoiceOverCue.phraseBlueStar: 'voice_over/phrases/BlueStar.wav',
+  VoiceOverCue.phraseBlueTriangle: 'voice_over/phrases/BlueTriangle.wav',
+  VoiceOverCue.phraseGoldStar: 'voice_over/phrases/GoldStar.wav',
+  VoiceOverCue.phraseGreenCircle: 'voice_over/phrases/GreenCircle.wav',
+  VoiceOverCue.phraseGreenDiamond: 'voice_over/phrases/GreenDiamond.wav',
+  VoiceOverCue.phraseGreenStar: 'voice_over/phrases/GreenStar.wav',
+  VoiceOverCue.phraseGreenTriangle: 'voice_over/phrases/GreenTriangle.wav',
+  VoiceOverCue.phraseMagentaDiamond: 'voice_over/phrases/MagentaDiamond.wav',
+  VoiceOverCue.phraseOrangeCircle: 'voice_over/phrases/OrangeCircle.wav',
+  VoiceOverCue.phraseOrangeDiamond: 'voice_over/phrases/OrangeDiamond.wav',
+  VoiceOverCue.phraseOrangeStar: 'voice_over/phrases/OrangeStar.wav',
+  VoiceOverCue.phraseOrangeTriangle: 'voice_over/phrases/OrangeTriangle.wav',
+  VoiceOverCue.phrasePinkHeart: 'voice_over/phrases/PinkHeart.wav',
+  VoiceOverCue.phrasePurpleCircle: 'voice_over/phrases/PurpleCircle.wav',
+  VoiceOverCue.phrasePurpleDiamond: 'voice_over/phrases/PurpleDiamond.wav',
+  VoiceOverCue.phrasePurpleHeart: 'voice_over/phrases/PurpleHeart.wav',
+  VoiceOverCue.phrasePurpleStar: 'voice_over/phrases/PurpleStar.wav',
+  VoiceOverCue.phrasePurpleTriangle: 'voice_over/phrases/PurpleTriangle.wav',
+  VoiceOverCue.phraseRedCircle: 'voice_over/phrases/RedCircle.wav',
+  VoiceOverCue.phraseRedDiamond: 'voice_over/phrases/RedDiamond.wav',
+  VoiceOverCue.phraseRedHeart: 'voice_over/phrases/RedHeart.wav',
+  VoiceOverCue.phraseRedStar: 'voice_over/phrases/RedStar.wav',
+  VoiceOverCue.phraseRedTriangle: 'voice_over/phrases/RedTriangle.wav',
+  VoiceOverCue.phraseTealTriangle: 'voice_over/phrases/TealTriangle.wav',
+  VoiceOverCue.phraseYellowCircle: 'voice_over/phrases/YellowCircle.wav',
+  VoiceOverCue.phraseYellowDiamond: 'voice_over/phrases/YellowDiamond.wav',
+  VoiceOverCue.phraseYellowStar: 'voice_over/phrases/YellowStar.wav',
+  VoiceOverCue.phraseYellowTriangle: 'voice_over/phrases/YellowTriangle.wav',
 
   // Shapes
   VoiceOverCue.shapeCircle: 'voice_over/shapes/Circle.wav',
   VoiceOverCue.shapeStar: 'voice_over/shapes/Star.wav',
   VoiceOverCue.shapeTriangle: 'voice_over/shapes/Triangle.wav',
   VoiceOverCue.shapeDiamond: 'voice_over/shapes/Diamond.wav',
+  VoiceOverCue.shapeHeart: 'voice_over/shapes/Heart.wav',
+
+  // Letters
+  VoiceOverCue.letterA: 'voice_over/letters/A.wav',
+  VoiceOverCue.letterC: 'voice_over/letters/C.wav',
+  VoiceOverCue.letterE: 'voice_over/letters/E.wav',
+  VoiceOverCue.letterH: 'voice_over/letters/H.wav',
+  VoiceOverCue.letterL: 'voice_over/letters/L.wav',
+  VoiceOverCue.letterT: 'voice_over/letters/T.wav',
+  VoiceOverCue.letterU: 'voice_over/letters/U.wav',
+  VoiceOverCue.letterV: 'voice_over/letters/V.wav',
+
+  // Numbers
+  VoiceOverCue.numberOne: 'voice_over/numbers/One.wav',
+  VoiceOverCue.numberTwo: 'voice_over/numbers/Two.wav',
+  VoiceOverCue.numberThree: 'voice_over/numbers/Three.wav',
+  VoiceOverCue.numberFour: 'voice_over/numbers/Four.wav',
+  VoiceOverCue.numberFive: 'voice_over/numbers/Five.wav',
+  VoiceOverCue.numberSeven: 'voice_over/numbers/Seven.wav',
+
+  // Items
+  VoiceOverCue.itemTinapay: 'voice_over/items/Tinapay.wav',
+  VoiceOverCue.itemBiskwit: 'voice_over/items/Biskwit.wav',
+  VoiceOverCue.itemKendi: 'voice_over/items/Kendi.wav',
+  VoiceOverCue.itemSaging: 'voice_over/items/Saging.wav',
+  VoiceOverCue.itemMansanas: 'voice_over/items/Mansanas.wav',
+  VoiceOverCue.itemTubig: 'voice_over/items/Tubig.wav',
+  VoiceOverCue.itemGatas: 'voice_over/items/Gatas.wav',
+  VoiceOverCue.itemJuice: 'voice_over/items/Juice.wav',
+  VoiceOverCue.itemSoftdrink: 'voice_over/items/Softdrink.wav',
+  VoiceOverCue.itemKape: 'voice_over/items/Kape.wav',
+  VoiceOverCue.itemSabon: 'voice_over/items/Sabon.wav',
+  VoiceOverCue.itemSipilyo: 'voice_over/items/Sipilyo.wav',
+  VoiceOverCue.itemTisyu: 'voice_over/items/Tisyu.wav',
+  VoiceOverCue.itemSyampu: 'voice_over/items/Syampu.wav',
 };
 
 /// Audio context for voice-over playback that mixes with background music.
@@ -458,29 +682,41 @@ const _kDebounceInterval = Duration(milliseconds: 300);
 /// Uses [AssetSource] for playback which works reliably on both Android and
 /// iOS.
 ///
-/// Supports multiple languages via [languageCode]. Voice-over assets are
-/// loaded from language-specific subdirectories:
+/// Assets are loaded from the voice pack folder named by [languageCode]:
 ///   `voice_over/{languageCode}/{category}/{CueName}.wav`
 ///
-/// Supported language codes: `'en'` (English), `'tl'` (Tagalog),
-/// `'ceb'` (Cebuano/Bisaya).
+/// [languageCode] is a [VoicePack.assetFolder] (`'en_adult_woman'`,
+/// `'ceb_lexianne'`, …). A bare language slug is accepted too and resolves to
+/// that language's default pack — see [resolveVoiceFolder]. Alternate packs
+/// fall back to their language's default pack for any cue they are missing —
+/// see [fallbackVoiceFolder].
 ///
 /// Usage:
 /// ```dart
 /// final voiceOver = VoiceOverService(languageCode: 'tl');
 /// await voiceOver.play(VoiceOverCue.greatJob);
 /// await voiceOver.playCorrectPraise(); // random from Core Praise
-/// await voiceOver.setLanguage('ceb');  // switch language at runtime
+/// await voiceOver.setLanguage('ceb');  // switch voice pack at runtime
 /// voiceOver.setEnabled(false);         // master toggle
 /// ```
+/// Converts the parent-facing "prompt speed" setting into a playback rate.
+///
+/// The setting runs 0–1 where 1 is the recording's own pace; the bottom of
+/// the range stretches speech to 0.6x for children who need longer to process
+/// each word. Speaking *faster* than recorded is deliberately not offered.
+double voiceRateForPromptSpeed(double promptSpeed) =>
+    0.6 + 0.4 * promptSpeed.clamp(0.0, 1.0);
+
 class VoiceOverService {
   /// Asset prefix for package-based assets.
   static const String _assetPrefix = 'packages/shared_audio/assets/audio';
 
-  /// Supported language codes for voice-over playback.
-  static const List<String> supportedLanguages = ['en', 'tl', 'ceb'];
+  /// Voice pack asset folders that can be played.
+  static final List<String> supportedLanguages = [
+    for (final pack in kVoicePacks) pack.assetFolder,
+  ];
 
-  /// Current language code for voice-over asset resolution.
+  /// Current voice pack asset folder for voice-over asset resolution.
   String _languageCode;
 
   /// Pool of players for voice-over playback.
@@ -495,6 +731,14 @@ class VoiceOverService {
   /// Volume level for voice-over playback (0.0 – 1.0).
   double _volume;
 
+  /// Playback rate applied to every cue, where 1.0 is the recording's own
+  /// pace.
+  ///
+  /// Below 1.0 stretches speech without lowering its pitch, which is what a
+  /// child who needs longer to process each word actually benefits from —
+  /// the parent's "prompt speed" setting feeds this.
+  double _speed;
+
   /// Random number generator for category-based random playback.
   final Random _random;
 
@@ -504,6 +748,50 @@ class VoiceOverService {
   /// Timestamp of the last successful [play] call, used for debouncing.
   DateTime? _lastPlayTime;
 
+  /// How many times another service has taken the floor from this one.
+  /// Test-only: yielding is otherwise invisible.
+  @visibleForTesting
+  int yieldedCount = 0;
+
+  /// Every service that exists and has not been disposed.
+  ///
+  /// A screen builds its own service, and screens outlive each other: the
+  /// child-mode lobby is still mounted underneath an open game, so its service
+  /// is still alive and still holds three audio players. Two services speaking
+  /// at once is always wrong — there is one narrator, and a child hearing two
+  /// overlapping voices cannot follow either. Instance-level stopping cannot
+  /// see across that boundary, so the floor is arbitrated here.
+  static final Set<VoiceOverService> _live = <VoiceOverService>{};
+
+  /// Monotonic ticket identifying whoever most recently claimed the floor.
+  ///
+  /// Stopping other players is not enough on its own. Starting a cue is
+  /// asynchronous — the asset is loaded and the platform player prepared, which
+  /// takes 100–400 ms on Android — and during that window the player is not yet
+  /// `playing`, so a service scanning for something to silence finds nothing
+  /// and the pending cue starts afterwards anyway. That is the game-launch
+  /// overlap exactly: the lobby says "Let's go" as the game screen says "Match
+  /// it", each too early for the other to see.
+  ///
+  /// So the floor is a ticket, not a scan. Every claim takes the next number,
+  /// and a call that no longer holds the current one abandons itself at its
+  /// next await rather than reaching the speaker. Last claim wins, whatever
+  /// order the platform happens to get around to.
+  static int _floorTicket = 0;
+
+  /// The ticket this service last claimed.
+  int _myTicket = 0;
+
+  /// Whether this service still holds the floor. Test-only.
+  @visibleForTesting
+  bool get holdsFloor => _myTicket == _floorTicket;
+
+  /// How many cues the debounce has dropped. Test-only: the debounce is
+  /// otherwise invisible, and a silently dropped cue is exactly the failure
+  /// mode this guards against.
+  @visibleForTesting
+  int debouncedCount = 0;
+
   /// Flag to cancel an in-progress [playSequence] call.
   bool _sequenceCancelled = false;
 
@@ -511,12 +799,12 @@ class VoiceOverService {
     String languageCode = 'en',
     bool enabled = true,
     double volume = 1.0,
+    double speed = 1.0,
     Random? random,
-  })  : _languageCode = supportedLanguages.contains(languageCode)
-            ? languageCode
-            : 'en',
+  })  : _languageCode = resolveVoiceFolder(languageCode),
         _enabled = enabled,
         _volume = volume.clamp(0.0, 1.0),
+        _speed = speed.clamp(_kMinSpeed, _kMaxSpeed),
         _random = random ?? Random() {
     // Create the player pool.
     for (int i = 0; i < _kPoolSize; i++) {
@@ -524,6 +812,8 @@ class VoiceOverService {
       player.audioCache = AudioCache(prefix: '');
       _players.add(player);
     }
+
+    _live.add(this);
 
     // Build the category → cues lookup once.
     _cuesByCategory = {};
@@ -541,11 +831,21 @@ class VoiceOverService {
   /// Whether voice-over playback is enabled.
   bool get isEnabled => _enabled;
 
-  /// Current language code for voice-over playback.
+  /// Current voice pack asset folder for voice-over playback.
   String get languageCode => _languageCode;
 
   /// Current volume level (0.0 – 1.0).
   double get volume => _volume;
+
+  /// Current playback rate (1.0 = the recording's own pace).
+  double get speed => _speed;
+
+  /// Slowest and fastest rates a cue may be played at.
+  ///
+  /// Below ~0.5x the recordings smear into something harder to follow than
+  /// the normal pace, which defeats the point of slowing them down.
+  static const double _kMinSpeed = 0.5;
+  static const double _kMaxSpeed = 1.5;
 
   // ── Configuration ───────────────────────────────────────────────────
 
@@ -559,21 +859,28 @@ class VoiceOverService {
     }
   }
 
-  /// Change the voice-over language at runtime.
+  /// Set the pace cues are spoken at, clamped to 0.5x – 1.5x.
   ///
-  /// Stops any currently playing cue and updates the language.
-  /// Falls back to `'en'` if [languageCode] is not in
-  /// [supportedLanguages].
+  /// Takes effect on the next cue rather than mid-word: changing the rate of
+  /// a clip already speaking would be its own startling event.
+  void setSpeed(double speed) {
+    _speed = speed.clamp(_kMinSpeed, _kMaxSpeed);
+  }
+
+  /// Change the voice pack at runtime.
+  ///
+  /// Stops any currently playing cue and updates the pack. [languageCode] is
+  /// a [VoicePack.assetFolder] or a language slug — see [resolveVoiceFolder].
   Future<void> setLanguage(String languageCode) async {
-    if (!supportedLanguages.contains(languageCode)) {
+    final folder = resolveVoiceFolder(languageCode);
+    if (folder != languageCode) {
       debugPrint(
-          '[VoiceOverService] ⚠ Unsupported language: $languageCode, '
-          'falling back to en');
-      languageCode = 'en';
+          '[VoiceOverService] ⚠ Not a voice pack folder: $languageCode, '
+          'using $folder');
     }
-    if (_languageCode != languageCode) {
+    if (_languageCode != folder) {
       await stop();
-      _languageCode = languageCode;
+      _languageCode = folder;
       debugPrint(
           '[VoiceOverService] 🌐 Language changed to: $_languageCode');
     }
@@ -637,6 +944,7 @@ class VoiceOverService {
       final now = DateTime.now();
       if (_lastPlayTime != null &&
           now.difference(_lastPlayTime!) < _kDebounceInterval) {
+        debouncedCount++;
         debugPrint(
             '[VoiceOverService] ⏭ Debounced (${now.difference(_lastPlayTime!).inMilliseconds}ms): ${cue.name}');
         return;
@@ -644,18 +952,13 @@ class VoiceOverService {
       _lastPlayTime = now;
     }
 
-    final relativePath = _cueAssetPaths[cue];
-    if (relativePath == null) {
+    final candidates = assetPathCandidates(cue, _languageCode);
+    if (candidates.isEmpty) {
       debugPrint('[VoiceOverService] ✖ No asset path for cue: ${cue.name}');
       return;
     }
 
-    // Insert language folder: voice_over/{lang}/category/File.wav
-    final langPath = relativePath.replaceFirst(
-      'voice_over/',
-      'voice_over/$_languageCode/',
-    );
-    final assetPath = '$_assetPrefix/$langPath';
+    final ticket = _takeFloor();
 
     try {
       // Stop all currently playing players (fire-and-forget).
@@ -670,44 +973,211 @@ class VoiceOverService {
 
       player.setReleaseMode(ReleaseMode.stop);
       await player.setVolume(_volume);
+      await _applySpeed(player);
+      // Someone else claimed the floor while the platform was busy; drop this
+      // cue rather than adding a second voice.
+      if (!_holdsFloor(ticket)) return;
 
       debugPrint('[VoiceOverService] 🗣 Playing: ${cue.name} '
-          '(lang=$_languageCode, vol=$_volume)');
+          '(pack=$_languageCode, vol=$_volume, speed=$_speed)');
 
-      if (awaitCompletion) {
-        // Wait for the clip to finish playing before returning.
-        final completer = Completer<void>();
-        StreamSubscription<void>? subscription;
-        subscription = player.onPlayerComplete.listen((_) {
-          if (!completer.isCompleted) completer.complete();
-          subscription?.cancel();
-        });
-        await player.play(AssetSource(assetPath));
-        await completer.future;
-      } else {
-        await player.play(AssetSource(assetPath));
+      for (var i = 0; i < candidates.length; i++) {
+        if (!_holdsFloor(ticket)) return;
+        try {
+          await _playAsset(player, candidates[i],
+              awaitCompletion: awaitCompletion);
+          return;
+        } catch (e) {
+          if (i == candidates.length - 1) rethrow;
+          debugPrint('[VoiceOverService] ↩ "${cue.name}" unavailable in '
+              '$_languageCode, retrying default pack: $e');
+        }
       }
     } catch (e) {
       debugPrint('[VoiceOverService] ✖ Error playing "${cue.name}": $e');
     }
   }
 
-  /// Plays a sequence of voice-over cues one after another.
-  /// Each cue waits for the previous one to finish before playing.
-  /// Returns when the entire sequence has finished or been cancelled.
+  /// Asset paths to try for [cue], most preferred first.
+  ///
+  /// An alternate voice pack that is missing a cue yields a second candidate
+  /// pointing at its language's default pack, so the child hears the default
+  /// voice rather than silence.
+  ///
+  /// [_cueAssetPaths] names every cue with a `.wav` suffix; the extension
+  /// actually used is whatever the target pack declares, so a `.mp3` pack and
+  /// a `.wav` pack can sit side by side without the cue table caring.
+  @visibleForTesting
+  static List<String> assetPathCandidates(VoiceOverCue cue, String voiceFolder) {
+    final paths = <String>[];
+    for (final c in [cue, if (_cueFallbacks[cue] case final f?) f]) {
+      final relativePath = _cueAssetPaths[c];
+      if (relativePath == null) continue;
+      final withoutExtension =
+          relativePath.substring(0, relativePath.length - '.wav'.length);
+
+      String pathFor(String folder) =>
+          '$_assetPrefix/'
+          '${withoutExtension.replaceFirst('voice_over/', 'voice_over/$folder/')}'
+          '${voiceFileExtension(folder)}';
+
+      final fallback = fallbackVoiceFolder(voiceFolder);
+      paths.add(pathFor(voiceFolder));
+      if (fallback != null) paths.add(pathFor(fallback));
+    }
+    return paths;
+  }
+
+  /// Cues that degrade to a different cue when their own audio is absent.
+  ///
+  /// A linking colour is only an intonation variant of the plain one. A pack
+  /// that has not been regenerated since they were introduced simply falls back
+  /// to its sentence-final recording: the phrase sounds less connected, which
+  /// is what it sounded like before, rather than dropping the colour entirely.
+  static const Map<VoiceOverCue, VoiceOverCue> _cueFallbacks = {};
+
+  /// Applies the current [speed] to [player] before it starts a clip.
+  ///
+  /// A platform that does not support rate changes must not cost the child the
+  /// cue itself, so a failure here is logged and the clip plays at its
+  /// recorded pace.
+  Future<void> _applySpeed(AudioPlayer player) async {
+    try {
+      await player.setPlaybackRate(_speed);
+    } catch (e) {
+      debugPrint('[VoiceOverService] ⚠ Playback rate $_speed unavailable: $e');
+    }
+  }
+
+  /// Plays [assetPath] on [player], optionally waiting for it to finish.
+  Future<void> _playAsset(
+    AudioPlayer player,
+    String assetPath, {
+    required bool awaitCompletion,
+  }) async {
+    if (!awaitCompletion) {
+      await player.play(AssetSource(assetPath));
+      return;
+    }
+
+    final completer = Completer<void>();
+    StreamSubscription<void>? subscription;
+    subscription = player.onPlayerComplete.listen((_) {
+      if (!completer.isCompleted) completer.complete();
+      subscription?.cancel();
+    });
+    try {
+      await player.play(AssetSource(assetPath));
+    } catch (_) {
+      await subscription.cancel();
+      rethrow;
+    }
+    await completer.future;
+  }
+
+  /// Loads [cue] onto [player] and leaves it prepared, ready for `resume()`.
+  ///
+  /// Returns false when no candidate path could be loaded, so the caller can
+  /// skip that word instead of stalling the phrase on it.
+  Future<bool> _prepare(AudioPlayer player, VoiceOverCue cue) async {
+    final candidates = assetPathCandidates(cue, _languageCode);
+    for (var i = 0; i < candidates.length; i++) {
+      try {
+        player.setReleaseMode(ReleaseMode.stop);
+        await player.setVolume(_volume);
+        await _applySpeed(player);
+        await player.setSource(AssetSource(candidates[i]));
+        return true;
+      } catch (e) {
+        if (i == candidates.length - 1) {
+          debugPrint('[VoiceOverService] ✖ Could not prepare "${cue.name}": $e');
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Plays an already-prepared [player] and waits for the clip to finish.
+  ///
+  /// The completion listener is attached before `resume()`, so a very short
+  /// clip cannot finish in the window before anyone is listening, and it is
+  /// cancelled in a `finally` so a failed resume does not leak it.
+  Future<void> _playPrepared(AudioPlayer player) async {
+    final completer = Completer<void>();
+    final subscription = player.onPlayerComplete.listen((_) {
+      if (!completer.isCompleted) completer.complete();
+    });
+    try {
+      await player.resume();
+      await completer.future;
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
+  /// Plays a sequence of cues as one phrase — "Tap the" · "Yellow" · "Star".
+  ///
+  /// Every clip is **loaded before the first word plays**. Preparing an audio
+  /// source is a platform round trip (asset extraction, then an Android
+  /// MediaPlayer prepare), and doing it lazily per word put that cost *between*
+  /// the words, where it read as a long unexplained pause mid-phrase. Paying it
+  /// up front costs the same total time but moves it before the phrase starts,
+  /// where it is just onset latency.
+  ///
+  /// The pool holds [_kPoolSize] players and phrases are at most three words,
+  /// so in practice the whole phrase is resident before it starts. Longer
+  /// sequences fall back to preparing each remaining word on the player freed
+  /// by the word that just finished.
+  ///
+  /// [gap] is the deliberate pause between words, on top of the ~90 ms tail and
+  /// ~40 ms lead the clips themselves carry. Keep it small: the silence a child
+  /// hears is the sum of all three.
   Future<void> playSequence(
     List<VoiceOverCue> cues, {
-    Duration gap = const Duration(milliseconds: 80),
+    Duration gap = Duration.zero,
   }) async {
-    // Cancel any currently playing sequence or single cue
+    // Cancel any currently playing sequence or single cue, here and anywhere
+    // else in the app that is speaking.
+    final ticket = _takeFloor();
     await stop();
+    if (!_holdsFloor(ticket)) return;
     _sequenceCancelled = false;
+    if (cues.isEmpty) return;
 
-    for (final cue in cues) {
+    // One player per word, cycling through the pool.
+    AudioPlayer playerFor(int i) => _players[i % _players.length];
+    final ready = List<bool>.filled(cues.length, false);
+
+    final preload = min(cues.length, _players.length);
+    await Future.wait([
+      for (var i = 0; i < preload; i++)
+        _prepare(playerFor(i), cues[i]).then((ok) => ready[i] = ok),
+    ]);
+
+    for (var i = 0; i < cues.length; i++) {
+      if (_sequenceCancelled || !_holdsFloor(ticket)) break;
+      final player = playerFor(i);
+
+      if (ready[i]) {
+        _activePlayerIndex = i % _players.length;
+        try {
+          await _playPrepared(player);
+        } catch (e) {
+          debugPrint(
+              '[VoiceOverService] ✖ Error playing "${cues[i].name}": $e');
+        }
+      }
+
       if (_sequenceCancelled) break;
-      await play(cue, awaitCompletion: true, skipDebounce: true);
-      if (_sequenceCancelled) break;
-      if (cue != cues.last) {
+
+      // This player is free again; load the word that will reuse it. Only
+      // reached for sequences longer than the pool.
+      final next = i + _players.length;
+      if (next < cues.length) {
+        ready[next] = await _prepare(playerFor(next), cues[next]);
+      }
+
+      if (i != cues.length - 1) {
         await Future.delayed(gap);
       }
     }
@@ -737,15 +1207,92 @@ class VoiceOverService {
       playRandom(VoiceOverCategory.gentlyRetry);
 
   /// Play a random transition cue from [VoiceOverCategory.transition].
+  ///
+  /// Follows the answer's naming cue in the same synchronous block when a round
+  /// ends, so like the celebration it waits its turn rather than being dropped
+  /// by the debounce. See [_playRandomAfterCurrent].
   Future<void> playTransition() =>
-      playRandom(VoiceOverCategory.transition);
+      _playRandomAfterCurrent(VoiceOverCategory.transition);
 
   /// Play a random celebration cue from
   /// [VoiceOverCategory.rewardAndCelebration].
+  ///
+  /// Unlike every other cue this one is **never dropped and never interrupts**.
+  ///
+  /// Games fire it in the same synchronous breath as the final answer's naming
+  /// cue, so with ordinary [play] it hit the debounce window microseconds after
+  /// the label set it, and was discarded — the end-of-game praise, the one line
+  /// the whole reward system is built around, simply never played. Skipping the
+  /// debounce alone would fix that but replace it with a different fault: the
+  /// celebration would cut the label off mid-word. So it waits for whatever is
+  /// speaking to finish, then plays regardless of timing.
   Future<void> playRewardCelebration() =>
-      playRandom(VoiceOverCategory.rewardAndCelebration);
+      _playRandomAfterCurrent(VoiceOverCategory.rewardAndCelebration);
+
+  /// Play a random cue from [category] once anything speaking has finished,
+  /// exempt from the debounce.
+  ///
+  /// For lines a game fires as a *consequence* of the answer it just narrated,
+  /// rather than in response to a fresh tap. The debounce exists to stop a
+  /// child's rapid tapping from stacking up speech; these are not taps, and
+  /// dropping them loses the line entirely.
+  Future<void> _playRandomAfterCurrent(VoiceOverCategory category) async {
+    if (!_enabled) return;
+    final cues = _cuesByCategory[category];
+    if (cues == null || cues.isEmpty) return;
+    final cue = cues[_random.nextInt(cues.length)];
+    await _awaitCurrentSpeech();
+    debugPrint('[VoiceOverService] ▶ ${category.name}: ${cue.name}');
+    await play(cue, skipDebounce: true);
+  }
+
+  /// Waits for any cue that is currently speaking to finish.
+  ///
+  /// The timeout is a backstop, not a schedule: if a completion event is missed
+  /// the caller still speaks rather than staying silent forever.
+  Future<void> _awaitCurrentSpeech({
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    for (final player in _players) {
+      if (player.state == PlayerState.playing) {
+        try {
+          await player.onPlayerComplete.first.timeout(timeout);
+        } on TimeoutException {
+          debugPrint('[VoiceOverService] ⏱ Gave up waiting for current cue');
+        } catch (_) {
+          // A player that errors is not going to complete; carry on.
+        }
+        return;
+      }
+    }
+  }
 
   // ── Playback Control ────────────────────────────────────────────────
+
+  /// Silence every *other* live service, and cancel this one's own sequence.
+  ///
+  /// Called immediately before this service speaks. A sequence in flight is
+  /// cancelled rather than left running, because it would otherwise keep
+  /// producing words underneath whatever is starting now — the pooled players
+  /// mean stopping the current clip does not stop the phrase it belongs to.
+  int _takeFloor() {
+    _sequenceCancelled = true;
+    _myTicket = ++_floorTicket;
+    for (final other in _live) {
+      if (identical(other, this)) continue;
+      other._sequenceCancelled = true;
+      other.yieldedCount++;
+      for (final player in other._players) {
+        // Unconditionally, not only when `playing`: a player still preparing
+        // is precisely the one that would otherwise surface later.
+        player.stop(); // intentionally not awaited
+      }
+    }
+    return _myTicket;
+  }
+
+  /// Whether [ticket] is still the current claim on the floor.
+  static bool _holdsFloor(int ticket) => ticket == _floorTicket;
 
   /// Stop the currently playing voice-over cue, if any.
   /// Also cancels any in-progress [playSequence] call.
@@ -760,6 +1307,7 @@ class VoiceOverService {
 
   /// Release audio resources. Call when the service is no longer needed.
   Future<void> dispose() async {
+    _live.remove(this);
     _sequenceCancelled = true;
     for (final player in _players) {
       await player.dispose();
@@ -779,13 +1327,17 @@ class VoiceOverService {
     required String shape,
   }) {
     final actionCue = _actionMap[action.toLowerCase()];
-    final colorCue = _colorMap[color.toLowerCase()];
-    final shapeCue = _shapeMap[shape.toLowerCase()];
-
+    final phraseCue = _phraseMap[_phraseKey(color, shape)];
+    // "Tap the" + one recording of "purple circle" beats three separate words:
+    // the phrase carries its own internal prosody, so only the seam after the
+    // action word is left. See [answerLabelCues].
+    if (phraseCue != null) {
+      return [if (actionCue != null) actionCue, phraseCue];
+    }
     return [
       if (actionCue != null) actionCue,
-      if (colorCue != null) colorCue,
-      if (shapeCue != null) shapeCue,
+      if (_colorMap[color.toLowerCase()] case final cue?) cue,
+      if (_shapeMap[shape.toLowerCase()] case final cue?) cue,
     ];
   }
 
@@ -802,12 +1354,174 @@ class VoiceOverService {
     'yellow': VoiceOverCue.colorYellow,
     'purple': VoiceOverCue.colorPurple,
     'orange': VoiceOverCue.colorOrange,
+    'gold': VoiceOverCue.colorGold,
+    'pink': VoiceOverCue.colorPink,
+    'magenta': VoiceOverCue.colorMagenta,
+    'teal': VoiceOverCue.colorTeal,
   };
+
+  /// Colour+shape phrases recorded as a single utterance, keyed
+  /// `<colour>_<shape>`. Generated from the games' palettes by
+  /// `tools/voice_gen`; a pair with no entry falls back to two separate words.
+  static const _phraseMap = {
+    'blue_circle': VoiceOverCue.phraseBlueCircle,
+    'blue_diamond': VoiceOverCue.phraseBlueDiamond,
+    'blue_star': VoiceOverCue.phraseBlueStar,
+    'blue_triangle': VoiceOverCue.phraseBlueTriangle,
+    'gold_star': VoiceOverCue.phraseGoldStar,
+    'green_circle': VoiceOverCue.phraseGreenCircle,
+    'green_diamond': VoiceOverCue.phraseGreenDiamond,
+    'green_star': VoiceOverCue.phraseGreenStar,
+    'green_triangle': VoiceOverCue.phraseGreenTriangle,
+    'magenta_diamond': VoiceOverCue.phraseMagentaDiamond,
+    'orange_circle': VoiceOverCue.phraseOrangeCircle,
+    'orange_diamond': VoiceOverCue.phraseOrangeDiamond,
+    'orange_star': VoiceOverCue.phraseOrangeStar,
+    'orange_triangle': VoiceOverCue.phraseOrangeTriangle,
+    'pink_heart': VoiceOverCue.phrasePinkHeart,
+    'purple_circle': VoiceOverCue.phrasePurpleCircle,
+    'purple_diamond': VoiceOverCue.phrasePurpleDiamond,
+    'purple_heart': VoiceOverCue.phrasePurpleHeart,
+    'purple_star': VoiceOverCue.phrasePurpleStar,
+    'purple_triangle': VoiceOverCue.phrasePurpleTriangle,
+    'red_circle': VoiceOverCue.phraseRedCircle,
+    'red_diamond': VoiceOverCue.phraseRedDiamond,
+    'red_heart': VoiceOverCue.phraseRedHeart,
+    'red_star': VoiceOverCue.phraseRedStar,
+    'red_triangle': VoiceOverCue.phraseRedTriangle,
+    'teal_triangle': VoiceOverCue.phraseTealTriangle,
+    'yellow_circle': VoiceOverCue.phraseYellowCircle,
+    'yellow_diamond': VoiceOverCue.phraseYellowDiamond,
+    'yellow_star': VoiceOverCue.phraseYellowStar,
+    'yellow_triangle': VoiceOverCue.phraseYellowTriangle,
+  };
+
+  /// Lookup key for a colour+shape phrase, or null when either is missing.
+  static String? _phraseKey(String? color, String? shape) {
+    if (color == null || shape == null) return null;
+    return '${color.trim().toLowerCase()}_${shape.trim().toLowerCase()}';
+  }
 
   static const _shapeMap = {
     'circle': VoiceOverCue.shapeCircle,
     'star': VoiceOverCue.shapeStar,
     'triangle': VoiceOverCue.shapeTriangle,
     'diamond': VoiceOverCue.shapeDiamond,
+    'heart': VoiceOverCue.shapeHeart,
   };
+
+  static const _letterMap = {
+    'a': VoiceOverCue.letterA,
+    'c': VoiceOverCue.letterC,
+    'e': VoiceOverCue.letterE,
+    'h': VoiceOverCue.letterH,
+    'l': VoiceOverCue.letterL,
+    't': VoiceOverCue.letterT,
+    'u': VoiceOverCue.letterU,
+    'v': VoiceOverCue.letterV,
+  };
+
+  static const _numberMap = {
+    '1': VoiceOverCue.numberOne,
+    '2': VoiceOverCue.numberTwo,
+    '3': VoiceOverCue.numberThree,
+    '4': VoiceOverCue.numberFour,
+    '5': VoiceOverCue.numberFive,
+    '7': VoiceOverCue.numberSeven,
+  };
+
+  static const _itemMap = {
+    'tinapay': VoiceOverCue.itemTinapay,
+    'biskwit': VoiceOverCue.itemBiskwit,
+    'kendi': VoiceOverCue.itemKendi,
+    'saging': VoiceOverCue.itemSaging,
+    'mansanas': VoiceOverCue.itemMansanas,
+    'tubig': VoiceOverCue.itemTubig,
+    'gatas': VoiceOverCue.itemGatas,
+    'juice': VoiceOverCue.itemJuice,
+    'softdrink': VoiceOverCue.itemSoftdrink,
+    'kape': VoiceOverCue.itemKape,
+    'sabon': VoiceOverCue.itemSabon,
+    'sipilyo': VoiceOverCue.itemSipilyo,
+    'tisyu': VoiceOverCue.itemTisyu,
+    'syampu': VoiceOverCue.itemSyampu,
+  };
+
+  // ── Immediate Answer Feedback ───────────────────────────────────────
+
+  /// Cues that name back what the child just got right, in spoken order.
+  ///
+  /// Colour precedes shape ("red circle"), which is the order all three
+  /// languages take and the order the instruction cues are already composed in,
+  /// so the confirmation echoes the prompt rather than reversing it.
+  ///
+  /// Returns an empty list when nothing in the answer has a recorded name —
+  /// the caller then stays silent rather than substituting praise, because
+  /// praise is reserved for the end-of-game reward.
+  @visibleForTesting
+  static List<VoiceOverCue> answerLabelCues({
+    String? color,
+    String? shape,
+    String? letter,
+    String? item,
+  }) {
+    VoiceOverCue? lookup(Map<String, VoiceOverCue> table, String? value) =>
+        value == null ? null : table[value.trim().toLowerCase()];
+
+    // A glyph label is either a letter or a numeral; try both tables.
+    final glyphCue =
+        lookup(_letterMap, letter) ?? lookup(_numberMap, letter);
+
+    // "Purple circle" is one phrase, not two statements. Played as two clips it
+    // never sounds like one: an isolated word has no following context, so the
+    // model renders it sentence-final and the pitch drops hard at the end --
+    // measured at -39% to -69% across the colour set. Neither a trailing comma
+    // nor an explicit "keep the pitch lifted" instruction changed that, because
+    // the model has nothing to lift *towards*. A phrase recorded whole does
+    // have it: the colour rises into the shape and only the shape falls.
+    //
+    // So a colour-plus-shape answer resolves to a single phrase recording when
+    // one exists, and falls back to the two separate words when it does not.
+    final shapeCue = lookup(_shapeMap, shape);
+    final phraseCue = _phraseMap[_phraseKey(color, shape)];
+    if (phraseCue != null) return [phraseCue];
+
+    return [
+      if (lookup(_itemMap, item) case final cue?) cue,
+      if (lookup(_colorMap, color) case final cue?) cue,
+      if (shapeCue case final cue?) cue,
+      if (glyphCue case final cue?) cue,
+    ];
+  }
+
+  /// Name back what the child just answered correctly — "red circle", "Gatas",
+  /// "A" — as immediate feedback on a correct response.
+  ///
+  /// This is the *only* voice-over a correct answer gets. Praise ("Great job!")
+  /// is deliberately withheld until the end-of-game reward: labelling every
+  /// correct answer turns each success into another exposure to the target
+  /// vocabulary, while praise on every trial both dilutes the reinforcer and
+  /// tells the child nothing about *what* they got right.
+  ///
+  /// Silent when the answer has no recorded name, so an unrecorded item never
+  /// falls back to praise and breaks that contract.
+  Future<void> playAnswerLabel({
+    String? color,
+    String? shape,
+    String? letter,
+    String? item,
+  }) async {
+    final cues = answerLabelCues(
+      color: color,
+      shape: shape,
+      letter: letter,
+      item: item,
+    );
+    if (cues.isEmpty) return;
+    if (cues.length == 1) {
+      await play(cues.first);
+      return;
+    }
+    await playSequence(cues);
+  }
 }

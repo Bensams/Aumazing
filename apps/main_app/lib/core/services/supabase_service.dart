@@ -14,7 +14,11 @@ import '../sync/sync_status.dart';
 /// await supabase.upsertChild(child.toSupabase(), child.id);
 /// ```
 class SupabaseService {
-  final SupabaseClient _client = Supabase.instance.client;
+  /// Resolved on first use, not at construction. The global [supabaseService]
+  /// is reached transitively by widgets (via [syncService]), and an eager
+  /// field made merely *constructing* it throw wherever Supabase.initialize
+  /// had not run — which meant any widget touching sync was untestable.
+  late final SupabaseClient _client = Supabase.instance.client;
 
   // ─── Generic Sync Upserts ─────────────────────────────────────────────
 

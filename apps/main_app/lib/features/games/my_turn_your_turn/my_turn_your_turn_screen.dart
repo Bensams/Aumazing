@@ -1,6 +1,5 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
@@ -14,6 +13,8 @@ import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
+import '../../../widgets/mascot.dart';
+import '../../../widgets/mascot_host.dart';
 
 /// Screen wrapper for the My Turn Your Turn game during pre-assessment.
 class MyTurnYourTurnScreen extends StatefulWidget {
@@ -70,7 +71,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
     widget.sensoryController?.applyRoundConfig(1);
 
     _voiceOverService = VoiceOverService(
-        languageCode: context.read<ChildProvider>().language.slug);
+      languageCode: context.read<ChildProvider>().voiceAssetFolder,
+      speed: context.read<ChildProvider>().voicePlaybackRate,
+    );
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
@@ -92,9 +95,16 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       onPlayDragSfx: () => audioService.playDragSfx(),
       onPlayDropSfx: () => audioService.playDropSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
-      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteCelebration(),
       // Voice-over callbacks
-      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      // Immediate feedback names what was just answered ("red circle");
+      // praise is saved for the end-of-game reward.
+      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
+        color: label.color,
+        shape: label.shape,
+        letter: label.letter,
+        item: label.item,
+      ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.letsTakeTurns),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
@@ -113,6 +123,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
           context.read<HapticService>().correctFeedback();
         }
       },
+      // An out-of-turn tap gets a brief "oh, not quite" that resolves into an
+      // encouraging pose — the mascot never blames or despairs at the child.
+      onWrongAnswer: () => MascotHost.maybeOf(context)?.reassure(),
       onStepChanged: (step) {
         setState(() {
           _currentStep = step;
@@ -146,6 +159,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         GameSessionMetrics? analytics,
       }) {
         setState(() => _gameComplete = true);
+
+        // Celebrate with the child before the reward overlay lands. The
+        // overlay and its barrier are transparent, so the mascot stays
+        // visible under it.
+        MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
 
         // Trigger game-complete haptic feedback
         if (context.read<ChildProvider>().vibrationEnabled) {
@@ -229,9 +247,14 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
   void _retryGame() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => MyTurnYourTurnScreen(
-          assessmentContext: widget.assessmentContext,
-          sensoryController: widget.sensoryController,
+        // A pushed route leaves the old host behind, so the replacement
+        // screen carries its own — without it the mascot is simply absent
+        // for the whole retry, reactions included.
+        builder: (_) => MascotHost(
+          child: MyTurnYourTurnScreen(
+            assessmentContext: widget.assessmentContext,
+            sensoryController: widget.sensoryController,
+          ),
         ),
       ),
     );
@@ -305,10 +328,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
 
           // Flutter: Voice-over prompt with dynamic text based on turn (overlay)
           Positioned(
-            bottom: 12,
-            left: 0,
-            right: 0,
+            // Inside the reserved band, hard into the upper-left corner.
+            top: MediaQuery.of(context).padding.top + 8,
+            left: AppSpacing.md,
             child: VoiceOverPromptBubble(
+              showText: context.watch<ChildProvider>().showTextPrompts,
               text: _voiceOverText,
               isVisible: !_gameComplete,
             ),

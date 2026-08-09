@@ -172,7 +172,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.destructiveSoftRed,
+        backgroundColor: AppColors.destructiveRed,
       ),
     );
   }
@@ -341,6 +341,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             labelText: 'New Password',
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
+                              tooltip: _obscurePassword
+                                  ? 'Show new password'
+                                  : 'Hide new password',
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_off
@@ -371,6 +374,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             labelText: 'Confirm New Password',
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
+                              tooltip: _obscureConfirm
+                                  ? 'Show confirmed password'
+                                  : 'Hide confirmed password',
                               icon: Icon(
                                 _obscureConfirm
                                     ? Icons.visibility_off

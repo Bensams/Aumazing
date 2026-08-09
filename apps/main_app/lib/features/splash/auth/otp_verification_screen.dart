@@ -151,7 +151,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.destructiveSoftRed,
+        backgroundColor: AppColors.destructiveRed,
       ),
     );
   }

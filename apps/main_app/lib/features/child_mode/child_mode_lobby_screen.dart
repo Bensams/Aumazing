@@ -12,8 +12,10 @@ import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
-import '../../widgets/bps_mascot.dart';
+import '../../widgets/mascot.dart';
+import '../../widgets/mascot_host.dart';
 import 'game_launcher.dart';
+import 'path_map_view.dart';
 import 'time_up_dialog.dart';
 
 /// Child Mode Lobby.
@@ -35,7 +37,7 @@ class ChildModeLobbyScreen extends StatefulWidget {
 }
 
 class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _categoryOrder = [
     SkillCategory.playSkills,
     SkillCategory.communication,
@@ -66,7 +68,72 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   // "My Path". After 30s idle: the hand appears at the next tap target
   // and a guiding voice line repeats every ~7s until the child taps.
   late final VoiceOverService _lobbyVo;
+
+  /// The hand's four motions, kept separate so they can overlap: the resting
+  /// bob, the fade/scale as it arrives and leaves, the glide when it moves to
+  /// a new target, and the press it plays back when the child taps.
   late final AnimationController _bobController;
+  late final AnimationController _fadeController;
+  late final AnimationController _travelController;
+  late final AnimationController _pressController;
+
+  /// Opens My Path as a door: the path view is revealed through a window that
+  /// grows out of the "My Path" button until it fills the screen, and closes
+  /// back into that same button on the way out.
+  ///
+  /// The lobby keeps rendering underneath for the whole animation, so the child
+  /// sees the world open *on* the place they tapped rather than the screen
+  /// swapping under them. This is the one piece of motion the lobby allows
+  /// itself: it only ever runs because the child tapped, and it explains a
+  /// change instead of decorating one.
+  ///
+  /// Everything about how it moves is chosen for an ASD child rather than for
+  /// polish:
+  ///
+  /// * **Slow enough to follow.** [_doorDuration] is well past the ~300ms of a
+  ///   typical UI flourish. A fast transition is *finished* before a child who
+  ///   processes visual change slowly has located what moved, which turns the
+  ///   new screen into a surprise. This one can be tracked from start to end.
+  /// * **No sudden onset.** [_doorCurve] eases in as well as out, so the motion
+  ///   starts from rest instead of snapping away on the first frame. Abrupt
+  ///   onsets are the startling part of an animation, not the speed.
+  /// * **Nothing overshoots, bounces, spins or flashes.** The window only ever
+  ///   grows, at a steady rate, in one direction.
+  /// * **Reversible and symmetric.** Going back closes the same window along
+  ///   the same path at the same speed, so the child is shown where My Path
+  ///   *lives* — the transition doubles as a map instead of teleporting them.
+  /// * **Nothing inside moves.** The path view is laid out at full size the
+  ///   whole time and only the window over it changes, so there is no scaling
+  ///   text or reflowing layout to track.
+  /// * **Opt-out honoured.** With reduced motion on, the same change is made as
+  ///   a plain cross-fade ([_doorFadeOnly]) — announced just as clearly, with
+  ///   nothing travelling across the screen.
+  late final AnimationController _doorController;
+
+  /// Root-stack rect the door grows from; null when no door is running.
+  Rect? _doorFromRect;
+  bool _doorActive = false;
+
+  /// True while the door is closing (path → lobby) rather than opening.
+  bool _doorClosing = false;
+
+  /// Reduced motion: hold the window at full screen and cross-fade instead.
+  bool _doorFadeOnly = false;
+
+  static const _doorDuration = Duration(milliseconds: 600);
+  static const _doorCurve = Curves.easeInOutCubic;
+
+  /// Fraction of the door spent fading the path view in over the button, so the
+  /// window's first frame dissolves out of what the child tapped rather than
+  /// replacing it between one frame and the next.
+  static const _doorFadeFraction = 0.3;
+
+  /// The full-screen stack the door is drawn in. The door's clip is sized to
+  /// this box, so its start rect has to be measured against it too — measuring
+  /// against [_stackKey] (which sits inside the SafeArea) would start the
+  /// window offset by the safe-area insets, which in child-mode landscape is
+  /// the notch/gesture inset on the very edge the button sits near.
+  final GlobalKey _rootStackKey = GlobalKey();
   final GlobalKey _stackKey = GlobalKey();
   final GlobalKey _pathButtonKey = GlobalKey();
   final GlobalKey _allButtonKey = GlobalKey();
@@ -76,12 +143,24 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   Timer? _entryHideTimer;
   bool _guideVisible = false;
   Offset? _guideAnchor; // stack-local center of the target
+  Offset? _fromAnchor; // where a glide started, null when not travelling
+  bool _dismissing = false; // playing the press-and-ripple goodbye
   bool _voAlternate = false;
   static const _idleGuideDelay = Duration(seconds: 30);
   static const _voRepeatInterval = Duration(seconds: 7); // within 5–8s
 
+  /// Prompts spoken in the current idle burst. Repeating indefinitely turns
+  /// help into nagging, which for an ASD child is aversive rather than
+  /// supportive — so a burst stops after [_maxIdlePrompts] and the lobby
+  /// waits [_idleBackoffDelay] (quietly) before offering help again.
+  int _idlePrompts = 0;
+  static const _maxIdlePrompts = 3;
+  static const _idleBackoffDelay = Duration(seconds: 90);
+
   /// Bumped whenever the guidance voice speaks so BPS waves along with it.
-  int _mascotWave = 0;
+  /// Drives BPS in the corner: greets on entry, points alongside the guidance
+  /// hand, and nods back when the child chooses.
+  final MascotController _mascot = MascotController();
 
   @override
   void initState() {
@@ -96,11 +175,71 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _startScreenTimeTracking();
 
     _lobbyVo = VoiceOverService(
-        languageCode: context.read<ChildProvider>().language.slug);
+      languageCode: context.read<ChildProvider>().voiceAssetFolder,
+      speed: context.read<ChildProvider>().voicePlaybackRate,
+    );
     _bobController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 220),
+    )..addStatusListener((status) {
+        // Fully faded out — drop the hand from the tree.
+        if (status == AnimationStatus.dismissed && mounted) {
+          setState(() => _guideVisible = false);
+        }
+      });
+    _travelController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 430),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) _fromAnchor = null;
+      });
+    _pressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    )..addStatusListener((status) {
+        // The goodbye finished playing — now the hand is really gone.
+        if (status == AnimationStatus.completed && mounted) {
+          _fadeController.value = 0;
+          setState(() {
+            _dismissing = false;
+            _guideVisible = false;
+          });
+        }
+      });
+    _doorController = AnimationController(vsync: this, duration: _doorDuration)
+      ..addStatusListener((status) {
+        if (!mounted) return;
+        // Both ends of the door hand over to a view that is already
+        // pixel-identical to the last frame drawn, so the state swap itself is
+        // invisible: opening finishes with the window covering the screen and
+        // the real path view underneath it, closing finishes with the window
+        // shrunk into the button the lobby is already drawing.
+        //
+        // The direction has to be checked because seeding a controller
+        // (`forward(from: 0)`, `value = 1`) reports dismissed/completed before
+        // the animation itself runs.
+        if (status == AnimationStatus.completed && !_doorClosing) {
+          setState(() {
+            _doorActive = false;
+            _doorFromRect = null;
+            _viewingPath = true;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_lobbyActive) _showGuide();
+          });
+        } else if (status == AnimationStatus.dismissed && _doorClosing) {
+          setState(() {
+            _doorActive = false;
+            _doorClosing = false;
+            _doorFromRect = null;
+          });
+        }
+      });
     WidgetsBinding.instance.addPostFrameCallback((_) => _startEntryGuidance());
     _restartIdleTimer();
   }
@@ -143,7 +282,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _voRepeatTimer?.cancel();
     _entryHideTimer?.cancel();
     _bobController.dispose();
+    _fadeController.dispose();
+    _travelController.dispose();
+    _pressController.dispose();
+    _doorController.dispose();
     _lobbyVo.dispose();
+    _mascot.dispose();
     super.dispose();
   }
 
@@ -155,14 +299,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       !TimeUpDialog.isShowing &&
       (ModalRoute.of(context)?.isCurrent ?? true);
 
-  /// Entry guidance: when a recommended module (learning path) exists, the
-  /// voice welcomes the child and the hand shows where to start.
+  /// Entry guidance: the voice welcomes the child and the hand shows where to
+  /// start. Every child gets this — a child with no assessment yet has no
+  /// learning path, but is exactly the child least able to work out where to
+  /// tap, so [_currentGuideKey] points at "All" for them instead.
   Future<void> _startEntryGuidance() async {
     await Future.delayed(const Duration(milliseconds: 900));
     if (!_lobbyActive) return;
-    if (_learningPath().isEmpty) return; // guided start needs a recommendation
     _lobbyVo.play(VoiceOverCue.letsBegin);
-    setState(() => _mascotWave++);
+    _mascot.play(MascotGesture.wave);
     _showGuide();
     // The entry pointer is a short nudge, not a fixture.
     _entryHideTimer = Timer(const Duration(seconds: 6), () {
@@ -178,97 +323,365 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     return _guideCardKey; // set on the recommended card in the visible row
   }
 
-  /// Positions (or repositions) the pointing hand over the current target.
-  void _showGuide() {
+  /// Stack-local centre of the widget the hand should point at, or null if
+  /// that widget is not laid out right now.
+  Offset? _anchorForCurrentTarget() {
     final targetContext = _currentGuideKey().currentContext;
     final stackContext = _stackKey.currentContext;
-    if (targetContext == null || stackContext == null) return;
+    if (targetContext == null || stackContext == null) return null;
     final targetBox = targetContext.findRenderObject() as RenderBox?;
     final stackBox = stackContext.findRenderObject() as RenderBox?;
-    if (targetBox == null || stackBox == null || !targetBox.attached) return;
-
+    if (targetBox == null || stackBox == null || !targetBox.attached) {
+      return null;
+    }
     final centerGlobal = targetBox.localToGlobal(
         Offset(targetBox.size.width / 2, targetBox.size.height / 2));
+    return stackBox.globalToLocal(centerGlobal);
+  }
+
+  /// Positions (or repositions) the pointing hand over the current target.
+  ///
+  /// A hand that is already on screen glides to its new target rather than
+  /// teleporting — the travel itself is the cue, since the child's eye follows
+  /// the movement to the thing they should tap.
+  void _showGuide() {
+    final anchor = _anchorForCurrentTarget();
+    if (anchor == null) return;
+    final reduced = context.read<ChildProvider>().reducedMotion;
+    final wasOnScreen = _guideVisible && !_dismissing && _guideAnchor != null;
+
+    // A tap-dismiss already in flight is stale now — start clean.
+    if (_dismissing) {
+      _pressController.stop();
+      _pressController.value = 0;
+      _dismissing = false;
+    }
+
     setState(() {
-      _guideAnchor = stackBox.globalToLocal(centerGlobal);
+      if (wasOnScreen && !reduced && (_guideAnchor! - anchor).distance > 4) {
+        _fromAnchor = _renderedAnchor();
+        _travelController.forward(from: 0);
+      } else {
+        _fromAnchor = null;
+      }
+      _guideAnchor = anchor;
       _guideVisible = true;
+    });
+    _fadeController.forward();
+  }
+
+  /// Keeps the hand on its card while the games row scrolls under it, so the
+  /// pointer never ends up aimed at empty space or the wrong game.
+  ///
+  /// Runs during the tap-dismiss too. A drag begins with the pointer-down that
+  /// starts the goodbye, so this is mostly what it is here for: the fading
+  /// hand and its ripple ride along with the card instead of being left
+  /// behind in the space the card used to occupy.
+  void _reanchorGuide() {
+    if (!_guideVisible) return;
+    final anchor = _anchorForCurrentTarget();
+    if (anchor == null || anchor == _guideAnchor) return;
+    setState(() {
+      _fromAnchor = null; // track the card directly, no glide
+      _guideAnchor = anchor;
     });
   }
 
+  /// Withdraws the hand quietly (timer expiry, launching a game). The child
+  /// did not act on it, so there is nothing to acknowledge — it just fades.
   void _hideGuide({required bool restartIdle}) {
     _entryHideTimer?.cancel();
     _voRepeatTimer?.cancel();
     _voRepeatTimer = null;
-    if (_guideVisible && mounted) setState(() => _guideVisible = false);
+    if (_guideVisible && !_dismissing) _fadeController.reverse();
     if (restartIdle) _restartIdleTimer();
   }
 
   /// Any touch means the child is engaged — hide guidance, rearm the timer.
+  ///
+  /// When the hand is up, the touch gets answered: it presses down and throws
+  /// a ripple before fading, so the child sees that the prompt registered what
+  /// they did rather than watching it blink out.
   void _onUserInteraction(PointerDownEvent _) {
+    _idlePrompts = 0; // engagement ends the burst; next one starts fresh
+    final acknowledge = _guideVisible &&
+        !_dismissing &&
+        _fadeController.value > 0 &&
+        !context.read<ChildProvider>().reducedMotion;
+    if (acknowledge) {
+      _entryHideTimer?.cancel();
+      _voRepeatTimer?.cancel();
+      _voRepeatTimer = null;
+      setState(() => _dismissing = true);
+      _pressController.forward(from: 0);
+      _restartIdleTimer();
+      return;
+    }
     _hideGuide(restartIdle: true);
   }
 
-  void _restartIdleTimer() {
+  void _restartIdleTimer({Duration delay = _idleGuideDelay}) {
     _idleGuideTimer?.cancel();
-    _idleGuideTimer = Timer(_idleGuideDelay, _onIdle);
+    _idleGuideTimer = Timer(delay, _onIdle);
   }
 
   /// 30s without a tap: point at the next place to tap and repeat a short
-  /// guiding voice line every ~7s until the child interacts.
+  /// guiding voice line every ~7s — up to [_maxIdlePrompts] times, then go
+  /// quiet for [_idleBackoffDelay] rather than prompting forever.
   void _onIdle() {
     if (!_lobbyActive) {
       // Mid-game or locked — check again later instead of talking over it.
       _restartIdleTimer();
       return;
     }
+    _idlePrompts = 0;
     _showGuide();
     _speakGuidance();
     _voRepeatTimer = Timer.periodic(_voRepeatInterval, (_) {
       if (!_lobbyActive) return;
+      if (_idlePrompts >= _maxIdlePrompts) {
+        // Said our piece. Withdraw the pointer and leave the child in peace
+        // until the longer backoff elapses.
+        _hideGuide(restartIdle: false);
+        _restartIdleTimer(delay: _idleBackoffDelay);
+        return;
+      }
       _showGuide(); // re-anchor in case the view changed
       _speakGuidance();
     });
   }
 
-  /// Alternates two short cues so the repetition stays gentle.
+  /// Alternates two short cues so the repetition stays gentle, and matches
+  /// the cue to what the child is actually looking at: the category buttons
+  /// ("let's begin") or a row of game cards ("choose one").
   void _speakGuidance() {
     _voAlternate = !_voAlternate;
-    _lobbyVo.play(
-        _voAlternate ? VoiceOverCue.tapHere : VoiceOverCue.letsBegin);
-    setState(() => _mascotWave++);
+    final settled =
+        _inView ? VoiceOverCue.chooseOne : VoiceOverCue.letsBegin;
+    _lobbyVo.play(_voAlternate ? VoiceOverCue.tapHere : settled);
+    _idlePrompts++;
+    _mascot.play(MascotGesture.point);
   }
 
-  /// The bobbing pointing hand (static halo under reduced motion).
-  Widget _buildGuidePointer() {
-    final reduced = context.read<ChildProvider>().reducedMotion;
-    final anchor = _guideAnchor!;
-    return Positioned(
-      left: anchor.dx - 36,
-      top: anchor.dy - 12,
-      child: IgnorePointer(
-        child: ListenableBuilder(
-          listenable: _bobController,
-          builder: (_, child) => Transform.translate(
-            offset:
-                reduced ? Offset.zero : Offset(0, 8 * _bobController.value),
-            child: child,
-          ),
-          child: Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.8),
-              shape: BoxShape.circle,
-              boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 12),
-              ],
-            ),
-            child: const Text('👆', style: TextStyle(fontSize: 40)),
-          ),
-        ),
-      ),
+  /// Speaks a short confirmation when the child makes a choice, so the lobby
+  /// answers back instead of going silent at the moment of the tap.
+  void _speakChoice(VoiceOverCue cue) {
+    if (!mounted) return;
+    _lobbyVo.play(cue);
+    _mascot.play(MascotGesture.nod);
+  }
+
+  /// Rect of a keyed widget in the coordinate space of [within] (the guidance
+  /// stack by default), or null when either is not laid out.
+  Rect? _rectForKey(GlobalKey key, {GlobalKey? within}) {
+    final targetContext = key.currentContext;
+    final stackContext = (within ?? _stackKey).currentContext;
+    if (targetContext == null || stackContext == null) return null;
+    final targetBox = targetContext.findRenderObject() as RenderBox?;
+    final stackBox = stackContext.findRenderObject() as RenderBox?;
+    if (targetBox == null || stackBox == null || !targetBox.attached) {
+      return null;
+    }
+    final topLeft = stackBox.globalToLocal(targetBox.localToGlobal(Offset.zero));
+    return Rect.fromLTWH(
+      topLeft.dx,
+      topLeft.dy,
+      targetBox.size.width,
+      targetBox.size.height,
     );
+  }
+
+  /// Enters My Path through the door animation — growing out of the button when
+  /// motion is allowed, cross-fading when it is not, and falling back to a
+  /// plain swap only when the button's rect cannot be measured at all.
+  void _enterPath() {
+    final reduced = context.read<ChildProvider>().reducedMotion;
+    final rect =
+        reduced ? Rect.zero : _rectForKey(_pathButtonKey, within: _rootStackKey);
+    if (rect == null) {
+      _enterView(() => _viewingPath = true);
+      return;
+    }
+    _speakChoice(VoiceOverCue.hereWeGo);
+    _hideGuide(restartIdle: false);
+    _doorClosing = false;
+    // Seeded before mounting so the door's first frame is the button's rect and
+    // not wherever the last run left the controller.
+    _doorController.value = 0;
+    setState(() {
+      _doorFadeOnly = reduced;
+      _doorFromRect = rect;
+      _doorActive = true;
+    });
+    // The frame that mounts the door is the frame that builds the path view for
+    // the first time — backdrop, level map and all. Starting the animation on
+    // that same frame spends the build on frame one and drops it, so the door
+    // appears to jump. Wait for the view to exist, then move it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _doorActive && !_doorClosing) _doorController.forward();
+    });
+  }
+
+  /// Leaves My Path by running the same door backwards, so the world the child
+  /// was in visibly folds back into the button that opened it. Seeing where a
+  /// screen *went* is what makes the lobby stay one place instead of becoming a
+  /// series of unrelated screens.
+  ///
+  /// The lobby is switched back on the same frame the door is pinned open, so
+  /// the button is laid out and measurable by the next frame while the child
+  /// still sees only the path view.
+  void _exitPath() {
+    final reduced = context.read<ChildProvider>().reducedMotion;
+    _doorClosing = true;
+    _doorController.value = 1;
+    setState(() {
+      _doorFadeOnly = reduced;
+      // Only read at progress < 1, and the next frame replaces it with the
+      // measured button. Pinned at 1 the clip is the whole canvas regardless.
+      _doorFromRect = Rect.zero;
+      _doorActive = true;
+      _viewingPath = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_doorClosing) return;
+      final rect = reduced
+          ? Rect.zero
+          : _rectForKey(_pathButtonKey, within: _rootStackKey);
+      if (rect == null) {
+        // Nothing to shrink into — drop the cover and let the lobby stand.
+        setState(() {
+          _doorActive = false;
+          _doorClosing = false;
+          _doorFromRect = null;
+        });
+        return;
+      }
+      setState(() => _doorFromRect = rect);
+      _doorController.reverse(from: 1);
+    });
+  }
+
+  /// Opens a category / All / My Path view: acknowledge the tap out loud, then
+  /// move the pointing hand onto the card the child should try first.
+  void _enterView(VoidCallback apply) {
+    setState(apply);
+    _speakChoice(VoiceOverCue.hereWeGo);
+    // The cards do not exist until this frame is laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_lobbyActive) _showGuide();
+    });
+  }
+
+  /// True while any part of the hand — arrival, rest, or goodbye — is on
+  /// screen.
+  ///
+  /// Deliberately keyed off [_guideVisible] and not the fade value: the
+  /// controllers tick without rebuilding this widget (only the inner
+  /// [ListenableBuilder] listens), so a value-based test would never see the
+  /// hand fade in. [_guideVisible] is cleared by the fade and press status
+  /// listeners once the exit has finished playing.
+  bool get _guideOnScreen => _guideAnchor != null && _guideVisible;
+
+  /// Where the hand sits this frame: its target, or a point along the glide
+  /// if it is still travelling there.
+  Offset _renderedAnchor() {
+    final to = _guideAnchor!;
+    final from = _fromAnchor;
+    if (from == null) return to;
+    final t = Curves.easeInOutCubic.transform(_travelController.value);
+    return Offset.lerp(from, to, t)!;
+  }
+
+  /// The pointing hand and the ripple it leaves when the child taps.
+  ///
+  /// Returned as a list so the ripple can sit exactly on the target centre
+  /// while the hand hangs just below it. Both ignore pointers: the hand is a
+  /// cue, never the thing to tap — the game card underneath is.
+  List<Widget> _buildGuideLayer() {
+    final reduced = context.read<ChildProvider>().reducedMotion;
+    return [
+      ListenableBuilder(
+        listenable: Listenable.merge([
+          _fadeController,
+          _travelController,
+          _pressController,
+          _bobController,
+        ]),
+        builder: (context, _) {
+          final anchor = _renderedAnchor();
+          final press = _pressController.value;
+
+          // Arrival overshoots a little so the hand lands rather than
+          // materialises; departure is a plain fade.
+          final appear = reduced
+              ? 1.0
+              : Curves.easeOutBack.transform(_fadeController.value);
+          // The press: a dip that holds while the hand fades away.
+          final pressDip =
+              1 - 0.16 * Curves.easeOutCubic.transform((press / 0.35).clamp(0.0, 1.0));
+          final pressFade =
+              press <= 0.35 ? 1.0 : 1 - ((press - 0.35) / 0.65);
+          final opacity =
+              (_fadeController.value * pressFade).clamp(0.0, 1.0);
+
+          // Each unanswered prompt bobs a little wider — an unheeded cue
+          // should grow, but only to a gentle ceiling.
+          final bobHeight = (6.0 + 2.5 * _idlePrompts).clamp(6.0, 13.0);
+          final bob = reduced ? 0.0 : bobHeight * _bobController.value;
+
+          return Positioned(
+            left: anchor.dx - 36,
+            top: anchor.dy - 12,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: opacity,
+                child: Transform.translate(
+                  offset: Offset(0, bob),
+                  child: Transform.scale(
+                    scale: appear * pressDip,
+                    // No halo behind the hand: the emoji sits directly on the
+                    // lobby. The 72x72 box keeps the anchor offsets centred.
+                    child: const SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: Center(
+                          child: Text('👆', style: TextStyle(fontSize: 40))),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+      if (_dismissing)
+        ListenableBuilder(
+          listenable: _pressController,
+          builder: (context, _) {
+            final t = Curves.easeOutCubic.transform(_pressController.value);
+            final radius = 30 + 42 * t;
+            final anchor = _renderedAnchor();
+            return Positioned(
+              left: anchor.dx - radius,
+              top: anchor.dy - radius,
+              child: IgnorePointer(
+                child: Container(
+                  width: radius * 2,
+                  height: radius * 2,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.white
+                          .withValues(alpha: (0.5 * (1 - t)).clamp(0.0, 1.0)),
+                      width: 3,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+    ];
   }
 
   /// The AI-recommended learning path (empty when no assessment yet, all
@@ -279,10 +692,19 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   /// All supported games, deduplicated (used by the "All" view/button).
   List<GameEntry> _allGames() => GameLauncher.supportedGames();
 
-  void _launch(String gameId, int difficulty) {
+  Future<void> _launch(String gameId, int difficulty) async {
     final screen = GameLauncher.screenFor(gameId, difficulty);
     if (screen == null) return;
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    _speakChoice(VoiceOverCue.letsGo);
+    _hideGuide(restartIdle: false); // the game speaks for itself from here
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => screen));
+    // Back in the lobby: pick the child up again rather than dropping them
+    // into silence, and re-arm the idle guidance.
+    if (!_lobbyActive) return;
+    _speakChoice(VoiceOverCue.chooseOne);
+    _idlePrompts = 0;
+    _restartIdleTimer();
   }
 
   Future<void> _exitToParent() async {
@@ -327,10 +749,26 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     final level = context.watch<AssessmentProvider>().recommendedLevel;
     context.watch<ChildProvider>().difficultyOverride;
 
+    // My Path is a scene, not a row on the lobby: when it is open the world
+    // fills the whole body so the header and mascot sit on the same sky. The
+    // scene is decoration, so the lowest graphics tier — which exists to cut
+    // GPU and sensory load — drops it and falls back to the lobby gradient.
+    final world = context.watch<ChildProvider>().activeWorldStyle;
+    final showScene = _viewingPath &&
+        world.hasBackdrop &&
+        context.watch<ChildProvider>().graphicsQuality != GraphicsQuality.low;
+
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(gradient: palette.gameBackground),
-        child: SafeArea(
+        decoration: showScene
+            ? null
+            : BoxDecoration(gradient: palette.gameBackground),
+        child: Stack(
+          key: _rootStackKey,
+          fit: StackFit.expand,
+          children: [
+        if (showScene) WorldBackdrop(style: world),
+        SafeArea(
           // Any touch counts as engagement for the guided-start idle timer.
           child: Listener(
             behavior: HitTestBehavior.translucent,
@@ -338,34 +776,138 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
             child: Stack(
               key: _stackKey,
               children: [
+                // The games row scrolls horizontally; if it moves while the
+                // hand is up, the hand moves with its card.
+                NotificationListener<ScrollNotification>(
+                  onNotification: (_) {
+                    _reanchorGuide();
+                    return false;
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(palette, level),
+                      Expanded(
+                        child: !_inView
+                            ? _buildCategoryButtons(palette)
+                            : _buildGamesRow(level, palette),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildMascotCorner(),
+                if (_guideOnScreen) ..._buildGuideLayer(),
+              ],
+            ),
+          ),
+        ),
+            // The door: the path view revealed through a window growing out of
+            // the button. Drawn last so it covers the lobby beneath it.
+            if (_doorActive && _doorFromRect != null) ...[
+              // Taps are swallowed for the whole animation. The clip means the
+              // lobby is still reachable *outside* the window, and a second
+              // button pressed mid-transition would leave the view in a state
+              // the door never accounted for.
+              const Positioned.fill(
+                child: AbsorbPointer(child: SizedBox.expand()),
+              ),
+              Positioned.fill(
+                child: ListenableBuilder(
+                  listenable: _doorController,
+                  // The path view is built **once** per lobby build and handed
+                  // to the builder, not rebuilt inside it. Building it per
+                  // frame meant re-running the backdrop, header and the whole
+                  // level map sixty times a second, which is what made the
+                  // door stutter. The RepaintBoundary takes the rest: the
+                  // finished scene is rasterised once and every later frame
+                  // only re-composites it under a new clip.
+                  child: RepaintBoundary(
+                    child: _buildPathPresentation(palette, level, world),
+                  ),
+                  builder: (context, child) {
+                    final raw = _doorController.value;
+                    // Reduced motion: window pinned open, fade carries the
+                    // whole change. Otherwise the window grows and the fade is
+                    // just a soft first frame.
+                    final t = _doorFadeOnly ? 1.0 : _doorCurve.transform(raw);
+                    final opacity = _doorFadeOnly
+                        ? raw
+                        : (raw / _doorFadeFraction).clamp(0.0, 1.0);
+                    return Opacity(
+                      // Free once opaque — RenderOpacity skips the layer at 1.0
+                      // — so the cross-fade costs nothing after it finishes.
+                      opacity: opacity,
+                      child: ClipRRect(
+                        clipper: _DoorClipper(
+                          from: _doorFromRect!,
+                          progress: t,
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The path view exactly as it looks once open — scene, header and map.
+  ///
+  /// Built standalone so the door animation can reveal the finished view while
+  /// [_viewingPath] is still false and the lobby is still mounted underneath.
+  /// Because the door's last frame is this same widget at full size, the state
+  /// swap at the end of the animation changes nothing on screen.
+  Widget _buildPathPresentation(
+      GamePalette palette, int level, WorldStyle world) {
+    final sceneOn = world.hasBackdrop &&
+        context.read<ChildProvider>().graphicsQuality != GraphicsQuality.low;
+    return DecoratedBox(
+      // Opaque either way: the door must not let the lobby show through.
+      decoration: sceneOn
+          ? const BoxDecoration(color: AppColors.background)
+          : BoxDecoration(gradient: palette.gameBackground),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (sceneOn) WorldBackdrop(style: world),
+          SafeArea(
+            child: Stack(
+              children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(palette, level),
-                    Expanded(
-                      child: !_inView
-                          ? _buildCategoryButtons(palette)
-                          : _buildGamesRow(level, palette),
-                    ),
+                    _buildHeader(palette, level, asPath: true),
+                    Expanded(child: _buildPathRow()),
                   ],
                 ),
-                // BPS keeps the child company from the corner, waving hello
-                // on entry and whenever the guidance voice speaks.
-                Positioned(
-                  left: AppSpacing.md,
-                  bottom: AppSpacing.sm,
-                  child: IgnorePointer(
-                    child: BpsMascot(
-                      height: 92,
-                      waveTrigger: _mascotWave,
-                      semanticLabel: 'BPS the mascot',
-                    ),
-                  ),
-                ),
-                if (_guideVisible && _guideAnchor != null)
-                  _buildGuidePointer(),
+                _buildMascotCorner(),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// BPS keeps the child company from the corner, waving hello on entry and
+  /// whenever the guidance voice speaks.
+  Widget _buildMascotCorner() {
+    return Positioned(
+      left: AppSpacing.md,
+      bottom: AppSpacing.sm,
+      child: IgnorePointer(
+        child: ListenableBuilder(
+          listenable: _mascot,
+          builder: (context, _) => Mascot(
+            height: 92,
+            pose: _mascot.pose,
+            gesture: _mascot.gesture,
+            gestureTrigger: _mascot.tick,
+            semanticLabel: 'BPS the mascot',
           ),
         ),
       ),
@@ -374,8 +916,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   // ── Header ─────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(GamePalette palette, int level) {
-    final title = _viewingPath
+  /// [asPath] forces the open-My-Path rendering regardless of current state,
+  /// so the door animation can show the header it is travelling towards.
+  Widget _buildHeader(GamePalette palette, int level, {bool asPath = false}) {
+    final title = (_viewingPath || asPath)
         ? 'My Path'
         : _viewingAll
             ? 'All Games'
@@ -385,18 +929,22 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       child: Row(
         children: [
-          if (_inView)
+          if (_inView || asPath)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Material(
                 color: AppColors.white.withAlpha(200),
                 shape: const CircleBorder(),
                 child: IconButton(
-                  onPressed: () => setState(() {
-                    _selected = null;
-                    _viewingAll = false;
-                    _viewingPath = false;
-                  }),
+                  // My Path leaves the way it arrived — the door closes back
+                  // into its button. The category and All rows are a plain
+                  // swap, as they were.
+                  onPressed: () => (_viewingPath || asPath)
+                      ? _exitPath()
+                      : setState(() {
+                          _selected = null;
+                          _viewingAll = false;
+                        }),
                   icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
                   tooltip: 'Back',
                 ),
@@ -460,6 +1008,18 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   // ── Step 1: category buttons ───────────────────────────────────────────
 
+  /// The world shown inside the "My Path" button, or null when there is no
+  /// scene to show (Classic, or the lowest graphics tier).
+  Widget? _lobbyWorldPreview() {
+    final childProv = context.read<ChildProvider>();
+    final world = childProv.activeWorldStyle;
+    if (!world.hasBackdrop ||
+        childProv.graphicsQuality == GraphicsQuality.low) {
+      return null;
+    }
+    return WorldBackdrop(style: world, borderRadius: 24);
+  }
+
   Widget _buildCategoryButtons(GamePalette palette) {
     final path = _learningPath();
     final buttons = <Widget>[
@@ -473,7 +1033,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
             icon: Icons.route_rounded,
             gradient: const [Color(0xFFC7B4EC), Color(0xFFA9E3CC)], // lavender → mint
             count: path.length,
-            onTap: () => setState(() => _viewingPath = true),
+            // The button wears the world it leads into, so the door reads as
+            // stepping through rather than the screen changing.
+            backdrop: _lobbyWorldPreview(),
+            onTap: _enterPath,
           ),
         ),
       KeyedSubtree(
@@ -483,7 +1046,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
           icon: Icons.apps_rounded,
           gradient: const [Color(0xFFFBD89A), Color(0xFFA9E3CC)], // amber → mint
           count: _allGames().length,
-          onTap: () => setState(() => _viewingAll = true),
+          onTap: () => _enterView(() => _viewingAll = true),
         ),
       ),
       for (final cat in _categoryOrder)
@@ -492,7 +1055,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
           icon: _iconForCategory(cat),
           gradient: _gradientForCategory(cat),
           count: _gamesFor(cat).length,
-          onTap: () => setState(() => _selected = cat),
+          onTap: () => _enterView(() => _selected = cat),
         ),
     ];
     return Padding(
@@ -572,39 +1135,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     // the first incomplete step (always unlocked by the sequence rule).
     var guideIndex = path.indexWhere((e) => !completed.contains(e.game.id));
     if (guideIndex < 0) guideIndex = 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: SizedBox(
-        height: 200,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          itemCount: path.length,
-          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-          itemBuilder: (_, i) {
-            final step = path[i];
-            final unlocked = LearningPathService.isUnlocked(path, i, completed);
-            final done = completed.contains(step.game.id);
-            // The parent's manual override still wins over the path level.
-            final override =
-                context.read<ChildProvider>().difficultyOverride;
-            final difficulty = (override ?? step.difficulty).clamp(1, 3);
-            final card = _GameCard(
-              entry: step.game,
-              difficulty: difficulty,
-              stepNumber: i + 1,
-              locked: !unlocked,
-              completed: done,
-              onTap: unlocked
-                  ? () => _launch(step.game.id, difficulty)
-                  : null,
-            );
-            return i == guideIndex
-                ? KeyedSubtree(key: _guideCardKey, child: card)
-                : card;
-          },
-        ),
-      ),
+    final childProv = context.watch<ChildProvider>();
+    return PathMapView(
+      path: path,
+      completedGameIds: completed,
+      // The parent's manual override still wins over the path level.
+      difficultyOverride: childProv.difficultyOverride,
+      style: childProv.activeWorldStyle,
+      currentStepKey: _guideCardKey,
+      onLaunch: _launch,
     );
   }
 }
@@ -617,6 +1156,7 @@ class _CategoryButton extends StatelessWidget {
     required this.gradient,
     required this.count,
     required this.onTap,
+    this.backdrop,
   });
 
   final String label;
@@ -625,22 +1165,30 @@ class _CategoryButton extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
 
+  /// A scene painted inside the button in place of [gradient] — used by "My
+  /// Path" to show the world it opens into. Text flips to light when set.
+  final Widget? backdrop;
+
   @override
   Widget build(BuildContext context) {
+    final onScene = backdrop != null;
+    final labelColor = onScene ? AppColors.white : AppColors.foreground;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: gradient,
-            ),
+            // A scene replaces the gradient rather than layering over it.
+            gradient: onScene
+                ? null
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: gradient,
+                  ),
             boxShadow: [
               BoxShadow(
                 color: gradient.first.withAlpha(120),
@@ -649,33 +1197,54 @@ class _CategoryButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
+            fit: StackFit.passthrough,
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppColors.white.withAlpha(200),
-                  shape: BoxShape.circle,
+              if (onScene)
+                Positioned.fill(child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: backdrop,
+                )),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: AppColors.white.withAlpha(200),
+                        shape: BoxShape.circle,
+                      ),
+                      child:
+                          Icon(icon, color: AppColors.primaryPurple, size: 38),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: labelColor,
+                        fontWeight: FontWeight.w800,
+                        shadows: onScene
+                            ? const [
+                                Shadow(color: Color(0x99000000), blurRadius: 5)
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$count ${count == 1 ? 'game' : 'games'}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: onScene
+                            ? AppColors.white.withValues(alpha: 0.85)
+                            : AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
                 ),
-                child:
-                    Icon(icon, color: AppColors.primaryPurple, size: 38),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: AppColors.foreground,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '$count ${count == 1 ? 'game' : 'games'}',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.mutedForeground),
               ),
             ],
           ),
@@ -685,30 +1254,58 @@ class _CategoryButton extends StatelessWidget {
   }
 }
 
+/// Clips to a rounded window between [from] and the full canvas.
+///
+/// The child is always laid out at full size and only the *window* changes, so
+/// nothing inside scales or reflows during the animation — the path view is
+/// uncovered rather than zoomed, which is what makes it read as a door. Driven
+/// in reverse it is the same door closing, frame for frame.
+/// A rounded rect rather than a [Path]: `clipRRect` is a fast path on the
+/// raster thread, while a general `clipPath` is not — and the door redraws this
+/// clip on every frame.
+class _DoorClipper extends CustomClipper<RRect> {
+  const _DoorClipper({required this.from, required this.progress});
+
+  final Rect from;
+
+  /// 0 = just the button's rect, 1 = the whole canvas.
+  final double progress;
+
+  @override
+  RRect getClip(Size size) {
+    final full = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rect = Rect.lerp(from, full, progress)!;
+    // Corners open out as the window grows, ending square at the screen edge.
+    final radius = 24 * (1 - progress);
+    return RRect.fromRectAndRadius(rect, Radius.circular(radius));
+  }
+
+  @override
+  bool shouldReclip(_DoorClipper oldClipper) =>
+      oldClipper.from != from || oldClipper.progress != progress;
+}
+
 /// A game card shown in the horizontal row (step 2).
+///
+/// Picture first, name on a white strip underneath, and nothing else but the
+/// difficulty pill: the child using this row cannot read, so the game's own
+/// logo tile is what they actually choose by. The registry's one-line
+/// description is deliberately not shown here — it is written for the parent,
+/// and it survives on game_lab's launcher, where a reader is the audience.
+///
+/// Used by the category and "All" rows. My Path no longer uses this — it
+/// renders steps as platforms via [PathMapView].
 class _GameCard extends StatelessWidget {
   const _GameCard({
     required this.entry,
     required this.difficulty,
     required this.onTap,
-    this.stepNumber,
-    this.locked = false,
-    this.completed = false,
   });
 
   final GameEntry entry;
 
   /// 1 Easy / 2 Medium / 3 Hard — from the child's per-area AI level.
   final int difficulty;
-
-  /// 1-based position on the learning path; shows a numbered badge.
-  final int? stepNumber;
-
-  /// Sequential unlock: locked steps are muted and not tappable.
-  final bool locked;
-
-  /// Completed steps show a checkmark (still replayable).
-  final bool completed;
 
   final VoidCallback? onTap;
 
@@ -721,121 +1318,102 @@ class _GameCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const radius = 22.0;
     return SizedBox(
-      width: 230,
-      child: Opacity(
-        // Locked steps are visibly muted (and not tappable).
-        opacity: locked ? 0.45 : 1.0,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: entry.gradientColors,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: entry.gradientColors.first.withAlpha(90),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+      width: 186,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(radius),
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: entry.gradientColors,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: AppColors.white.withAlpha(200),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                            locked ? Icons.lock_rounded : entry.icon,
-                            color: AppColors.primaryPurple,
-                            size: 30),
-                      ),
-                      if (stepNumber != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 28,
-                          height: 28,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: completed
-                                ? const Color(0xFF43A047) // done — green
-                                : AppColors.primaryPurple,
-                            shape: BoxShape.circle,
-                          ),
-                          child: completed
-                              ? const Icon(Icons.check_rounded,
-                                  size: 18, color: AppColors.white)
-                              : Text(
-                                  '$stepNumber',
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                        ),
-                      ],
-                      const Spacer(),
-                      // Per-game difficulty tier from the child's AI level.
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.white.withAlpha(210),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _tierLabels[difficulty] ?? 'Medium',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: _tierColors[difficulty] ??
-                                _tierColors[2],
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  entry.name,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.foreground,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Text(
-                    entry.description,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.mutedForeground),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: entry.gradientColors.first.withAlpha(90),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
+            // Clipped so the name strip's straight top edge can meet the
+            // card's rounded corners without a seam.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        // Inset at the top so the difficulty pill sits beside
+                        // the artwork rather than on top of it.
+                        Padding(
+                          padding: const EdgeInsets.only(top: 20),
+                          child: Center(
+                            child: GameLogo(
+                              asset: entry.logoAsset,
+                              size: 104,
+                              fallbackIcon: entry.icon,
+                              fallbackColor: AppColors.primaryPurple,
+                              semanticLabel: entry.name,
+                            ),
+                          ),
+                        ),
+                        // Per-game difficulty tier from the child's AI level.
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.white.withAlpha(225),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              _tierLabels[difficulty] ?? 'Medium',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color:
+                                    _tierColors[difficulty] ?? _tierColors[2],
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    // Fixed to two lines' worth so the strips — and therefore
+                    // the artwork above them — line up across the row, whether
+                    // a game's name wraps or not.
+                    height: 62,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    color: AppColors.white.withAlpha(240),
+                    child: Text(
+                      entry.name,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: AppColors.foreground,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
       ),
     );
   }

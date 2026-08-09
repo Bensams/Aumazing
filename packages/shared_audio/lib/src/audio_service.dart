@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import 'audio_config.dart';
+import 'bgm_library.dart';
 
 /// Audio context for SFX that doesn't request audio focus (allows mixing with music)
 final _sfxAudioContext = AudioContext(
@@ -51,6 +52,9 @@ class AudioService {
 
   /// The currently playing music track ID (null if none).
   String? _currentTrack;
+
+  /// The category [playCategoryMusic] last picked from (null if none).
+  String? _currentCategory;
 
   /// Asset prefix for package-based assets.
   /// Flutter resolves package assets at: packages/<pkg_name>/assets/...
@@ -123,6 +127,7 @@ class AudioService {
   Future<void> stopMusic() async {
     await _musicPlayer.stop();
     _currentTrack = null;
+    _currentCategory = null;
   }
 
   /// Play a random track from the provided list.
@@ -136,21 +141,73 @@ class AudioService {
     await playMusic(selectedTrack);
   }
 
+  /// Play one track from [categoryKey], looping for the rest of the session.
+  ///
+  /// A track is chosen once and then repeats until [stopMusic] or another
+  /// category is requested. Music deliberately does *not* advance through a
+  /// playlist mid-session: a new timbre arriving unannounced is exactly the
+  /// kind of unpredictable change this library is designed to avoid. Variety
+  /// comes from a fresh pick on the next session instead.
+  ///
+  /// Calling this again with the same category while it is already playing is
+  /// a no-op, so rebuilds and lifecycle callbacks cannot restart the track.
+  /// Pass [restart] to force a new pick — used when a game session begins.
+  ///
+  /// An unknown [categoryKey] falls back to the default category rather than
+  /// leaving the child in silence.
+  Future<void> playCategoryMusic(String? categoryKey,
+      {bool restart = false}) async {
+    if (!_config.musicEnabled) return;
+
+    final category = bgmCategoryOrDefault(categoryKey);
+    if (category.tracks.isEmpty) return;
+
+    if (!restart && _currentCategory == category.key && isMusicPlaying) return;
+
+    final track = category.tracks[Random().nextInt(category.tracks.length)];
+    _currentCategory = category.key;
+    await playMusic(category.trackPath(track));
+  }
+
+  /// Play one *named* track, for the settings preview.
+  ///
+  /// [playCategoryMusic] picks at random and no-ops on a repeat call, which is
+  /// right for the app and useless for auditioning: a parent choosing music
+  /// needs to hear the specific piece they tapped. This always restarts.
+  Future<void> playCategoryTrack(BgmCategory category, BgmTrack track) async {
+    if (!_config.musicEnabled) return;
+    _currentCategory = category.key;
+    await playMusic(category.trackPath(track));
+  }
+
+  /// The category currently playing, or null when music is stopped.
+  String? get currentCategory => _currentCategory;
+
+  /// The track path currently playing, or null when music is stopped.
+  ///
+  /// Compare against [BgmCategory.trackPath] to tell which track this is.
+  String? get currentTrack => _currentTrack;
+
   // ── Sound Effects ──────────────────────────────────────────────────
 
   /// Play a one-shot sound effect from the shared_audio assets.
   ///
   /// [sfxName] is just the filename, e.g. `'correct.wav'`.
   ///
+  /// [volumeScale] multiplies the configured SFX volume for this one clip. It
+  /// exists for effects that play *under* speech and would otherwise mask it;
+  /// it scales the child's own volume setting rather than replacing it.
+  ///
   /// Uses [AssetSource] for reliable playback on both Android and iOS.
-  Future<void> playSfx(String sfxName) async {
+  Future<void> playSfx(String sfxName, {double volumeScale = 1.0}) async {
     if (!_config.sfxEnabled) return;
 
     final assetPath = '$_assetPrefix/$sfxName';
 
     try {
       final player = _getAvailableSfxPlayer();
-      await player.setVolume(_config.effectiveSfxVolume);
+      await player.setVolume(
+          (_config.effectiveSfxVolume * volumeScale).clamp(0.0, 1.0));
       await player.play(AssetSource(assetPath));
     } catch (e) {
       debugPrint('[AudioService] ✖ Error playing SFX "$sfxName": $e');
@@ -207,6 +264,14 @@ class AudioService {
 
   /// SFX file for game completion / celebration.
   static const String _gameCompleteSfx = 'sfx/game_complete.wav';
+
+  /// SFX file for the end-of-game cheer: real children clapping and cheering.
+  ///
+  /// Deliberately a recording of other kids rather than a synthesised fanfare —
+  /// social praise is the reinforcer the reward system is built around, and an
+  /// applause bed reads as "people are pleased with you" to a child who may not
+  /// yet parse the words of the praise line that follows it.
+  static const String _cheerClapSfx = 'sfx/cheer_clap.wav';
 
   /// SFX file for drag start.
   static const String _dragSfx = 'sfx/drag.wav';
@@ -265,6 +330,26 @@ class AudioService {
 
   /// Play the game-complete / celebration sound effect.
   Future<void> playGameCompleteSfx() => playSfx(_gameCompleteSfx);
+
+  /// Play the end-of-game cheer: children clapping and cheering.
+  ///
+  /// Plays on its own SFX player, so it lays under the celebration voice-over
+  /// rather than cutting it off — held back to 70% so it stays a bed and does
+  /// not mask the praise line running on top of it.
+  Future<void> playCheerClapSfx() =>
+      playSfx(_cheerClapSfx, volumeScale: 0.7);
+
+  /// Play the full end-of-game celebration bed: the completion chime, then the
+  /// children's cheer a beat later.
+  ///
+  /// The stagger keeps the chime's attack audible instead of burying it under
+  /// the applause, and leaves the cheer still running when the celebration
+  /// voice-over starts.
+  Future<void> playGameCompleteCelebration() async {
+    await playGameCompleteSfx();
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await playCheerClapSfx();
+  }
 
   /// Play the drag-start sound effect.
   Future<void> playDragSfx() => playSfx(_dragSfx);

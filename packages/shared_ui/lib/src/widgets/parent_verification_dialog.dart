@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -22,10 +23,56 @@ const _digitWords = [
   'nine',
 ];
 
-/// A modal dialog that requires a parent to type a 4-digit code shown as
-/// English words, using an on-screen numpad (no keyboard).
+/// Outcome of one custom-PIN attempt.
+enum ParentPinAttempt {
+  correct,
+
+  /// Wrong PIN, tries still available.
+  incorrect,
+
+  /// Throttled after too many wrong tries — see
+  /// [ParentPinDelegate.lockoutRemaining] for how long.
+  lockedOut,
+}
+
+/// App-supplied hooks that let [ParentVerificationDialog] challenge with a
+/// parent-chosen PIN instead of the on-screen word code.
+///
+/// This package deliberately knows nothing about storage, accounts, or
+/// email; the host app implements those and installs the delegate once at
+/// startup via [ParentVerificationDialog.pinDelegate]. When no delegate is
+/// installed — or [hasPin] is false — the dialog falls back to the word-code
+/// challenge, so callers never have to branch.
+abstract class ParentPinDelegate {
+  /// True when a custom PIN is configured and should be used.
+  bool get hasPin;
+
+  /// Checks [pin]. Implementations own the brute-force throttle.
+  Future<ParentPinAttempt> verify(String pin);
+
+  /// Time left on the cooldown, or null when entry is allowed.
+  Duration? get lockoutRemaining;
+
+  /// Runs the app's "forgot PIN" recovery flow. Return true when the parent
+  /// proved ownership (and the gate should therefore open).
+  Future<bool> onForgotPin(BuildContext context);
+}
+
+/// A modal dialog that verifies a parent before leaving child mode.
+///
+/// Two challenge types, chosen by whether a [ParentPinDelegate] with a PIN
+/// is installed:
+/// - **Word code** (default): a fresh random 4-digit code rendered as English
+///   words, typed back on an on-screen numpad. Keeps pre-readers out with
+///   nothing for the parent to remember.
+/// - **Custom PIN**: a 4-digit PIN the parent chose. Nothing on screen
+///   reveals it, so it also holds against a child who can read.
 class ParentVerificationDialog extends StatefulWidget {
   const ParentVerificationDialog({super.key});
+
+  /// Installed once at app startup. Null leaves every call site on the
+  /// word-code challenge.
+  static ParentPinDelegate? pinDelegate;
 
   /// Shows the dialog and returns `true` if the parent verified successfully.
   static Future<bool> show(BuildContext context) async {
@@ -44,8 +91,11 @@ class ParentVerificationDialog extends StatefulWidget {
 }
 
 class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
-  /// The randomly generated 4-digit code (each digit 0-9).
+  /// The randomly generated 4-digit code (each digit 0-9). Word-code mode only.
   late final List<int> _code;
+
+  /// The delegate captured at open time, when it has a PIN to check against.
+  late final ParentPinDelegate? _pin;
 
   /// Digits entered by the user via the on-screen numpad.
   String _enteredCode = '';
@@ -53,17 +103,64 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
   /// Error message shown after an incorrect attempt.
   String? _error;
 
+  /// True while an async PIN check is running (numpad disabled).
+  bool _checking = false;
+
+  /// Seconds left on the throttle cooldown; null when entry is allowed.
+  int? _lockoutSeconds;
+  Timer? _lockoutTimer;
+
+  bool get _usesPin => _pin != null;
+
   @override
   void initState() {
     super.initState();
     final rng = Random();
     _code = List.generate(4, (_) => rng.nextInt(10));
+
+    final delegate = ParentVerificationDialog.pinDelegate;
+    _pin = (delegate != null && delegate.hasPin) ? delegate : null;
+
+    // A cooldown may already be running from an earlier attempt — including
+    // one in a previous app session, since the throttle is persisted.
+    final remaining = _pin?.lockoutRemaining;
+    if (remaining != null) _startLockout(remaining);
   }
+
+  @override
+  void dispose() {
+    _lockoutTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startLockout(Duration remaining) {
+    _lockoutTimer?.cancel();
+    _lockoutSeconds = remaining.inSeconds.clamp(1, 3600);
+    _enteredCode = '';
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        final left = (_lockoutSeconds ?? 1) - 1;
+        if (left <= 0) {
+          _lockoutSeconds = null;
+          _error = null;
+          timer.cancel();
+        } else {
+          _lockoutSeconds = left;
+        }
+      });
+    });
+  }
+
+  bool get _inputDisabled => _checking || _lockoutSeconds != null;
 
   // ── Numpad callbacks ────────────────────────────────────────────────────
 
   void _onDigitPressed(int digit) {
-    if (_enteredCode.length >= 4) return;
+    if (_inputDisabled || _enteredCode.length >= 4) return;
     setState(() {
       _enteredCode += digit.toString();
       _error = null;
@@ -71,24 +168,61 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
   }
 
   void _onBackspace() {
-    if (_enteredCode.isEmpty) return;
+    if (_inputDisabled || _enteredCode.isEmpty) return;
     setState(() {
       _enteredCode = _enteredCode.substring(0, _enteredCode.length - 1);
       _error = null;
     });
   }
 
-  void _onSubmit() {
-    if (_enteredCode.length != 4) return;
-    final expected = _code.join();
-    if (_enteredCode == expected) {
-      Navigator.of(context).pop(true);
-    } else {
-      setState(() {
-        _error = 'Incorrect code. Try again.';
-        _enteredCode = '';
-      });
+  Future<void> _onSubmit() async {
+    if (_inputDisabled || _enteredCode.length != 4) return;
+
+    final delegate = _pin;
+    if (delegate == null) {
+      // Word-code mode: compare against the code shown on screen.
+      if (_enteredCode == _code.join()) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() {
+          _error = 'Incorrect code. Try again.';
+          _enteredCode = '';
+        });
+      }
+      return;
     }
+
+    setState(() => _checking = true);
+    final outcome = await delegate.verify(_enteredCode);
+    if (!mounted) return;
+
+    switch (outcome) {
+      case ParentPinAttempt.correct:
+        setState(() => _checking = false);
+        Navigator.of(context).pop(true);
+      case ParentPinAttempt.incorrect:
+        setState(() {
+          _checking = false;
+          _error = 'Incorrect PIN. Try again.';
+          _enteredCode = '';
+        });
+      case ParentPinAttempt.lockedOut:
+        setState(() {
+          _checking = false;
+          _error = null;
+          _startLockout(
+            delegate.lockoutRemaining ?? const Duration(seconds: 60),
+          );
+        });
+    }
+  }
+
+  Future<void> _onForgotPin() async {
+    final delegate = _pin;
+    if (delegate == null) return;
+    final verified = await delegate.onForgotPin(context);
+    if (!mounted) return;
+    if (verified) Navigator.of(context).pop(true);
   }
 
   // ── Build ───────────────────────────────────────────────────────────────
@@ -128,7 +262,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Left column – code words + indicator dots
+                    // Left column – code words (or PIN prompt) + dots
                     Expanded(child: _buildLeftColumn()),
                     const SizedBox(width: AppSpacing.md),
                     // Right column – numpad
@@ -138,13 +272,36 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
               ),
             ),
 
-            // ── Error message ────────────────────────────────────────
-            if (_error != null) ...[
+            // ── Cooldown / error message ─────────────────────────────
+            if (_lockoutSeconds != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Too many tries. Try again in ${_lockoutSeconds}s.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.destructiveRed,
+                ),
+              ),
+            ] else if (_error != null) ...[
               const SizedBox(height: AppSpacing.xs),
               Text(
                 _error!,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.destructiveSoftRed,
+                  color: AppColors.destructiveRed,
+                ),
+              ),
+            ],
+
+            if (_usesPin) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton(
+                onPressed: _checking ? null : _onForgotPin,
+                child: Text(
+                  'Forgot PIN?',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.primaryPurple,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -185,7 +342,9 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                 style: AppTextStyles.titleLarge,
               ),
               Text(
-                'Enter the code shown below:',
+                _usesPin
+                    ? 'Enter your parent PIN:'
+                    : 'Enter the code shown below:',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.mutedForeground,
                 ),
@@ -228,11 +387,15 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Word label
+                // Word label — the challenge in word-code mode. In PIN mode
+                // there is nothing to show: revealing anything here would
+                // hand the PIN to whoever is looking at the screen.
                 Text(
-                  _digitWords[_code[i]],
+                  _usesPin ? '•' : _digitWords[_code[i]],
                   style: AppTextStyles.headlineMedium.copyWith(
-                    color: AppColors.primaryPurple,
+                    color: _usesPin
+                        ? AppColors.border
+                        : AppColors.primaryPurple,
                     letterSpacing: 1.0,
                   ),
                 ),
@@ -255,9 +418,11 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                     ),
                   ),
                   alignment: Alignment.center,
+                  // PIN mode masks the entry — a child watching over a
+                  // shoulder must not be able to read it back.
                   child: i < _enteredCode.length
                       ? Text(
-                          _enteredCode[i],
+                          _usesPin ? '•' : _enteredCode[i],
                           style: AppTextStyles.titleMedium.copyWith(
                             color: AppColors.white,
                           ),
@@ -280,13 +445,18 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
 
     Widget digitButton(int digit) {
       return _NumpadButton(
+        key: ValueKey('numpad_$digit'),
         size: buttonSize,
-        onTap: () => _onDigitPressed(digit),
-        color: AppColors.lavenderLight,
+        onTap: _inputDisabled ? null : () => _onDigitPressed(digit),
+        color: _inputDisabled
+            ? AppColors.disabledFill
+            : AppColors.lavenderLight,
         child: Text(
           '$digit',
           style: AppTextStyles.titleLarge.copyWith(
-            color: AppColors.foreground,
+            color: _inputDisabled
+                ? AppColors.mutedForeground
+                : AppColors.foreground,
           ),
         ),
       );
@@ -294,8 +464,9 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
 
     Widget backspaceButton() {
       return _NumpadButton(
+        key: const ValueKey('numpad_backspace'),
         size: buttonSize,
-        onTap: _onBackspace,
+        onTap: _inputDisabled ? null : _onBackspace,
         color: AppColors.muted,
         child: const Icon(
           Icons.backspace_outlined,
@@ -306,16 +477,26 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
     }
 
     Widget submitButton() {
-      final active = _enteredCode.length == 4;
+      final active = _enteredCode.length == 4 && !_inputDisabled;
       return _NumpadButton(
+        key: const ValueKey('numpad_submit'),
         size: buttonSize,
         onTap: active ? _onSubmit : null,
         color: active ? AppColors.primaryPurple : AppColors.disabledFill,
-        child: Icon(
-          Icons.check_rounded,
-          color: active ? AppColors.white : AppColors.mutedForeground,
-          size: 22,
-        ),
+        child: _checking
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.mutedForeground,
+                ),
+              )
+            : Icon(
+                Icons.check_rounded,
+                color: active ? AppColors.white : AppColors.mutedForeground,
+                size: 22,
+              ),
       );
     }
 
@@ -378,6 +559,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
 
 class _NumpadButton extends StatelessWidget {
   const _NumpadButton({
+    super.key,
     required this.size,
     required this.onTap,
     required this.color,

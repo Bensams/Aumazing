@@ -6,11 +6,13 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/instruction_shape.dart';
+import '../shared/answer_label.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// Do What I Say — instruction-following game with XGBoost-ready analytics.
 ///
@@ -26,6 +28,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -70,6 +73,11 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
   final void Function()? onCorrectMatch;
 
+  /// Optional callback fired on each wrong tap, alongside the wrong SFX and the
+  /// encouraging voice line. The Flutter layer uses it for the mascot's
+  /// reaction, so the character answers a mistake the same way the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
@@ -78,7 +86,9 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+  /// Immediate feedback on a correct tap: the target the child found, so the
+  /// app can name it back ("red circle"). Praise waits for the end of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -154,8 +164,14 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     );
     analyticsStartSession();
 
-    // Play instruction voice-over when game loads
-    onPlayInstructionVo?.call();
+    // _setupRound speaks the real instruction a moment from now ("Tap the
+    // purple circle"), and that *is* the instruction — a generic "Listen"
+    // ahead of it would only be cut off mid-word by it. So it plays only when
+    // there is no composite voice-over to say instead, which is the same rule
+    // _setupRound already applies to onPlayListenVo.
+    if (onPlayInstructionVoiceOver == null) {
+      onPlayInstructionVo?.call();
+    }
 
     _setupRound();
   }
@@ -199,12 +215,15 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     final gameH = size.y;
     final cols = count <= 4 ? 4 : 3;
     final rows = (count / cols).ceil();
-    final cardSize = math.min(gameW / (cols + 1.5), gameH / (rows + 1.5));
+    final availH = gameH - kTopOverlayBand;
+    var cardSize = math.min(gameW / (cols + 1.5), gameH / (rows + 1.5));
+    final rowSpan = rows + (rows - 1) * 0.2;
+    if (rowSpan * cardSize > availH) cardSize = availH / rowSpan;
     final gap = cardSize * 0.2;
     final totalW = cols * cardSize + (cols - 1) * gap;
     final totalH = rows * cardSize + (rows - 1) * gap;
     final startX = (gameW - totalW) / 2;
-    final startY = (gameH - totalH) / 2 + gameH * 0.03;
+    final startY = kTopOverlayBand + (availH - totalH) / 2;
 
     for (var i = 0; i < items.length; i++) {
       final col = i % cols;
@@ -384,7 +403,8 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
 
       // Play correct SFX and voice-over
       onPlayCorrectSfx?.call();
-      onPlayCorrectVo?.call();
+      onPlayCorrectVo?.call(
+          AnswerLabel(color: target.colorName, shape: target.shapeType));
 
       // Notify Flutter layer of correct tap (for haptic feedback)
       onCorrectMatch?.call();
@@ -470,6 +490,7 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
       // Play wrong SFX and voice-over
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
+      onWrongAnswer?.call();
 
       final tappedShape = _shapes[index];
 
