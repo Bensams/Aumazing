@@ -1319,9 +1319,19 @@ class _GameCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const radius = 22.0;
+    final tier = _tierLabels[difficulty] ?? 'Medium';
     return SizedBox(
       width: 186,
-      child: Material(
+      // One node for the whole card. The logo's semanticLabel and the name
+      // strip underneath both carried entry.name, so TalkBack read every card
+      // twice ("Match It … Match It"). Merged here into a single button that
+      // also says which difficulty it will start at.
+      child: Semantics(
+        button: true,
+        label: '${entry.name}, $tier',
+        excludeSemantics: true,
+        onTap: onTap,
+        child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(radius),
@@ -1377,7 +1387,7 @@ class _GameCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              _tierLabels[difficulty] ?? 'Medium',
+                              tier,
                               style: AppTextStyles.labelSmall.copyWith(
                                 color:
                                     _tierColors[difficulty] ?? _tierColors[2],
@@ -1413,6 +1423,7 @@ class _GameCard extends StatelessWidget {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

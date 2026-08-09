@@ -960,9 +960,16 @@ class _LoginScreenState extends State<LoginScreen>
           Positioned(
             bottom: 16,
             right: 16,
-            child: FloatingActionButton.small(
+            // Was FloatingActionButton.small: a 40dp target with no
+            // accessible name, so a screen reader announced an unlabelled
+            // button and never said whether music was on or off. The regular
+            // FAB is 56dp and the tooltip supplies the name.
+            child: FloatingActionButton(
               onPressed: _toggleMusic,
               backgroundColor: AppColors.white.withValues(alpha: 0.9),
+              tooltip: _musicOn
+                  ? 'Turn background music off'
+                  : 'Turn background music on',
               child: Icon(
                 _musicOn ? Icons.music_note : Icons.music_off,
                 color: AppColors.primaryPurple,

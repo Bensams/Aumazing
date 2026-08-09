@@ -249,4 +249,55 @@ void main() {
       expect(find.text('Forgot PIN?'), findsNothing);
     });
   });
+
+  group('accessibility', () {
+    testWidgets('every key meets the 48dp minimum touch target',
+        (tester) async {
+      await openDialog(tester);
+
+      // The pad shipped at 46dp, which Accessibility Scanner flagged as a
+      // 3x4 grid of undersized targets.
+      for (final key in [
+        ...List.generate(10, (i) => ValueKey('numpad_$i')),
+        const ValueKey('numpad_backspace'),
+        const ValueKey('numpad_submit'),
+      ]) {
+        final size = tester.getSize(find.byKey(key));
+        expect(size.width, greaterThanOrEqualTo(kMinInteractiveDimension),
+            reason: '$key is ${size.width}dp wide');
+        expect(size.height, greaterThanOrEqualTo(kMinInteractiveDimension),
+            reason: '$key is ${size.height}dp tall');
+      }
+    });
+
+    testWidgets('every control has exactly one accessible name',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await openDialog(tester);
+
+      // Backspace and submit were bare icons with no name at all.
+      for (final label in ['Delete last digit', 'Confirm', 'Cancel']) {
+        expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
+      }
+
+      // Each digit key publishes one node, not a button wrapping a
+      // separately-announced Text of the same digit.
+      for (var i = 0; i <= 9; i++) {
+        expect(find.bySemanticsLabel('$i'), findsOneWidget, reason: 'digit $i');
+      }
+
+      handle.dispose();
+    });
+
+    testWidgets('the cancel button dismisses the dialog', (tester) async {
+      final results = await openDialog(tester);
+
+      // Guards the swap from GestureDetector to a padded InkResponse: the
+      // 48dp box is what gets tapped now, and it still has to pop false.
+      await tester.tap(find.bySemanticsLabel('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(results.single, isFalse);
+    });
+  });
 }
