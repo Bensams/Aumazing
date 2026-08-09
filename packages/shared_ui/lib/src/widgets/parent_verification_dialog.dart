@@ -352,20 +352,36 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
             ],
           ),
         ),
-        // Close / cancel button
-        GestureDetector(
-          onTap: () => Navigator.of(context).pop(false),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.muted,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.close_rounded,
-              color: AppColors.mutedForeground,
-              size: 18,
+        // Close / cancel button.
+        //
+        // The grey circle stays 32dp — it is a quiet control and should not
+        // compete with the header — but the *tappable* area is padded out to
+        // the 48dp minimum, and the icon is named so it is not just an
+        // unlabelled button next to the PIN pad.
+        Semantics(
+          button: true,
+          label: 'Cancel',
+          excludeSemantics: true,
+          child: InkResponse(
+            onTap: () => Navigator.of(context).pop(false),
+            radius: kMinInteractiveDimension / 2,
+            child: Container(
+              width: kMinInteractiveDimension,
+              height: kMinInteractiveDimension,
+              alignment: Alignment.center,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.muted,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: AppColors.mutedForeground,
+                  size: 18,
+                ),
+              ),
             ),
           ),
         ),
@@ -440,13 +456,16 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
   // ── Right column: numpad ────────────────────────────────────────────────
 
   Widget _buildNumpad() {
-    const double buttonSize = 46;
+    // The pad measured 46dp per key, under the 48dp minimum the rest of the
+    // app now holds to (and the figure TC-AU-028 tests for).
+    const double buttonSize = kMinInteractiveDimension;
     const double gap = 6;
 
     Widget digitButton(int digit) {
       return _NumpadButton(
         key: ValueKey('numpad_$digit'),
         size: buttonSize,
+        semanticLabel: '$digit',
         onTap: _inputDisabled ? null : () => _onDigitPressed(digit),
         color: _inputDisabled
             ? AppColors.disabledFill
@@ -466,6 +485,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
       return _NumpadButton(
         key: const ValueKey('numpad_backspace'),
         size: buttonSize,
+        semanticLabel: 'Delete last digit',
         onTap: _inputDisabled ? null : _onBackspace,
         color: AppColors.muted,
         child: const Icon(
@@ -481,6 +501,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
       return _NumpadButton(
         key: const ValueKey('numpad_submit'),
         size: buttonSize,
+        semanticLabel: _checking ? 'Checking' : 'Confirm',
         onTap: active ? _onSubmit : null,
         color: active ? AppColors.primaryPurple : AppColors.disabledFill,
         child: _checking
@@ -563,29 +584,45 @@ class _NumpadButton extends StatelessWidget {
     required this.size,
     required this.onTap,
     required this.color,
+    required this.semanticLabel,
     required this.child,
   });
 
   final double size;
   final VoidCallback? onTap;
   final Color color;
+
+  /// Spoken name for the key. The digit keys draw their number, but backspace
+  /// and submit are bare icons — a screen-reader user got two unnamed buttons
+  /// at the end of the pad with no way to tell delete from confirm.
+  final String semanticLabel;
+
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: semanticLabel,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          boxShadow: onTap != null ? AppShadows.card : null,
+      // The drawn digit would otherwise be published as a second node inside
+      // the button, so every key announced its number twice.
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: onTap != null ? AppShadows.card : null,
+          ),
+          alignment: Alignment.center,
+          child: child,
         ),
-        alignment: Alignment.center,
-        child: child,
       ),
     );
   }
