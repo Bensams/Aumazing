@@ -13,6 +13,9 @@ export 'src/config/game_motion.dart';
 // Shared game components
 export 'src/games/shared/answer_label.dart';
 export 'src/games/shared/ghost_hand.dart';
+// Exported so the parent-facing settings previews can draw object cards
+// with the same code the games use, rather than a copy that drifts.
+export 'src/games/shared/shape_painter_3d.dart';
 
 // Games — Match It
 export 'src/games/match_it/match_it_game.dart';
