@@ -13,6 +13,7 @@ import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 import 'widgets/background_picker.dart';
+import 'widgets/object_style_picker.dart';
 
 /// Full-screen Settings hub (the "main settings" page).
 ///
@@ -400,6 +401,23 @@ class _ChildPreferencesScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     BackgroundPicker(childProv: childProv),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // ── Game objects ──────────────────────────────────────
+                _SettingsCard(
+                  children: [
+                    const _SectionLabel('Game Objects'),
+                    const SizedBox(height: 2),
+                    const _HintText(
+                      'Sets the card behind each shape, picture and item, and '
+                      'the outline around it. A plain card colour with an '
+                      'outline makes objects easier to tell apart — helpful '
+                      'if your child struggles to pick out a shape.',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    ObjectStylePicker(childProv: childProv),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),

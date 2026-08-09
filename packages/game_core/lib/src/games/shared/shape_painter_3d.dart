@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 /// Shared utility for rendering 3D-looking shapes with gradients,
 /// drop shadows, and specular highlights.
@@ -100,8 +101,22 @@ class ShapePainter3D {
         ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6),
     );
 
-    // Gradient card fill
-    final baseColor = color.withAlpha(alpha);
+    // Gradient card fill.
+    //
+    // A parent-set card colour replaces the object's own tint entirely. The
+    // original `color.withAlpha(alpha)` made the card a 16% wash of the very
+    // shape drawn on top of it, which is why a gold star could measure
+    // 1.00:1 against its own card. A fixed colour has no such relationship
+    // to the object, so the object stays visible whatever colour it is.
+    //
+    // The alpha is still honoured as a *state* signal rather than a tint: a
+    // matched card (alpha below the resting 40) fades back, everything else
+    // paints solid.
+    final style = GameObjectStyle.current;
+    final override = style.cardColour;
+    final baseColor = override != null
+        ? override.withValues(alpha: alpha < 40 ? 0.45 : 1.0)
+        : color.withAlpha(alpha);
     final lighter = _lighten(baseColor, 0.25);
     final darker = _darken(baseColor, 0.15);
     final gradient = LinearGradient(
@@ -127,7 +142,18 @@ class ShapePainter3D {
       ui.Paint()..color = const ui.Color(0xFFFFFFFF).withAlpha(35),
     );
 
-    // Border
+    // Outline.
+    //
+    // Two things want to draw here and they are not the same thing:
+    //
+    //  * a *state* border — selected, wrong answer, hint — which the caller
+    //    asks for and whose colour carries meaning, and
+    //  * the *standing* outline, which exists so the card is separable from
+    //    whatever is behind it and is drawn on every card, always.
+    //
+    // The state border wins when present. Otherwise the standing outline is
+    // drawn in a colour derived from the card itself, so it is guaranteed to
+    // clear 3:1 without anyone choosing it.
     if (showBorder) {
       canvas.drawRRect(
         rrect,
@@ -136,6 +162,34 @@ class ShapePainter3D {
           ..style = ui.PaintingStyle.stroke
           ..strokeWidth = borderWidth,
       );
+    } else if (style.hasOutline) {
+      final paint = ui.Paint()
+        ..color = GameObjectStyle.outlineColourFor(baseColor)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = style.effectiveWidth;
+      if (style.outline == ObjectOutline.dashed) {
+        _strokeDashed(canvas, ui.Path()..addRRect(rrect), paint);
+      } else {
+        canvas.drawRRect(rrect, paint);
+      }
+    }
+  }
+
+  /// Strokes [path] as a dashed line.
+  ///
+  /// Flutter has no dashed stroke, so the path is walked with [ui.PathMetric]
+  /// and drawn in segments. Dash and gap scale with the stroke width, so a
+  /// thick outline does not turn into a row of dots.
+  static void _strokeDashed(ui.Canvas canvas, ui.Path path, ui.Paint paint) {
+    final dash = math.max(6.0, paint.strokeWidth * 2.5);
+    final gap = math.max(4.0, paint.strokeWidth * 1.5);
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = math.min(distance + dash, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + gap;
+      }
     }
   }
 

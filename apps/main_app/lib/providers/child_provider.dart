@@ -26,6 +26,12 @@ class ChildProvider extends ChangeNotifier {
   ChildBackground? _customBackground;
   static const _customBackgroundKeyPrefix = 'custom_background_';
 
+  /// Parent's chosen look for the cards behind game objects — the tile under
+  /// each shape, picture and item — plus its outline. Persisted locally per
+  /// child (no DB migration).
+  GameObjectStyle _objectStyle = const GameObjectStyle();
+  static const _objectStyleKeyPrefix = 'object_style_';
+
   /// Parent's chosen scene for the child's "My Path" row. When null the path
   /// keeps its classic look. Persisted locally (no DB migration).
   WorldTheme? _worldOverride;
@@ -304,6 +310,7 @@ class ChildProvider extends ChangeNotifier {
       _profile = children.isEmpty ? null : children.first;
       await _loadThemeOverride();
       await _loadCustomBackground();
+      await _loadObjectStyle();
       await _loadWorldOverride();
       await _loadLanguage();
       await _loadVoicePack();
@@ -410,6 +417,39 @@ class ChildProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final slug = prefs.getString('$_themeOverrideKeyPrefix$id');
     _themeOverride = slug == null ? null : GameTheme.fromSlug(slug);
+  }
+
+  /// The look of the cards behind game objects.
+  GameObjectStyle get objectStyle => _objectStyle;
+
+  /// Sets the game-object card style and persists it locally.
+  ///
+  /// Also pushes it to the global the Flame components read, so a change
+  /// made in Settings is live the next time a game renders rather than
+  /// waiting for an app restart.
+  Future<void> setObjectStyle(GameObjectStyle style) async {
+    _objectStyle = style;
+    GameObjectStyle.current = style;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_objectStyleKeyPrefix$id', style.encode());
+    }
+  }
+
+  /// Loads any persisted object style for the current child.
+  Future<void> _loadObjectStyle() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _objectStyle = const GameObjectStyle();
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      _objectStyle =
+          GameObjectStyle.decode(prefs.getString('$_objectStyleKeyPrefix$id')) ??
+              const GameObjectStyle();
+    }
+    GameObjectStyle.current = _objectStyle;
   }
 
   /// Sets a custom child game background and persists it locally.
