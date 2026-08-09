@@ -392,41 +392,8 @@ class CopyMeGameAnalyticsExample extends FlameGame
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
-
-  @override
-  void render(Canvas canvas) {
-    final fontSize = (size.x * 0.035).clamp(16.0, 24.0);
-
-    if (_isDemonstrating) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: 'Watch carefully...',
-          style: TextStyle(
-            color: const Color(0xFF9B82C4),
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(size.x / 2 - tp.width / 2, 20));
-    } else if (_isInputPhase) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: 'Your turn! Tap the shapes!',
-          style: TextStyle(
-            color: const Color(0xFF5DAF8E),
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(size.x / 2 - tp.width / 2, 20));
-    }
-
-    super.render(canvas);
-  }
+  // Phase labels are not drawn on the canvas: the hosting screen shows them in
+  // the upper-left VoiceOverPromptBubble.
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
 

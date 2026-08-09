@@ -140,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen>
       debugPrint('[LoginScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}');
       if (!audioService.isMusicPlaying) {
         debugPrint('[LoginScreen] Music not playing, starting...');
-        await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
+        await audioService.playCategoryMusic(kDefaultBgmCategory);
       } else {
         debugPrint('[LoginScreen] Music already playing from LoadingScreen');
       }
@@ -281,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.destructiveSoftRed,
+        backgroundColor: AppColors.destructiveRed,
       ),
     );
   }
@@ -597,11 +597,21 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // ── Title ──────────────────────────────
                             Center(
-                              child: Text(
-                                _isLogin ? 'Log In' : 'Sign Up!',
-                                style: AppTextStyles.headlineLarge.copyWith(
-                                  color: AppColors.primaryPurple,
-                                  fontSize: 22,
+                              // Marked as a heading and named distinctly: the
+                              // title and the submit button both read "Log In",
+                              // which the scanner flagged as two controls
+                              // sharing one description.
+                              child: Semantics(
+                                header: true,
+                                child: Text(
+                                  _isLogin ? 'Log In' : 'Sign Up!',
+                                  semanticsLabel: _isLogin
+                                      ? 'Log in screen'
+                                      : 'Sign up screen',
+                                  style: AppTextStyles.headlineLarge.copyWith(
+                                    color: AppColors.primaryPurple,
+                                    fontSize: 22,
+                                  ),
                                 ),
                               ),
                             ),
@@ -667,6 +677,9 @@ class _LoginScreenState extends State<LoginScreen>
                                     icon: Icons.lock_outline,
                                     obscureText: _obscurePassword,
                                     suffixIcon: IconButton(
+                                      tooltip: _obscurePassword
+                                          ? 'Show password'
+                                          : 'Hide password',
                                       icon: Icon(
                                         _obscurePassword
                                             ? Icons.visibility_off
@@ -897,8 +910,11 @@ class _LoginScreenState extends State<LoginScreen>
                                     color: AppColors.mutedForeground,
                                   ),
                                 ),
-                                GestureDetector(
-                                  onTap: _isLoading
+                                // A bare Text in a GestureDetector gave a
+                                // 47x18dp tap target. TextButton carries the
+                                // 48dp minimum without changing how it looks.
+                                TextButton(
+                                  onPressed: _isLoading
                                       ? null
                                       : () {
                                           setState(() {
@@ -907,8 +923,19 @@ class _LoginScreenState extends State<LoginScreen>
                                             _formKey.currentState?.reset();
                                           });
                                         },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    minimumSize: const Size(
+                                      kMinInteractiveDimension,
+                                      kMinInteractiveDimension,
+                                    ),
+                                  ),
                                   child: Text(
                                     _isLogin ? 'Register' : 'Log In',
+                                    semanticsLabel: _isLogin
+                                        ? 'Register a new account'
+                                        : 'Go to log in',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.primaryPurple,
                                       fontWeight: FontWeight.w700,

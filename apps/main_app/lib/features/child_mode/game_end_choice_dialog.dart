@@ -68,6 +68,7 @@ class GameEndChoiceDialog {
       builder: (_) => _GameEndChoiceContent(
         palette: palette,
         nextGameIcon: next?.icon,
+        nextGameLogo: next?.logoAsset,
         nextGameName: next?.name,
       ),
     );
@@ -94,11 +95,13 @@ class _GameEndChoiceContent extends StatelessWidget {
   const _GameEndChoiceContent({
     required this.palette,
     required this.nextGameIcon,
+    required this.nextGameLogo,
     required this.nextGameName,
   });
 
   final GamePalette palette;
   final IconData? nextGameIcon;
+  final String? nextGameLogo;
   final String? nextGameName;
 
   @override
@@ -140,6 +143,7 @@ class _GameEndChoiceContent extends StatelessWidget {
                 borderColor: palette.primary,
                 iconColor: palette.onPrimary,
                 icon: nextGameIcon!,
+                logoAsset: nextGameLogo,
                 badgeIcon: Icons.play_arrow_rounded,
                 label: nextGameName ?? 'Next',
                 labelColor: palette.onPrimary,
@@ -164,7 +168,12 @@ class _ChoiceButton extends StatelessWidget {
     required this.labelColor,
     required this.onTap,
     this.badgeIcon,
+    this.logoAsset,
   });
+
+  /// Illustrated game tile to show instead of [icon], when this button stands
+  /// for a specific game.
+  final String? logoAsset;
 
   final Color background;
   final Color borderColor;
@@ -196,7 +205,18 @@ class _ChoiceButton extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(icon, size: 56, color: iconColor),
+                  // "Next" shows the game's own logo so the child recognises
+                  // what they are agreeing to play; "Lobby" is a plain icon.
+                  if (logoAsset != null)
+                    GameLogo(
+                      asset: logoAsset,
+                      size: 56,
+                      fallbackIcon: icon,
+                      fallbackColor: iconColor,
+                      semanticLabel: label,
+                    )
+                  else
+                    Icon(icon, size: 56, color: iconColor),
                   if (badgeIcon != null)
                     Positioned(
                       right: -14,

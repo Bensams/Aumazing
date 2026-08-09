@@ -18,12 +18,22 @@ abstract final class AppColors {
   static const Color foreground = Color(0xFF5A5A6B);
   static const Color white = Color(0xFFFFFFFF);
   static const Color muted = Color(0xFFF0EEE9);
-  static const Color mutedForeground = Color(0xFF8A8A9B);
+
+  /// Secondary/caption text. Darkened from 0xFF8A8A9B (3.2:1) so small text
+  /// clears WCAG 2.2 AA 1.4.3 — 4.7:1 on [background], 5.0:1 on [white].
+  static const Color mutedForeground = Color(0xFF6E6E80);
 
   // ── Functional ───────────────────────────────────────────────────────
   static const Color primaryPurple = Color(0xFF9B82C4);
   static const Color secondaryMint = Color(0xFFB8E8D4);
+
+  /// Decorative red — pastel fill only. Too light for text or icons
+  /// (2.5:1 on white); pair it with [textPrimary], never with white.
   static const Color destructiveSoftRed = Color(0xFFE88888);
+
+  /// Readable red for error text, error borders and error snackbars.
+  /// 6.5:1 against white in either direction.
+  static const Color destructiveRed = Color(0xFFB3261E);
   static const Color border = Color.fromRGBO(90, 90, 107, 0.15);
 
   // ── Derived helpers ──────────────────────────────────────────────────

@@ -74,14 +74,22 @@ class GameLabGameFactory {
     }
 
     void playGameCompleteSfx() {
-      audio.playGameCompleteSfx();
-      services.lastPlayedSfx = 'game_complete';
+      audio.playGameCompleteCelebration();
+      services.lastPlayedSfx = 'game_complete + cheer_clap';
     }
 
     // Common VO callbacks
-    void playCorrectVo() {
-      vo.playCorrectPraise();
-      services.lastPlayedVo = 'correct_praise (random)';
+    // A correct answer is named back, not praised — praise belongs to the
+    // end-of-game celebration.
+    void playCorrectVo(AnswerLabel label) {
+      vo.playAnswerLabel(
+        color: label.color,
+        shape: label.shape,
+        letter: label.letter,
+        item: label.item,
+      );
+      services.lastPlayedVo = label.isEmpty ? 'answer_label (none)'
+          : 'answer_label ($label)';
     }
 
     void playWrongVo() {

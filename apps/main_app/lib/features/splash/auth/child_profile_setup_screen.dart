@@ -7,9 +7,11 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/child_profile_policy.dart';
 import '../../../core/repositories/child_repository.dart';
+import '../../../providers/child_provider.dart';
 import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
+import 'widgets/sound_preferences_step.dart';
 
 class ChildProfileSetupScreen extends StatefulWidget {
   const ChildProfileSetupScreen({
@@ -36,8 +38,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   bool _isLoading = false;
 
   // Setup step tracking
-  int _currentStep = 0; // 0: basic info, 1: reward preference
-  
+  int _currentStep = 0; // 0: basic info, 1: sound & voice, 2: rewards & limits
+  static const _stepCount = 3;
+
+  /// Language, voice, music and prompt choices made on step 1.
+  SoundPreferences _sound = SoundPreferences.initial();
+
   // Reward preference state
   RewardPreference _selectedRewardPreference = RewardPreference.bubbles;
   bool _useRandomReward = false;
@@ -115,9 +121,33 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
         sex: _selectedSex,
+        musicEnabled: _sound.musicEnabled,
+        musicVolume: _sound.musicVolume,
+        musicCategory: _sound.musicCategory,
+        sfxVolume: _sound.sfxVolume,
+        vibrationEnabled: _sound.vibrationEnabled,
+        promptSpeed: _sound.promptSpeed,
+        // The parent has just chosen music, effects, vibration and prompt
+        // speed here, so the pre-assessment does not ask for them again.
+        sensoryPreferencesSet: true,
         rewardPreference: _selectedRewardPreference,
         useRandomReward: _useRandomReward,
       );
+
+      // Language and voice live in local prefs keyed by child id, so they can
+      // only be written once the child record exists.
+      if (mounted) {
+        await context.read<ChildProvider>().applyInitialPreferences(
+              childId: profile.id,
+              language: _sound.language,
+              voicePackId: _sound.voicePackId,
+            );
+      }
+      if (mounted) {
+        await context
+            .read<ChildProvider>()
+            .setShowTextPrompts(_sound.showTextPrompts);
+      }
 
       // Save the daily screen-time limit chosen during setup (can be
       // changed later in Settings → Screen Time).
@@ -186,7 +216,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.destructiveSoftRed,
+        backgroundColor: AppColors.destructiveRed,
       ),
     );
   }
@@ -237,6 +267,50 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   /// right so taps are not stacked in a short vertical band.
   Widget _buildLandscapeTwoColumn() {
     if (_currentStep == 1) {
+      // Sound & voice step in landscape
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildSoundStepHeader(),
+                const SizedBox(height: AppSpacing.md),
+                TextButton(
+                  onPressed: () => setState(() => _currentStep = 0),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            flex: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SoundPreferencesStep(
+                  value: _sound,
+                  onChanged: (value) => setState(() => _sound = value),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppPrimaryButton(
+                  label: 'Continue',
+                  onPressed: _isLoading ? null : _goToRewardStep,
+                  isLoading: _isLoading,
+                  autofocus: false,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_currentStep == 2) {
       // Reward step in landscape
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +324,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                 _buildRewardStepHeader(),
                 const SizedBox(height: AppSpacing.md),
                 TextButton(
-                  onPressed: () => setState(() => _currentStep = 0),
+                  onPressed: () => setState(() => _currentStep = 1),
                   child: const Text('Go Back'),
                 ),
               ],
@@ -358,6 +432,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     setState(() => _currentStep = 1);
   }
 
+  void _goToRewardStep() => setState(() => _currentStep = 2);
+
   void _skipRewardPreference() {
     // Use default (bubbles) and save
     _saveProfile();
@@ -385,6 +461,25 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             isLoading: _isLoading,
             autofocus: false,
           ),
+        ] else if (_currentStep == 1) ...[
+          _buildSoundStepHeader(),
+          const SizedBox(height: AppSpacing.lg),
+          SoundPreferencesStep(
+            value: _sound,
+            onChanged: (value) => setState(() => _sound = value),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppPrimaryButton(
+            label: 'Continue',
+            onPressed: _isLoading ? null : _goToRewardStep,
+            isLoading: _isLoading,
+            autofocus: false,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton(
+            onPressed: () => setState(() => _currentStep = 0),
+            child: const Text('Go Back'),
+          ),
         ] else ...[
           _buildRewardStepHeader(),
           const SizedBox(height: AppSpacing.lg),
@@ -411,7 +506,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           TextButton(
-            onPressed: () => setState(() => _currentStep = 0),
+            onPressed: () => setState(() => _currentStep = 1),
             child: const Text('Go Back'),
           ),
         ],
@@ -489,7 +584,28 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     );
   }
 
-  Widget _buildRewardStepHeader() {
+  Widget _buildSoundStepHeader() => _buildStepHeader(
+        icon: Icons.hearing_rounded,
+        title: 'How should it sound?',
+        subtitle: 'Pick the language, voice and music your child is most '
+            'comfortable with. Everything here can be changed later in '
+            'Settings.',
+        step: 2,
+      );
+
+  Widget _buildRewardStepHeader() => _buildStepHeader(
+        icon: Icons.celebration_rounded,
+        title: 'Almost Done!',
+        subtitle: 'Choose how to celebrate when your child completes games',
+        step: 3,
+      );
+
+  Widget _buildStepHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int step,
+  }) {
     return Column(
       children: [
         Container(
@@ -498,15 +614,20 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             color: AppColors.lavenderLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.celebration_rounded,
-            size: 48,
-            color: AppColors.primaryPurple,
-          ),
+          child: Icon(icon, size: 48, color: AppColors.primaryPurple),
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Almost Done!',
+          'Step $step of $_stepCount',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.mutedForeground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          title,
           textAlign: TextAlign.center,
           style: AppTextStyles.headlineLarge.copyWith(
             color: AppColors.primaryPurple,
@@ -514,7 +635,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Choose how to celebrate when your child completes games',
+          subtitle,
           textAlign: TextAlign.center,
           style: AppTextStyles.bodyMedium.copyWith(
             color: AppColors.mutedForeground,
@@ -541,6 +662,15 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             ),
           ),
           SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+          Text(
+            'Step 1 of $_stepCount',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             'Tell us about your child',
             textAlign: TextAlign.center,
@@ -582,7 +712,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             enabled: !_isLoading,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.done,
-            onFieldSubmitted: (_) => _saveProfile(),
+            // Advances rather than saving: the sound and reward steps still
+            // have to be answered before there is a profile worth writing.
+            onFieldSubmitted: (_) => _goToNextStep(),
             style: AppTextStyles.bodyMedium,
             scrollPadding: const EdgeInsets.only(bottom: 120),
             decoration: InputDecoration(
@@ -700,7 +832,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           helperText,
           style: AppTextStyles.bodySmall.copyWith(
             color: validation == ChildBirthDateValidation.futureDate
-                ? AppColors.destructiveSoftRed
+                ? AppColors.destructiveRed
                 : AppColors.mutedForeground,
           ),
         ),

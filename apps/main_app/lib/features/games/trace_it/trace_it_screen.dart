@@ -14,6 +14,8 @@ import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
+import '../../../widgets/mascot.dart';
+import '../../../widgets/mascot_host.dart';
 
 /// Child game screen: "Trace It"
 ///
@@ -72,7 +74,9 @@ class _TraceItScreenState extends State<TraceItScreen> {
 
     _sessionStartTime = DateTime.now();
     _voiceOverService = VoiceOverService(
-        languageCode: context.read<ChildProvider>().language.slug);
+      languageCode: context.read<ChildProvider>().voiceAssetFolder,
+      speed: context.read<ChildProvider>().voicePlaybackRate,
+    );
 
     widget.sensoryController?.applyRoundConfig(1);
 
@@ -88,14 +92,24 @@ class _TraceItScreenState extends State<TraceItScreen> {
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectTrace: _onCorrectTrace,
+      // A wrong answer gets a brief "oh, not quite" that resolves into an
+      // encouraging pose — the mascot never blames or despairs at the child.
+      onWrongAnswer: () => MascotHost.maybeOf(context)?.reassure(),
       // Audio SFX callbacks
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
       onPlayWrongSfx: () => audioService.playWrongSfx(),
       onPlayTapSfx: () => audioService.playGameTapSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
-      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteCelebration(),
       // Voice-over callbacks
-      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      // Immediate feedback names what was just answered ("red circle");
+      // praise is saved for the end-of-game reward.
+      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
+        color: label.color,
+        shape: label.shape,
+        letter: label.letter,
+        item: label.item,
+      ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.followMe),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
@@ -122,6 +136,9 @@ class _TraceItScreenState extends State<TraceItScreen> {
 
   /// Called on each completed stroke (not just round completion).
   void _onCorrectTrace() {
+    // Nod along with the child on each correct answer.
+    MascotHost.maybeOf(context)?.play(MascotGesture.nod);
+
     if (widget.sensoryController != null) {
       widget.sensoryController!.triggerHapticOnCorrect();
     } else if (context.read<ChildProvider>().vibrationEnabled) {
@@ -137,6 +154,10 @@ class _TraceItScreenState extends State<TraceItScreen> {
     GameSessionMetrics? analytics,
   }) {
     setState(() => _gameComplete = true);
+
+    // Celebrate with the child before the reward overlay lands. The overlay
+    // and its barrier are transparent, so the mascot stays visible under it.
+    MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
 
     if (context.read<ChildProvider>().vibrationEnabled) {
       context.read<HapticService>().gameCompleteFeedback();
@@ -199,12 +220,19 @@ class _TraceItScreenState extends State<TraceItScreen> {
 
   /// Replays the current game from the start (learning-path Retry).
   void _retryGame() {
+    // Hold an encouraging pose while the child tries again.
+    MascotHost.maybeOf(context)?.flash(MascotPose.encourage);
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => TraceItScreen(
-          assessmentContext: widget.assessmentContext,
-          sensoryController: widget.sensoryController,
-          difficulty: widget.difficulty,
+        // A pushed route leaves the old host behind, so the replacement
+        // screen carries its own.
+        builder: (_) => MascotHost(
+          child: TraceItScreen(
+            assessmentContext: widget.assessmentContext,
+            sensoryController: widget.sensoryController,
+            difficulty: widget.difficulty,
+          ),
         ),
       ),
     );
@@ -263,10 +291,11 @@ class _TraceItScreenState extends State<TraceItScreen> {
 
           // Flutter: Voice-over prompt (overlay)
           Positioned(
-            bottom: 12,
-            left: 0,
-            right: 0,
+            // Inside the reserved band, hard into the upper-left corner.
+            top: MediaQuery.of(context).padding.top + 8,
+            left: AppSpacing.md,
             child: VoiceOverPromptBubble(
+              showText: context.watch<ChildProvider>().showTextPrompts,
               text: _gameComplete
                   ? 'Well done! You finished the game!'
                   : 'Trace the letter with your finger!',

@@ -1,3 +1,5 @@
+import 'package:shared_audio/shared_audio.dart';
+
 import '../core/child_profile_policy.dart';
 
 /// Reward preference options for celebration effects.
@@ -86,6 +88,13 @@ class ChildProfile {
   final ChildSex? sex;
   final bool musicEnabled;
   final double musicVolume;
+
+  /// Which background-music category the parent picked, as a [BgmCategory] key.
+  ///
+  /// One track from this category is chosen per session and loops. An unknown
+  /// value (a profile written by a build that shipped a category this build
+  /// does not have) falls back to the default rather than failing.
+  final String musicCategory;
   final double sfxVolume;
   final bool vibrationEnabled;
   final double animationIntensity;
@@ -106,6 +115,7 @@ class ChildProfile {
     this.sex,
     this.musicEnabled = true,
     this.musicVolume = 0.5,
+    this.musicCategory = kDefaultBgmCategory,
     this.sfxVolume = 0.7,
     this.vibrationEnabled = true,
     this.animationIntensity = 1.0,
@@ -144,6 +154,7 @@ class ChildProfile {
   Map<String, dynamic> get sensorySettingsMap => {
         'music_enabled': musicEnabled,
         'music_volume': musicVolume,
+        'music_category': musicCategory,
         'sfx_volume': sfxVolume,
         'vibration_enabled': vibrationEnabled,
         'animation_intensity': animationIntensity,
@@ -159,6 +170,7 @@ class ChildProfile {
     bool clearSex = false,
     bool? musicEnabled,
     double? musicVolume,
+    String? musicCategory,
     double? sfxVolume,
     bool? vibrationEnabled,
     double? animationIntensity,
@@ -182,6 +194,7 @@ class ChildProfile {
       sex: clearSex ? null : sex ?? this.sex,
       musicEnabled: musicEnabled ?? this.musicEnabled,
       musicVolume: musicVolume ?? this.musicVolume,
+      musicCategory: musicCategory ?? this.musicCategory,
       sfxVolume: sfxVolume ?? this.sfxVolume,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
       animationIntensity: animationIntensity ?? this.animationIntensity,
@@ -203,6 +216,7 @@ class ChildProfile {
     'sex': sex?.value,
     'music_enabled': musicEnabled ? 1 : 0,
     'music_volume': musicVolume,
+    'music_category': musicCategory,
     'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled ? 1 : 0,
     'animation_intensity': animationIntensity,
@@ -242,6 +256,8 @@ class ChildProfile {
       sex: ChildSex.fromString(map['sex'] as String?),
       musicEnabled: (map['music_enabled'] ?? 1) == 1,
       musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
+      musicCategory:
+          (map['music_category'] as String?) ?? kDefaultBgmCategory,
       sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
       vibrationEnabled: (map['vibration_enabled'] ?? 1) == 1,
       animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
@@ -273,6 +289,7 @@ class ChildProfile {
     sex: ChildSex.fromString(map['sex'] as String?),
     musicEnabled: map['music_enabled'] as bool? ?? true,
     musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
+    musicCategory: (map['music_category'] as String?) ?? kDefaultBgmCategory,
     sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
     vibrationEnabled: map['vibration_enabled'] as bool? ?? true,
     animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
@@ -293,6 +310,7 @@ class ChildProfile {
     'sex': sex?.value,
     'music_enabled': musicEnabled,
     'music_volume': musicVolume,
+    'music_category': musicCategory,
     'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled,
     'animation_intensity': animationIntensity,

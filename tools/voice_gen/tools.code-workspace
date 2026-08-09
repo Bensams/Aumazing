@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"name": "tools",
+			"path": ".."
+		},
+		{
+			"name": "SeedanceIntegration",
+			"path": "../../../SeedanceIntegration"
+		},
+		{
+			"path": "../../packages/shared_audio/assets/audio/voice_over/ceb/Lexianne_Ceb"
+		}
+	],
+	"settings": {}
+}

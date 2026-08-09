@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../services/screen_time_service.dart';
+import '../../widgets/mascot.dart';
 
 /// Screen-time enforcement: a plain, full-screen black rest screen.
 ///
@@ -68,10 +69,26 @@ class _ScreenTimeLockScreen extends StatelessWidget {
           style: AppTextStyles.titleLarge
               .copyWith(color: AppColors.textPrimary),
         ),
-        content: Text(
-          'Today\'s play limit has been reached.',
-          style: AppTextStyles.bodyMedium
-              .copyWith(color: AppColors.mutedForeground),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // A sleepy mascot says "we're winding down" before the child has
+            // parsed the sentence — this dialog is the one moment play stops,
+            // so the character softens it rather than the text carrying it all.
+            const Mascot(
+              height: 120,
+              pose: MascotPose.sleepy,
+              greetOnAppear: false,
+              semanticLabel: 'BPS the mascot is sleepy',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Today\'s play limit has been reached.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: AppColors.mutedForeground),
+            ),
+          ],
         ),
         actions: [
           TextButton(

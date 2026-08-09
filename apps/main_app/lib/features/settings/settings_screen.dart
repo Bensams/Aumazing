@@ -7,7 +7,9 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../providers/child_provider.dart';
+import '../../services/parent_pin_service.dart';
 import '../../services/screen_time_service.dart';
+import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 
@@ -63,6 +65,19 @@ class SettingsScreen extends StatelessWidget {
           subtitle: 'Daily play limit, age-based recommendation',
           onTap: () =>
               _push(context, _ScreenTimeSettingsScreen(palette: palette)),
+        ),
+        _CategoryTile(
+          icon: Icons.lock_outline_rounded,
+          color: const Color(0xFF8A7BC8),
+          title: 'Parent Lock',
+          subtitle: 'How the app checks a grown-up is present',
+          onTap: () => _push(
+            context,
+            _ParentLockSettingsScreen(
+              palette: palette,
+              authService: authService,
+            ),
+          ),
         ),
         if (isGuest)
           _CategoryTile(
@@ -144,6 +159,21 @@ class _VideoSettingsScreen extends StatelessWidget {
                   'Reduce visual stimulation for children sensitive to '
                   'movement.',
                 ),
+                const SizedBox(height: AppSpacing.md),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.md),
+                const _SectionLabel('On-screen Text'),
+                _SettingToggle(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Show instruction text',
+                  value: childProv.showTextPrompts,
+                  onChanged: (val) => childProv.setShowTextPrompts(val),
+                ),
+                const _HintText(
+                  'Hide the written prompt during games for pre-readers or '
+                  'children who find text busy. The spoken instruction still '
+                  'plays either way.',
+                ),
               ],
             );
           },
@@ -185,14 +215,13 @@ class _AudioSettingsScreen extends StatelessWidget {
                       audioService.config.copyWith(musicEnabled: val),
                     );
                     if (val) {
-                      audioService.playRandomMusic(
-                          ['bg_music.ogg', 'bg_music1.ogg']);
+                      audioService.playCategoryMusic(childProv.musicCategory);
                     } else {
                       audioService.stopMusic();
                     }
                   },
                 ),
-                if (childProv.musicEnabled)
+                if (childProv.musicEnabled) ...[
                   _SettingSlider(
                     label: 'Music Volume',
                     value: childProv.musicVolume,
@@ -204,6 +233,9 @@ class _AudioSettingsScreen extends StatelessWidget {
                       );
                     },
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _MusicCategoryPicker(childProv: childProv),
+                ],
                 _SettingSlider(
                   label: 'Sound Effects',
                   value: childProv.sfxVolume,
@@ -230,14 +262,10 @@ class _AudioSettingsScreen extends StatelessWidget {
                     );
                   },
                 ),
-                _SettingSlider(
-                  label: 'Prompt Speed',
-                  value: childProv.promptSpeed,
-                  onChanged: (val) =>
-                      childProv.updateComfortSettings(promptSpeed: val),
-                ),
+                _PromptSpeedSlider(childProv: childProv),
                 const _HintText(
-                  'How quickly voice prompts and instructions play.',
+                  'How quickly voice prompts and instructions play. Release '
+                  'the slider to hear the new pace.',
                 ),
               ],
             );
@@ -353,6 +381,37 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
 
+                // ── My Path scene ─────────────────────────────────────
+                _SettingsCard(
+                  children: [
+                    const _SectionLabel('My Path Scene'),
+                    const SizedBox(height: 2),
+                    const _HintText(
+                      'Sets the world your child\'s learning path travels '
+                      'through. The games themselves are unchanged. Pick one '
+                      'your child likes — and keep it, since a path that '
+                      'looks different each visit is harder to follow.',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        for (final world in WorldTheme.values)
+                          Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              child: _WorldOption(
+                                world: world,
+                                childProv: childProv,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+
                 // ── Game difficulty ───────────────────────────────────
                 _SettingsCard(
                   children: [
@@ -426,6 +485,23 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         );
                       }).toList(),
                     ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // ── Voice ─────────────────────────────────────────────
+                // Shown for every language so a parent can always hear a
+                // sample, even where there is only one recorded voice.
+                _SettingsCard(
+                  children: [
+                    const _SectionLabel('Voice'),
+                    const SizedBox(height: 2),
+                    const _HintText(
+                      'Who reads the prompts aloud. Tap the speaker to hear '
+                      'a sample.',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _VoicePackPicker(childProv: childProv),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -637,6 +713,138 @@ class _CategoryTile extends StatelessWidget {
   }
 }
 
+/// Chips for choosing which recorded voice speaks the voice-over cues, each
+/// with a speaker button that auditions the voice before it is applied.
+class _VoicePackPicker extends StatefulWidget {
+  const _VoicePackPicker({required this.childProv});
+
+  final ChildProvider childProv;
+
+  @override
+  State<_VoicePackPicker> createState() => _VoicePackPickerState();
+}
+
+class _VoicePackPickerState extends State<_VoicePackPicker> {
+  /// Throwaway player used only for auditioning; the games build their own.
+  VoiceOverService? _preview;
+  String? _previewFolder;
+
+  @override
+  void dispose() {
+    _preview?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playPreview(VoicePack pack) async {
+    // Rebuild the throwaway player whenever the audition target changes.
+    if (_previewFolder != pack.assetFolder) {
+      final previous = _preview;
+      _preview = VoiceOverService(languageCode: pack.assetFolder);
+      _previewFolder = pack.assetFolder;
+      await previous?.dispose();
+    }
+    // Audition at the child's own prompt speed — the same voice sounds quite
+    // different stretched to 0.6x, and that is what the child will hear.
+    _preview?.setSpeed(widget.childProv.voicePlaybackRate);
+    await _preview?.play(VoiceOverCue.greatJob);
+  }
+
+  /// Heading for an age tier. Null is the untiered human-recorded Cebuano
+  /// pack, which is listed last without a heading.
+  static const Map<String, String> _tierHeadings = {
+    'adult': 'Grown-up voices',
+    'young': 'Teen voices',
+    'child': 'Child voices',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = widget.childProv.voicePack.id;
+    final languageSlug = widget.childProv.language.slug;
+    final tiers = voiceTiersForLanguage(languageSlug);
+
+    // Each language offers six or seven voices, so a single flat Wrap would
+    // be a wall of chips. Grouping by age gives the parent a way to narrow
+    // down before auditioning.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final tier in tiers) ...[
+          if (tier != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _tierHeadings[tier] ?? tier,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              for (final pack in voicePacksForTier(languageSlug, tier))
+                _buildChip(
+                  pack,
+                  pack.id == selectedId,
+                  tier == null ? null : _tierHeadings[tier],
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChip(VoicePack pack, bool selected, String? tierHeading) {
+    // Every tier offers a "Girl" and a "Boy", so the visible label alone is
+    // ambiguous once the heading is out of view — Accessibility Scanner
+    // reported four pairs of identical descriptions here. Screen readers get
+    // the heading folded in; sighted parents still read the short label.
+    final spokenName =
+        tierHeading == null ? pack.label : '$tierHeading: ${pack.label}';
+
+    // The preview button sits outside the chip: nesting it in the chip's
+    // label lets the chip's own InkWell swallow the tap.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ChoiceChip(
+          selected: selected,
+          selectedColor: AppColors.primaryPurple,
+          label: Text(pack.label, semanticsLabel: spokenName),
+          labelStyle: AppTextStyles.bodySmall.copyWith(
+            color: selected ? AppColors.white : AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+          // Selecting also plays a sample, so the parent always hears
+          // the voice they just chose.
+          onSelected: (_) async {
+            await widget.childProv.setVoicePack(pack.id);
+            await _playPreview(pack);
+          },
+        ),
+        const SizedBox(width: 2),
+        IconButton(
+          onPressed: () => _playPreview(pack),
+          icon: const Icon(Icons.volume_up_rounded, size: 22),
+          color: AppColors.primaryPurple,
+          tooltip: 'Hear $spokenName',
+          // VisualDensity.compact used to shave 8dp off each axis, quietly
+          // defeating the 48dp constraints below and landing these at
+          // 40x40dp in Accessibility Scanner.
+          constraints: const BoxConstraints(
+            minWidth: kMinInteractiveDimension,
+            minHeight: kMinInteractiveDimension,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// White rounded content card wrapping one settings section.
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.children});
@@ -737,11 +945,13 @@ class _SettingSlider extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.onChangeEnd,
   });
 
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -762,6 +972,7 @@ class _SettingSlider extends StatelessWidget {
             child: Slider(
               value: value,
               onChanged: onChanged,
+              onChangeEnd: onChangeEnd,
               activeColor: AppColors.primaryPurple,
               inactiveColor: AppColors.lavenderLight,
             ),
@@ -776,6 +987,300 @@ class _SettingSlider extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Prompt-speed slider that speaks a sample at the new pace when released.
+///
+/// Prompt speed is the one comfort setting with no visible effect, so without
+/// a sample a parent is guessing at a percentage. Dragging is silent; the
+/// sample plays on release so a drag does not stutter out ten half-cues.
+class _PromptSpeedSlider extends StatefulWidget {
+  const _PromptSpeedSlider({required this.childProv});
+
+  final ChildProvider childProv;
+
+  @override
+  State<_PromptSpeedSlider> createState() => _PromptSpeedSliderState();
+}
+
+class _PromptSpeedSliderState extends State<_PromptSpeedSlider> {
+  VoiceOverService? _preview;
+
+  @override
+  void dispose() {
+    _preview?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playSample() async {
+    final childProv = widget.childProv;
+    _preview ??= VoiceOverService(languageCode: childProv.voiceAssetFolder);
+    await _preview?.setLanguage(childProv.voiceAssetFolder);
+    _preview?.setSpeed(childProv.voicePlaybackRate);
+    await _preview?.play(VoiceOverCue.greatJob);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingSlider(
+      label: 'Prompt Speed',
+      value: widget.childProv.promptSpeed,
+      onChanged: (val) =>
+          widget.childProv.updateComfortSettings(promptSpeed: val),
+      onChangeEnd: (_) => _playSample(),
+    );
+  }
+}
+
+/// Lets the parent choose which kind of background music the child hears.
+///
+/// One track from the chosen category is picked when a session starts and
+/// loops until it ends — the music never changes underneath the child. Picking
+/// here is the deliberate exception: the parent is listening on purpose, so the
+/// new category starts playing immediately as a preview.
+class _MusicCategoryPicker extends StatefulWidget {
+  const _MusicCategoryPicker({required this.childProv});
+
+  final ChildProvider childProv;
+
+  @override
+  State<_MusicCategoryPicker> createState() => _MusicCategoryPickerState();
+}
+
+class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
+  /// Which category is expanded to show its individual tracks. Defaults to
+  /// none, so the list opens as six calm choices rather than thirty.
+  String? _expandedKey;
+
+  /// Path of the track being auditioned, so the row can show it is playing.
+  String? _previewPath;
+
+  Future<void> _selectCategory(BgmCategory category) async {
+    await widget.childProv.updateComfortSettings(musicCategory: category.key);
+    if (!mounted) return;
+    // restart: true so the parent hears the new style straight away rather
+    // than only on the next session.
+    await context
+        .read<AudioService>()
+        .playCategoryMusic(category.key, restart: true);
+    if (!mounted) return;
+    setState(() => _previewPath = context.read<AudioService>().currentTrack);
+  }
+
+  Future<void> _previewTrack(BgmCategory category, BgmTrack track) async {
+    await context.read<AudioService>().playCategoryTrack(category, track);
+    if (!mounted) return;
+    setState(() => _previewPath = category.trackPath(track));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedKey = widget.childProv.musicCategory;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Music Style',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'One track from the chosen style plays each session, on repeat. '
+          'Tap a style to choose it, or ▸ to hear each track.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        for (final category in kBgmCategories) ...[
+          _MusicCategoryOption(
+            category: category,
+            selected: category.key == selectedKey,
+            expanded: _expandedKey == category.key,
+            onTap: () => _selectCategory(category),
+            onToggleExpand: () => setState(
+              () => _expandedKey =
+                  _expandedKey == category.key ? null : category.key,
+            ),
+          ),
+          if (_expandedKey == category.key)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.md,
+                bottom: AppSpacing.xs,
+              ),
+              child: Column(
+                children: [
+                  for (final track in category.tracks)
+                    _MusicTrackRow(
+                      title: track.title,
+                      playing: _previewPath == category.trackPath(track),
+                      onTap: () => _previewTrack(category, track),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One track inside an expanded style, with a preview control.
+///
+/// Previewing does not change which style is selected — a parent can listen
+/// through everything before committing to one.
+class _MusicTrackRow extends StatelessWidget {
+  const _MusicTrackRow({
+    required this.title,
+    required this.playing,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool playing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Preview $title',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+          child: Row(
+            children: [
+              Icon(
+                playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
+                size: 18,
+                color: playing
+                    ? AppColors.primaryPurple
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: playing
+                        ? AppColors.primaryPurple
+                        : AppColors.textPrimary,
+                    fontWeight:
+                        playing ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in [_MusicCategoryPicker]: the category name, its guidance text,
+/// and a check when it is the active choice.
+class _MusicCategoryOption extends StatelessWidget {
+  const _MusicCategoryOption({
+    required this.category,
+    required this.selected,
+    required this.expanded,
+    required this.onTap,
+    required this.onToggleExpand,
+  });
+
+  final BgmCategory category;
+  final bool selected;
+  final bool expanded;
+  final VoidCallback onTap;
+  final VoidCallback onToggleExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      button: true,
+      label: category.label,
+      hint: category.description,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.lavenderLight : AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primaryPurple
+                  : AppColors.lavenderLight,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.label,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      category.description,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 20,
+                  color: AppColors.primaryPurple,
+                ),
+              // Separate hit target: expanding to audition the tracks must not
+              // change which style the child gets.
+              IconButton(
+                key: ValueKey('bgm-expand-${category.key}'),
+                onPressed: onToggleExpand,
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                tooltip: expanded
+                    ? 'Hide ${category.label} tracks'
+                    : 'Hear ${category.label} tracks',
+                icon: Icon(
+                  expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -829,6 +1334,85 @@ class _ThemeOption extends StatelessWidget {
               theme.label,
               style: AppTextStyles.labelSmall.copyWith(
                 color: selected ? palette.primary : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable swatch for one "My Path" scene, previewing the real backdrop
+/// with a sample of its trail across the middle.
+///
+/// Choosing [WorldTheme.classic] clears the override rather than storing one,
+/// so it doubles as the reset control and no separate button is needed.
+class _WorldOption extends StatelessWidget {
+  const _WorldOption({required this.world, required this.childProv});
+
+  final WorldTheme world;
+  final ChildProvider childProv;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = WorldStyles.of(world);
+    final selected = childProv.activeWorld == world;
+    return GestureDetector(
+      onTap: () => world == WorldTheme.classic
+          ? childProv.clearWorldOverride()
+          : childProv.setWorldOverride(world),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primaryPurple : AppColors.border,
+            width: selected ? 2.5 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 40,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (style.hasBackdrop)
+                    WorldBackdrop(style: style, borderRadius: 8)
+                  else
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.muted,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                    ),
+                  // A sample of the trail, so the swatch shows the thing that
+                  // actually changes rather than just a background.
+                  Center(
+                    child: Container(
+                      width: 26,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: style.trailTravelled,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              world.label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: selected
+                    ? AppColors.primaryPurple
+                    : AppColors.textSecondary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
@@ -994,6 +1578,321 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
           },
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Parent Lock
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Chooses how the app verifies a grown-up before leaving child mode.
+///
+/// The default word code needs nothing memorised, but it is beaten by any
+/// child who can read the number words on screen — which is why we
+/// recommend a custom PIN from age [ParentPinService.recommendedPinAge].
+/// It is a recommendation, not a rule: reading ability varies widely among
+/// ASD learners and the parent knows their child.
+///
+/// Custom PINs require a confirmed email on the account. A forgotten PIN is
+/// reset via a one-time code sent to that address — with no address there is
+/// no way back in, so we do not let a parent set a PIN they could be
+/// permanently locked out by.
+class _ParentLockSettingsScreen extends StatefulWidget {
+  const _ParentLockSettingsScreen({
+    required this.palette,
+    required this.authService,
+  });
+
+  final GamePalette palette;
+  final AuthService authService;
+
+  @override
+  State<_ParentLockSettingsScreen> createState() =>
+      _ParentLockSettingsScreenState();
+}
+
+class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
+  int? _childAgeYears() {
+    final birthDate = context.read<ChildProvider>().profile?.birthDate;
+    if (birthDate == null) return null;
+    final now = DateTime.now();
+    var age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  Future<void> _setPin({required bool isChange}) async {
+    final saved = await ParentPinSetupDialog.show(context, isChange: isChange);
+    if (!mounted || !saved) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Parent PIN saved.'),
+        backgroundColor: AppColors.mint,
+      ),
+    );
+  }
+
+  Future<void> _switchToWordCode() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Remove your PIN?',
+          style:
+              AppTextStyles.titleLarge.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'The lock will go back to showing a code on screen for you to type '
+          'back. A child who can read those words will be able to get past '
+          'it.',
+          style: AppTextStyles.bodyMedium
+              .copyWith(color: AppColors.mutedForeground),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep PIN'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ParentPinService.instance.clearPin();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final age = _childAgeYears();
+    final recommendsPin =
+        age != null && ParentPinService.recommendsCustomPin(age);
+    final email = widget.authService.verifiedEmail;
+
+    return _SettingsScaffold(
+      title: 'Parent Lock',
+      icon: Icons.lock_outline_rounded,
+      palette: widget.palette,
+      children: [
+        ListenableBuilder(
+          listenable: ParentPinService.instance,
+          builder: (context, _) {
+            final pinService = ParentPinService.instance;
+            final usesPin = pinService.hasPin;
+
+            return _SettingsCard(
+              children: [
+                const _SectionLabel('Unlock Method'),
+                const SizedBox(height: AppSpacing.sm),
+                _LockModeOption(
+                  icon: Icons.abc_rounded,
+                  title: 'Word Code',
+                  subtitle: 'We show four numbers as words — type them back. '
+                      'Nothing to remember.',
+                  selected: !usesPin,
+                  onTap: usesPin ? _switchToWordCode : null,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _LockModeOption(
+                  icon: Icons.pin_rounded,
+                  title: 'My Own PIN',
+                  subtitle: email == null
+                      ? 'Needs a confirmed email address on your account.'
+                      : 'Four digits only you know. Nothing on screen gives '
+                          'it away.',
+                  selected: usesPin,
+                  recommended: recommendsPin && !usesPin && email != null,
+                  onTap: email == null
+                      ? null
+                      : () => _setPin(isChange: usesPin),
+                ),
+
+                if (recommendsPin && !usesPin) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          size: 16, color: Color(0xFFDD9B4A)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Your child is $age. Most children this age can '
+                          'read the number words on the unlock screen, so we '
+                          'recommend setting your own PIN. You know your '
+                          'child best — the word code is still fine if '
+                          'reading is not yet a strength.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (email == null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          size: 16, color: AppColors.mutedForeground),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          widget.authService.isGuestMode
+                              ? 'Bind your account and confirm your email to '
+                                  'use your own PIN. A one-time code sent to '
+                                  'that address is the only way back in if '
+                                  'you forget it.'
+                              : 'Confirm the email on your account to use '
+                                  'your own PIN. A one-time code sent to '
+                                  'that address is the only way back in if '
+                                  'you forget it.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (usesPin) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const _SectionLabel('Your PIN'),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Forgot it? Tap "Forgot PIN?" on the unlock screen '
+                          'and we email a one-time code to $email. We never '
+                          'send the PIN itself — you pick a new one.',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _setPin(isChange: true),
+                        child: const Text('Change'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _HintText(
+                    'After ${ParentPinService.maxAttempts} wrong tries the '
+                    'keypad pauses for '
+                    '${ParentPinService.lockoutDuration.inSeconds} seconds, '
+                    'so the PIN cannot be guessed by trial and error.',
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// One selectable unlock method, styled like a settings row.
+class _LockModeOption extends StatelessWidget {
+  const _LockModeOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+    this.recommended = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool recommended;
+
+  /// Null disables the row (already selected, or unavailable).
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null && !selected;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.lavenderLight : AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primaryPurple : AppColors.border,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              size: 22,
+              color: disabled
+                  ? AppColors.mutedForeground
+                  : AppColors.primaryPurple,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: disabled
+                              ? AppColors.mutedForeground
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (recommended) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.star_rounded,
+                            size: 14, color: Color(0xFFDD9B4A)),
+                        const SizedBox(width: 2),
+                        Text(
+                          'Recommended',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color(0xFFDD9B4A),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.mutedForeground),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded,
+                  size: 20, color: AppColors.primaryPurple),
+          ],
+        ),
+      ),
     );
   }
 }

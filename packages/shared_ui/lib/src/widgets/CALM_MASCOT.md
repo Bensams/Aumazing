@@ -66,7 +66,13 @@ CalmMascot(image: happy ? bpsHappy : bpsIdle, reducedMotion: reducedMotion)
 
 ## Rules of thumb
 
-- **Children:** idle + wave + happy only. Never the crying pose in a
-  child-facing failure/break context (it models distress).
+- **Children:** idle + wave + happy, plus the `oops` reaction below. Never a
+  crying pose in a child-facing failure/break context (it models distress).
+- **A wrong answer gets `MascotController.reassure()`, nothing else.** It plays
+  one brief `oops` — shoulders dip, smile softens, a small downward sink — and
+  then *recovers on its own* into the encouraging pose. The two beats are the
+  contract: disappointment that isn't answered by encouragement is exactly the
+  crying pose in slower motion. Never play `oops` on its own, never loop it,
+  and never let a second mistake restart it while the first is still resolving.
 - **Always pass `reducedMotion`** from the child's setting.
 - Animate on an event (greet, reward), then let it rest.

@@ -7,12 +7,14 @@ import 'package:flame/game.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import 'components/category_bin.dart';
+import '../shared/answer_label.dart';
 import 'components/draggable_item.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// The three sari-sari store categories the child sorts items into.
 ///
@@ -55,6 +57,7 @@ class SariSariSortGame extends FlameGame
     this.strings = const AppStrings(GameLanguage.english),
     this.profile = DifficultyProfile.medium,
     this.onCorrectDrop,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers).
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -81,6 +84,11 @@ class SariSariSortGame extends FlameGame
   /// Fired on each correct drop (used by the Flutter layer for haptics).
   final void Function()? onCorrectDrop;
 
+  /// Fired on each wrong drop, alongside the wrong SFX and the encouraging
+  /// voice line. The Flutter layer uses it for the mascot's reaction, so the
+  /// character answers a mistake the same way the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
@@ -88,7 +96,10 @@ class SariSariSortGame extends FlameGame
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+  /// Immediate feedback on a correct sort: the item that went in the right
+  /// basket, so the app can name it back ("Gatas"). Praise waits for the end
+  /// of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -197,13 +208,19 @@ class SariSariSortGame extends FlameGame
 
   // ── Layout ───────────────────────────────────────────────────────────
 
+  /// Width of a category bin. Shared so the item tray can be sized against
+  /// the space the bins leave it.
+  double get _binWidth => math.min(size.x / 4.2, size.y / 1.9);
+
+  /// Y of the top of the bin row — the floor the draggable tray must clear.
+  double get _binTop => size.y - _binWidth * 0.95 - size.y * 0.06;
+
   void _buildBins() {
     final gameW = size.x;
-    final gameH = size.y;
 
-    final binW = math.min(gameW / 4.2, gameH / 1.9);
+    final binW = _binWidth;
     final binH = binW * 0.95;
-    final binY = gameH - binH - gameH * 0.06;
+    final binY = _binTop;
     final gap = (gameW - 3 * binW) / 4;
 
     final categories = StoreCategory.values;
@@ -241,11 +258,13 @@ class SariSariSortGame extends FlameGame
 
     final gameW = size.x;
     final gameH = size.y;
-    final itemSize = math.min(gameW / 6.5, gameH / 3.6);
+    final trayAvail = _binTop - kTopOverlayBand;
+    var itemSize = math.min(gameW / 6.5, gameH / 3.6);
+    if (itemSize > trayAvail * 0.92) itemSize = trayAvail * 0.92;
     final gap = itemSize * 0.4;
     final totalW = roundItems.length * itemSize + (roundItems.length - 1) * gap;
     final startX = (gameW - totalW) / 2;
-    final trayY = gameH * 0.12;
+    final trayY = kTopOverlayBand + (trayAvail - itemSize) / 2;
 
     for (var i = 0; i < roundItems.length; i++) {
       final data = roundItems[i];
@@ -369,7 +388,7 @@ class SariSariSortGame extends FlameGame
 
       onCorrectDrop?.call();
       onPlayCorrectSfx?.call();
-      onPlayCorrectVo?.call();
+      onPlayCorrectVo?.call(AnswerLabel(item: item.data.name));
 
       final binCenter = targetBin.position + targetBin.size / 2;
       _items.remove(item);
@@ -403,6 +422,7 @@ class SariSariSortGame extends FlameGame
 
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
+      onWrongAnswer?.call();
 
       item.showError();
       Future.delayed(const Duration(milliseconds: 450), () {

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 
@@ -19,10 +20,22 @@ class ChildProvider extends ChangeNotifier {
   GameTheme? _themeOverride;
   static const _themeOverrideKeyPrefix = 'theme_override_';
 
+  /// Parent's chosen scene for the child's "My Path" row. When null the path
+  /// keeps its classic look. Persisted locally (no DB migration).
+  WorldTheme? _worldOverride;
+  static const _worldOverrideKeyPrefix = 'world_override_';
+
   /// Selected app/game language (English / Tagalog / Cebuano). Persisted
   /// locally; defaults to English.
   GameLanguage _language = GameLanguage.english;
   static const _languageKeyPrefix = 'language_';
+
+  /// Selected voice-over pack — which recorded voice speaks the cues for the
+  /// active language. Persisted locally per child; defaults to the language's
+  /// default pack.
+  String _voicePackId =
+      defaultVoicePackForLanguage(GameLanguage.english.slug).id;
+  static const _voicePackKeyPrefix = 'voice_pack_';
 
   /// Parent's manual difficulty override (1 Easy / 2 Medium / 3 Hard). When
   /// null, practice difficulty follows the AI's per-area assessment levels.
@@ -35,6 +48,7 @@ class ChildProvider extends ChangeNotifier {
   /// load. Defaults to High.
   GraphicsQuality _graphicsQuality = GraphicsQuality.high;
   static const _graphicsQualityKey = 'graphics_quality';
+  static const _showTextPromptsKey = 'show_text_prompts';
 
   ChildProvider({
     LocalDbService? localDb,
@@ -49,6 +63,7 @@ class ChildProvider extends ChangeNotifier {
   // Comfort settings shortcuts
   bool get musicEnabled => _profile?.musicEnabled ?? true;
   double get musicVolume => _profile?.musicVolume ?? 0.5;
+  String get musicCategory => _profile?.musicCategory ?? kDefaultBgmCategory;
   double get sfxVolume => _profile?.sfxVolume ?? 0.7;
   bool get vibrationEnabled => _profile?.vibrationEnabled ?? true;
   double get animationIntensity => _profile?.animationIntensity ?? 1.0;
@@ -74,6 +89,20 @@ class ChildProvider extends ChangeNotifier {
 
   /// The full color palette for the [activeTheme] (game + dashboard).
   GamePalette get activePalette => GamePalettes.of(activeTheme);
+
+  // ── My Path world ─────────────────────────────────────────────────────
+
+  /// The parent's chosen path scene, or null while on the classic look.
+  WorldTheme? get worldOverride => _worldOverride;
+
+  /// Whether a world has been chosen (vs. the untouched classic default).
+  bool get isWorldOverridden => _worldOverride != null;
+
+  /// The active world — classic unless the parent has opted into one.
+  WorldTheme get activeWorld => _worldOverride ?? WorldTheme.classic;
+
+  /// Trail / badge / backdrop styling for the [activeWorld].
+  WorldStyle get activeWorldStyle => WorldStyles.of(activeWorld);
 
   // ── Difficulty override ───────────────────────────────────────────────
 
@@ -126,6 +155,62 @@ class ChildProvider extends ChangeNotifier {
   /// Localized strings for the active language.
   AppStrings get strings => AppStrings(_language);
 
+  // ── Voice pack ────────────────────────────────────────────────────────
+
+  /// The selected voice pack, falling back to the active language's default
+  /// if the stored pack was removed from the registry.
+  VoicePack get voicePack =>
+      voicePackById(_voicePackId) ??
+      defaultVoicePackForLanguage(_language.slug);
+
+  /// Asset folder [VoiceOverService] should read voice-over cues from.
+  String get voiceAssetFolder => voicePack.assetFolder;
+
+  /// Rate [VoiceOverService] should speak cues at, from the parent's
+  /// prompt-speed setting.
+  double get voicePlaybackRate => voiceRateForPromptSpeed(promptSpeed);
+
+  /// Voice packs the parent can choose between for the active language.
+  List<VoicePack> get availableVoicePacks =>
+      voicePacksForLanguage(_language.slug);
+
+  /// Selects a voice pack and persists it locally.
+  ///
+  /// Ignores packs that do not belong to the active language, so audio and
+  /// on-screen text can never drift apart.
+  Future<void> setVoicePack(String voicePackId) async {
+    final pack = voicePackById(voicePackId);
+    if (pack == null || pack.languageSlug != _language.slug) return;
+
+    _voicePackId = pack.id;
+    notifyListeners();
+    await _persistVoicePack();
+  }
+
+  Future<void> _persistVoicePack() async {
+    final id = _profile?.id;
+    if (id == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_voicePackKeyPrefix$id', _voicePackId);
+  }
+
+  /// Loads the persisted voice pack for the current child.
+  ///
+  /// Must run after [_loadLanguage]: a stored pack belonging to a different
+  /// language is discarded in favour of the current language's default.
+  Future<void> _loadVoicePack() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _voicePackId = defaultVoicePackForLanguage(_language.slug).id;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final stored = voicePackById(prefs.getString('$_voicePackKeyPrefix$id'));
+    _voicePackId = stored != null && stored.languageSlug == _language.slug
+        ? stored.id
+        : defaultVoicePackForLanguage(_language.slug).id;
+  }
+
   // ── Graphics quality (heat / sensory) ─────────────────────────────────
 
   /// The active graphics quality tier (Low / Medium / High).
@@ -136,6 +221,26 @@ class ChildProvider extends ChangeNotifier {
 
   /// Whether motion/particle effects should be minimised (Low only).
   bool get reducedMotion => _graphicsQuality.reducedMotion;
+
+  /// Whether on-screen instruction text is drawn.
+  ///
+  /// Off suits pre-readers and children who find text busy; the spoken
+  /// voice-over still plays either way, so turning this off removes clutter
+  /// without removing the instruction.
+  bool get showTextPrompts => _showTextPrompts;
+  bool _showTextPrompts = true;
+
+  Future<void> setShowTextPrompts(bool value) async {
+    _showTextPrompts = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showTextPromptsKey, value);
+  }
+
+  Future<void> _loadShowTextPrompts() async {
+    final prefs = await SharedPreferences.getInstance();
+    _showTextPrompts = prefs.getBool(_showTextPromptsKey) ?? true;
+  }
 
   /// Reads whether to use a static background directly — usable before a
   /// profile is loaded (e.g. on the login / loading screens).
@@ -165,6 +270,7 @@ class ChildProvider extends ChangeNotifier {
     try {
       // Device-level preference — load regardless of profile/auth state.
       await _loadGraphicsQuality();
+      await _loadShowTextPrompts();
 
       final userId = _authService.effectiveUserId;
       if (userId == null) {
@@ -175,7 +281,9 @@ class ChildProvider extends ChangeNotifier {
       final children = await _localDb.getChildren(userId: userId);
       _profile = children.isEmpty ? null : children.first;
       await _loadThemeOverride();
+      await _loadWorldOverride();
       await _loadLanguage();
+      await _loadVoicePack();
       await _loadDifficultyOverride();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
@@ -189,6 +297,7 @@ class ChildProvider extends ChangeNotifier {
   Future<void> updateComfortSettings({
     bool? musicEnabled,
     double? musicVolume,
+    String? musicCategory,
     double? sfxVolume,
     bool? vibrationEnabled,
     double? animationIntensity,
@@ -200,6 +309,7 @@ class ChildProvider extends ChangeNotifier {
     _profile = _profile!.copyWith(
       musicEnabled: musicEnabled,
       musicVolume: musicVolume,
+      musicCategory: musicCategory,
       sfxVolume: sfxVolume,
       vibrationEnabled: vibrationEnabled,
       animationIntensity: animationIntensity,
@@ -279,15 +389,84 @@ class ChildProvider extends ChangeNotifier {
     _themeOverride = slug == null ? null : GameTheme.fromSlug(slug);
   }
 
+  /// Sets the "My Path" scene and persists it locally.
+  Future<void> setWorldOverride(WorldTheme world) async {
+    _worldOverride = world;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_worldOverrideKeyPrefix$id', world.slug);
+    }
+  }
+
+  /// Clears the chosen scene so the path returns to its classic look.
+  Future<void> clearWorldOverride() async {
+    _worldOverride = null;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_worldOverrideKeyPrefix$id');
+    }
+  }
+
+  /// Loads any persisted world choice for the current child.
+  Future<void> _loadWorldOverride() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _worldOverride = null;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final slug = prefs.getString('$_worldOverrideKeyPrefix$id');
+    _worldOverride = slug == null ? null : WorldTheme.fromSlug(slug);
+  }
+
   /// Sets the app/game language and persists it locally.
+  ///
+  /// Switching language resets the voice pack to the new language's default —
+  /// an earlier alternate-voice choice is not restored when switching back.
   Future<void> setLanguage(GameLanguage language) async {
     _language = language;
+
+    final current = voicePackById(_voicePackId);
+    final voicePackChanged =
+        current == null || current.languageSlug != language.slug;
+    if (voicePackChanged) {
+      _voicePackId = defaultVoicePackForLanguage(language.slug).id;
+    }
+
     notifyListeners();
     final id = _profile?.id;
     if (id != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_languageKeyPrefix$id', language.slug);
     }
+    if (voicePackChanged) await _persistVoicePack();
+  }
+
+  /// Stores the language and voice a parent chose during initial profile
+  /// setup, keyed against the child row that has just been created.
+  ///
+  /// Setup writes these directly rather than going through [setLanguage] /
+  /// [setVoicePack]: those persist against `_profile`, which is still null
+  /// until the home screen loads the new child.
+  Future<void> applyInitialPreferences({
+    required String childId,
+    required GameLanguage language,
+    required String voicePackId,
+  }) async {
+    _language = language;
+    final pack = voicePackById(voicePackId);
+    _voicePackId = pack != null && pack.languageSlug == language.slug
+        ? pack.id
+        : defaultVoicePackForLanguage(language.slug).id;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_languageKeyPrefix$childId', _language.slug);
+    await prefs.setString('$_voicePackKeyPrefix$childId', _voicePackId);
+    notifyListeners();
   }
 
   /// Loads the persisted language for the current child (defaults to English).
@@ -320,8 +499,10 @@ class ChildProvider extends ChangeNotifier {
   void clear() {
     _profile = null;
     _themeOverride = null;
+    _worldOverride = null;
     _difficultyOverride = null;
     _language = GameLanguage.english;
+    _voicePackId = defaultVoicePackForLanguage(GameLanguage.english.slug).id;
     _graphicsQuality = GraphicsQuality.high;
     notifyListeners();
   }

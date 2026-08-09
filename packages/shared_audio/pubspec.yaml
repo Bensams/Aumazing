@@ -12,44 +12,331 @@ dependencies:
     sdk: flutter
   audioplayers: ^6.1.0
 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
 flutter:
   assets:
     - assets/audio/
     - assets/audio/sfx/
     - assets/audio/sfx/rewards/
-    # ── English voice-overs ──────────────────────────────────────────
-    - assets/audio/voice_over/en/assessment_style/
-    - assets/audio/voice_over/en/attention_and_regulation/
-    - assets/audio/voice_over/en/core_praise/
-    - assets/audio/voice_over/en/gently_retry/
-    - assets/audio/voice_over/en/instruction/
-    - assets/audio/voice_over/en/reward_and_celebration/
-    - assets/audio/voice_over/en/transition/
-    - assets/audio/voice_over/en/turn_taking/
-    - assets/audio/voice_over/en/dynamic/
-    - assets/audio/voice_over/en/colors/
-    - assets/audio/voice_over/en/shapes/
-    # ── Tagalog voice-overs ──────────────────────────────────────────
-    - assets/audio/voice_over/tl/assessment_style/
-    - assets/audio/voice_over/tl/attention_and_regulation/
-    - assets/audio/voice_over/tl/core_praise/
-    - assets/audio/voice_over/tl/gently_retry/
-    - assets/audio/voice_over/tl/instruction/
-    - assets/audio/voice_over/tl/reward_and_celebration/
-    - assets/audio/voice_over/tl/transition/
-    - assets/audio/voice_over/tl/turn_taking/
-    - assets/audio/voice_over/tl/dynamic/
-    - assets/audio/voice_over/tl/colors/
-    - assets/audio/voice_over/tl/shapes/
-    # ── Cebuano (Bisaya) voice-overs ─────────────────────────────────
-    - assets/audio/voice_over/ceb/assessment_style/
-    - assets/audio/voice_over/ceb/attention_and_regulation/
-    - assets/audio/voice_over/ceb/core_praise/
-    - assets/audio/voice_over/ceb/gently_retry/
-    - assets/audio/voice_over/ceb/instruction/
-    - assets/audio/voice_over/ceb/reward_and_celebration/
-    - assets/audio/voice_over/ceb/transition/
-    - assets/audio/voice_over/ceb/turn_taking/
-    - assets/audio/voice_over/ceb/dynamic/
-    - assets/audio/voice_over/ceb/colors/
-    - assets/audio/voice_over/ceb/shapes/
+    # ── Background music, one folder per parent-selectable category ────
+    # Written by tools/bgm_gen/install_bgm.py; track list mirrored in
+    # lib/src/bgm_library.dart. See docs/asd-friendly-bgm.md.
+    - assets/audio/bgm/soft_relaxing/
+    - assets/audio/bgm/nature_ambient/
+    - assets/audio/bgm/gentle_playful/
+    - assets/audio/bgm/lullaby_music_box/
+    - assets/audio/bgm/focus_minimal/
+    - assets/audio/bgm/filipino_calm/
+    # `letters/`, `numbers/` and `items/` are the naming cues played back on a
+    # correct answer. install_packs.py writes them for the generated packs.
+    # ceb_lexianne is human-recorded and has none — it is not a default, so it
+    # falls back to ceb_adult_woman.
+    #
+    # The original en / tl / ceb packs are gone: each was stitched from several
+    # speakers, so the voice could change mid-session.
+    # ── Cebuano "Lexianne" voice pack (human-recorded) ────────────────
+    - assets/audio/voice_over/ceb_lexianne/assessment_style/
+    - assets/audio/voice_over/ceb_lexianne/attention_and_regulation/
+    - assets/audio/voice_over/ceb_lexianne/core_praise/
+    - assets/audio/voice_over/ceb_lexianne/gently_retry/
+    - assets/audio/voice_over/ceb_lexianne/instruction/
+    - assets/audio/voice_over/ceb_lexianne/reward_and_celebration/
+    - assets/audio/voice_over/ceb_lexianne/transition/
+    - assets/audio/voice_over/ceb_lexianne/turn_taking/
+    - assets/audio/voice_over/ceb_lexianne/dynamic/
+    - assets/audio/voice_over/ceb_lexianne/colors/
+    - assets/audio/voice_over/ceb_lexianne/shapes/
+    # BEGIN generated voice packs
+    # Written by tools/voice_gen/install_packs.py.
+    # en adult / woman
+    - assets/audio/voice_over/en_adult_woman/assessment_style/
+    - assets/audio/voice_over/en_adult_woman/attention_and_regulation/
+    - assets/audio/voice_over/en_adult_woman/core_praise/
+    - assets/audio/voice_over/en_adult_woman/gently_retry/
+    - assets/audio/voice_over/en_adult_woman/instruction/
+    - assets/audio/voice_over/en_adult_woman/reward_and_celebration/
+    - assets/audio/voice_over/en_adult_woman/transition/
+    - assets/audio/voice_over/en_adult_woman/turn_taking/
+    - assets/audio/voice_over/en_adult_woman/dynamic/
+    - assets/audio/voice_over/en_adult_woman/colors/
+    - assets/audio/voice_over/en_adult_woman/shapes/
+    - assets/audio/voice_over/en_adult_woman/letters/
+    - assets/audio/voice_over/en_adult_woman/numbers/
+    - assets/audio/voice_over/en_adult_woman/items/
+    - assets/audio/voice_over/en_adult_woman/phrases/
+    # en adult / man
+    - assets/audio/voice_over/en_adult_man/assessment_style/
+    - assets/audio/voice_over/en_adult_man/attention_and_regulation/
+    - assets/audio/voice_over/en_adult_man/core_praise/
+    - assets/audio/voice_over/en_adult_man/gently_retry/
+    - assets/audio/voice_over/en_adult_man/instruction/
+    - assets/audio/voice_over/en_adult_man/reward_and_celebration/
+    - assets/audio/voice_over/en_adult_man/transition/
+    - assets/audio/voice_over/en_adult_man/turn_taking/
+    - assets/audio/voice_over/en_adult_man/dynamic/
+    - assets/audio/voice_over/en_adult_man/colors/
+    - assets/audio/voice_over/en_adult_man/shapes/
+    - assets/audio/voice_over/en_adult_man/letters/
+    - assets/audio/voice_over/en_adult_man/numbers/
+    - assets/audio/voice_over/en_adult_man/items/
+    - assets/audio/voice_over/en_adult_man/phrases/
+    # en young / girl
+    - assets/audio/voice_over/en_young_girl/assessment_style/
+    - assets/audio/voice_over/en_young_girl/attention_and_regulation/
+    - assets/audio/voice_over/en_young_girl/core_praise/
+    - assets/audio/voice_over/en_young_girl/gently_retry/
+    - assets/audio/voice_over/en_young_girl/instruction/
+    - assets/audio/voice_over/en_young_girl/reward_and_celebration/
+    - assets/audio/voice_over/en_young_girl/transition/
+    - assets/audio/voice_over/en_young_girl/turn_taking/
+    - assets/audio/voice_over/en_young_girl/dynamic/
+    - assets/audio/voice_over/en_young_girl/colors/
+    - assets/audio/voice_over/en_young_girl/shapes/
+    - assets/audio/voice_over/en_young_girl/letters/
+    - assets/audio/voice_over/en_young_girl/numbers/
+    - assets/audio/voice_over/en_young_girl/items/
+    - assets/audio/voice_over/en_young_girl/phrases/
+    # en young / boy
+    - assets/audio/voice_over/en_young_boy/assessment_style/
+    - assets/audio/voice_over/en_young_boy/attention_and_regulation/
+    - assets/audio/voice_over/en_young_boy/core_praise/
+    - assets/audio/voice_over/en_young_boy/gently_retry/
+    - assets/audio/voice_over/en_young_boy/instruction/
+    - assets/audio/voice_over/en_young_boy/reward_and_celebration/
+    - assets/audio/voice_over/en_young_boy/transition/
+    - assets/audio/voice_over/en_young_boy/turn_taking/
+    - assets/audio/voice_over/en_young_boy/dynamic/
+    - assets/audio/voice_over/en_young_boy/colors/
+    - assets/audio/voice_over/en_young_boy/shapes/
+    - assets/audio/voice_over/en_young_boy/letters/
+    - assets/audio/voice_over/en_young_boy/numbers/
+    - assets/audio/voice_over/en_young_boy/items/
+    - assets/audio/voice_over/en_young_boy/phrases/
+    # en child / girl
+    - assets/audio/voice_over/en_child_girl/assessment_style/
+    - assets/audio/voice_over/en_child_girl/attention_and_regulation/
+    - assets/audio/voice_over/en_child_girl/core_praise/
+    - assets/audio/voice_over/en_child_girl/gently_retry/
+    - assets/audio/voice_over/en_child_girl/instruction/
+    - assets/audio/voice_over/en_child_girl/reward_and_celebration/
+    - assets/audio/voice_over/en_child_girl/transition/
+    - assets/audio/voice_over/en_child_girl/turn_taking/
+    - assets/audio/voice_over/en_child_girl/dynamic/
+    - assets/audio/voice_over/en_child_girl/colors/
+    - assets/audio/voice_over/en_child_girl/shapes/
+    - assets/audio/voice_over/en_child_girl/letters/
+    - assets/audio/voice_over/en_child_girl/numbers/
+    - assets/audio/voice_over/en_child_girl/items/
+    - assets/audio/voice_over/en_child_girl/phrases/
+    # en child / boy
+    - assets/audio/voice_over/en_child_boy/assessment_style/
+    - assets/audio/voice_over/en_child_boy/attention_and_regulation/
+    - assets/audio/voice_over/en_child_boy/core_praise/
+    - assets/audio/voice_over/en_child_boy/gently_retry/
+    - assets/audio/voice_over/en_child_boy/instruction/
+    - assets/audio/voice_over/en_child_boy/reward_and_celebration/
+    - assets/audio/voice_over/en_child_boy/transition/
+    - assets/audio/voice_over/en_child_boy/turn_taking/
+    - assets/audio/voice_over/en_child_boy/dynamic/
+    - assets/audio/voice_over/en_child_boy/colors/
+    - assets/audio/voice_over/en_child_boy/shapes/
+    - assets/audio/voice_over/en_child_boy/letters/
+    - assets/audio/voice_over/en_child_boy/numbers/
+    - assets/audio/voice_over/en_child_boy/items/
+    - assets/audio/voice_over/en_child_boy/phrases/
+    # tl adult / woman
+    - assets/audio/voice_over/tl_adult_woman/assessment_style/
+    - assets/audio/voice_over/tl_adult_woman/attention_and_regulation/
+    - assets/audio/voice_over/tl_adult_woman/core_praise/
+    - assets/audio/voice_over/tl_adult_woman/gently_retry/
+    - assets/audio/voice_over/tl_adult_woman/instruction/
+    - assets/audio/voice_over/tl_adult_woman/reward_and_celebration/
+    - assets/audio/voice_over/tl_adult_woman/transition/
+    - assets/audio/voice_over/tl_adult_woman/turn_taking/
+    - assets/audio/voice_over/tl_adult_woman/dynamic/
+    - assets/audio/voice_over/tl_adult_woman/colors/
+    - assets/audio/voice_over/tl_adult_woman/shapes/
+    - assets/audio/voice_over/tl_adult_woman/letters/
+    - assets/audio/voice_over/tl_adult_woman/numbers/
+    - assets/audio/voice_over/tl_adult_woman/items/
+    - assets/audio/voice_over/tl_adult_woman/phrases/
+    # tl adult / man
+    - assets/audio/voice_over/tl_adult_man/assessment_style/
+    - assets/audio/voice_over/tl_adult_man/attention_and_regulation/
+    - assets/audio/voice_over/tl_adult_man/core_praise/
+    - assets/audio/voice_over/tl_adult_man/gently_retry/
+    - assets/audio/voice_over/tl_adult_man/instruction/
+    - assets/audio/voice_over/tl_adult_man/reward_and_celebration/
+    - assets/audio/voice_over/tl_adult_man/transition/
+    - assets/audio/voice_over/tl_adult_man/turn_taking/
+    - assets/audio/voice_over/tl_adult_man/dynamic/
+    - assets/audio/voice_over/tl_adult_man/colors/
+    - assets/audio/voice_over/tl_adult_man/shapes/
+    - assets/audio/voice_over/tl_adult_man/letters/
+    - assets/audio/voice_over/tl_adult_man/numbers/
+    - assets/audio/voice_over/tl_adult_man/items/
+    - assets/audio/voice_over/tl_adult_man/phrases/
+    # tl young / girl
+    - assets/audio/voice_over/tl_young_girl/assessment_style/
+    - assets/audio/voice_over/tl_young_girl/attention_and_regulation/
+    - assets/audio/voice_over/tl_young_girl/core_praise/
+    - assets/audio/voice_over/tl_young_girl/gently_retry/
+    - assets/audio/voice_over/tl_young_girl/instruction/
+    - assets/audio/voice_over/tl_young_girl/reward_and_celebration/
+    - assets/audio/voice_over/tl_young_girl/transition/
+    - assets/audio/voice_over/tl_young_girl/turn_taking/
+    - assets/audio/voice_over/tl_young_girl/dynamic/
+    - assets/audio/voice_over/tl_young_girl/colors/
+    - assets/audio/voice_over/tl_young_girl/shapes/
+    - assets/audio/voice_over/tl_young_girl/letters/
+    - assets/audio/voice_over/tl_young_girl/numbers/
+    - assets/audio/voice_over/tl_young_girl/items/
+    - assets/audio/voice_over/tl_young_girl/phrases/
+    # tl young / boy
+    - assets/audio/voice_over/tl_young_boy/assessment_style/
+    - assets/audio/voice_over/tl_young_boy/attention_and_regulation/
+    - assets/audio/voice_over/tl_young_boy/core_praise/
+    - assets/audio/voice_over/tl_young_boy/gently_retry/
+    - assets/audio/voice_over/tl_young_boy/instruction/
+    - assets/audio/voice_over/tl_young_boy/reward_and_celebration/
+    - assets/audio/voice_over/tl_young_boy/transition/
+    - assets/audio/voice_over/tl_young_boy/turn_taking/
+    - assets/audio/voice_over/tl_young_boy/dynamic/
+    - assets/audio/voice_over/tl_young_boy/colors/
+    - assets/audio/voice_over/tl_young_boy/shapes/
+    - assets/audio/voice_over/tl_young_boy/letters/
+    - assets/audio/voice_over/tl_young_boy/numbers/
+    - assets/audio/voice_over/tl_young_boy/items/
+    - assets/audio/voice_over/tl_young_boy/phrases/
+    # tl child / girl
+    - assets/audio/voice_over/tl_child_girl/assessment_style/
+    - assets/audio/voice_over/tl_child_girl/attention_and_regulation/
+    - assets/audio/voice_over/tl_child_girl/core_praise/
+    - assets/audio/voice_over/tl_child_girl/gently_retry/
+    - assets/audio/voice_over/tl_child_girl/instruction/
+    - assets/audio/voice_over/tl_child_girl/reward_and_celebration/
+    - assets/audio/voice_over/tl_child_girl/transition/
+    - assets/audio/voice_over/tl_child_girl/turn_taking/
+    - assets/audio/voice_over/tl_child_girl/dynamic/
+    - assets/audio/voice_over/tl_child_girl/colors/
+    - assets/audio/voice_over/tl_child_girl/shapes/
+    - assets/audio/voice_over/tl_child_girl/letters/
+    - assets/audio/voice_over/tl_child_girl/numbers/
+    - assets/audio/voice_over/tl_child_girl/items/
+    - assets/audio/voice_over/tl_child_girl/phrases/
+    # tl child / boy
+    - assets/audio/voice_over/tl_child_boy/assessment_style/
+    - assets/audio/voice_over/tl_child_boy/attention_and_regulation/
+    - assets/audio/voice_over/tl_child_boy/core_praise/
+    - assets/audio/voice_over/tl_child_boy/gently_retry/
+    - assets/audio/voice_over/tl_child_boy/instruction/
+    - assets/audio/voice_over/tl_child_boy/reward_and_celebration/
+    - assets/audio/voice_over/tl_child_boy/transition/
+    - assets/audio/voice_over/tl_child_boy/turn_taking/
+    - assets/audio/voice_over/tl_child_boy/dynamic/
+    - assets/audio/voice_over/tl_child_boy/colors/
+    - assets/audio/voice_over/tl_child_boy/shapes/
+    - assets/audio/voice_over/tl_child_boy/letters/
+    - assets/audio/voice_over/tl_child_boy/numbers/
+    - assets/audio/voice_over/tl_child_boy/items/
+    - assets/audio/voice_over/tl_child_boy/phrases/
+    # ceb adult / woman
+    - assets/audio/voice_over/ceb_adult_woman/assessment_style/
+    - assets/audio/voice_over/ceb_adult_woman/attention_and_regulation/
+    - assets/audio/voice_over/ceb_adult_woman/core_praise/
+    - assets/audio/voice_over/ceb_adult_woman/gently_retry/
+    - assets/audio/voice_over/ceb_adult_woman/instruction/
+    - assets/audio/voice_over/ceb_adult_woman/reward_and_celebration/
+    - assets/audio/voice_over/ceb_adult_woman/transition/
+    - assets/audio/voice_over/ceb_adult_woman/turn_taking/
+    - assets/audio/voice_over/ceb_adult_woman/dynamic/
+    - assets/audio/voice_over/ceb_adult_woman/colors/
+    - assets/audio/voice_over/ceb_adult_woman/shapes/
+    - assets/audio/voice_over/ceb_adult_woman/letters/
+    - assets/audio/voice_over/ceb_adult_woman/numbers/
+    - assets/audio/voice_over/ceb_adult_woman/items/
+    - assets/audio/voice_over/ceb_adult_woman/phrases/
+    # ceb adult / man
+    - assets/audio/voice_over/ceb_adult_man/assessment_style/
+    - assets/audio/voice_over/ceb_adult_man/attention_and_regulation/
+    - assets/audio/voice_over/ceb_adult_man/core_praise/
+    - assets/audio/voice_over/ceb_adult_man/gently_retry/
+    - assets/audio/voice_over/ceb_adult_man/instruction/
+    - assets/audio/voice_over/ceb_adult_man/reward_and_celebration/
+    - assets/audio/voice_over/ceb_adult_man/transition/
+    - assets/audio/voice_over/ceb_adult_man/turn_taking/
+    - assets/audio/voice_over/ceb_adult_man/dynamic/
+    - assets/audio/voice_over/ceb_adult_man/colors/
+    - assets/audio/voice_over/ceb_adult_man/shapes/
+    - assets/audio/voice_over/ceb_adult_man/letters/
+    - assets/audio/voice_over/ceb_adult_man/numbers/
+    - assets/audio/voice_over/ceb_adult_man/items/
+    - assets/audio/voice_over/ceb_adult_man/phrases/
+    # ceb young / girl
+    - assets/audio/voice_over/ceb_young_girl/assessment_style/
+    - assets/audio/voice_over/ceb_young_girl/attention_and_regulation/
+    - assets/audio/voice_over/ceb_young_girl/core_praise/
+    - assets/audio/voice_over/ceb_young_girl/gently_retry/
+    - assets/audio/voice_over/ceb_young_girl/instruction/
+    - assets/audio/voice_over/ceb_young_girl/reward_and_celebration/
+    - assets/audio/voice_over/ceb_young_girl/transition/
+    - assets/audio/voice_over/ceb_young_girl/turn_taking/
+    - assets/audio/voice_over/ceb_young_girl/dynamic/
+    - assets/audio/voice_over/ceb_young_girl/colors/
+    - assets/audio/voice_over/ceb_young_girl/shapes/
+    - assets/audio/voice_over/ceb_young_girl/letters/
+    - assets/audio/voice_over/ceb_young_girl/numbers/
+    - assets/audio/voice_over/ceb_young_girl/items/
+    - assets/audio/voice_over/ceb_young_girl/phrases/
+    # ceb young / boy
+    - assets/audio/voice_over/ceb_young_boy/assessment_style/
+    - assets/audio/voice_over/ceb_young_boy/attention_and_regulation/
+    - assets/audio/voice_over/ceb_young_boy/core_praise/
+    - assets/audio/voice_over/ceb_young_boy/gently_retry/
+    - assets/audio/voice_over/ceb_young_boy/instruction/
+    - assets/audio/voice_over/ceb_young_boy/reward_and_celebration/
+    - assets/audio/voice_over/ceb_young_boy/transition/
+    - assets/audio/voice_over/ceb_young_boy/turn_taking/
+    - assets/audio/voice_over/ceb_young_boy/dynamic/
+    - assets/audio/voice_over/ceb_young_boy/colors/
+    - assets/audio/voice_over/ceb_young_boy/shapes/
+    - assets/audio/voice_over/ceb_young_boy/letters/
+    - assets/audio/voice_over/ceb_young_boy/numbers/
+    - assets/audio/voice_over/ceb_young_boy/items/
+    - assets/audio/voice_over/ceb_young_boy/phrases/
+    # ceb child / girl
+    - assets/audio/voice_over/ceb_child_girl/assessment_style/
+    - assets/audio/voice_over/ceb_child_girl/attention_and_regulation/
+    - assets/audio/voice_over/ceb_child_girl/core_praise/
+    - assets/audio/voice_over/ceb_child_girl/gently_retry/
+    - assets/audio/voice_over/ceb_child_girl/instruction/
+    - assets/audio/voice_over/ceb_child_girl/reward_and_celebration/
+    - assets/audio/voice_over/ceb_child_girl/transition/
+    - assets/audio/voice_over/ceb_child_girl/turn_taking/
+    - assets/audio/voice_over/ceb_child_girl/dynamic/
+    - assets/audio/voice_over/ceb_child_girl/colors/
+    - assets/audio/voice_over/ceb_child_girl/shapes/
+    - assets/audio/voice_over/ceb_child_girl/letters/
+    - assets/audio/voice_over/ceb_child_girl/numbers/
+    - assets/audio/voice_over/ceb_child_girl/items/
+    - assets/audio/voice_over/ceb_child_girl/phrases/
+    # ceb child / boy
+    - assets/audio/voice_over/ceb_child_boy/assessment_style/
+    - assets/audio/voice_over/ceb_child_boy/attention_and_regulation/
+    - assets/audio/voice_over/ceb_child_boy/core_praise/
+    - assets/audio/voice_over/ceb_child_boy/gently_retry/
+    - assets/audio/voice_over/ceb_child_boy/instruction/
+    - assets/audio/voice_over/ceb_child_boy/reward_and_celebration/
+    - assets/audio/voice_over/ceb_child_boy/transition/
+    - assets/audio/voice_over/ceb_child_boy/turn_taking/
+    - assets/audio/voice_over/ceb_child_boy/dynamic/
+    - assets/audio/voice_over/ceb_child_boy/colors/
+    - assets/audio/voice_over/ceb_child_boy/shapes/
+    - assets/audio/voice_over/ceb_child_boy/letters/
+    - assets/audio/voice_over/ceb_child_boy/numbers/
+    - assets/audio/voice_over/ceb_child_boy/items/
+    - assets/audio/voice_over/ceb_child_boy/phrases/
+    # END generated voice packs

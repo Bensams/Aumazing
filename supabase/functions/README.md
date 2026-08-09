@@ -6,14 +6,21 @@ FR-10, FR-17, NFR-06, Use Cases 12 & 13). Two functions:
 | Function | Auth | Purpose |
 | --- | --- | --- |
 | `create-checkout` | Supabase JWT (default) | Creates a PayMongo Checkout Session (₱149/month, cards + GCash + GrabPay + Maya), records a pending `payment_records` row, returns the hosted `checkout_url` for the in-app WebView. |
-| `paymongo-webhook` | PayMongo HMAC signature (deploy with `--no-verify-jwt`) | Verifies the `Paymongo-Signature` header, dedupes on event id via `webhook_events`, grants `entitlements.is_premium` on `checkout_session.payment.paid`, revokes on refund events. |
+| `paymongo-webhook` | PayMongo HMAC signature (deploy with `--no-verify-jwt`) | Verifies the `Paymongo-Signature` header, dedupes on event id via `webhook_events`, grants a 30-day `entitlements` period (`is_premium` + `expires_at`; paying again extends the running period) on `checkout_session.payment.paid`, revokes on refund events. There is no auto-renewal — expiry is enforced by `expires_at`, which clients cache and check locally (works offline). |
+
+There is also an account-lifecycle function:
+
+| Function | Auth | Purpose |
+| --- | --- | --- |
+| `delete-account` | Supabase JWT (default) | Permanently deletes the calling user: removes their `children` rows plus child-keyed `assessment_results` / `game_sessions` / `module_recommendations`, then deletes the auth user (FK cascades clean up `entitlements`, `payment_records`, `research_consents`). Refuses admin accounts. Called from Settings → Delete Account after a two-step confirmation. Deploy with `supabase functions deploy delete-account`. |
 
 The app never talks to PayMongo directly and can never grant itself
 Premium — entitlement rows are written only here with the service role.
 
 ## One-time setup
 
-1. Apply the migration `supabase/migrations/20260703_paymongo_entitlements.sql`
+1. Apply the migrations `supabase/migrations/20260703_paymongo_entitlements.sql`
+   and `supabase/migrations/20260720_entitlement_expiry.sql`
    (`supabase db push`).
 
 2. Set the function secrets (PayMongo Dashboard → Developers → API Keys,

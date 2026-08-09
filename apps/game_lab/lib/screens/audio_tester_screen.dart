@@ -28,6 +28,9 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
   String _lastAction = 'None';
   bool _musicPlaying = false;
 
+  /// Filename of the track currently auditioning, or null when stopped.
+  String? _playingTrack;
+
   // Group cues by category for display
   static final Map<VoiceOverCategory, List<VoiceOverCue>> _cuesByCategory = () {
     final map = <VoiceOverCategory, List<VoiceOverCue>>{};
@@ -41,6 +44,17 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
   static VoiceOverCategory _getCueCategory(VoiceOverCue cue) {
     // Map cues to categories based on their enum position
     final name = cue.name;
+    // The naming-feedback families are prefixed, so they need no roster here —
+    // and unlike the lists below, a new colour or item stays classified.
+    if (name.startsWith('phrase')) return VoiceOverCategory.phrases;
+    if (name.startsWith('color')) return VoiceOverCategory.colors;
+    if (name.startsWith('shape')) return VoiceOverCategory.shapes;
+    if (name.startsWith('letter')) return VoiceOverCategory.letters;
+    if (name.startsWith('number')) return VoiceOverCategory.numbers;
+    if (name.startsWith('item')) return VoiceOverCategory.items;
+    if (['tapThe', 'dragThe', 'dropThe'].contains(name)) {
+      return VoiceOverCategory.dynamic;
+    }
     if (['canYouCopyMe', 'canYouMatchThis', 'findTheRightOne', 'goodListening',
          'goodLooking', 'letSeeWhatYouCanDo', 'letsTryTheNextTask', 'showMe',
          'whatComesNext', 'whichOneIsTheSame'].contains(name)) {
@@ -105,6 +119,14 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
         return '🎨 Colors';
       case VoiceOverCategory.shapes:
         return '🔷 Shapes';
+      case VoiceOverCategory.phrases:
+        return '🗣 Phrases';
+      case VoiceOverCategory.letters:
+        return '🔤 Letters';
+      case VoiceOverCategory.numbers:
+        return '🔢 Numbers';
+      case VoiceOverCategory.items:
+        return '🛒 Items';
     }
   }
 
@@ -137,13 +159,26 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
     });
   }
 
-  void _toggleMusic() {
-    if (_musicPlaying) {
-      _audio.stopMusic();
-    } else {
-      _audio.playMusic('bg_music.ogg');
-    }
-    setState(() => _musicPlaying = !_musicPlaying);
+  /// Play one specific track, so the whole library can be auditioned.
+  ///
+  /// This deliberately bypasses [AudioService.playCategoryMusic] — that method
+  /// picks at random and no-ops on a repeat call, which is right for the app
+  /// and useless for checking a particular file.
+  void _playTrack(BgmCategory category, BgmTrack track) {
+    _audio.playMusic(category.trackPath(track));
+    setState(() {
+      _playingTrack = track.file;
+      _musicPlaying = true;
+      _lastAction = 'Music: ${category.key}/${track.file}';
+    });
+  }
+
+  void _stopMusic() {
+    _audio.stopMusic();
+    setState(() {
+      _playingTrack = null;
+      _musicPlaying = false;
+    });
   }
 
   @override
@@ -264,24 +299,44 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
                     .copyWith(color: AppColors.primaryPurple)),
             const SizedBox(height: 12),
 
+            Text(
+              'Every track the app can play, grouped by the style a parent '
+              'picks in Settings. Tracks loop, so leave one running to hear '
+              'whether the loop join is audible.',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _toggleMusic,
-                icon: Icon(
-                  _musicPlaying ? Icons.stop : Icons.play_arrow,
-                  size: 20,
-                ),
-                label: Text(_musicPlaying ? 'Stop Music' : 'Play Music'),
+                onPressed: _musicPlaying ? _stopMusic : null,
+                icon: const Icon(Icons.stop, size: 20),
+                label: const Text('Stop Music'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _musicPlaying
-                      ? Colors.red.shade400
-                      : AppColors.primaryPurple,
+                  backgroundColor: Colors.red.shade400,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppColors.lavenderLight,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+
+            for (final category in kBgmCategories) ...[
+              Text(
+                '${category.label}  (${category.tracks.length})',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              for (final track in category.tracks)
+                _buildTrackButton(category, track),
+              const SizedBox(height: 10),
+            ],
 
             const Divider(height: 24),
 
@@ -306,6 +361,47 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
             _buildInfoRow('Last SFX', _services.lastPlayedSfx),
             _buildInfoRow('Last VO', _services.lastPlayedVo),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// One track row. Highlights while it is the one playing, so it is obvious
+  /// which file you are hearing when you are working through a category.
+  Widget _buildTrackButton(BgmCategory category, BgmTrack track) {
+    final playing = _playingTrack == track.file;
+    final label = track.title;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: SizedBox(
+        width: double.infinity,
+        height: 32,
+        child: ElevatedButton(
+          onPressed: () => _playTrack(category, track),
+          style: ElevatedButton.styleFrom(
+            backgroundColor:
+                playing ? AppColors.primaryPurple : AppColors.lavenderLight,
+            foregroundColor: playing ? Colors.white : AppColors.primaryPurple,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(playing ? Icons.volume_up : Icons.play_arrow, size: 15),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,0 +1,164 @@
+path,text,style,emotion
+assessment_style/CanYouCopyMe,Mahimo ba nimong sundogon ko?,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/CanYouMatchThis,Mahimo ba nimong itugma kini?,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/FindTheRightOne,Pangitaa ang husto.,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/GoodListening,Maayong pagpaminaw.,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/GoodLooking,Maayong pagtan-aw.,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/LetSeeWhatYouCanDo,Tan-awon nato kung unsa imong mahimo!,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/LetsTryTheNextTask,Sulayan nato ang sunod nga buluhaton.,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/ShowMe,Ipakita kanako.,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/WhatComesNext,Unsa'y sunod?,"warm, clear, friendly kid's voice, calm pace",neutral
+assessment_style/WhichOneIsTheSame,Asa ang parehas?,"warm, clear, friendly kid's voice, calm pace",neutral
+attention_and_regulation/CalmBody,Kalma nga lawas.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/EyesHere,Tan-aw diri.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/GoodCalmingDown,Maayo kang nikalma.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/ItsOkay,Okay ra.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/LetsContinue,Padayon ta.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/LetsSlowDown,Hinay-hinay lang ta.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/ListenCarefully,Pamati'g maayo.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/ReadyAgain,Andam na pag-usab.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/TakeABreath,Ginhawa una.,"calm, soft, gentle, reassuring, slow pace",calm
+attention_and_regulation/YouAreSafe,Luwas ka.,"calm, soft, gentle, reassuring, slow pace",calm
+colors/Blue,Asul.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Gold,Bulawan.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Green,Berde.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Magenta,Magenta.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Orange,Kahel.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Pink,Rosas.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Purple,Lila.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Red,Pula.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Teal,Teal.,"warm, clear, friendly kid's voice, calm pace",neutral
+colors/Yellow,Dalag.,"warm, clear, friendly kid's voice, calm pace",neutral
+core_praise/Aumazing,Aumazing!,"happy, warm, cheerful tone",happy
+core_praise/Ausome,Ausome!,"happy, warm, cheerful tone",happy
+core_praise/Correct,Sakto!,"happy, warm, cheerful tone",happy
+core_praise/Excellent,Maayo kaayo!,"happy, warm, cheerful tone",happy
+core_praise/GoodTry,Maayong sulay!,"happy, warm, cheerful tone",happy
+core_praise/GreatJob,Maayo gyud!,"happy, warm, cheerful tone",happy
+core_praise/NiceWork,Nindot nga trabaho!,"happy, warm, cheerful tone",happy
+core_praise/ThatsRight,Sakto na!,"happy, warm, cheerful tone",happy
+core_praise/VeryGood,Nindot kaayo!,"happy, warm, cheerful tone",happy
+core_praise/WellDone,Maayong buhat!,"happy, warm, cheerful tone",happy
+core_praise/YayYouGotIt,Yehey! Nakuha na nimo!,"happy, warm, cheerful tone",happy
+core_praise/YouDidIt,Nahimo na nimo!,"happy, warm, cheerful tone",happy
+dynamic/DragThe,Guy-ora ang,"warm, clear, friendly kid's voice, calm pace",neutral
+dynamic/DropThe,Ibutang ang,"warm, clear, friendly kid's voice, calm pace",neutral
+dynamic/TapThe,Pindota ang,"warm, clear, friendly kid's voice, calm pace",neutral
+gently_retry/AlmostThere,Hapit na.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/GiveItAnotherTry,Sulayi pag-usab.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/KeepGoing,Padayon lang.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/LetsDoItOneMoreTime,Buhaton nato pag-usab.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/LetsPracticeAgain,Magpraktis ta pag-usab.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/LetsTryAgain,Sulayan nato pag-usab.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/NiceTry,Maayong sulay.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/NotYet,Dili pa.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/TryAgain,Sulayi pag-usab.,"gentle, encouraging, warm, patient tone",gentle
+gently_retry/YouCanDoIt,Kaya ni nimo.,"gentle, encouraging, warm, patient tone",gentle
+instruction/ChooseOne,Pilia ang usa.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/CopyMe,Sundoga ko.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/CountWithMe,Mag-ihap ta.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/DragIt,Guy-ora kini.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/FindTheSame,Pangitaa ang parehas.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/FollowMe,Sunda ko.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/LetsBegin,Magsugod na ta.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/Listen,Paminaw.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/MatchIt,Itugma kini.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/MyTurn,Akoa na.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/PickTheColor,Pilia ang kolor.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/PickTheShape,Pilia ang porma.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/TapHere,Pindota diri.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/TouchThePicture,Pindota ang hulagway.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/WatchCarefully,Tan-awa'g maayo.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/YourTurn,Ikaw na!,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Biskwit,Biskwit.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Gatas,Gatas.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Juice,Juice.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Kape,Kape.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Kendi,Kendi.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Mansanas,Mansanas.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Sabon,Sabon.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Saging,Saging.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Sipilyo,Sipilyo.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Softdrink,Softdrink.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Syampu,Syampu.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Tinapay,Tinapay.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Tisyu,Tisyu.,"warm, clear, friendly kid's voice, calm pace",neutral
+items/Tubig,Tubig.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/A,A.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/C,C.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/E,E.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/H,H.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/L,L.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/T,T.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/U,U.,"warm, clear, friendly kid's voice, calm pace",neutral
+letters/V,V.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/Five,Lima.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/Four,Upat.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/One,Usa.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/Seven,Pito.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/Three,Tulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+numbers/Two,Duha.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/BlueCircle,Asul nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/BlueDiamond,Asul nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/BlueStar,Asul nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/BlueTriangle,Asul nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/GoldStar,Bulawan nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/GreenCircle,Berde nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/GreenDiamond,Berde nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/GreenStar,Berde nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/GreenTriangle,Berde nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/MagentaDiamond,Magenta nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/OrangeCircle,Kahel nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/OrangeDiamond,Kahel nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/OrangeStar,Kahel nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/OrangeTriangle,Kahel nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PinkHeart,Rosas nga kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PurpleCircle,Lila nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PurpleDiamond,Lila nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PurpleHeart,Lila nga kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PurpleStar,Lila nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/PurpleTriangle,Lila nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/RedCircle,Pula nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/RedDiamond,Pula nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/RedHeart,Pula nga kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/RedStar,Pula nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/RedTriangle,Pula nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/TealTriangle,Teal nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/YellowCircle,Dalag nga lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/YellowDiamond,Dalag nga diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/YellowStar,Dalag nga bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+phrases/YellowTriangle,Dalag nga trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+reward_and_celebration/AwesomeWorkToday,Nindot kaayo ang buhat nimo karon!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/BigHighFive,Dako nga high-five!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/Fantastic,Kahibulongan!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/GreatPlaying,Nindot og dula!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/Hooray,Yehey!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/SuperJob,Super nindot!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/YouDidSoWell,Nindot kaayo imong gibuhat!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/YouFinishedIt,Nahuman na nimo!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/YoureAmazing,Kahibulongan ka!,"excited, bouncy, cheerful kid's voice, high energy",excited
+shapes/Circle,Lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
+shapes/Diamond,Diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
+shapes/Heart,Kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
+shapes/Star,Bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
+shapes/Triangle,Trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
+transition/GameFinished,Human na ang dula!,"happy, warm, cheerful tone",happy
+transition/GetReady,Pangandam na!,"happy, warm, cheerful tone",happy
+transition/GoodJobMovingOn,Maayo! Mosunod na ta!,"happy, warm, cheerful tone",happy
+transition/LetsGo,Dali na!,"happy, warm, cheerful tone",happy
+transition/LetsPlayAgain,Magdula ta pag-usab!,"happy, warm, cheerful tone",happy
+transition/LevelComplete,Human na ang level!,"happy, warm, cheerful tone",happy
+transition/NewGame,Bag-ong dula!,"happy, warm, cheerful tone",happy
+transition/NextActivity,Sunod nga kalihokan!,"happy, warm, cheerful tone",happy
+transition/NextOne,Sunod!,"happy, warm, cheerful tone",happy
+transition/TimeForTheNextOne,Oras na para sa sunod!,"happy, warm, cheerful tone",happy
+turn_taking/GoodWaiting,Maayong paghulat.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/HereWeGo,Sige na.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/LetsTakeTurns,Magpuli-puli ta.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/MyTurn,Akoa na.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/NowYouTry,Sulayi na nimo.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/Ready,Andam.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/ThankYouForWaiting,Salamat sa paghulat.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/Wait,Hulat.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/WatchMeFirst,Tan-awa ko una.,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/YourTurn,Ikaw na!,"warm, clear, friendly kid's voice, calm pace",neutral

@@ -7,9 +7,16 @@ import 'package:aumazing/core/services/local_db_service.dart';
 import 'package:aumazing/core/services/supabase_service.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  // bootstrap() reaches AuthService.isGuestEstablished, which reads
+  // SharedPreferences — that needs both the binding and mock values.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   test('bootstrap hydrates SQLite from Supabase when online', () async {
     final localDb = _FakeLocalDbService();
     final service = ChildBootstrapService(
@@ -63,7 +70,11 @@ void main() {
 
   test('bootstrap uses valid local guest child data while offline', () async {
     final service = ChildBootstrapService(
-      authService: _FakeAuthService(loggedIn: false, userId: 'guest-1'),
+      authService: _FakeAuthService(
+        loggedIn: false,
+        userId: 'guest-1',
+        guestEstablished: true,
+      ),
       connectivityService: _FakeConnectivityService(online: false),
       supabaseService: _FakeSupabaseService(children: const []),
       localDbService: _FakeLocalDbService(
@@ -89,8 +100,11 @@ void main() {
 }
 
 class _FakeAuthService extends AuthService {
-  _FakeAuthService({required this.loggedIn, required this.userId})
-    : super(supabaseAuth: _NoopSupabaseAuthClient());
+  _FakeAuthService({
+    required this.loggedIn,
+    required this.userId,
+    this.guestEstablished = false,
+  }) : super(supabaseAuth: _NoopSupabaseAuthClient());
 
   factory _FakeAuthService.loggedIn() =>
       _FakeAuthService(loggedIn: true, userId: 'user-1');
@@ -98,8 +112,16 @@ class _FakeAuthService extends AuthService {
   final bool loggedIn;
   final String? userId;
 
+  /// Whether the user explicitly chose "Continue as Guest". Bootstrap treats
+  /// an auto-minted guest id as no session at all, so this has to be stated
+  /// rather than inferred from [userId].
+  final bool guestEstablished;
+
   @override
   bool get isLoggedIn => loggedIn;
+
+  @override
+  Future<bool> isGuestEstablished() async => guestEstablished;
 
   @override
   String? get effectiveUserId => userId;

@@ -41,23 +41,31 @@ class ChildModeTopBar extends StatelessWidget {
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,
         ),
-        child: Row(
+        child: Stack(
+          alignment: Alignment.center,
           children: [
+            // Controls define the bar's height; the dots are then centred over
+            // them so their position doesn't shift with how many buttons this
+            // screen happens to show.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onRetry != null)
+                  _CircleIconButton(
+                    icon: Icons.refresh_rounded,
+                    tooltip: 'Retry',
+                    onTap: onRetry!,
+                  ),
+                if (onMenu != null)
+                  _CircleIconButton(
+                    icon: Icons.grid_view_rounded,
+                    tooltip: 'Games menu',
+                    onTap: onMenu!,
+                  ),
+                ParentModeIconButton(onLongPress: onParentTap),
+              ],
+            ),
             ProgressDots(total: totalSteps, current: currentStep),
-            const Spacer(),
-            if (onRetry != null)
-              _CircleIconButton(
-                icon: Icons.refresh_rounded,
-                tooltip: 'Retry',
-                onTap: onRetry!,
-              ),
-            if (onMenu != null)
-              _CircleIconButton(
-                icon: Icons.grid_view_rounded,
-                tooltip: 'Games menu',
-                onTap: onMenu!,
-              ),
-            ParentModeIconButton(onLongPress: onParentTap),
           ],
         ),
       ),
@@ -89,7 +97,12 @@ class _CircleIconButton extends StatelessWidget {
           icon: Icon(icon, color: AppColors.primaryPurple),
           tooltip: tooltip,
           iconSize: 24,
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          // Was 44 — below the 48dp minimum touch target (WCAG 2.2 SC 2.5.8),
+          // and these are the buttons children tap most.
+          constraints: const BoxConstraints(
+            minWidth: kMinInteractiveDimension,
+            minHeight: kMinInteractiveDimension,
+          ),
         ),
       ),
     );
