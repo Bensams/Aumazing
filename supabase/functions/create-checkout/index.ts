@@ -73,14 +73,15 @@ Deno.serve(async (req) => {
           attributes: {
             line_items: [
               {
-                name: "Aumazing Premium — Monthly",
+                name: "Aumazing Premium — 30 days",
                 amount: PREMIUM_AMOUNT_CENTAVOS,
                 currency: "PHP",
                 quantity: 1,
               },
             ],
             payment_method_types: ["card", "gcash", "grab_pay", "paymaya"],
-            description: "Aumazing Premium monthly subscription (sandbox)",
+            description:
+              "Aumazing Premium — 30 days of access, no auto-renewal (sandbox)",
             success_url: SUCCESS_URL,
             cancel_url: CANCEL_URL,
             send_email_receipt: false,

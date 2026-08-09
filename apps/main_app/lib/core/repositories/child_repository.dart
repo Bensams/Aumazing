@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../model/child_profile.dart';
@@ -47,7 +48,12 @@ class ChildRepository {
     required String avatar,
     ChildSex? sex,
     bool musicEnabled = true,
+    double musicVolume = 0.5,
+    String musicCategory = kDefaultBgmCategory,
+    double sfxVolume = 0.7,
     bool vibrationEnabled = true,
+    double promptSpeed = 1.0,
+    bool sensoryPreferencesSet = false,
     RewardPreference rewardPreference = RewardPreference.bubbles,
     bool useRandomReward = false,
   }) async {
@@ -62,7 +68,12 @@ class ChildRepository {
       avatar: avatar,
       sex: sex,
       musicEnabled: musicEnabled,
+      musicVolume: musicVolume,
+      musicCategory: musicCategory,
+      sfxVolume: sfxVolume,
       vibrationEnabled: vibrationEnabled,
+      promptSpeed: promptSpeed,
+      sensoryPreferencesSet: sensoryPreferencesSet,
       rewardPreference: rewardPreference,
       useRandomReward: useRandomReward,
       createdAt: now,

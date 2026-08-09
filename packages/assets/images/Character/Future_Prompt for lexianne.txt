@@ -1,0 +1,41 @@
+Gemini prompt — for a proper rest pose
+Her current artwork works as-is, but it's an open-mouth smile with arms slightly out, which makes an odd neutral rest that every other action inherits. Worth generating a dedicated one. Attach Lexianne_chibi.png:
+
+
+Using the attached chibi character as the exact reference, produce a single
+clean full-body REST pose of the same girl.
+
+IDENTITY: keep her exactly as drawn — same face, same large brown eyes, same
+long dark wavy hair, same white puff-sleeve dress, same thin gold necklace,
+same white strappy sandals, same flat 2D cartoon anime chibi style with thick
+clean outlines and soft cel shading.
+
+POSE: standing straight and centered, facing the viewer, both arms relaxed
+down at her sides, hands empty and relaxed, feet flat on the ground, calm
+friendly CLOSED-MOUTH smile, eyes open looking at the viewer. A neutral
+resting pose she could return to after any gesture.
+
+FRAMING: full body from the top of her hair to the soles of her shoes, all
+inside the frame with clear empty margin above her head and below her feet.
+Do not crop any part of her. Centered horizontally. Portrait 3:4.
+
+BACKGROUND: plain solid pure white, completely empty. No shadow under her, no
+floor, no gradient, no props, no text, no logos or brand marks, no watermark,
+no extra characters.
+Why each constraint matters, from what actually bit us:
+
+Closed mouth, arms down — the rest pose is the first frame of all nine clips. Whatever she's doing here, she does in every sheet.
+Pure white, no shadow — background removal floods inward from the frame border. A drop shadow survives it and shows as grey mush at her feet. Her white dress is safe; it's enclosed by dark outlines so it never touches the border.
+Margin on all sides — this was the bug that cost ~1,800 credits. Tight framing made seedance zoom in and crop the feet off 13 sheets.
+When you're ready
+
+# 1. Save the Gemini result over (or beside) her artwork:
+#    packages/assets/images/Character/Lexianne_chibi.png
+#    If you use a new filename, update CHARACTERS['lexianne']['from_image'].
+
+# 2. Generate all nine sheets (~1,500 credits, ~15 min):
+export KIE_API_KEY=...
+python scripts/generate_sprites.py lexianne
+
+# 3. Shrink them (16% of original size):
+python scripts/quantize_sprites.py --apply

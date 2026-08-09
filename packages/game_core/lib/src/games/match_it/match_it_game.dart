@@ -6,11 +6,13 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/matchable_shape.dart';
+import '../shared/answer_label.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// Data for a single match pair used in the Match It game.
 class MatchPairData {
@@ -23,6 +25,17 @@ class MatchPairData {
     required this.color,
     required this.label,
   });
+
+  /// The colour word from [label] — every label reads "<Colour> <Shape>".
+  String get colorName => label.split(' ').first;
+
+  /// The shape word, taken from [shape] rather than [label] so it always
+  /// matches the key the voice-over and painter use.
+  String get shapeName => shape.name;
+
+  /// What to say back when this pair is matched: "gold star".
+  AnswerLabel get answerLabel =>
+      AnswerLabel(color: colorName, shape: shapeName);
 }
 
 /// The core Flame game for "Match It".
@@ -45,6 +58,7 @@ class MatchItGame extends FlameGame
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -73,6 +87,11 @@ class MatchItGame extends FlameGame
   /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
   final void Function()? onCorrectMatch;
 
+  /// Optional callback fired on each wrong answer, alongside the wrong SFX and
+  /// the encouraging voice line. The Flutter layer uses it for the mascot's
+  /// reaction, so the character answers a mistake the same way the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
@@ -81,7 +100,11 @@ class MatchItGame extends FlameGame
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+
+  /// Immediate feedback on a correct match: the pair that was matched, so the
+  /// app can name it back ("gold star"). Praise is deliberately not played
+  /// here — it belongs to [onPlayCelebrationVo] at the end of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -128,6 +151,10 @@ class MatchItGame extends FlameGame
 
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
+
+  /// This round's three pairs, indexed by [MatchableShape.index], so a matched
+  /// shape can be traced back to the words that name it.
+  final List<MatchPairData> _roundPairs = [];
 
   /// Tracks indices of pairs already used in previous rounds to reduce
   /// repetition. Resets when the pool is exhausted.
@@ -285,16 +312,25 @@ class MatchItGame extends FlameGame
     // Record these pairs as used for cross-round dedup.
     _usedPairIndices.addAll(roundIndices);
 
+    _roundPairs
+      ..clear()
+      ..addAll(roundPairs);
+
     // Create a shuffled order for right column
     final rightOrder = List<int>.generate(3, (i) => i)..shuffle(rng);
 
     // Responsive layout constants
     final gameW = size.x;
     final gameH = size.y;
-    final cardSize = math.min(gameW / 5.0, gameH / 4.5);
+    // Lay out below the app's top overlay strip. Cards keep their full size
+    // whenever the remaining height allows it — they simply sit lower — and
+    // only shrink if the band genuinely leaves no room.
+    final availH = gameH - kTopOverlayBand;
+    var cardSize = math.min(gameW / 5.0, gameH / 4.5);
+    if (3.3 * cardSize > availH) cardSize = availH / 3.3;
     final cardGap = cardSize * 0.15;
     final totalHeight = 3 * cardSize + 2 * cardGap;
-    final startY = (gameH - totalHeight) / 2;
+    final startY = kTopOverlayBand + (availH - totalHeight) / 2;
     final leftX = gameW * 0.18;
     final rightX = gameW * 0.82 - cardSize;
 
@@ -463,9 +499,11 @@ class MatchItGame extends FlameGame
       // Notify Flutter layer of individual correct match (for haptic feedback)
       onCorrectMatch?.call();
 
-      // Play correct SFX and voice-over
+      // Play correct SFX, then name the pair the child just matched.
       onPlayCorrectSfx?.call();
-      onPlayCorrectVo?.call();
+      onPlayCorrectVo?.call(leftShape.index < _roundPairs.length
+          ? _roundPairs[leftShape.index].answerLabel
+          : AnswerLabel.none);
 
       leftShape.markMatched();
       rightShape.markMatched();
@@ -539,6 +577,7 @@ class MatchItGame extends FlameGame
       // Play wrong SFX and voice-over
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
+      onWrongAnswer?.call();
 
       // Record wrong response with details
       analyticsRecordWrong(extraData: {

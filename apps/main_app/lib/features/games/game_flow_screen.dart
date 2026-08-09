@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 
 import '../../providers/child_provider.dart';
 import '../home/home_screen.dart';
@@ -8,6 +9,8 @@ import 'copy_me/copy_me_screen.dart';
 import 'do_what_i_say/do_what_i_say_screen.dart';
 import 'match_it/match_it_screen.dart';
 import 'my_turn_your_turn/my_turn_your_turn_screen.dart';
+import '../../widgets/mascot.dart';
+import '../../widgets/mascot_host.dart';
 
 /// Game types available in the flow
 enum GameType {
@@ -19,6 +22,12 @@ enum GameType {
 
 /// Screen that manages a sequence of games with rewards between them
 /// Usage: GameFlowScreen(gameSequence: [GameType.copyMe, GameType.matchIt])
+///
+/// NOTE: nothing constructs this today — the shipping practice path is
+/// lobby → [GameLauncher.screenFor] → single game → [GameEndChoiceDialog],
+/// which chains games one at a time. Keep the two in step: behaviour added
+/// here (mascot gestures, rewards) must also be added to the game screens
+/// themselves, or it will never run.
 class GameFlowScreen extends StatefulWidget {
   final List<GameType> gameSequence;
   final VoidCallback? onComplete;
@@ -64,10 +73,39 @@ class GameFlowScreen extends StatefulWidget {
 class _GameFlowScreenState extends State<GameFlowScreen> {
   int _currentGameIndex = 0;
 
+  /// Owned here rather than by the host, because [_onGameComplete] runs above
+  /// the host in the tree and so cannot reach it via MascotHost.maybeOf.
+  final MascotController _mascot = MascotController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Pick this session's track once, here. The flow can run several games
+    // back to back, and re-picking between them would change the music
+    // underneath a child who is already settled — so the whole sitting keeps
+    // one track, and variety comes from the next session instead.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final childProvider = context.read<ChildProvider>();
+      context
+          .read<AudioService>()
+          .playCategoryMusic(childProvider.musicCategory, restart: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _mascot.dispose();
+    super.dispose();
+  }
+
   GameType get _currentGame => widget.gameSequence[_currentGameIndex];
   bool get _isLastGame => _currentGameIndex >= widget.gameSequence.length - 1;
 
   void _onGameComplete() {
+    // The mascot celebrates with the child before the reward overlay lands.
+    _mascot.play(MascotGesture.celebrate);
+
     // Show reward overlay
     final childProvider = context.read<ChildProvider>();
     
@@ -144,11 +182,20 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      // One mascot for the whole flow: it walks on once, then stays with the
+      // child across every game instead of reloading its sheets per screen.
+      // Games drive it through MascotHost.maybeOf(context).
+      body: MascotHost(
+        controller: _mascot,
+        height: 88,
+        alignment: Alignment.bottomLeft,
+        padding: const EdgeInsets.only(left: 12, bottom: 12),
+        semanticLabel: 'BPS the mascot',
+        child: Stack(
         children: [
           // Current game
           _buildCurrentGame(),
-          
+
           // Progress indicator overlay
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
@@ -205,6 +252,7 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

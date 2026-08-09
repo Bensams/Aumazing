@@ -68,12 +68,23 @@ void main() {
     });
 
     test(
-      'syncs only canonical child rows and maps them to public.children fields',
+      'syncs pending child rows and maps them to public.children fields',
       () async {
         await service.startSync();
 
-        expect(supabase.upsertedChildren, hasLength(1));
-        expect(supabase.upsertedChildren.single, {
+        // Legacy rows (no birth date) still sync — eligibility is decided by
+        // name/user/guest-ownership only, so nothing is stranded local-only.
+        // Ordered by local_created_at, so the legacy row goes up first.
+        expect(supabase.upsertedChildren, hasLength(2));
+        expect(supabase.upsertedChildren.first, {
+          'id': 'legacy-child',
+          'parent_user_id': 'parent-1',
+          'display_name': 'Legacy Child',
+          'birth_date': null,
+          'created_at': '2026-04-20T11:00:00.000',
+          'updated_at': '2026-04-21T00:00:00.000',
+        });
+        expect(supabase.upsertedChildren.last, {
           'id': 'sync-child',
           'parent_user_id': 'parent-1',
           'display_name': 'Mika',

@@ -11,6 +11,7 @@ export 'src/config/game_config.dart';
 export 'src/config/game_motion.dart';
 
 // Shared game components
+export 'src/games/shared/answer_label.dart';
 export 'src/games/shared/ghost_hand.dart';
 
 // Games — Match It

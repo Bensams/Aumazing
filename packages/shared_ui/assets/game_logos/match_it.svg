@@ -1,0 +1,49 @@
+<!--
+  Match It — two identical stars on facing cards, joined by a link.
+
+  All six game logos share one construction: a 240x240 rounded tile, a soft
+  two-stop diagonal wash in the game's own hue, three faint leaves for family
+  resemblance, then chunky white-outlined objects. Kept pastel on purpose —
+  the loud, saturated tile look would fight the calm palette the rest of the
+  app is built on (see the mascot/appearance notes).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <clipPath id="tile"><rect width="240" height="240" rx="48"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7FCBB0"/>
+      <stop offset="1" stop-color="#A6D8E8"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="240" height="240" rx="48" fill="url(#bg)"/>
+
+    <!-- Shared leaf motif -->
+    <g fill="#FFFFFF" opacity="0.14">
+      <ellipse cx="28" cy="36" rx="10" ry="23" transform="rotate(-28 28 36)"/>
+      <ellipse cx="214" cy="72" rx="9" ry="20" transform="rotate(34 214 72)"/>
+      <ellipse cx="38" cy="210" rx="9" ry="20" transform="rotate(22 38 210)"/>
+    </g>
+
+    <!-- The link between the pair: the "match" itself -->
+    <g stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" fill="#FFFFFF">
+      <line x1="112" y1="98" x2="130" y2="144"/>
+      <circle cx="112" cy="98" r="8" stroke="none"/>
+      <circle cx="130" cy="144" r="8" stroke="none"/>
+    </g>
+
+    <!-- Card A -->
+    <g transform="translate(70 82)">
+      <rect x="-40" y="-40" width="80" height="80" rx="20" fill="#FFFFFF"/>
+      <path d="M0,-26 L7.1,-9.7 L24.7,-8 L11.4,3.7 L15.3,21 L0,12 L-15.3,21 L-11.4,3.7 L-24.7,-8 L-7.1,-9.7 Z"
+            fill="#F5B942"/>
+    </g>
+
+    <!-- Card B — same shape, same colour: that is the answer -->
+    <g transform="translate(170 158)">
+      <rect x="-40" y="-40" width="80" height="80" rx="20" fill="#FFFFFF"/>
+      <path d="M0,-26 L7.1,-9.7 L24.7,-8 L11.4,3.7 L15.3,21 L0,12 L-15.3,21 L-11.4,3.7 L-24.7,-8 L-7.1,-9.7 Z"
+            fill="#F5B942"/>
+    </g>
+  </g>
+</svg>

@@ -7,10 +7,12 @@ import 'package:flame/game.dart';
 
 import 'components/trace_guide_dot.dart';
 import 'trace_glyphs.dart';
+import '../shared/answer_label.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// The core Flame game for "Trace It".
 ///
@@ -29,6 +31,7 @@ class TraceItGame extends FlameGame
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectTrace,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -55,13 +58,21 @@ class TraceItGame extends FlameGame
   /// Used by the Flutter layer for haptic feedback.
   final void Function()? onCorrectTrace;
 
+  /// Fired on each wrong attempt, alongside the wrong SFX and the encouraging
+  /// voice line. The Flutter layer uses it for the mascot's reaction, so the
+  /// character answers a mistake the same way the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
   final VoidCallback? onPlayTapSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+  /// Immediate feedback on a finished glyph: the letter or numeral the child
+  /// just traced, so the app can name it back ("A", "three"). Praise waits for
+  /// the end of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -129,10 +140,16 @@ class TraceItGame extends FlameGame
   // ── Layout / tolerance ───────────────────────────────────────────────
 
   /// Side of the centered square the glyph is scaled into.
-  double get _glyphSide => math.min(size.x * 0.55, size.y * 0.78);
+  double get _glyphSide => math.min(
+        math.min(size.x * 0.55, size.y * 0.78),
+        // Never taller than the space left below the overlay strip.
+        (size.y - kTopOverlayBand) * 0.98,
+      );
 
-  Vector2 get _glyphOrigin =>
-      Vector2((size.x - _glyphSide) / 2, (size.y - _glyphSide) / 2);
+  Vector2 get _glyphOrigin => Vector2(
+        (size.x - _glyphSide) / 2,
+        kTopOverlayBand + (size.y - kTopOverlayBand - _glyphSide) / 2,
+      );
 
   /// How far a finger may stray from the guide path and still count.
   /// Wider on easier tiers (and after an adaptive step-down).
@@ -378,6 +395,7 @@ class TraceItGame extends FlameGame
 
       onPlayWrongSfx?.call();
       onPlayWrongVo?.call();
+      onWrongAnswer?.call();
       analyticsRecordWrong(extraData: {
         'glyph': _glyph?.label,
         'stroke_index': _strokeIndex,
@@ -428,7 +446,7 @@ class TraceItGame extends FlameGame
       'finger_lifts': _liftCount,
       'avg_deviation_ratio': avgDeviation,
     });
-    onPlayCorrectVo?.call();
+    onPlayCorrectVo?.call(_glyphAnswerLabel());
 
     analyticsCompleteRound(successful: true);
 
@@ -602,5 +620,19 @@ class TraceItGame extends FlameGame
   void onRemove() {
     _cancelNoResponseTimer();
     super.onRemove();
+  }
+
+  /// What to say back for the glyph just traced.
+  ///
+  /// The glyph table mixes single characters ('A', '3') with named strokes
+  /// ('circle', 'line across'). Only the first kind has a recorded name, and
+  /// 'circle' happens to be a shape the library already says — anything else
+  /// resolves to nothing and the app stays quiet rather than inventing praise.
+  AnswerLabel _glyphAnswerLabel() {
+    final label = _glyph?.label;
+    if (label == null) return AnswerLabel.none;
+    if (label.length == 1) return AnswerLabel(letter: label);
+    if (label.toLowerCase() == 'circle') return const AnswerLabel(shape: 'circle');
+    return AnswerLabel.none;
   }
 }

@@ -343,6 +343,28 @@ class AuthService {
   User? get currentUser => _supabaseAuth.currentUser;
   bool get isLoggedIn => currentUser != null;
 
+  /// True when signed in with a permanent (bound) account — i.e. a Supabase
+  /// user that is not anonymous. Guest/anonymous sessions return false.
+  bool get isBoundAccount =>
+      currentUser != null && currentUser?.isAnonymous != true;
+
+  /// The account's confirmed email address, or null when the session is a
+  /// guest, has no email, or the address has not been confirmed yet.
+  ///
+  /// This gates the custom parent PIN: an emailed one-time code is the only
+  /// way back in after a forgotten PIN, so without a deliverable address a
+  /// parent could lock themselves out of the dashboard permanently.
+  String? get verifiedEmail {
+    final user = currentUser;
+    if (user == null || user.isAnonymous == true) return null;
+    final email = user.email;
+    if (email == null || email.isEmpty) return null;
+    return user.emailConfirmedAt == null ? null : email;
+  }
+
+  /// True when [verifiedEmail] is available.
+  bool get hasVerifiedEmail => verifiedEmail != null;
+
   /// Current guest ID (valid when in guest mode)
   String? get currentGuestId => _guestId;
 
@@ -607,12 +629,7 @@ class AuthService {
     try {
       final googleUser = await _googleAuth.attemptLightweightAuthentication();
       debugPrint('[GoogleAuth] Lightweight auth result: ${googleUser != null}');
-      if (googleUser != null) {
-        debugPrint(
-          '[GoogleAuth] Access token obtained: ${googleUser.accessToken}',
-        );
-        return googleUser;
-      }
+      if (googleUser != null) return googleUser;
     } catch (e) {
       debugPrint('[GoogleAuth] Lightweight auth failed: $e');
     }
@@ -621,28 +638,35 @@ class AuthService {
     try {
       final tokens = await _googleAuth.authenticate();
       debugPrint('[GoogleAuth] Interactive auth completed');
-      debugPrint('[GoogleAuth] Access token obtained: ${tokens.accessToken}');
       return tokens;
-    } on Exception catch (e) {
-      final errorString = e.toString();
-      debugPrint('[GoogleAuth] Interactive auth error: $errorString');
+    } on GoogleSignInException catch (e) {
+      // Branch on the plugin's own failure code rather than string-matching
+      // its toString(): a real user cancellation and a misconfigured OAuth
+      // client are indistinguishable once flattened to text, and reporting
+      // the wrong one sends you looking in the wrong place.
+      debugPrint(
+        '[GoogleAuth] Interactive auth failed: ${e.code} — ${e.description}',
+      );
+      throw AuthException(_googleFailureMessage(e));
+    }
+  }
 
-      if (errorString.contains('CancellationException') ||
-          errorString.contains('canceled') ||
-          errorString.contains('CANCELLED')) {
-        throw AuthException('Sign-in was cancelled. Please try again.');
-      }
-      if (errorString.contains('unknownError') ||
-          errorString.contains('10:') ||
-          errorString.contains('DEVELOPER_ERROR')) {
-        throw AuthException(
-          'Google Sign-In configuration error. Please check:\n'
-          '1. Android OAuth Client ID is created in Google Cloud Console\n'
-          '2. SHA-1 fingerprint is added to the Android OAuth client\n'
-          '3. Package name matches the OAuth configuration',
-        );
-      }
-      rethrow;
+  /// Maps a [GoogleSignInException] to a message that names the real cause.
+  /// New codes may be added by the plugin without a breaking change, so
+  /// anything unrecognised falls through to the diagnostic branch.
+  String _googleFailureMessage(GoogleSignInException e) {
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return 'Sign-in was cancelled. Please try again.';
+      case GoogleSignInExceptionCode.interrupted:
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Sign-in was interrupted. Please try again.';
+      default:
+        final detail = e.description?.trim();
+        return 'Google Sign-In could not complete (${e.code.name}'
+            '${detail == null || detail.isEmpty ? '' : ': $detail'}).\n'
+            'This usually means the Android OAuth client is missing, or its '
+            'SHA-1 fingerprint / package name do not match this build.';
     }
   }
 
@@ -841,5 +865,42 @@ class AuthService {
     }
     // Sign-out returns the user to login on next launch.
     await clearGuestEstablished();
+  }
+
+  // --- Delete Account ---
+
+  /// Permanently deletes the current account and all its cloud data via the
+  /// `delete-account` edge function, then clears every local trace of the
+  /// session. Throws if the server-side deletion fails.
+  Future<void> deleteAccount() async {
+    final response =
+        await Supabase.instance.client.functions.invoke('delete-account');
+    final data = response.data as Map<String, dynamic>?;
+    if (data?['deleted'] != true) {
+      throw AuthException(
+        (data?['error'] as String?) ?? 'Account deletion failed.',
+      );
+    }
+    debugPrint('[AuthService] Account deleted server-side');
+
+    try {
+      await GoogleSignIn.instance.disconnect();
+    } catch (e) {
+      debugPrint('Google delete-account cleanup: $e');
+    }
+    try {
+      await _facebookAuth.logOut();
+    } catch (e) {
+      debugPrint('Facebook delete-account cleanup: $e');
+    }
+    try {
+      // The server-side user is gone; local scope just drops the session.
+      await _supabaseAuth.signOut(scope: SignOutScope.local);
+    } catch (e) {
+      debugPrint('Supabase delete-account sign-out cleanup: $e');
+    }
+    await clearStoredGuestSession();
+    await clearGuestEstablished();
+    clearGuestMode();
   }
 }

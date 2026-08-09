@@ -44,8 +44,16 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   bool _showError = false;
 
   // ── Drag state ─────────────────────────────────────────────────────
+  /// The pointer is being tracked by the drag recognizer.
+  bool _pointerDown = false;
+
+  /// The pointer has travelled past [_tapSlop] — a real drag, not a tap.
   bool _dragging = false;
   Vector2? _dragStartPos;
+  final Vector2 _dragTravel = Vector2.zero();
+
+  /// Pointer travel (game px) below which a release counts as a tap.
+  static const double _tapSlop = 14.0;
 
   // ── Hint state ─────────────────────────────────────────────────────
   bool _isHint = false;
@@ -75,14 +83,18 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   static const double _cornerRadius = 24.0;
   static const double _borderWidth = 3.0;
 
-  // Selection happens on tap UP so a drag (which cancels the tap) does not
-  // also trigger a tap-match — letting tap and drag coexist cleanly.
+  // Flame's drag recognizer claims the pointer as soon as it moves at all,
+  // which knocks the tap recognizer out of the gesture arena — so on a
+  // component with both TapCallbacks and DragCallbacks, onTapUp only fires
+  // for a perfectly still finger. Children are never that still, so taps are
+  // resolved in onDragEnd instead (see [_tapSlop]); onTapUp remains as the
+  // path for the rare tap the arena does award to the tap recognizer.
   @override
   void onTapDown(TapDownEvent event) {}
 
   @override
   void onTapUp(TapUpEvent event) {
-    if (isMatched || _dragging) return;
+    if (isMatched || _pointerDown) return;
     onSelected(index);
   }
 
@@ -92,25 +104,46 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
     if (isMatched) return;
-    _dragging = true;
+    _pointerDown = true;
+    _dragging = false;
+    _dragTravel.setZero();
     _dragStartPos = position.clone();
-    priority = 100; // float above other shapes while dragging
-    add(ScaleEffect.to(
-      Vector2.all(1.1),
-      EffectController(duration: 0.1, curve: Curves.easeOut),
-    ));
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    if (isMatched || !_dragging) return;
+    if (isMatched || !_pointerDown) return;
+    _dragTravel.add(event.localDelta);
+
+    if (!_dragging) {
+      // Still tap-like: leave the card sitting in its slot so a shaky tap
+      // doesn't visibly nudge it.
+      if (_dragTravel.length < _tapSlop) return;
+      _dragging = true;
+      priority = 100; // float above other shapes while dragging
+      add(ScaleEffect.to(
+        Vector2.all(1.1),
+        EffectController(duration: 0.1, curve: Curves.easeOut),
+      ));
+      position += _dragTravel; // catch up on the travel so far
+      return;
+    }
+
     position += event.localDelta;
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (!_dragging) return;
+    if (!_pointerDown) return;
+    _pointerDown = false;
+
+    if (!_dragging) {
+      // Released without ever leaving the card — that was a tap.
+      if (!isMatched) onSelected(index);
+      return;
+    }
+
     _dragging = false;
     priority = 0;
     scale = Vector2.all(1.0);
@@ -124,6 +157,8 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
+    _pointerDown = false;
+    if (!_dragging) return;
     _dragging = false;
     priority = 0;
     scale = Vector2.all(1.0);

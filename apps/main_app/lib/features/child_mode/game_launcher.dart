@@ -12,6 +12,7 @@ import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/sari_sari_sort/sari_sari_sort_screen.dart';
 import '../games/trace_it/trace_it_screen.dart';
+import '../../widgets/mascot_host.dart';
 
 /// Shared launcher for practice (non-assessment) games.
 ///
@@ -96,7 +97,16 @@ class GameLauncher {
   }
 
   /// Builds the practice screen for [gameId], or null if unsupported.
+  ///
+  /// Wrapped in a [MascotHost] so the mascot keeps the child company during
+  /// play: the host must be an ANCESTOR of the game screen for the game's
+  /// MascotHost.maybeOf lookups to find it.
   static Widget? screenFor(String gameId, int difficulty) {
+    final game = _gameFor(gameId, difficulty);
+    return game == null ? null : MascotHost(child: game);
+  }
+
+  static Widget? _gameFor(String gameId, int difficulty) {
     switch (gameId) {
       case 'match_it':
         return MatchItScreen(

@@ -46,6 +46,9 @@ app.*.map.json
 # Gemini
 .gemini/
 
+# Hermes orchestrator
+tools/hermes/.env
+
 # AI Assessment (Python)
 ai_assessment/.env
 ai_assessment/__pycache__/
@@ -60,3 +63,30 @@ docs/aumazing-*.json
 
 # Build-time env config (dart-define-from-file) — real values never commit
 apps/main_app/env/dev.json
+
+# Generated sprite clips + extracted frames (scripts/generate_sprites.py)
+.sprite_cache/
+
+# Discarded sprite takes kept for inspection, not shipped or versioned
+packages/shared_ui/assets/characters/Archive/
+
+# AVP presenter footage (scripts/generate_avp.py) — video, regenerable, not app assets
+avp_out/
+
+# Agent / editor local state
+.claude/
+.obsidian/
+
+# Local scratch + generated output
+debug/
+graphify-out/
+
+# Backup of a corrupted .git directory — kept on disk, never versioned
+.git.corrupt-backup/
+
+# Windows artifact from a stray `> nul` redirect
+nul
+
+# Coursework deliverables live in Downloads, not in the repo
+/proposal/
+/*.docx

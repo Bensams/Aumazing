@@ -231,6 +231,7 @@ class _TestChildProvider extends ChildProvider {
   Future<void> updateComfortSettings({
     bool? musicEnabled,
     double? musicVolume,
+    String? musicCategory,
     double? sfxVolume,
     bool? vibrationEnabled,
     double? animationIntensity,
@@ -298,7 +299,11 @@ class _FakeAudioService extends AudioService {
   Future<void> playRandomMusic(List<String> trackNames) async {}
 
   @override
-  Future<void> playSfx(String sfxName) async {}
+  Future<void> playCategoryMusic(String? categoryKey,
+      {bool restart = false}) async {}
+
+  @override
+  Future<void> playSfx(String sfxName, {double volumeScale = 1.0}) async {}
 
   @override
   Future<void> playButtonTap() async {}

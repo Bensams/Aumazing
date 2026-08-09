@@ -22,7 +22,16 @@ class GameEntry {
   final String description;
 
   /// Icon displayed on the game card.
+  ///
+  /// Kept alongside [logoAsset] as the small-space and fallback form: it is
+  /// what a monochrome chip or a failed SVG decode falls back to.
   final IconData icon;
+
+  /// The game's own illustrated logo tile, as a shared_ui asset path.
+  ///
+  /// Rendered by `GameLogo`. Full path (`packages/shared_ui/assets/...`) so any
+  /// app in the workspace can show it without declaring the asset itself.
+  final String logoAsset;
 
   /// Background gradient colors for the game card.
   final List<Color> gradientColors;
@@ -48,6 +57,7 @@ class GameEntry {
     required this.name,
     required this.description,
     required this.icon,
+    required this.logoAsset,
     required this.gradientColors,
     required this.categories,
     required this.create,
@@ -61,12 +71,18 @@ class GameEntry {
 class GameRegistry {
   GameRegistry._();
 
+  /// Path to a game's illustrated logo tile, which lives in shared_ui so
+  /// main_app and game_lab both get it from the package bundle.
+  static String _logo(String id) =>
+      'packages/shared_ui/assets/game_logos/$id.svg';
+
   static final List<GameEntry> games = [
     GameEntry(
       id: 'match_it',
       name: 'Match It',
       description: 'Tap shapes that look the same to make a match.',
       icon: Icons.extension_rounded,
+      logoAsset: _logo('match_it'),
       categories: [SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFD4F4E8),
@@ -110,6 +126,7 @@ class GameRegistry {
       name: 'Copy Me',
       description: 'Watch the sequence, then copy it!',
       icon: Icons.content_copy_rounded,
+      logoAsset: _logo('copy_me'),
       categories: [SkillCategory.communication, SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFFFF3D4),
@@ -153,6 +170,7 @@ class GameRegistry {
       name: 'Do What I Say',
       description: 'Follow the instructions to tap the right shape!',
       icon: Icons.record_voice_over_rounded,
+      logoAsset: _logo('do_what_i_say'),
       categories: [SkillCategory.communication],
       gradientColors: [
         const Color(0xFFE8DEFA),
@@ -198,6 +216,7 @@ class GameRegistry {
       name: 'My Turn, Your Turn',
       description: 'Take turns placing shapes with your buddy!',
       icon: Icons.people_rounded,
+      logoAsset: _logo('my_turn_your_turn'),
       categories: [SkillCategory.socialInteraction],
       gradientColors: [
         const Color(0xFFD4E8FA),
@@ -243,6 +262,7 @@ class GameRegistry {
       name: 'Sari-Sari Store Sorting',
       description: 'Drag each item into the right basket at the store!',
       icon: Icons.storefront_rounded,
+      logoAsset: _logo('sari_sari_sort'),
       categories: [SkillCategory.playSkills, SkillCategory.communication],
       gradientColors: [
         const Color(0xFFFFF3D4),
@@ -288,6 +308,7 @@ class GameRegistry {
       name: 'Trace It',
       description: 'Trace the letter or number with your finger!',
       icon: Icons.gesture_rounded,
+      logoAsset: _logo('trace_it'),
       categories: [SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFD4E8FA),

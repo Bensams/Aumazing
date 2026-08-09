@@ -8,7 +8,7 @@ import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
-import '../../widgets/bps_mascot.dart';
+import '../../widgets/mascot.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -309,7 +309,7 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
   /// gentle breathing idle. Falls back to the celebration-emoji circle while
   /// the sprite sheets are still loading (or if they fail to load).
   Widget _buildMascot(BuildContext context) {
-    return BpsMascot(
+    return Mascot(
       height: 140,
       fallback: Container(
         width: 80,

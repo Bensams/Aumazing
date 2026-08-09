@@ -19,6 +19,7 @@ import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
+import '../../widgets/mascot_host.dart';
 
 import 'sensory/sensory.dart';
 import 'waiting_for_parent_screen.dart';
@@ -671,13 +672,15 @@ class _PreAssessmentProgressScreenState
         Navigator.of(context)
             .push(
           MaterialPageRoute(
-            builder: (_) => MatchItScreen(
-              assessmentContext: 'pre_assessment',
-              sensoryController: _sensoryController,
-              onComplete: (score, total, errors, time) {
-                // Call _onGameComplete to handle reward and advancement
-                _onGameComplete(gameId, score, total, errors, time);
-              },
+            builder: (_) => MascotHost(
+              child: MatchItScreen(
+                assessmentContext: 'pre_assessment',
+                sensoryController: _sensoryController,
+                onComplete: (score, total, errors, time) {
+                  // Call _onGameComplete to handle reward and advancement
+                  _onGameComplete(gameId, score, total, errors, time);
+                },
+              ),
             ),
           ),
         );
@@ -686,8 +689,10 @@ class _PreAssessmentProgressScreenState
         return;
     }
 
+    // The mascot keeps the child company through pre-assessment too; the host
+    // must sit above the game screen for its lookups to resolve.
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
+      MaterialPageRoute(builder: (_) => MascotHost(child: screen)),
     );
   }
 }

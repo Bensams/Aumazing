@@ -91,7 +91,13 @@ void main() {
     await tester.binding.setSurfaceSize(_phonePortrait);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(_wrap(const PremiumUpgradeScreen()));
+    await tester.pumpWidget(
+      _wrap(
+        PremiumUpgradeScreen(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 

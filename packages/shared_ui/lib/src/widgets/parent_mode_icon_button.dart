@@ -27,6 +27,11 @@ class _ParentModeIconButtonState extends State<ParentModeIconButton> {
       hint: 'Long press to exit child mode',
       button: true,
       onLongPress: widget.onLongPress,
+      // Without this, the inner GestureDetector publishes a second
+      // long-pressable node at the same bounds, and Accessibility Scanner
+      // reports "Multiple long clickable items share this location" on every
+      // child screen. One node, one name.
+      excludeSemantics: true,
       child: Tooltip(
         message: 'Exit child mode (long press)',
         child: GestureDetector(
@@ -38,8 +43,10 @@ class _ParentModeIconButtonState extends State<ParentModeIconButton> {
             scale: _pressing ? 0.9 : 1.0,
             duration: AppAnimations.tapFeedback,
             child: Container(
-              width: 44,
-              height: 44,
+              // 48dp is the minimum touch target Android's Accessibility
+              // Scanner and WCAG 2.2 SC 2.5.8 ask for; this used to be 44.
+              width: kMinInteractiveDimension,
+              height: kMinInteractiveDimension,
               decoration: BoxDecoration(
                 color: AppColors.white.withAlpha(200),
                 shape: BoxShape.circle,

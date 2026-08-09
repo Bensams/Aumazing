@@ -173,6 +173,7 @@ class _DashboardBody extends StatelessWidget {
     final back = IconButton(
       icon: const Icon(Icons.arrow_back_rounded),
       color: AppColors.primaryPurple,
+      tooltip: 'Back',
       onPressed: () => Navigator.of(context).pop(),
     );
     final title = Text(

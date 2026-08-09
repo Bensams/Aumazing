@@ -1,6 +1,5 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
@@ -14,6 +13,8 @@ import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
+import '../../../widgets/mascot.dart';
+import '../../../widgets/mascot_host.dart';
 
 /// Screen wrapper for the Do What I Say game during pre-assessment.
 class DoWhatISayScreen extends StatefulWidget {
@@ -84,7 +85,9 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
     widget.sensoryController?.applyRoundConfig(1);
 
     _voiceOverService = VoiceOverService(
-        languageCode: context.read<ChildProvider>().language.slug);
+      languageCode: context.read<ChildProvider>().voiceAssetFolder,
+      speed: context.read<ChildProvider>().voicePlaybackRate,
+    );
     final childId = context.read<ChildProvider>().profile?.id ?? 'unknown';
     final audioService = context.read<AudioService>();
     GameMotion.reduced = context.read<ChildProvider>().reducedMotion;
@@ -102,9 +105,16 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
       onPlayWrongSfx: () => audioService.playWrongSfx(),
       onPlayTapSfx: () => audioService.playGameTapSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
-      onPlayGameCompleteSfx: () => audioService.playGameCompleteSfx(),
+      onPlayGameCompleteSfx: () => audioService.playGameCompleteCelebration(),
       // Voice-over callbacks
-      onPlayCorrectVo: () => _voiceOverService.playCorrectPraise(),
+      // Immediate feedback names what was just answered ("red circle");
+      // praise is saved for the end-of-game reward.
+      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
+        color: label.color,
+        shape: label.shape,
+        letter: label.letter,
+        item: label.item,
+      ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.listen),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
@@ -131,6 +141,9 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           context.read<HapticService>().correctFeedback();
         }
       },
+      // A wrong answer gets a brief "oh, not quite" that resolves into an
+      // encouraging pose — the mascot never blames or despairs at the child.
+      onWrongAnswer: () => MascotHost.maybeOf(context)?.reassure(),
       onStepChanged: (step) {
         setState(() {
           _currentStep = step;
@@ -157,6 +170,11 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           _gameComplete = true;
           _showCelebration = true;
         });
+
+        // Celebrate with the child before the reward overlay lands. The
+        // overlay and its barrier are transparent, so the mascot stays
+        // visible under it.
+        MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
 
         // Trigger game-complete haptic feedback
         if (context.read<ChildProvider>().vibrationEnabled) {
@@ -272,9 +290,14 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
   void _retryGame() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => DoWhatISayScreen(
-          assessmentContext: widget.assessmentContext,
-          sensoryController: widget.sensoryController,
+        // A pushed route leaves the old host behind, so the replacement
+        // screen carries its own — without it the mascot is simply absent
+        // for the whole retry, reactions included.
+        builder: (_) => MascotHost(
+          child: DoWhatISayScreen(
+            assessmentContext: widget.assessmentContext,
+            sensoryController: widget.sensoryController,
+          ),
         ),
       ),
     );
@@ -348,10 +371,11 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
 
           // Flutter: Voice-over prompt (overlay)
           Positioned(
-            bottom: 12,
-            left: 0,
-            right: 0,
+            // Inside the reserved band, hard into the upper-left corner.
+            top: MediaQuery.of(context).padding.top + 8,
+            left: AppSpacing.md,
             child: VoiceOverPromptBubble(
+              showText: context.watch<ChildProvider>().showTextPrompts,
               text: _instruction,
               isVisible: !_gameComplete,
               onPlayVoiceOver: _lastInstructionCues.isNotEmpty

@@ -22,7 +22,7 @@ import 'auth/login_screen.dart';
 ///
 /// Pre-loads and initializes:
 /// - Background video
-/// - Audio files (bg_music.ogg, bg_music1.ogg, ui_tap.wav)
+/// - Audio files (the default background-music category, ui_tap.wav)
 /// - Other critical assets
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({
@@ -48,11 +48,18 @@ class _LoadingScreenState extends State<LoadingScreen> {
   double _progress = 0.0;
   String _status = 'Preparing...';
 
+  /// Warmed before the first note plays, so the opening track never stutters.
+  ///
+  /// The child's profile is not loaded yet at this point, so this screen plays
+  /// the default category — and every track in it is a candidate for the
+  /// random pick, so all of them are pre-cached.
   final List<String> _assetsToPreload = [
-    'packages/shared_audio/assets/audio/bg_music.ogg',
-    'packages/shared_audio/assets/audio/bg_music1.ogg',
+    for (final track in bgmCategoryOrDefault(kDefaultBgmCategory).tracks)
+      'packages/shared_audio/assets/audio/'
+          '${bgmCategoryOrDefault(kDefaultBgmCategory).trackPath(track)}',
     'packages/shared_audio/assets/audio/ui_tap.wav',
   ];
+
 
   @override
   void initState() {
@@ -173,7 +180,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
     // Start music playing - it will continue through to LoginScreen
     try {
       debugPrint('[LoadingScreen] Starting music...');
-      await audioService.playRandomMusic(['bg_music.ogg', 'bg_music1.ogg']);
+      // No profile yet — the default category plays until HomeScreen loads the
+      // child's own choice and switches if it differs.
+      await audioService.playCategoryMusic(kDefaultBgmCategory);
       debugPrint('[LoadingScreen] Music started, will continue to LoginScreen');
     } catch (e, stackTrace) {
       debugPrint('[LoadingScreen] ✖ Music start error: $e');

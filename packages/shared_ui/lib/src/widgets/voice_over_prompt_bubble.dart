@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -16,12 +18,21 @@ class VoiceOverPromptBubble extends StatefulWidget {
     super.key,
     required this.text,
     this.isVisible = true,
+    this.showText = true,
     this.onPlayVoiceOver,
     this.autoPlayOnAppear = true,
   });
 
   final String text;
+
+  /// Whether the prompt is *active*. This drives the voice-over, so it stays
+  /// true even when the caption itself is turned off.
   final bool isVisible;
+
+  /// Whether the caption is drawn. Turning this off hides the text but leaves
+  /// [isVisible] — and therefore the spoken prompt — untouched, so a child who
+  /// can't read still hears the instruction.
+  final bool showText;
 
   /// Optional callback to play voice-over audio. Called when the bubble
   /// appears (if [autoPlayOnAppear] is true) and when the speaker icon
@@ -83,41 +94,65 @@ class _VoiceOverPromptBubbleState extends State<VoiceOverPromptBubble> {
           ),
         );
       },
-      child: widget.isVisible
-          ? Container(
-              key: const ValueKey('voice_over_prompt_bubble_visible'),
-              constraints: const BoxConstraints(maxWidth: 400),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.white.withAlpha(230),
-                borderRadius: AppRadius.largeBorder,
-                boxShadow: AppShadows.card,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: widget.onPlayVoiceOver,
-                    child: const Icon(
-                      Icons.volume_up_rounded,
-                      color: AppColors.primaryPurple,
-                      size: 22,
+      child: (widget.isVisible && widget.showText)
+          ? Semantics(
+              // The speaker icon used to be the only thing that replayed the
+              // prompt: a 22dp tap target with no accessible name, on the one
+              // control a child who missed the instruction needs most. The
+              // whole bubble is the button now — far easier to hit with
+              // developing fine motor control — and it carries a single named
+              // node instead of an unlabelled inner one.
+              button: true,
+              label: widget.text,
+              hint: 'Plays the instruction again',
+              excludeSemantics: true,
+              onTap: widget.onPlayVoiceOver,
+              child: GestureDetector(
+                onTap: widget.onPlayVoiceOver,
+                child: Container(
+                  key: const ValueKey('voice_over_prompt_bubble_visible'),
+                  // Capped against the screen as well as an absolute maximum:
+                  // the bubble sits in the upper-left of a bar whose centre
+                  // holds the progress dots, and a fixed 400 would reach them
+                  // on a narrow landscape phone. The minimum height keeps the
+                  // bubble at or above the 48dp touch target minimum.
+                  constraints: BoxConstraints(
+                    minHeight: kMinInteractiveDimension,
+                    maxWidth: math.min(
+                      400,
+                      MediaQuery.sizeOf(context).width * 0.38,
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Flexible(
-                    child: Text(
-                      widget.text,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.foreground,
-                        fontWeight: FontWeight.w600,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withAlpha(230),
+                    borderRadius: AppRadius.largeBorder,
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.volume_up_rounded,
+                        color: AppColors.primaryPurple,
+                        size: 22,
                       ),
-                    ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Flexible(
+                        child: Text(
+                          widget.text,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.foreground,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             )
           : const SizedBox(

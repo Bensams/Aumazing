@@ -7,11 +7,13 @@ import 'package:flutter/painting.dart';
 
 import 'components/game_piece.dart';
 import 'components/turn_slot.dart';
+import '../shared/answer_label.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_layout.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
@@ -32,6 +34,7 @@ class MyTurnYourTurnGame extends FlameGame
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectMatch,
+    this.onWrongAnswer,
     // Audio event callbacks (optional, wired by screen wrappers)
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -75,6 +78,12 @@ class MyTurnYourTurnGame extends FlameGame
   /// Optional callback fired on each correct child turn (for haptics).
   final void Function()? onCorrectMatch;
 
+  /// Optional callback fired when the child taps out of turn, alongside the
+  /// wrong SFX and the encouraging voice line. The Flutter layer uses it for
+  /// the mascot's reaction, so the character answers a mistake the same way
+  /// the audio does.
+  final void Function()? onWrongAnswer;
+
   // ── Audio event callbacks ────────────────────────────────────────────
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
@@ -83,7 +92,11 @@ class MyTurnYourTurnGame extends FlameGame
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+  /// Immediate feedback on a correct turn. Taking a turn in the right order
+  /// is a sequence, not a thing with a name, so this always carries
+  /// [AnswerLabel.none] and the app stays quiet — the drop SFX is the
+  /// feedback. Praise waits for the end of the game.
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
@@ -201,12 +214,15 @@ class MyTurnYourTurnGame extends FlameGame
     const rows = 2;
     final centreLeft = gameW * 0.20;
     final centreW = gameW * 0.60;
-    final cardSize = math.min(centreW / (cols + 0.4), gameH / (rows + 1.2));
+    final availH = gameH - kTopOverlayBand;
+    var cardSize = math.min(centreW / (cols + 0.4), gameH / (rows + 1.2));
+    final rowSpan = rows + (rows - 1) * 0.18;
+    if (rowSpan * cardSize > availH) cardSize = availH / rowSpan;
     final gap = cardSize * 0.18;
     final gridW = cols * cardSize + (cols - 1) * gap;
     final gridH = rows * cardSize + (rows - 1) * gap;
     final startX = centreLeft + (centreW - gridW) / 2;
-    final startY = (gameH - gridH) / 2;
+    final startY = kTopOverlayBand + (gameH - kTopOverlayBand - gridH) / 2;
 
     for (var i = 0; i < _slotsPerRound; i++) {
       final col = i % cols;
@@ -404,7 +420,7 @@ class MyTurnYourTurnGame extends FlameGame
 
       onPlayDropSfx?.call();
       onPlayCorrectSfx?.call();
-      onPlayCorrectVo?.call();
+      onPlayCorrectVo?.call(AnswerLabel.none);
       onCorrectMatch?.call();
 
       _adaptive.recordCorrect();
@@ -442,6 +458,7 @@ class MyTurnYourTurnGame extends FlameGame
 
     onPlayWrongSfx?.call();
     onPlayWrongVo?.call();
+    onWrongAnswer?.call();
     analyticsRecordOffTaskAction(actionType: 'early_tap_slot_buddy_turn');
     analyticsRecordWrong(extraData: {
       'error_type': 'impulse_control',
@@ -593,27 +610,6 @@ class MyTurnYourTurnGame extends FlameGame
     super.onRemove();
   }
 
-  @override
-  void render(Canvas canvas) {
-    final text =
-        _isBuddyTurn ? "$_buddyEmoji Buddy's turn…" : '$avatar Your turn!';
-    final color =
-        _isBuddyTurn ? const Color(0xFF9B82C4) : const Color(0xFF5DAF8E);
-    final fontSize = (size.x * 0.04).clamp(16.0, 28.0);
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(size.x / 2 - tp.width / 2, 12));
-
-    super.render(canvas);
-  }
+  // The turn label is not drawn on the canvas: the screen shows it in the
+  // upper-left VoiceOverPromptBubble via onTurnChanged.
 }

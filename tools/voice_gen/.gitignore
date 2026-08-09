@@ -1,0 +1,7 @@
+# Generated audio and local environment - never commit these.
+out/
+.venv/
+.venv.corrupt/
+__pycache__/
+install.log
+.env

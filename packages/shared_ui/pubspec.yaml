@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.3.2
+  # Per-game logo tiles are vector art (see assets/game_logos/).
+  flutter_svg: ^2.0.17
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +21,4 @@ dev_dependencies:
 flutter:
   assets:
     - assets/characters/
+    - assets/game_logos/

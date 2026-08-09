@@ -12,6 +12,7 @@ import '../model/gameplay_session.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../model/area_level.dart';
 import '../services/ai_assessment_service.dart';
+import '../services/entitlement_service.dart';
 import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
 import '../services/research_consent_service.dart';
@@ -70,6 +71,15 @@ class AssessmentProvider extends ChangeNotifier {
   bool get hasPreAssessment => _preResults.isNotEmpty;
   bool get hasPostAssessment => _postResults.isNotEmpty;
   bool get hasRecommendation => _recommendation != null;
+
+  /// Freemium cycle gate: the first assessment cycle (pre-assessment →
+  /// recommended module → post-assessment) is free forever. Every learning
+  /// path generated AFTER a post-assessment belongs to a later cycle and
+  /// needs an active Premium period. Evaluated live off the entitlement,
+  /// so an expired subscription re-locks it and a renewal re-opens it —
+  /// no stored state to migrate.
+  bool get nextCycleLocked =>
+      hasPostAssessment && !EntitlementService.instance.isPremium;
 
   /// The latest AI prediction result, or null if unavailable.
   AiAssessmentResponse? get aiPrediction => _aiPrediction;

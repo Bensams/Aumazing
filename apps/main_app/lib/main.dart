@@ -10,11 +10,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/supabase_config.dart';
 import 'core/offline_first_integration.dart';
+import 'features/parent_lock/parent_pin_delegate.dart';
 import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
 import 'services/entitlement_service.dart';
+import 'services/parent_pin_service.dart';
 import 'services/rubric/rubric_threshold_service.dart';
 
 /// True for transient network failures (offline, DNS, unreachable host) —
@@ -45,11 +47,9 @@ Future<void> main() async {
     return false; // let the default handler report it
   };
 
-  // Force landscape orientation globally
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  // Phones auto-rotate; tablets are landscape-only. Games re-lock landscape
+  // themselves when entered.
+  lockParentAdaptive();
 
   // Enable fullscreen mode to hide mobile header/status bar
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -78,6 +78,12 @@ Future<void> main() async {
   // Admin-configured rubric thresholds: cache-first with hardcoded
   // defaults, so scoring works offline; refreshed in the background.
   RubricThresholdService.instance.load();
+
+  // Parent lock: load the account's PIN state (and follow account changes),
+  // then install the delegate so every ParentVerificationDialog call site
+  // picks the right challenge without knowing which one is configured.
+  ParentPinService.instance.init();
+  ParentVerificationDialog.pinDelegate = const AppParentPinDelegate();
 
   runApp(const MyApp());
 }

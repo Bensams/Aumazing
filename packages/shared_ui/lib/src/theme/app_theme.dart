@@ -18,7 +18,7 @@ abstract final class AppTheme {
         onSecondary: AppColors.foreground,
         surface: AppColors.white,
         onSurface: AppColors.foreground,
-        error: AppColors.destructiveSoftRed,
+        error: AppColors.destructiveRed,
         onError: AppColors.white,
         outline: AppColors.border,
       ),
@@ -76,17 +76,17 @@ abstract final class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadius.button,
-          borderSide: const BorderSide(color: AppColors.destructiveSoftRed),
+          borderSide: const BorderSide(color: AppColors.destructiveRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: AppRadius.button,
-          borderSide: const BorderSide(color: AppColors.destructiveSoftRed, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.destructiveRed, width: 1.5),
         ),
         labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
         hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
         prefixIconColor: AppColors.mutedForeground,
         suffixIconColor: AppColors.mutedForeground,
-        errorStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.destructiveSoftRed),
+        errorStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.destructiveRed),
       ),
 
       // ── Elevated buttons ─────────────────────────────────────────────

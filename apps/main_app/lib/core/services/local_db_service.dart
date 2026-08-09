@@ -94,7 +94,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 15; // v15: Add sync_attempts to syncable tables
+  static const _dbVersion = 16; // v16: Add music_category to children
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -157,6 +157,7 @@ class LocalDbService {
         sex TEXT,
         music_enabled INTEGER NOT NULL DEFAULT 1,
         music_volume REAL NOT NULL DEFAULT 0.5,
+        music_category TEXT NOT NULL DEFAULT 'soft_relaxing',
         sfx_volume REAL NOT NULL DEFAULT 0.7,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
         animation_intensity REAL NOT NULL DEFAULT 1.0,
@@ -843,6 +844,21 @@ class LocalDbService {
         }
       }
       debugPrint('[LocalDbService] Added sync_attempts column to syncable tables (v15)');
+    }
+
+    if (oldVersion < 16) {
+      // Migration from v15 to v16: the parent can now pick a background-music
+      // category. Existing children keep the calmest one, which is the safest
+      // default for a child whose sensitivity has not been assessed.
+      try {
+        await db.execute(
+          "ALTER TABLE ${LocalTables.children} ADD COLUMN music_category "
+          "TEXT NOT NULL DEFAULT 'soft_relaxing'",
+        );
+      } catch (_) {
+        // Column already present — safe to skip.
+      }
+      debugPrint('[LocalDbService] Added music_category column to children (v16)');
     }
   }
 
