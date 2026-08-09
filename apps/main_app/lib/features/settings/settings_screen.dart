@@ -384,40 +384,20 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         'A custom background is in use, so the theme above '
                         'only sets the button and card colours.',
                       ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // ── Custom background ─────────────────────────────────
-                _SettingsCard(
-                  children: [
-                    const _SectionLabel('Custom Background'),
-                    const SizedBox(height: 2),
-                    const _HintText(
-                      'Pick your own colour for your child\'s game screens, '
-                      'or blend two. This replaces the theme background above '
-                      'and is used for every game, so the screens stay '
-                      'predictable.',
-                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    BackgroundPicker(childProv: childProv),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // ── Game objects ──────────────────────────────────────
-                _SettingsCard(
-                  children: [
-                    const _SectionLabel('Game Objects'),
-                    const SizedBox(height: 2),
-                    const _HintText(
-                      'Sets the card behind each shape, picture and item, and '
-                      'the outline around it. A plain card colour with an '
-                      'outline makes objects easier to tell apart — helpful '
-                      'if your child struggles to pick out a shape.',
+                    const Divider(height: 1),
+                    // The detailed controls live on their own page: the
+                    // wheel, swatches and two previews are far too tall to
+                    // sit inline in a list of one-line settings.
+                    _CustomiseTile(
+                      childProv: childProv,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              _AppearanceSettingsScreen(palette: palette),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ObjectStylePicker(childProv: childProv),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -584,6 +564,226 @@ class _ChildPreferencesScreen extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Appearance (custom background + game objects)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Row inside the Background Theme card that opens the appearance page.
+///
+/// Summarises what is currently set so the parent can see the state without
+/// opening it — the point of moving the controls out was to shorten this
+/// list, which is lost if they then have to go in to check.
+class _CustomiseTile extends StatelessWidget {
+  const _CustomiseTile({required this.childProv, required this.onTap});
+
+  final ChildProvider childProv;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = childProv.customBackground;
+    final style = childProv.objectStyle;
+
+    final backgroundText = background == null
+        ? 'Theme background'
+        : background.kind == ChildBackgroundKind.solid
+            ? 'Custom colour'
+            : 'Custom blend';
+    final outlineText = style.hasOutline
+        ? '${style.outline.label.toLowerCase()} outline'
+        : 'no outline';
+    final summary = '$backgroundText · $outlineText';
+
+    return Semantics(
+      button: true,
+      label: 'Customise background and objects. Currently $summary',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: kMinInteractiveDimension),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            children: [
+              Icon(Icons.tune_rounded,
+                  size: 20, color: AppColors.primaryPurple),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Customise background and objects',
+                      style: AppTextStyles.labelLarge
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      summary,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.mutedForeground),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The custom background and game-object editors, on two tabs.
+///
+/// These live on their own page rather than inline in Child Preferences:
+/// each carries a colour wheel and a live game preview, and stacked inline
+/// they buried the shorter settings underneath them. Two tabs rather than
+/// one long scroll because the two things are independent — a parent
+/// adjusting the outline is not also adjusting the background.
+class _AppearanceSettingsScreen extends StatelessWidget {
+  const _AppearanceSettingsScreen({required this.palette});
+
+  final GamePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(gradient: palette.parentBackground),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                      AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      Material(
+                        color: AppColors.white.withAlpha(220),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: Icon(Icons.arrow_back_rounded,
+                              color: palette.primary),
+                          tooltip: 'Back',
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withAlpha(235),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.palette_rounded,
+                            color: palette.primary),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Flexible(
+                        child: Text(
+                          'Appearance',
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.white.withAlpha(200),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TabBar(
+                      labelColor: palette.primary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: palette.primary,
+                      // Full-width targets rather than text-width ones.
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      tabs: const [
+                        Tab(text: 'Background', height: kMinInteractiveDimension),
+                        Tab(
+                            text: 'Game objects',
+                            height: kMinInteractiveDimension),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Consumer<ChildProvider>(
+                    builder: (context, childProv, _) => TabBarView(
+                      children: [
+                        _AppearanceTab(
+                          hint: 'Pick your own colour for your child\'s game '
+                              'screens, or blend two. This replaces the theme '
+                              'background and is used for every game, so the '
+                              'screens stay predictable.',
+                          child: BackgroundPicker(childProv: childProv),
+                        ),
+                        _AppearanceTab(
+                          hint: 'Sets the card behind each shape, picture and '
+                              'item, and the outline around it. A plain card '
+                              'colour with an outline makes objects easier to '
+                              'tell apart — helpful if your child struggles to '
+                              'pick out a shape.',
+                          child: ObjectStylePicker(childProv: childProv),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tab's scrollable body, matching the settings pages' card look.
+class _AppearanceTab extends StatelessWidget {
+  const _AppearanceTab({required this.hint, required this.child});
+
+  final String hint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: _SettingsCard(
+            children: [
+              _HintText(hint),
+              const SizedBox(height: AppSpacing.sm),
+              child,
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

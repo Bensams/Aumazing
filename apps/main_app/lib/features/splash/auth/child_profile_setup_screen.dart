@@ -97,6 +97,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     // On step 1, validation already happened in _goToNextStep()
     if (_currentStep == 0 && !(_formKey.currentState?.validate() ?? false)) return;
     
+    // Checked in the order the fields are shown, so the error names the
+    // first thing missing down the page rather than jumping past it.
+    if (_selectedSex == null) {
+      _showError("Please select your child's gender.");
+      return;
+    }
     final validation = validateBirthDate(_selectedBirthDate);
     if (validation == ChildBirthDateValidation.missing) {
       _showError('Please select your child\'s birth date.');
@@ -107,10 +113,6 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       return;
     }
     // Ages outside 2–6 are allowed at initialization (no age-range limit).
-    if (_selectedSex == null) {
-      _showError("Please select your child's gender.");
-      return;
-    }
 
     setState(() => _isLoading = true);
 
@@ -376,9 +378,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               const SizedBox(height: AppSpacing.lg),
               _buildForm(),
               const SizedBox(height: AppSpacing.xl),
-              _buildBirthDateSelector(),
-              const SizedBox(height: AppSpacing.xl),
+              // Name → gender → birth date. Gender is a two-tap choice and
+              // the date opens a modal picker, so asking the quick question
+              // before the interrupting one keeps the run of fields moving.
               _buildGenderSelector(),
+              const SizedBox(height: AppSpacing.xl),
+              _buildBirthDateSelector(),
             ],
           ),
         ),
@@ -406,6 +411,11 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
   void _goToNextStep() {
     if (!_formKey.currentState!.validate()) return;
+    // Same order as the fields on screen: name, gender, then birth date.
+    if (_selectedSex == null) {
+      _showError("Please select your child's gender.");
+      return;
+    }
     final validation = validateBirthDate(_selectedBirthDate);
     if (validation == ChildBirthDateValidation.missing) {
       _showError('Please select your child\'s birth date.');
@@ -416,10 +426,6 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       return;
     }
     // Ages outside 2–6 are allowed at initialization (no age-range limit).
-    if (_selectedSex == null) {
-      _showError("Please select your child's gender.");
-      return;
-    }
 
     // Default the screen-time limit to the age-based recommendation
     // (AAP/WHO guidance, ASD-adjusted) unless the parent already chose.
@@ -449,9 +455,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           const SizedBox(height: AppSpacing.xl),
           _buildForm(),
           const SizedBox(height: AppSpacing.xl),
-          _buildBirthDateSelector(),
-          const SizedBox(height: AppSpacing.xl),
           _buildGenderSelector(),
+          const SizedBox(height: AppSpacing.xl),
+          _buildBirthDateSelector(),
           const SizedBox(height: AppSpacing.xl),
           _buildAvatarPicker(),
           const SizedBox(height: AppSpacing.xl),
