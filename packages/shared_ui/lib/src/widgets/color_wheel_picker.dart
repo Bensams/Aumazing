@@ -37,6 +37,10 @@ class ColorWheelPicker extends StatelessWidget {
 
   HSVColor get _hsv => HSVColor.fromColor(colour);
 
+  /// Hue moved by [degrees], wrapped into 0–360.
+  static double _steppedHue(HSVColor hsv, double degrees) =>
+      (hsv.hue + degrees + 360) % 360;
+
   void _handlePoint(Offset local) {
     final radius = diameter / 2;
     final centre = Offset(radius, radius);
@@ -59,12 +63,18 @@ class ColorWheelPicker extends StatelessWidget {
         Semantics(
           label: '$label hue',
           value: '${hsv.hue.round()} degrees',
+          // Flutter asserts that an adjustable node annotates either both
+          // `value` and `increasedValue` or neither — omitting these threw
+          // as soon as a screen reader turned semantics on, which is the one
+          // situation this control exists for.
+          increasedValue: '${_steppedHue(hsv, 15).round()} degrees',
+          decreasedValue: '${_steppedHue(hsv, -15).round()} degrees',
           slider: true,
           // Stepping by 15° gives 24 reachable hues without dragging.
           onIncrease: () =>
-              onChanged(hsv.withHue((hsv.hue + 15) % 360).toColor()),
+              onChanged(hsv.withHue(_steppedHue(hsv, 15)).toColor()),
           onDecrease: () =>
-              onChanged(hsv.withHue((hsv.hue - 15 + 360) % 360).toColor()),
+              onChanged(hsv.withHue(_steppedHue(hsv, -15)).toColor()),
           child: GestureDetector(
             onPanDown: (d) => _handlePoint(d.localPosition),
             onPanUpdate: (d) => _handlePoint(d.localPosition),
