@@ -57,15 +57,17 @@ void main() {
   });
 
   test('the celebration survives being fired in the same breath', () async {
-    // Exactly the game-completion sequence: name the final answer, then
-    // celebrate, with nothing awaited in between.
-    await voice.playAnswerLabel(color: 'purple', shape: 'circle');
-    final droppedAfterLabel = voice.debouncedCount;
+    // Exactly the game-completion sequence, minus the label: nothing was named,
+    // so the celebration is the only line the child gets and must be heard.
+    await voice.playAnswerLabel(); // no recorded name — stays silent
+    final droppedBefore = voice.debouncedCount;
 
     await voice.playRewardCelebration();
 
-    expect(voice.debouncedCount, droppedAfterLabel,
+    expect(voice.debouncedCount, droppedBefore,
         reason: 'the celebration must never be dropped by the debounce');
+    expect(voice.praiseSuppressedCount, 0,
+        reason: 'nothing named the answer, so nothing outranks the praise');
   });
 
   // The round-transition line ("Next one!") sits in the same synchronous block

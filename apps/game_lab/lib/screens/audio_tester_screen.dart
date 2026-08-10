@@ -65,7 +65,7 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
          'youAreSafe'].contains(name)) {
       return VoiceOverCategory.attentionAndRegulation;
     }
-    if (['aumazing', 'ausome', 'correct', 'excellent', 'goodTry', 'greatJob',
+    if (['aumazing', 'ausome', 'correct', 'excellent', 'greatJob',
          'niceWork', 'thatsRight', 'veryGood', 'wellDone', 'yayYouGotIt',
          'youDidIt'].contains(name)) {
       return VoiceOverCategory.corePraise;
