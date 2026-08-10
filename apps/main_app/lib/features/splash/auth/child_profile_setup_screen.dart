@@ -32,6 +32,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _nameFocusNode = FocusNode();
+  final _scrollController = ScrollController();
   DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
   ChildSex? _selectedSex;
@@ -87,6 +88,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   @override
   void dispose() {
     unlockParentOrientation();
+    _scrollController.dispose();
     _nameFocusNode.dispose();
     _nameController.dispose();
     super.dispose();
@@ -190,7 +192,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     final today = DateTime.now();
     final initialDate =
         _selectedBirthDate ?? DateTime(today.year - 4, today.month, today.day);
-    final firstDate = DateTime(today.year - 18, today.month, today.day);
+    // No age range is enforced at setup, so the picker only has to stay
+    // within plausible human dates rather than a 2–6 year window.
+    final firstDate = DateTime(today.year - 100, today.month, today.day);
     if (!mounted) return;
     final pickedDate = await showDatePicker(
       context: currentContext,
@@ -211,6 +215,17 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     if (pickedDate != null && mounted) {
       setState(() => _selectedBirthDate = pickedDate);
     }
+  }
+
+  /// Moves to [step] and returns the scroll view to the top so the new step's
+  /// header is what the parent sees, not the middle of the previous page.
+  void _setStep(int step) {
+    _nameFocusNode.unfocus();
+    setState(() => _currentStep = step);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    });
   }
 
   void _showError(String message) {
@@ -246,6 +261,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                       constraints.maxWidth >= constraints.maxHeight;
 
                   return SingleChildScrollView(
+                    controller: _scrollController,
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: AppSpacing.horizontalLg.copyWith(
@@ -282,7 +298,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                 _buildSoundStepHeader(),
                 const SizedBox(height: AppSpacing.md),
                 TextButton(
-                  onPressed: () => setState(() => _currentStep = 0),
+                  onPressed: () => _setStep(0),
                   child: const Text('Go Back'),
                 ),
               ],
@@ -326,7 +342,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                 _buildRewardStepHeader(),
                 const SizedBox(height: AppSpacing.md),
                 TextButton(
-                  onPressed: () => setState(() => _currentStep = 1),
+                  onPressed: () => _setStep(1),
                   child: const Text('Go Back'),
                 ),
               ],
@@ -435,10 +451,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       );
     }
 
-    setState(() => _currentStep = 1);
+    _setStep(1);
   }
 
-  void _goToRewardStep() => setState(() => _currentStep = 2);
+  void _goToRewardStep() => _setStep(2);
 
   void _skipRewardPreference() {
     // Use default (bubbles) and save
@@ -483,7 +499,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           TextButton(
-            onPressed: () => setState(() => _currentStep = 0),
+            onPressed: () => _setStep(0),
             child: const Text('Go Back'),
           ),
         ] else ...[
@@ -512,7 +528,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           TextButton(
-            onPressed: () => setState(() => _currentStep = 1),
+            onPressed: () => _setStep(1),
             child: const Text('Go Back'),
           ),
         ],
