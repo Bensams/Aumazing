@@ -71,6 +71,73 @@ void main() {
         }
       });
 
+      test('the gaze poses form a 3x3 grid around the rest frame', () async {
+        // Indexed by where the child's finger is, so each corner of the
+        // screen must reach the matching corner pose, and the middle must
+        // leave the character looking straight ahead.
+        final s = await entry.value();
+        if (!s.canGaze) return; // poses not generated for this character yet
+        const near = 0.1, far = 0.9, mid = 0.5;
+        expect(s.gazeFrameFor(mid, mid), same(s.rest),
+            reason: 'a drag through the middle must not stare off-screen');
+        for (final (x, y, pose) in [
+          (near, mid, 'look_left'),
+          (far, mid, 'look_right'),
+          (mid, near, 'look_up'),
+          (mid, far, 'look_down'),
+          (near, near, 'look_up_left'),
+          (far, near, 'look_up_right'),
+          (near, far, 'look_down_left'),
+          (far, far, 'look_down_right'),
+        ]) {
+          if (s.still(pose) == null) continue; // not generated yet
+          expect(s.gazeFrameFor(x, y), same(s.still(pose)), reason: pose);
+        }
+      });
+
+      test('a fingertip dragged off the screen clamps to a corner', () async {
+        final s = await entry.value();
+        if (!s.canGaze) return;
+        expect(s.gazeFrameFor(-0.4, 0.5), same(s.still('look_left')));
+        expect(s.gazeFrameFor(1.7, 0.5), same(s.still('look_right')));
+        // Must not throw or return null anywhere in the plane.
+        for (var x = -1.0; x <= 2.0; x += 0.25) {
+          for (var y = -1.0; y <= 2.0; y += 0.25) {
+            expect(s.gazeFrameFor(x, y), isNotNull, reason: '($x, $y)');
+          }
+        }
+      });
+
+      test('a missing corner falls back rather than snapping to centre',
+          () async {
+        // Corners land in a different generation run from the edges, so this
+        // is the state the app is in mid-rollout. Dropping to the rest frame
+        // whenever a drag strays high or low would look like the character
+        // losing interest.
+        final s = await entry.value();
+        if (!s.canGaze || s.still('look_up_left') != null) return;
+        expect(s.gazeFrameFor(0.1, 0.1), same(s.still('look_left')));
+      });
+
+      test('every gaze pose is cut to the same cell as the rest frame',
+          () async {
+        // They are separate single-frame sheets from separate clips, so
+        // nothing but this stops one of them shipping at a different scale
+        // and making the mascot jump the moment a child drags sideways.
+        final s = await entry.value();
+        if (!s.canGaze) return;
+        final rest = await decode(s.rest);
+        for (final action in CharacterSprites.layout.keys) {
+          if (!action.startsWith('look_')) continue;
+          final pose = s.still(action);
+          if (pose == null) continue;
+          final frame = await decode(pose);
+          expect(frame.width, rest.width, reason: '${entry.key}_$action width');
+          expect(frame.height, rest.height,
+              reason: '${entry.key}_$action height');
+        }
+      });
+
       test('unknown actions are empty rather than throwing', () async {
         final s = await entry.value();
         expect(s.frames('nope'), isEmpty);

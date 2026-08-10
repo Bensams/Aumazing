@@ -51,6 +51,50 @@ class CharacterSprites {
   /// to greet; CalmMascot clamps playback to 3–8 fps and rests afterwards.
   List<ImageProvider> get waveFrames => frames('wave');
 
+  /// Whether this character can track a point on screen — i.e. both gaze
+  /// poses have been generated. Callers fall back to the resting pose.
+  bool get canGaze =>
+      still('look_left') != null && still('look_right') != null;
+
+  /// The gaze pose for a point ([x], [y]) of the way across and down the
+  /// screen, (0,0) being the top-left corner. Null if this character has no
+  /// gaze poses at all.
+  ///
+  /// A 3x3 grid of held poses with the resting frame at its centre. The
+  /// middle band on each axis is deliberately a full third: it keeps the
+  /// character from staring off into a corner while a child drags around the
+  /// middle of the screen, which is where most of a drag happens.
+  ///
+  /// Missing corners degrade rather than disappear — a character with only the
+  /// horizontal poses generated still tracks left and right instead of
+  /// dropping to the rest frame the moment a drag strays high or low.
+  ImageProvider? gazeFrameFor(double x, double y) {
+    if (!canGaze) return null;
+    final col = _band(x);
+    final row = _band(y);
+    if (col == 0 && row == 0) return rest;
+    return still(_gazeAction(row, col)) ??
+        still(_gazeAction(0, col)) ??
+        still(_gazeAction(row, 0)) ??
+        rest;
+  }
+
+  /// -1 (near edge), 0 (middle third), or 1 (far edge).
+  static int _band(double v) {
+    final at = v.clamp(0.0, 1.0);
+    if (at < 1 / 3) return -1;
+    if (at > 2 / 3) return 1;
+    return 0;
+  }
+
+  /// Sheet name for a grid cell, e.g. (-1, 1) -> `look_up_right`.
+  static String _gazeAction(int row, int col) {
+    final vertical = row < 0 ? 'up' : (row > 0 ? 'down' : '');
+    final horizontal = col < 0 ? 'left' : (col > 0 ? 'right' : '');
+    final parts = [vertical, horizontal].where((s) => s.isNotEmpty);
+    return 'look_${parts.join('_')}';
+  }
+
   /// Frames for any action in [layout]; empty if that sheet isn't loaded.
   /// Single-frame actions ([still]) return a one-element list.
   List<ImageProvider> frames(String action) =>
@@ -82,6 +126,22 @@ class CharacterSprites {
     // quite" that hands straight over to `encourage`, never a sheet the
     // character can sit in. See MascotController.reassure.
     'oops': SheetSpec(cols: 3, rows: 2, frames: 6, optional: true),
+    // The gaze poses: an extreme side-eye toward each edge and corner of the
+    // screen, forming a 3x3 grid with the idle rest frame at its centre. Named
+    // for the direction the CHILD sees, not the one the character would feel.
+    //
+    // Held stills rather than a sweep because that is what the generator will
+    // actually produce — see scripts/SPRITES.md. Nine cells is still coarse,
+    // so [Mascot] layers a continuous lean over them rather than relying on
+    // the eyes alone.
+    'look_left': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_right': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_up': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_down': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_up_left': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_up_right': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_down_left': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
+    'look_down_right': SheetSpec(cols: 1, rows: 1, frames: 1, optional: true),
     'encourage': SheetSpec(cols: 1, rows: 1, frames: 1),
     'listen': SheetSpec(cols: 1, rows: 1, frames: 1),
     'sleepy': SheetSpec(cols: 1, rows: 1, frames: 1),
