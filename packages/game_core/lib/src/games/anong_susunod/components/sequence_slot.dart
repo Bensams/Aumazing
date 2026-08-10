@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextPainter, TextSpan, TextStyle;
 
+import '../routine_art_cache.dart';
 import '../routine_steps.dart';
 
 /// One numbered position in the visual schedule.
@@ -78,8 +79,8 @@ class SequenceSlot extends PositionComponent {
     }
 
     if (filled != null) {
-      final art = size.x * 0.6;
-      RoutineArtPainter.paint(
+      final art = size.x * 0.7;
+      drawRoutineArt(
         canvas,
         filled!.art,
         Offset((size.x - art) / 2, (size.y - art) / 2 + size.y * 0.06),

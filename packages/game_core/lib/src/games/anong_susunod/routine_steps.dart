@@ -35,21 +35,35 @@ class RoutineStep {
 }
 
 /// The illustrations available to routine cards.
+///
+/// Each has both a bundled picture ([assetName]) and a painted fallback in
+/// [RoutineArtPainter]. The painted version is not dead code: it renders while
+/// the sprites are still loading, and it keeps the game playable if an asset
+/// ever fails to decode. A child's session should never end on a missing file.
 enum RoutineArt {
-  wake,
-  brushTeeth,
-  breakfast,
-  school,
-  washHands,
-  sitAtTable,
-  eat,
-  clearPlate,
-  bath,
-  pajamas,
-  sleep,
-  getToy,
-  play,
-  putAway,
+  wake('wake'),
+  brushTeeth('brush_teeth'),
+  breakfast('breakfast'),
+  school('school'),
+  washHands('wash_hands'),
+  sitAtTable('sit_at_table'),
+  eat('eat'),
+  clearPlate('clear_plate'),
+  bath('bath'),
+  pajamas('pajamas'),
+  sleep('sleep'),
+  getToy('get_toy'),
+  play('play'),
+  putAway('put_away');
+
+  const RoutineArt(this.assetName);
+
+  /// Basename of the card picture, without extension.
+  final String assetName;
+
+  /// Full bundled path, resolvable from any package in the workspace.
+  String get assetPath =>
+      'packages/shared_ui/assets/routine_cards/$assetName.png';
 }
 
 /// A named routine: four steps in their correct order.

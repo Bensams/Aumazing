@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import 'components/routine_card.dart';
 import 'components/sequence_slot.dart';
+import 'routine_art_cache.dart';
 import 'routine_steps.dart';
 import '../shared/game_layout.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
@@ -158,6 +159,12 @@ class AnongSusunodGame extends FlameGame
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    // Decode the card pictures before the first round is laid out. Awaited so
+    // the child never sees the painted fallback swap to the picture mid-round —
+    // a card changing appearance under them is exactly the unpredictability
+    // this app is built to avoid.
+    await RoutineArtCache.ensureLoaded();
 
     analyticsInitialize(
       gameId: 'anong_susunod',

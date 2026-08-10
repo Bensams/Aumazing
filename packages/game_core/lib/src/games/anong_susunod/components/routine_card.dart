@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../../config/game_motion.dart';
+import '../routine_art_cache.dart';
 import '../routine_steps.dart';
 
 /// A single picture card in the tray, or seated inside a slot.
@@ -91,8 +92,8 @@ class RoutineCard extends PositionComponent {
         ..color = selected || hinted ? _primary : _outline,
     );
 
-    final art = size.x * 0.66;
-    RoutineArtPainter.paint(
+    final art = size.x * 0.72;
+    drawRoutineArt(
       canvas,
       step.art,
       Offset((size.x - art) / 2, (size.y - art) / 2),

@@ -49,6 +49,7 @@ export 'src/games/hintay/components/sleepy_star.dart';
 // Games — Ano'ng Susunod? (What's Next?)
 export 'src/games/anong_susunod/anong_susunod_game.dart';
 export 'src/games/anong_susunod/routine_steps.dart';
+export 'src/games/anong_susunod/routine_art_cache.dart';
 export 'src/games/anong_susunod/components/routine_card.dart';
 export 'src/games/anong_susunod/components/sequence_slot.dart';
 

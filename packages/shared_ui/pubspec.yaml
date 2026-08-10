@@ -22,3 +22,6 @@ flutter:
   assets:
     - assets/characters/
     - assets/game_logos/
+    # Routine picture cards for Ano'ng Susunod?. Transparent PNGs, trimmed and
+    # re-padded to a square so every card composes identically.
+    - assets/routine_cards/
