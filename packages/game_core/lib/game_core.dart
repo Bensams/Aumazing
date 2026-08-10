@@ -42,6 +42,10 @@ export 'src/games/sari_sari_sort/components/category_bin.dart';
 export 'src/games/trace_it/trace_it_game.dart';
 export 'src/games/trace_it/trace_glyphs.dart';
 
+// Games — Hintay! (Wait For It)
+export 'src/games/hintay/hintay_game.dart';
+export 'src/games/hintay/components/sleepy_star.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
