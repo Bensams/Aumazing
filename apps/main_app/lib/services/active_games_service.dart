@@ -32,6 +32,7 @@ class ActiveGamesService {
     'Match It': 'match_it',
     'Sari-Sari Store Sorting': 'sari_sari_sort',
     'Trace It': 'trace_it',
+    'Hintay!': 'hintay',
   };
 
   /// Returns the set of active game IDs (e.g. `{'copy_me', 'match_it'}`).

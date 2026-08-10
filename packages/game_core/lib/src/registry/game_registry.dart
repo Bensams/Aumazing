@@ -8,6 +8,7 @@ import '../games/do_what_i_say/do_what_i_say_game.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_game.dart';
 import '../games/sari_sari_sort/sari_sari_sort_game.dart';
 import '../games/trace_it/trace_it_game.dart';
+import '../games/hintay/hintay_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -335,6 +336,56 @@ class GameRegistry {
             required int totalItems,
             required int errorCount,
             required int totalResponseTimeMs,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'hintay',
+      name: 'Hintay!',
+      description: 'Wait for the star to wake up, then tap it!',
+      icon: Icons.hourglass_top_rounded,
+      logoAsset: _logo('hintay'),
+      // Tagged Play Skills because the enum carries no `attention` value yet
+      // (it mirrors `skill_categories.slug` in Supabase, so adding one needs a
+      // migration first). The attention routing lives in the AI service, where
+      // `rules.py` already has an `attention` area and now recommends this game
+      // for it.
+      categories: [SkillCategory.playSkills],
+      gradientColors: [
+        const Color(0xFFE8DEFA),
+        const Color(0xFFD4E8FA),
+        const Color(0xFFFFF3D4),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return HintayGame(
+          totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
             analytics,
           }) {
             onGameComplete(
