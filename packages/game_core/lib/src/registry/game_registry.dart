@@ -9,6 +9,7 @@ import '../games/my_turn_your_turn/my_turn_your_turn_game.dart';
 import '../games/sari_sari_sort/sari_sari_sort_game.dart';
 import '../games/trace_it/trace_it_game.dart';
 import '../games/hintay/hintay_game.dart';
+import '../games/anong_susunod/anong_susunod_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -379,6 +380,54 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'anong_susunod',
+      name: "Ano'ng Susunod?",
+      description: 'Put the steps of the routine in the right order!',
+      icon: Icons.checklist_rounded,
+      logoAsset: _logo('anong_susunod'),
+      // A visual schedule is a communication support as much as a play task:
+      // the child is reading a sequence of pictures and acting on it.
+      categories: [SkillCategory.playSkills, SkillCategory.communication],
+      gradientColors: [
+        const Color(0xFFD4F4E8),
+        const Color(0xFFFFF3D4),
+        const Color(0xFFFFDDD4),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return AnongSusunodGame(
+          totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
+          strings: config.strings,
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,

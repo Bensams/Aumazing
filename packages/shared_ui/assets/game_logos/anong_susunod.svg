@@ -1,0 +1,65 @@
+<!--
+  Ano'ng Susunod? — three schedule cards in a row, the third still empty, with
+  connector arrows between them. The tile has to read as *sequence*: the
+  numbered order and the gap at the end are the whole idea. No <text> for the
+  step art; the numerals are drawn as paths so an unbundled font cannot make
+  them vanish.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <clipPath id="tile"><rect width="240" height="240" rx="48"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9FDCC2"/>
+      <stop offset="1" stop-color="#F0C79A"/>
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="240" height="240" rx="48" fill="url(#bg)"/>
+
+    <g fill="#FFFFFF" opacity="0.15">
+      <circle cx="30" cy="42" r="12"/>
+      <circle cx="212" cy="58" r="8"/>
+      <circle cx="204" cy="196" r="11"/>
+    </g>
+
+    <!-- Card 1: sun (wake up) -->
+    <g transform="translate(24 84)">
+      <rect width="58" height="72" rx="14" fill="#FFFDF8" stroke="#3F3B4A" stroke-width="5"/>
+      <circle cx="29" cy="40" r="14" fill="#FFF4C4" stroke="#3F3B4A" stroke-width="4.5"/>
+      <g stroke="#3F3B4A" stroke-width="4" stroke-linecap="round">
+        <path d="M29 16v-6M29 70v-6M5 40h6M53 40h-6M12 23l4 4M46 57l-4-4M46 23l-4 4M12 57l4-4"/>
+      </g>
+      <circle cx="29" cy="-2" r="12" fill="#9B82C4"/>
+      <path d="M29 -9v14" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+    </g>
+
+    <!-- Card 2: bowl (eat) -->
+    <g transform="translate(91 84)">
+      <rect width="58" height="72" rx="14" fill="#FFFDF8" stroke="#3F3B4A" stroke-width="5"/>
+      <path d="M11 38h36c-2 15-8 20-18 20s-16-5-18-20z" fill="#B8E8D4" stroke="#3F3B4A" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M7 38h44" stroke="#3F3B4A" stroke-width="4.5" stroke-linecap="round"/>
+      <g stroke="#3F3B4A" stroke-width="4" stroke-linecap="round" fill="none">
+        <path d="M22 28c4-4 0-8 0-12M36 28c4-4 0-8 0-12"/>
+      </g>
+      <circle cx="29" cy="-2" r="12" fill="#9B82C4"/>
+      <path d="M23 -8h9l-7 7h3a4 4 0 1 1-4 5" stroke="#FFFFFF" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Card 3: still empty — this is the question the game asks -->
+    <g transform="translate(158 84)">
+      <rect width="58" height="72" rx="14" fill="#FFFFFF" fill-opacity="0.42"
+            stroke="#FFFFFF" stroke-width="5" stroke-dasharray="13 11"/>
+      <path d="M29 30c0-8 12-9 12-1 0 6-7 5-7 12" stroke="#FFFFFF" stroke-width="6"
+            fill="none" stroke-linecap="round"/>
+      <circle cx="29" cy="54" r="4" fill="#FFFFFF"/>
+      <circle cx="29" cy="-2" r="12" fill="#FFFFFF" fill-opacity="0.55"/>
+    </g>
+
+    <!-- Connector arrows -->
+    <g stroke="#3F3B4A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.75">
+      <path d="M84 120l5 0M83 113l7 7-7 7"/>
+      <path d="M151 120l5 0M150 113l7 7-7 7"/>
+    </g>
+  </g>
+</svg>

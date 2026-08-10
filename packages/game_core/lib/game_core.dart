@@ -46,6 +46,12 @@ export 'src/games/trace_it/trace_glyphs.dart';
 export 'src/games/hintay/hintay_game.dart';
 export 'src/games/hintay/components/sleepy_star.dart';
 
+// Games — Ano'ng Susunod? (What's Next?)
+export 'src/games/anong_susunod/anong_susunod_game.dart';
+export 'src/games/anong_susunod/routine_steps.dart';
+export 'src/games/anong_susunod/components/routine_card.dart';
+export 'src/games/anong_susunod/components/sequence_slot.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
