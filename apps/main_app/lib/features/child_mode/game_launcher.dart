@@ -13,6 +13,7 @@ import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/sari_sari_sort/sari_sari_sort_screen.dart';
 import '../games/trace_it/trace_it_screen.dart';
 import '../games/hintay/hintay_screen.dart';
+import '../games/anong_susunod/anong_susunod_screen.dart';
 import '../../widgets/mascot_host.dart';
 
 /// Shared launcher for practice (non-assessment) games.
@@ -34,6 +35,7 @@ class GameLauncher {
     'sari_sari_sort',
     'trace_it',
     'hintay',
+    'anong_susunod',
   };
 
   /// AI per-area keys for each skill category (matches the on-device model's
@@ -130,6 +132,9 @@ class GameLauncher {
             assessmentContext: 'practice', difficulty: difficulty);
       case 'hintay':
         return HintayScreen(
+            assessmentContext: 'practice', difficulty: difficulty);
+      case 'anong_susunod':
+        return AnongSusunodScreen(
             assessmentContext: 'practice', difficulty: difficulty);
     }
     return null;

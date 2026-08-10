@@ -16,6 +16,7 @@ Game-ID ↔ Skill-area mapping:
     match_it           → Play, Attention
     my_turn_your_turn  → Social
     hintay             → Attention (go/no-go; the only direct measure)
+    anong_susunod      → Play, Communication (routine sequencing / visual schedule)
 """
 
 from typing import Any
@@ -30,6 +31,7 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "copy_me", "name": "Copy Me"},
         {"game_id": "do_what_i_say", "name": "Do What I Say"},
         {"game_id": "sari_sari_sort", "name": "Sari-Sari Store Sorting"},
+        {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
     ],
     "social": [
         {"game_id": "my_turn_your_turn", "name": "My Turn, Your Turn"},
@@ -38,6 +40,7 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "match_it", "name": "Match It"},
         {"game_id": "sari_sari_sort", "name": "Sari-Sari Store Sorting"},
         {"game_id": "trace_it", "name": "Trace It"},
+        {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
     ],
     "attention": [
         # Listed first: the only module built to train attention directly

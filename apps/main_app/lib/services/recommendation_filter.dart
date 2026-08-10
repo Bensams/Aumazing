@@ -43,6 +43,7 @@ class RecommendationFilter {
     'Sari-Sari Store Sorting': 'sari_sari_sort',
     'Trace It': 'trace_it',
     'Hintay!': 'hintay',
+    "Ano'ng Susunod?": 'anong_susunod',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose
