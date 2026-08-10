@@ -126,10 +126,29 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
+
+    // The character watches the item the child is holding travel to the
+    // basket, so the drag is something someone is paying attention to rather
+    // than a thing the child does alone.
+    _game.dragFocus.addListener(_followDraggedItem);
   }
+
+  /// Resolved once rather than per frame — the gaze updates every tick of a
+  /// drag, and this walks the element tree to find the host.
+  MascotController? _mascot;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _mascot = MascotHost.maybeOf(context);
+  }
+
+  void _followDraggedItem() => _mascot?.watch(_game.dragFocus.value);
 
   @override
   void dispose() {
+    // Before the GameWidget tears the game down and disposes the notifier.
+    _game.dragFocus.removeListener(_followDraggedItem);
     _voiceOverService.dispose();
     super.dispose();
   }

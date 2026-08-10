@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'mascot.dart';
@@ -17,6 +18,42 @@ class MascotController extends ChangeNotifier {
   MascotGesture get gesture => _gesture;
   MascotPose get pose => _pose;
   int get tick => _tick;
+
+  /// What the character is watching, as a fraction of the screen — (0,0) is
+  /// the top-left corner, (1,1) the bottom-right — or null when it is watching
+  /// nothing.
+  ///
+  /// Deliberately a separate notifier from the controller's own
+  /// [notifyListeners]: this changes on every frame of a drag, and routing it
+  /// through the main channel would rebuild the pose and gesture plumbing at
+  /// 60 fps to move one pair of eyes.
+  ValueListenable<Offset?> get gaze => _gaze;
+  final ValueNotifier<Offset?> _gaze = ValueNotifier<Offset?>(null);
+
+  /// Track a point on the screen, or stop tracking at null.
+  ///
+  /// Smoothed rather than followed exactly. A child's drag is jerky, and eyes
+  /// that copied it frame for frame would twitch — the opposite of the calm
+  /// attention this is meant to convey. The lag also reads as the character
+  /// *following* the object rather than being welded to it, and it keeps the
+  /// gaze from flickering between two poses when a finger hovers on the line
+  /// between them.
+  void watch(Offset? at) {
+    if (at == null) {
+      _gaze.value = null;
+      return;
+    }
+    final target = Offset(at.dx.clamp(0.0, 1.0), at.dy.clamp(0.0, 1.0));
+    final current = _gaze.value;
+    _gaze.value = current == null
+        ? target
+        : current + (target - current) * _gazeGain;
+  }
+
+  /// Per-frame catch-up fraction. At 60 fps this closes most of a
+  /// screen-width swing in about a fifth of a second: visibly a follow, not a
+  /// lag the child would notice waiting for.
+  static const double _gazeGain = 0.18;
 
   /// Play [gesture] once, then return to the current pose.
   void play(MascotGesture gesture) {
@@ -114,6 +151,7 @@ class MascotController extends ChangeNotifier {
   void dispose() {
     _revert?.cancel();
     _cancelReassurance();
+    _gaze.dispose();
     super.dispose();
   }
 }
@@ -203,15 +241,21 @@ class _MascotHostState extends State<MascotHost> {
                   alignment: widget.alignment,
                   child: ListenableBuilder(
                     listenable: _controller,
-                    builder: (context, _) => Mascot(
-                      character: widget.character,
-                      height: widget.height,
-                      pose: _controller.pose,
-                      gesture: _controller.gesture,
-                      gestureTrigger: _controller.tick,
-                      entrance: widget.entrance,
-                      greetOnAppear: widget.greetOnAppear,
-                      semanticLabel: widget.semanticLabel,
+                    // Gaze is rebuilt on its own inner builder so a drag moves
+                    // the head without re-running the pose/gesture plumbing.
+                    builder: (context, _) => ValueListenableBuilder<Offset?>(
+                      valueListenable: _controller.gaze,
+                      builder: (context, gaze, _) => Mascot(
+                        character: widget.character,
+                        height: widget.height,
+                        pose: _controller.pose,
+                        gesture: _controller.gesture,
+                        gestureTrigger: _controller.tick,
+                        gaze: gaze,
+                        entrance: widget.entrance,
+                        greetOnAppear: widget.greetOnAppear,
+                        semanticLabel: widget.semanticLabel,
+                      ),
                     ),
                   ),
                 ),

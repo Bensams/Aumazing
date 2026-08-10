@@ -89,6 +89,101 @@ STYLE = (
     "Gentle, calm, child-friendly motion."
 )
 
+# The eight gaze poses differ only by which way the eyes are rolled, so they
+# share one prompt. Together with the idle rest frame they form a 3x3 grid the
+# app indexes by where the child's finger is.
+#
+# Every direction is named RELATIVE TO THE IMAGE, and the prompt says so in
+# those words. `point` and `present` phrase their side as "its own left" and
+# land correctly mirrored on frame right, so the first gaze takes did the same
+# — and the model did not honour it. BPS came back with BOTH poses inverted;
+# Reiz drew itself looking left for both, twice, even after a regeneration.
+# Character-relative wording is simply not something it resolves consistently
+# for eyes. Naming the side of the IMAGE removes the ambiguity: there is
+# nothing left to mirror.
+#
+# Sheet names follow what the child sees. Always confirm with
+# scripts/check_gaze.py — direction is the one thing about these poses that no
+# geometry check can catch.
+_GAZE = (
+    "The chibi character looks toward {where} OF THE PICTURE — {where} "
+    "as the viewer sees it — WITHOUT MOVING ITS HEAD. The dark pupils and "
+    "irises {press} the part of the eye openings nearest {edge} of the image, "
+    "with a clear area of eye-white showing on the opposite side of each eye. "
+    "Both eyeballs move together toward {edge}. It is obvious at a glance "
+    "which way the character is looking. {both}"
+    # The one clause that matters most, and the reason it is stated in terms
+    # of SIZE rather than of mood: pushed to look down, the model shrank the
+    # irises to tiny black dots adrift in huge white eyes and added shadows
+    # underneath. It is a genuinely unsettling face, and this app is for
+    # autistic children — a mascot that reads as creepy or vacant is worse
+    # than no gaze sheet at all.
+    "CRITICAL — THE EYES MUST STAY CUTE. The irises stay EXACTLY THE SAME "
+    "LARGE SIZE as in the reference image, big and round and filling most of "
+    "the eye opening, keeping their colour and their little white catchlight "
+    "highlights. They are NEVER shrunk into small dots, pinpricks or tiny "
+    "black circles, and the eye is never mostly empty white. Keep the warm, "
+    "soft, friendly, curious expression of the reference image. NO dark "
+    "shadows, NO bags, NO shading and NO lines under the eyes. The character "
+    "is NOT scared, NOT creepy, NOT vacant, NOT staring blankly, NOT "
+    "bug-eyed, NOT sad, NOT tired and NOT unwell. It stays an adorable, "
+    "gentle, appealing children's cartoon character throughout. "
+    # Rolling the eyes up or down drags the lids with them unless this is
+    # spelled out, and a downward glance in particular comes back looking like
+    # a blink — which the app would then show whenever a child drags something
+    # to the bottom of the screen.
+    "Both eyes stay open with the eyelids shaped as in the reference image. "
+    "The character is NOT blinking, NOT squinting, NOT half-closing its eyes "
+    "and NOT sleepy — the eye openings keep their shape, and only the "
+    "eyeballs inside them move. "
+    "ONLY THE EYEBALLS move: the head does not turn, tilt, nod or lift, the "
+    "eyebrows do not move, the face stays squarely facing the viewer, and the "
+    "body, shoulders, arms, hands and feet stay exactly in the starting pose. "
+    # Same guard as `present`: a one-sided cue is enough to make the model
+    # mirror the whole character, which silently swaps the book to the other
+    # hand and cannot be cut together with the other sheets.
+    "The character is NOT mirrored, NOT flipped and does NOT turn around. "
+    "Whichever hand holds an object in the reference image keeps holding that "
+    "object, in that same hand, on that same side of the frame. "
+    "It reaches this pose within the first second and then holds it completely "
+    "still and unchanged for the rest of the video."
+)
+
+
+# Diagonals need BOTH components spelled out. Asked only for "the top-left
+# corner" the model reliably delivers one axis and forgets the other — BPS's
+# top corners came back separated by 1% horizontally, Reiz's bottom corners by
+# less than nothing. Naming the two movements as a pair, with equal weight, is
+# what makes a corner a corner.
+_BOTH = (
+    "This is a DIAGONAL look: the eyeballs move {first} AND {second} AT THE "
+    "SAME TIME, by equally large amounts, ending hard against the {corner} "
+    "corner of each eye opening, without shrinking. Both movements are equally "
+    "strong — it is not mostly {first} with a little {second}, nor mostly "
+    "{second} with a little {first}. "
+)
+
+
+# How hard the eyeballs are pushed. Straight down is deliberately the gentle
+# one: it is the only direction where the lower lid crops the iris, so "jammed
+# hard against the rim" leaves a sliver of pupil and a face full of white.
+PRESS_HARD = "are moved firmly over toward"
+PRESS_SOFT = "rest gently toward"
+
+
+def _gaze(where: str, edge: str, both: str = "",
+          press: str = PRESS_HARD) -> tuple:
+    return (1, 1, 1, "still",
+            _GAZE.format(where=where, edge=edge, both=both, press=press))
+
+
+def _corner(vertical: str, horizontal: str) -> tuple:
+    name = f"{vertical}-{horizontal}"
+    return _gaze(
+        f"THE {name.upper()} CORNER", f"that {name} corner",
+        _BOTH.format(first=vertical, second=horizontal, corner=name),
+        press=PRESS_SOFT if vertical == "down" else PRESS_HARD)
+
 # action -> (cols, rows, frames, selection strategy, prompt)
 ACTIONS = {
     "idle": (3, 2, 5, "blink",
@@ -185,6 +280,34 @@ ACTIONS = {
              "frowning harshly, NOT upset or distressed, and never covers its "
              "face. It stays calm and gentle throughout, more sympathetic "
              "than sad. Both feet stay on the ground."),
+    # The gaze poses. Two HELD stills, not a sweep, and eyes rather than head —
+    # both of which took takes to learn (SPRITES.md has the full table).
+    #
+    # Head rotation is off the table entirely: prompted as motion the character
+    # never turns at all, and prompted with the drawing vocabulary that fixes
+    # that ("three-quarter view") it swings the whole body round to profile.
+    # Eyes-only does work — it is the same kind of single-feature edit as
+    # `idle` (eyelids) and `talk` (mouth), both of which generate first-take.
+    #
+    # But an eye *sweep* does not. Asked politely the pupils travelled 0.9% of
+    # body width, which is one pixel at the size the mascot renders; asked in
+    # the strongest terms available the model drew an excellent extreme
+    # side-eye and then held it for all 97 frames rather than sweeping across.
+    # Holding a pose is exactly what `still` asks for, so the take that refused
+    # to sweep was really telling us which strategy this belongs in.
+    # The 3x3 grid, with the idle rest frame as its centre.
+    "look_left": _gaze("THE LEFT-HAND SIDE", "the left edge"),
+    "look_right": _gaze("THE RIGHT-HAND SIDE", "the right edge"),
+    "look_up": _gaze("THE TOP", "the top edge"),
+    # Firm, not gentle — the CUTE guard above is what keeps the iris big, so
+    # the press is free to be legible. Reiz needs it: its irises fill almost
+    # the whole eye opening, leaving so little white that a soft downward
+    # glance is indistinguishable from resting.
+    "look_down": _gaze("THE BOTTOM", "the bottom edge"),
+    "look_up_left": _corner("up", "left"),
+    "look_up_right": _corner("up", "right"),
+    "look_down_left": _corner("down", "left"),
+    "look_down_right": _corner("down", "right"),
     "encourage": (1, 1, 1, "still",
                   "The chibi character gives a warm reassuring thumbs-up with open "
                   "welcoming body language and a kind encouraging smile. It reaches "
