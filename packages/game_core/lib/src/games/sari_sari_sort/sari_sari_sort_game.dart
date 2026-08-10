@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import 'components/category_bin.dart';
@@ -157,6 +158,17 @@ class SariSariSortGame extends FlameGame
   final List<CategoryBin> _bins = [];
   final List<DraggableItem> _items = [];
 
+  /// Where the child is currently holding an item, as a fraction of the game's
+  /// size — (0,0) is the top-left corner, (1,1) the bottom-right; null when
+  /// nothing is held.
+  ///
+  /// The Flutter layer feeds this to the mascot so the character watches the
+  /// item travel to the basket. Normalised here rather than passed as pixels
+  /// because the mascot has no idea how big the game surface is, and a
+  /// [ValueNotifier] rather than a callback so only the character rebuilds on
+  /// it — this changes every frame of a drag.
+  final ValueNotifier<Offset?> dragFocus = ValueNotifier<Offset?>(null);
+
   Timer? _noResponseTimer;
 
   /// Item catalogue, grouped by category. Filipino sari-sari staples.
@@ -274,6 +286,7 @@ class SariSariSortGame extends FlameGame
         color: data.color,
         onPickedUp: _onItemPickedUp,
         onDropped: _onItemDropped,
+        onMoved: _onItemMoved,
         position: Vector2(x, trayY),
         size: Vector2.all(itemSize),
       );
@@ -342,6 +355,19 @@ class SariSariSortGame extends FlameGame
     _hideHints();
     _consecutiveIdleHints = 0; // child re-engaged — reset hint escalation
     onPlayDragSfx?.call();
+  }
+
+  /// Null once the item is let go — the character stops tracking and returns
+  /// to its rest pose.
+  void _onItemMoved(Vector2? center) {
+    if (center == null || size.x <= 0 || size.y <= 0) {
+      dragFocus.value = null;
+      return;
+    }
+    dragFocus.value = Offset(
+      (center.x / size.x).clamp(0.0, 1.0),
+      (center.y / size.y).clamp(0.0, 1.0),
+    );
   }
 
   void _onItemDropped(DraggableItem item, Vector2 dropCenter) {
@@ -593,6 +619,7 @@ class SariSariSortGame extends FlameGame
   @override
   void onRemove() {
     _cancelNoResponseTimer();
+    dragFocus.dispose();
     super.onRemove();
   }
 }

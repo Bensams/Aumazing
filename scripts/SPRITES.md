@@ -13,7 +13,9 @@ thrown away.
 export KIE_API_KEY=...                     # never commit; rotate if leaked
 python scripts/generate_sprites.py reiz               # all actions
 python scripts/generate_sprites.py bps --only nod,point
+python scripts/generate_sprites.py bps --only look_up,look_down_left    # gaze grid
 python scripts/generate_sprites.py reiz --compose-only   # free: rebuild from cache
+python scripts/check_gaze.py bps reiz                 # REQUIRED after any look_* run
 python scripts/quantize_sprites.py --apply            # run once at the end
 ```
 
@@ -92,15 +94,133 @@ much as the clip itself. Set per action in `ACTIONS`:
 |---|---|---|
 | `gesture` | wave, walk, celebrate, nod | Measures **frame-to-frame velocity** and samples only the moving span. Without this, several of the twelve frames are identical rest poses and the gesture visibly stutters. |
 | `late` | point | Samples the back 55%. The pose is reached late and held; an even spread wastes most frames on the pre-gesture rest. |
-| `still` | encourage, listen, sleepy, think | One frame, 60% in — settled, before drift grows. |
 | `spread` | talk | Even sampling across the whole clip. The clip is in motion end to end, so `gesture` would just return all of it; and a talk sheet is never lip-synced — nothing cues it to phonemes — so what it needs is six *distinct* mouth openings to shuffle through, which an even spread over a continuous cycle gives. |
+| `still` | encourage, listen, sleepy, think, `look_left`, `look_right` | One frame, 60% in — settled, before drift grows. |
 | `blink` | idle | Finds the eyes by **temporal variance** (only eyelids move, so the highest-variance pixels *are* the eyes), then takes rest / half / closed / half / open from a tight window around the second blink. |
 
 Velocity, not difference-from-frame-0: proportions drift over a clip, so the
 final rest pose no longer matches the first and a difference metric reads the
 static tail as motion.
 
----
+### Gaze: nine held poses, not a sweep
+
+The mascot follows a child's finger while they drag (`Mascot.gaze`). The art
+side is eight `still` sheets — `look_left/right/up/down` and the four corners —
+which with the idle rest frame form a **3x3 grid** the app indexes by where the
+finger is (`CharacterSprites.gazeFrameFor`).
+
+**Seven takes went into arriving at stills rather than an animation.** The
+short version, so nobody pays for this ground twice:
+
+| take | asked for | got |
+|---|---|---|
+| 1 | head turn, long motion prompt | faced forward the entire clip |
+| 2 | head turn, short prompt shaped like `nod` | same; Reiz moved 1.8% of body width |
+| 3 | head turn, "THREE-QUARTER VIEW" | whole **body** swung to profile; one frame showed the back of its head |
+| 4 | small turn, "both eyes visible, shoulders square" | body square, turn barely there, frame 1 mid-blink |
+| 5 | eyes only, polite phrasing | clean and stable, but pupils moved 0.9% of body width — **one pixel** at mascot size |
+| 6 | eyes only, "EXTREME SIDE-EYE" | drew a superb extreme side-eye and then **held it** for all 97 frames |
+| 7 | that same pose as `still` actions | ✅ shipped |
+
+Three things worth keeping:
+
+* **This model will not rotate a flat front-facing 2D chibi in depth.** Asked as
+  motion it does nothing; asked with drawing vocabulary it overshoots to full
+  profile. There is no reliable middle setting.
+* **It will happily change one facial feature and leave everything else alone.**
+  That is what `idle` (eyelids) and `talk` (mouth) already are, and a sideways
+  glance is the same class of edit. This is the direction that works.
+* **It holds poses far better than it sweeps between them.** Take 6 was the
+  pipeline saying so out loud — an excellent pose, refusing to animate.
+
+#### Directions are image-relative, and corners need both axes named
+
+Two prompt lessons, each paid for in clips:
+
+* `point` and `present` say "its own left" and land correctly mirrored on frame
+  right, so the gaze prompts did the same. The model did not honour it — BPS
+  came back with **both** poses inverted, Reiz looking left for **both**, twice.
+  Naming the side of the **image** ("the right as the viewer sees it") fixed it
+  outright: there is nothing left to mirror.
+* Asked only for "the top-left corner" it delivers one axis and forgets the
+  other. `_BOTH` now spells the diagonal out as two equally strong movements.
+
+#### The eyes must stay CUTE — this is a safety property, not polish
+
+The first `look_down` for both characters came back with the irises shrunk to
+**tiny black dots adrift in huge white eyes, with dark shadows underneath**. It
+is a genuinely unsettling face. This app is for autistic children and the
+mascot's whole job is to be calm company, so a pose that reads as creepy or
+vacant is worse than having no gaze sheet at all — and nothing else in this
+pipeline would ever have caught it. `SheetTooTight` and `check_gaze.py` both
+passed it happily.
+
+The cause was the prompt asking for the glance in terms of *extremity* —
+"jammed hard into the corner", "a WIDE expanse of empty eye-white". Straight
+down is the one direction where the lower lid crops the iris, so pushing hard
+leaves a sliver of pupil and a face full of white.
+
+`_GAZE` now carries a CRITICAL clause that pins the **iris size** ("exactly the
+same large size as in the reference image… never shrunk into small dots"), keeps
+the catchlight highlights, and forbids under-eye shadows. Stating it as size
+rather than as mood is what makes it work — "look cute" is not actionable, "do
+not shrink the iris" is.
+
+**Always look at a regenerated pose before shipping it.** The measurement tools
+answer "which way is it looking", never "is this a face you would put in front
+of a child".
+
+#### Reiz's vertical gaze is subtle, and that is the correct trade-off
+
+Reiz's irises fill almost the entire eye opening, leaving very little white to
+shift. A pure `look_down` is therefore only ever slightly legible — the only way
+to make it obvious is to shrink the iris, which is exactly the failure above.
+Its diagonals read better (they borrow the horizontal axis), and `Mascot._lean`
+carries the rest. Do not "fix" this by pushing harder.
+
+#### Verify every run — `scripts/check_gaze.py`
+
+A wrong-way pose passes every other check here: perfectly scaled, perfectly
+centred, perfectly clean. It must be measured.
+
+```bash
+python scripts/check_gaze.py bps reiz     # exits non-zero on a wrong-way pose
+```
+
+It finds each eye by its **white**, then compares each pose against its
+**opposite** on the axis they disagree about.
+
+Four traps it exists around, all of which produced confidently wrong numbers
+during this work:
+
+* **Don't locate the eyes by diffing two poses.** They come from separate clips
+  whose hair and outlines differ everywhere, so the difference image lights up
+  the whole head. BPS measured 0.4px of travel that way.
+* **Don't measure irises in absolute pixels.** Eyebrows are dark, static and far
+  larger than a pupil; any metric including them reports noise.
+* **Don't reference the rest frame.** BPS's idle measures well left of its own
+  `look_left` and marked four good poses as failures. Opposing pairs have no
+  such anchor problem.
+* **Don't trust the iris alone.** The upper lid *clips* it on any upward glance,
+  which reported BPS's top corners as pointing the wrong way round when they
+  plainly do not. The reading is the iris and the (never-clipped) eye-white
+  averaged together.
+
+The tool asserts **direction** and only advises on **magnitude**, for the same
+reason: the sign is robust, the size is not once a lid is involved. A `weak`
+line means look at the sheet, not that it is broken.
+
+**Isolating which pose is at fault:** a failing pair names two sheets, and it is
+easy to regenerate the innocent one — that happened twice here. Print the raw
+values for the whole row or column before spending a clip:
+
+```python
+from check_gaze import gaze, cell
+for n in ['look_up_left', 'look_up', 'look_up_right']:
+    print(n, gaze(cell('bps', n)))
+```
+
+The outlier against its neighbours is the one to redo.
 
 ## Safety rails
 
@@ -155,6 +275,7 @@ brand marks or logos. Whatever the rest pose is doing, every action inherits.
 ## Verifying a run
 
 ```bash
+python scripts/check_gaze.py bps reiz          # direction of the gaze poses
 cd packages/shared_ui && flutter test test/character_sprites_test.dart
 cd apps/main_app     && flutter test && flutter analyze
 ```

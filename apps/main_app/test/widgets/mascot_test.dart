@@ -135,6 +135,72 @@ void main() {
         expect(c.pose, MascotPose.sleepy);
       });
     });
+
+    group('gaze', () {
+      test('watch settles toward the point being tracked, on both axes', () {
+        final c = MascotController();
+        addTearDown(c.dispose);
+
+        // First call snaps: there is no previous gaze to ease from, and
+        // starting every drag from the middle of the screen would make the
+        // character swing across on pickup.
+        c.watch(const Offset(0.9, 0.8));
+        expect(c.gaze.value, const Offset(0.9, 0.8));
+
+        // Subsequent calls ease, so a jerky drag doesn't become twitching
+        // eyes — but they must actually converge.
+        c.watch(const Offset(0.1, 0.2));
+        final step = c.gaze.value!;
+        expect(step.dx, lessThan(0.9));
+        expect(step.dx, greaterThan(0.1), reason: 'eased, not snapped');
+        expect(step.dy, lessThan(0.8));
+        expect(step.dy, greaterThan(0.2));
+
+        for (var i = 0; i < 120; i++) {
+          c.watch(const Offset(0.1, 0.2));
+        }
+        expect(c.gaze.value!.dx, closeTo(0.1, 0.01));
+        expect(c.gaze.value!.dy, closeTo(0.2, 0.01));
+      });
+
+      test('watch clamps a finger dragged off the edge of the screen', () {
+        final c = MascotController();
+        addTearDown(c.dispose);
+
+        c.watch(const Offset(-3, -2));
+        expect(c.gaze.value, Offset.zero);
+        c.watch(null);
+        c.watch(const Offset(4.2, 9));
+        expect(c.gaze.value, const Offset(1, 1));
+      });
+
+      test('releasing stops the tracking outright', () {
+        final c = MascotController();
+        addTearDown(c.dispose);
+
+        c.watch(const Offset(0.7, 0.3));
+        c.watch(null);
+
+        // Not "eased back to the middle" — nothing is being watched, and the
+        // character returns to its resting pose.
+        expect(c.gaze.value, isNull);
+      });
+
+      test('gaze does not churn the pose/gesture channel', () {
+        final c = MascotController();
+        addTearDown(c.dispose);
+
+        var notifications = 0;
+        c.addListener(() => notifications++);
+        for (var i = 0; i < 60; i++) {
+          c.watch(Offset(i / 60, i / 60));
+        }
+
+        // A drag updates every frame; routing that through the main channel
+        // would rebuild the whole mascot's plumbing at 60 fps to move eyes.
+        expect(notifications, 0);
+      });
+    });
   });
 
   group('MascotHost', () {

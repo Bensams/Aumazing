@@ -91,6 +91,7 @@ class Mascot extends StatefulWidget {
     this.pose = MascotPose.idle,
     this.gesture = MascotGesture.wave,
     this.gestureTrigger,
+    this.gaze,
     this.entrance = MascotEntrance.none,
     this.greetOnAppear = true,
     this.greetDelay = const Duration(milliseconds: 500),
@@ -113,6 +114,19 @@ class Mascot extends StatefulWidget {
 
   /// Change this value to play [gesture] once.
   final Object? gestureTrigger;
+
+  /// What the character is watching, as a fraction of the screen — (0,0) is
+  /// the top-left corner, (1,1) the bottom-right. Null — the default — means
+  /// it isn't watching anything and rests on [pose] as usual.
+  ///
+  /// Wired to a game's drag position, this makes the character follow the
+  /// object in the child's hand, which is the point: it turns a mechanical
+  /// drag into something the character is paying attention to.
+  ///
+  /// Ignored under reduced motion. A character whose gaze poses haven't been
+  /// generated still leans toward the point, so the follow degrades rather
+  /// than disappearing.
+  final Offset? gaze;
 
   /// How the mascot arrives on first appearance.
   final MascotEntrance entrance;
@@ -395,6 +409,50 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
     return 1 - Curves.easeInOut.transform((t - up) / (1 - up));
   }
 
+  /// Tips [child] toward the point it is watching.
+  ///
+  /// Small on purpose. The whole envelope this widget sits in exists to keep
+  /// the character from becoming the busiest thing on screen, and a mascot
+  /// swinging about while a child is concentrating on dragging something is
+  /// exactly that. At these amounts it reads, correctly, as attention rather
+  /// than as an animation competing with the game.
+  Widget _lean(Widget child, Offset gaze) {
+    // −1 at the left/top edge of the screen, +1 at the right/bottom.
+    final side = (gaze.dx.clamp(0.0, 1.0) - 0.5) * 2;
+    final vertical = (gaze.dy.clamp(0.0, 1.0) - 0.5) * 2;
+    return Transform(
+      // Feet, not centre: the character tips over to see past something,
+      // rather than rotating on the spot like a dial.
+      alignment: Alignment.bottomCenter,
+      transform: Matrix4.identity()
+        ..translateByDouble(
+          side * widget.height * _leanShift,
+          // Down only. Rising to follow something high would lift the
+          // character off the floor it is standing on; sinking to follow
+          // something low reads as crouching to look, which is what a person
+          // would actually do.
+          vertical > 0 ? vertical * widget.height * _crouchShift : 0,
+          0,
+          1,
+        )
+        ..rotateZ(side * _leanRadians),
+      child: child,
+    );
+  }
+
+  /// Peak tilt at the edges of the screen, ~5°.
+  static const double _leanRadians = 5 * pi / 180;
+
+  /// Peak sideways shift, as a fraction of the mascot's height. Leaning alone
+  /// is legible but reads as stiff; a little travel with it looks like the
+  /// character shifting its weight to follow along.
+  static const double _leanShift = 0.05;
+
+  /// Peak downward shift when watching something near the bottom of the
+  /// screen. Smaller than [_leanShift] — the mascot already sits low, and any
+  /// more of a drop starts to read as sliding off the screen.
+  static const double _crouchShift = 0.03;
+
   ImageProvider _restImage(CharacterSprites s) => widget.pose == MascotPose.idle
       ? s.rest
       : (s.still(widget.pose.name) ?? s.rest);
@@ -409,6 +467,14 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
     final walkFrames = sprites.frames('walk');
     final stepping = _walking && walkFrames.isNotEmpty;
 
+    // Tracking is a *lookup* into the gaze sheet, not playback, so — like the
+    // walk cycle — it bypasses CalmMascot, which exists to play a sequence and
+    // then rest. Walking still wins: a character crossing the screen has
+    // somewhere to be, and its own sheet already says where it is looking.
+    final gazing = (widget.gaze != null && !_reducedMotion && !stepping)
+        ? sprites.gazeFrameFor(widget.gaze!.dx, widget.gaze!.dy)
+        : null;
+
     // A blink borrows the gesture channel — CalmMascot plays one frame list at
     // a time — so it is expressed as "which action is playing", not as motion
     // layered on top. The pose check also covers a pose change arriving
@@ -420,17 +486,21 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
         blinkFrames.length > 1 &&
         widget.pose == MascotPose.idle;
 
-    // While walking on, play the walk sheet directly: CalmMascot rests after a
-    // gesture by design, which is exactly wrong for a cycle that must keep
-    // going until the character arrives.
-    final Widget mascot = stepping
+    // Two cases drive the frame themselves instead of handing it to
+    // CalmMascot, which by design plays a sequence and then rests: walking on
+    // (the cycle must keep going until the character arrives) and tracking a
+    // drag (the frame is chosen by where the finger is, not by elapsed time).
+    final ImageProvider? directFrame =
+        stepping ? walkFrames[_stepFrame % walkFrames.length] : gazing;
+
+    final Widget mascot = directFrame != null
         ? Semantics(
             label: widget.semanticLabel,
             image: true,
             child: SizedBox(
               height: widget.height,
               child: Image(
-                image: walkFrames[_stepFrame % walkFrames.length],
+                image: directFrame,
                 height: widget.height,
                 fit: BoxFit.contain,
                 gaplessPlayback: true,
@@ -452,17 +522,32 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
             semanticLabel: widget.semanticLabel,
           );
 
+    // Leaning toward what it is watching, layered UNDER the eyes.
+    //
+    // The two carry different halves of the effect and neither is enough
+    // alone. The gaze poses are three points — hard left, straight ahead, hard
+    // right — so by themselves the character would snap between them; the lean
+    // is continuous and fills in everything in between. And a character whose
+    // gaze poses haven't been generated yet still follows the drag with its
+    // body rather than doing nothing.
+    //
+    // Pivoted at the feet so it reads as the character leaning over to see,
+    // not as the picture being rotated.
+    final Widget watching = (widget.gaze == null || _reducedMotion)
+        ? mascot
+        : _lean(mascot, widget.gaze!);
+
     // Sinking is a small translation of the whole character, so it is skipped
     // under reduced motion along with every other movement.
     final Widget body = _reducedMotion
-        ? mascot
+        ? watching
         : AnimatedBuilder(
             animation: _droop,
             builder: (context, child) => Transform.translate(
               offset: Offset(0, widget.height * _droopDepth * _sink(_droop.value)),
               child: child,
             ),
-            child: mascot,
+            child: watching,
           );
 
     if (widget.entrance == MascotEntrance.none || _reducedMotion) {
