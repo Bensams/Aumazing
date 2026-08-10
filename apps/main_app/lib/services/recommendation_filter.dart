@@ -42,6 +42,7 @@ class RecommendationFilter {
     'Match It': 'match_it',
     'Sari-Sari Store Sorting': 'sari_sari_sort',
     'Trace It': 'trace_it',
+    'Hintay!': 'hintay',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose

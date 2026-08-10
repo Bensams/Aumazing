@@ -15,6 +15,7 @@ Game-ID ↔ Skill-area mapping:
     do_what_i_say      → Communication, Attention
     match_it           → Play, Attention
     my_turn_your_turn  → Social
+    hintay             → Attention (go/no-go; the only direct measure)
 """
 
 from typing import Any
@@ -39,6 +40,9 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "trace_it", "name": "Trace It"},
     ],
     "attention": [
+        # Listed first: the only module built to train attention directly
+        # rather than measuring it as a by-product of another task.
+        {"game_id": "hintay", "name": "Hintay!"},
         {"game_id": "do_what_i_say", "name": "Do What I Say"},
         {"game_id": "match_it", "name": "Match It"},
     ],
