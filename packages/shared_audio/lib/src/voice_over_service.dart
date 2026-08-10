@@ -6,6 +6,30 @@ import 'package:flutter/foundation.dart';
 
 import 'voice_pack.dart';
 
+/// How much claim a line has on the narrator when two want to speak.
+///
+/// The layers are not about loudness or order in a queue — they decide which
+/// line the child hears *at all*. A higher layer speaking means the lower one
+/// is dropped, not deferred, because two voices in the same breath is the thing
+/// being avoided and a queued line arrives after the moment it referred to.
+///
+/// Applies to every game: the arbitration lives here, in the one service all of
+/// them speak through, so no game has to reason about it.
+enum VoiceOverPriority {
+  /// Naming back what the child just did — "red circle", "Gatas", "A".
+  ///
+  /// Outranks praise. It is tied to the thing on screen the child is looking at
+  /// right now, and it teaches the label; praise teaches nothing about *what*
+  /// was right.
+  immediateFeedback,
+
+  /// "Great job!", "Well done!" — core praise and the end-of-game celebration.
+  ///
+  /// Fills the gap when there was nothing to name, so a correct answer is never
+  /// met with silence.
+  praise,
+}
+
 /// Categories of voice-over audio cues, matching the asset folder structure.
 enum VoiceOverCategory {
   assessmentStyle,
@@ -55,11 +79,17 @@ enum VoiceOverCue {
   youAreSafe,
 
   // ── Core Praise ───────────────────────────────────────────────────
+  //
+  // Every line here must read as *you got it right*, with no second meaning.
+  // "Good try!" used to sit in this set and does not: it praises the attempt,
+  // so one correct answer in twelve was answered with consolation. For a child
+  // working out which sounds mean success, that is the one channel that cannot
+  // be ambiguous. It says the same thing as gently_retry/NiceTry — in Cebuano,
+  // the same words — so it was retired rather than moved.
   aumazing,
   ausome,
   correct,
   excellent,
-  goodTry,
   greatJob,
   niceWork,
   thatsRight,
@@ -258,7 +288,6 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.ausome: VoiceOverCategory.corePraise,
   VoiceOverCue.correct: VoiceOverCategory.corePraise,
   VoiceOverCue.excellent: VoiceOverCategory.corePraise,
-  VoiceOverCue.goodTry: VoiceOverCategory.corePraise,
   VoiceOverCue.greatJob: VoiceOverCategory.corePraise,
   VoiceOverCue.niceWork: VoiceOverCategory.corePraise,
   VoiceOverCue.thatsRight: VoiceOverCategory.corePraise,
@@ -471,7 +500,6 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.ausome: 'voice_over/core_praise/Ausome.wav',
   VoiceOverCue.correct: 'voice_over/core_praise/Correct.wav',
   VoiceOverCue.excellent: 'voice_over/core_praise/Excellent.wav',
-  VoiceOverCue.goodTry: 'voice_over/core_praise/GoodTry.wav',
   VoiceOverCue.greatJob: 'voice_over/core_praise/GreatJob.wav',
   VoiceOverCue.niceWork: 'voice_over/core_praise/NiceWork.wav',
   VoiceOverCue.thatsRight: 'voice_over/core_praise/ThatsRight.wav',
@@ -791,6 +819,34 @@ class VoiceOverService {
   /// mode this guards against.
   @visibleForTesting
   int debouncedCount = 0;
+
+  /// How many praise lines were dropped in favour of immediate feedback.
+  /// Test-only: the whole point of the layer is that nothing is heard.
+  @visibleForTesting
+  int praiseSuppressedCount = 0;
+
+  /// When the current immediate-feedback line claimed the floor, or null when
+  /// the last claim was something else.
+  DateTime? _immediateStartedAt;
+
+  /// The floor ticket that immediate-feedback line took.
+  int _immediateTicket = 0;
+
+  /// Set by [playAnswerLabel] for the length of one synchronous claim, so
+  /// [_takeFloor] can tag the ticket it is about to hand out as immediate
+  /// feedback. Consumed there.
+  bool _claimingImmediate = false;
+
+  /// How long an immediate-feedback line keeps praise off the air after it
+  /// starts.
+  ///
+  /// The same-breath case — a game naming the final answer and celebrating on
+  /// the next line — is what this exists for, and there the gap is microseconds.
+  /// The window only matters when playback state is unknown (a platform that
+  /// never reports completion); it is long enough to cover a spoken label and
+  /// short enough that a celebration fired later in the session, on its own,
+  /// still gets through.
+  static const _kImmediateFeedbackHold = Duration(seconds: 3);
 
   /// Flag to cancel an in-progress [playSequence] call.
   bool _sequenceCancelled = false;
@@ -1199,8 +1255,10 @@ class VoiceOverService {
   // ── Convenience Methods ─────────────────────────────────────────────
 
   /// Play a random praise cue from [VoiceOverCategory.corePraise].
+  ///
+  /// Yields to immediate feedback — see [_playPraise].
   Future<void> playCorrectPraise() =>
-      playRandom(VoiceOverCategory.corePraise);
+      _playPraise(VoiceOverCategory.corePraise);
 
   /// Play a random encouragement cue from [VoiceOverCategory.gentlyRetry].
   Future<void> playWrongEncouragement() =>
@@ -1217,17 +1275,49 @@ class VoiceOverService {
   /// Play a random celebration cue from
   /// [VoiceOverCategory.rewardAndCelebration].
   ///
-  /// Unlike every other cue this one is **never dropped and never interrupts**.
-  ///
-  /// Games fire it in the same synchronous breath as the final answer's naming
-  /// cue, so with ordinary [play] it hit the debounce window microseconds after
-  /// the label set it, and was discarded — the end-of-game praise, the one line
-  /// the whole reward system is built around, simply never played. Skipping the
-  /// debounce alone would fix that but replace it with a different fault: the
-  /// celebration would cut the label off mid-word. So it waits for whatever is
-  /// speaking to finish, then plays regardless of timing.
+  /// Yields to immediate feedback — see [_playPraise]. When it does play it is
+  /// **never dropped and never interrupts**: it is exempt from the debounce and
+  /// waits for anything mid-word to finish, because a game fires it in the same
+  /// synchronous breath as the round's last line rather than in response to a
+  /// fresh tap.
   Future<void> playRewardCelebration() =>
-      _playRandomAfterCurrent(VoiceOverCategory.rewardAndCelebration);
+      _playPraise(VoiceOverCategory.rewardAndCelebration);
+
+  /// Play a praise line from [category], unless immediate feedback has the
+  /// floor.
+  ///
+  /// This is the priority layer. A game names what the child just answered and
+  /// then, on the next line with nothing awaited between, praises them. Both
+  /// lines reaching the speaker means either two voices at once or a "Great
+  /// job!" landing after the moment it belonged to, and of the two the label is
+  /// the one worth keeping: it is tied to what the child is looking at and it
+  /// teaches the word. So praise is dropped here rather than queued.
+  ///
+  /// Praise still plays whenever the answer had no recorded name — an
+  /// unlabelled correct answer is met with "Well done!" instead of silence.
+  Future<void> _playPraise(VoiceOverCategory category) async {
+    if (!_enabled) return;
+    if (isImmediateFeedbackActive) {
+      praiseSuppressedCount++;
+      debugPrint('[VoiceOverService] 🤫 ${category.name} yields to immediate '
+          'feedback');
+      return;
+    }
+    await _playRandomAfterCurrent(category);
+  }
+
+  /// Whether an immediate-feedback line currently owns the narrator.
+  ///
+  /// True while that line is still speaking, and for [_kImmediateFeedbackHold]
+  /// after it starts on platforms that never report completion. False as soon
+  /// as any other line takes the floor, here or in another service.
+  bool get isImmediateFeedbackActive {
+    final startedAt = _immediateStartedAt;
+    if (startedAt == null) return false;
+    if (_immediateTicket != _floorTicket) return false;
+    if (isPlaying) return true;
+    return DateTime.now().difference(startedAt) < _kImmediateFeedbackHold;
+  }
 
   /// Play a random cue from [category] once anything speaking has finished,
   /// exempt from the debounce.
@@ -1278,6 +1368,18 @@ class VoiceOverService {
   int _takeFloor() {
     _sequenceCancelled = true;
     _myTicket = ++_floorTicket;
+
+    // Tag this claim's layer. Anything that is not immediate feedback ends the
+    // feedback episode: whatever spoke last is now what the child is hearing,
+    // so a praise line arriving after it is no longer competing with a label.
+    if (_claimingImmediate) {
+      _claimingImmediate = false;
+      _immediateStartedAt = DateTime.now();
+      _immediateTicket = _myTicket;
+    } else {
+      _immediateStartedAt = null;
+    }
+
     for (final other in _live) {
       if (identical(other, this)) continue;
       other._sequenceCancelled = true;
@@ -1497,14 +1599,14 @@ class VoiceOverService {
   /// Name back what the child just answered correctly — "red circle", "Gatas",
   /// "A" — as immediate feedback on a correct response.
   ///
-  /// This is the *only* voice-over a correct answer gets. Praise ("Great job!")
-  /// is deliberately withheld until the end-of-game reward: labelling every
-  /// correct answer turns each success into another exposure to the target
-  /// vocabulary, while praise on every trial both dilutes the reinforcer and
-  /// tells the child nothing about *what* they got right.
+  /// Speaks at [VoiceOverPriority.immediateFeedback], which outranks praise:
+  /// any praise line a game fires alongside this one is dropped rather than
+  /// stacked behind it. Labelling a success turns it into another exposure to
+  /// the target vocabulary, while praise on the same trial both dilutes the
+  /// reinforcer and tells the child nothing about *what* they got right.
   ///
-  /// Silent when the answer has no recorded name, so an unrecorded item never
-  /// falls back to praise and breaks that contract.
+  /// Silent when the answer has no recorded name — and it takes no floor in
+  /// that case either, so the game's praise line is heard instead of nothing.
   Future<void> playAnswerLabel({
     String? color,
     String? shape,
@@ -1518,10 +1620,20 @@ class VoiceOverService {
       item: item,
     );
     if (cues.isEmpty) return;
-    if (cues.length == 1) {
-      await play(cues.first);
-      return;
+    // Claim the immediate-feedback layer for the ticket this call is about to
+    // take. Both paths reach [_takeFloor] synchronously, before the game's next
+    // line runs, which is what lets praise fired in the same breath see it.
+    _claimingImmediate = true;
+    try {
+      if (cues.length == 1) {
+        await play(cues.first);
+        return;
+      }
+      await playSequence(cues);
+    } finally {
+      // Only set if the debounce turned the label away before it claimed
+      // anything; leaving it armed would mislabel the next line.
+      _claimingImmediate = false;
     }
-    await playSequence(cues);
   }
 }

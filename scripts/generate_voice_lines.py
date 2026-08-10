@@ -215,12 +215,9 @@ VOICE_LINES = {
         "tl": "Napakahusay!",
         "ceb": "Maayo kaayo!",
     },
-    "GoodTry": {
-        "category": "core_praise",
-        "en": "Good try!",
-        "tl": "Magandang subok!",
-        "ceb": "Nindot nga pagsulay!",
-    },
+    # "GoodTry" deliberately absent from core_praise: it praises the attempt,
+    # not the result, so a correct answer could be met with a line that reads as
+    # consolation. gently_retry/NiceTry already says it, in the right register.
     "GreatJob": {
         "category": "core_praise",
         "en": "Great job!",
