@@ -7,6 +7,7 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 
 import '../../../config/game_motion.dart';
+import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// The shape type drawn on each matchable card.
@@ -17,7 +18,8 @@ enum ShapeType { star, heart, circle, diamond, triangle }
 /// Renders a colored rounded-rect card with a centered 3D shape icon.
 /// Supports selection highlight, correct/incorrect feedback, hint state,
 /// and gentle scale animations.
-class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks {
+class MatchableShape extends PositionComponent
+    with TapCallbacks, DragCallbacks, FingertipDrag {
   MatchableShape({
     required this.shapeType,
     required this.shapeColor,
@@ -50,7 +52,13 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   /// The pointer has travelled past [_tapSlop] — a real drag, not a tap.
   bool _dragging = false;
   Vector2? _dragStartPos;
-  final Vector2 _dragTravel = Vector2.zero();
+  /// Where the pointer went down, in game space. The tap/drag decision is
+  /// DISPLACEMENT from here, not the sum of the pointer's deltas: accumulated
+  /// deltas keep growing while a finger trembles in one spot, so a child with
+  /// a tremor could cross the threshold — and lose their tap — without ever
+  /// moving off the piece, which is the exact case the threshold exists to
+  /// protect.
+  Vector2? _pointerOrigin;
 
   /// Pointer travel (game px) below which a release counts as a tap.
   static const double _tapSlop = 14.0;
@@ -106,30 +114,36 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
     if (isMatched) return;
     _pointerDown = true;
     _dragging = false;
-    _dragTravel.setZero();
+    _pointerOrigin = event.canvasPosition.clone();
     _dragStartPos = position.clone();
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
     if (isMatched || !_pointerDown) return;
-    _dragTravel.add(event.localDelta);
 
     if (!_dragging) {
       // Still tap-like: leave the card sitting in its slot so a shaky tap
       // doesn't visibly nudge it.
-      if (_dragTravel.length < _tapSlop) return;
+      final origin = _pointerOrigin;
+      if (origin != null &&
+          (event.canvasEndPosition - origin).length < _tapSlop) {
+        return;
+      }
       _dragging = true;
       priority = 100; // float above other shapes while dragging
       add(ScaleEffect.to(
         Vector2.all(1.1),
         EffectController(duration: 0.1, curve: Curves.easeOut),
       ));
-      position += _dragTravel; // catch up on the travel so far
+      // Centring starts only once the gesture is confirmed as a drag — doing
+      // it on the first pointer event would yank the card out from under a
+      // child whose tap merely wobbled. The glide covers the catch-up.
+      startFingertipFollow(event.canvasEndPosition);
       return;
     }
 
-    position += event.localDelta;
+    moveFingertip(event.canvasEndPosition);
   }
 
   @override
@@ -145,9 +159,12 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
     }
 
     _dragging = false;
+    // Read the centre before the scale-down, so the drop point is the card as
+    // the child last saw it.
+    final dropCenter = visualCenter;
+    stopFingertipFollow();
     priority = 0;
     scale = Vector2.all(1.0);
-    final dropCenter = position + size / 2;
     // Snap instantly back to the slot, then let the game resolve the match
     // (feedback animations then play in the shape's home position).
     if (_dragStartPos != null) position = _dragStartPos!;
@@ -160,6 +177,7 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
     _pointerDown = false;
     if (!_dragging) return;
     _dragging = false;
+    stopFingertipFollow();
     priority = 0;
     scale = Vector2.all(1.0);
     if (_dragStartPos != null) position = _dragStartPos!;
@@ -219,6 +237,7 @@ class MatchableShape extends PositionComponent with TapCallbacks, DragCallbacks 
   @override
   void update(double dt) {
     super.update(dt);
+    followFingertip(dt);
     if (_isHint) {
       _hintTime += dt;
     }

@@ -6,6 +6,7 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
+import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../sari_sari_sort_game.dart' show StoreCategory;
 
@@ -40,12 +41,13 @@ class StoreItemData {
 /// game decides whether the drop was correct via [onDropped]; this component
 /// only handles movement, lift/return animations, and the locked (sorted)
 /// state.
-class DraggableItem extends PositionComponent with DragCallbacks {
+class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag {
   DraggableItem({
     required this.data,
     required this.color,
     required this.onPickedUp,
     required this.onDropped,
+    this.onMoved,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size) {
@@ -61,6 +63,15 @@ class DraggableItem extends PositionComponent with DragCallbacks {
   /// Fired when the child releases the item. [dropCenter] is the item's center
   /// in the game's coordinate space, used for bin hit-testing.
   final void Function(DraggableItem item, Vector2 dropCenter) onDropped;
+
+  /// Fired every tick while the item is held, with its centre in game space,
+  /// and once with null when it is let go.
+  ///
+  /// Ticks rather than drag events on purpose: this drives the mascot's gaze,
+  /// and Flame only reports a drag when the finger actually moves. Driven off
+  /// drag events alone the character's head would stall a frame or two behind
+  /// whenever a child paused mid-drag — which is most of the time.
+  final void Function(Vector2? center)? onMoved;
 
   /// Where the item rests in its tray. Used to snap back after a wrong drop.
   late Vector2 homePosition;
@@ -100,6 +111,7 @@ class DraggableItem extends PositionComponent with DragCallbacks {
     if (isLocked) return;
     _dragging = true;
     priority = 100; // float above other items + bins while dragging
+    startFingertipFollow(event.canvasPosition);
     add(ScaleEffect.to(
       Vector2.all(1.12),
       EffectController(duration: 0.12, curve: Curves.easeOut),
@@ -110,26 +122,39 @@ class DraggableItem extends PositionComponent with DragCallbacks {
   @override
   void onDragUpdate(DragUpdateEvent event) {
     if (isLocked || !_dragging) return;
-    position += event.localDelta;
+    moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (followFingertip(dt)) onMoved?.call(visualCenter);
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
     if (isLocked || !_dragging) return;
+    // Read the centre before the scale-down starts, so the drop point is the
+    // item as the child last saw it.
+    final dropCenter = visualCenter;
     _dragging = false;
+    stopFingertipFollow();
+    onMoved?.call(null);
     priority = 0;
     add(ScaleEffect.to(
       Vector2.all(1.0),
       EffectController(duration: 0.12, curve: Curves.easeOut),
     ));
-    onDropped(this, position + size / 2);
+    onDropped(this, dropCenter);
   }
 
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
     _dragging = false;
+    stopFingertipFollow();
+    onMoved?.call(null);
     priority = 0;
     returnHome();
   }
