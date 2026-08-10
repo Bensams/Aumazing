@@ -6,6 +6,7 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart' show TextStyle;
 
+import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// A round token that lives in a side tray — either a buddy piece (left) or the
@@ -14,7 +15,8 @@ import '../../shared/shape_painter_3d.dart';
 /// Buddy pieces are non-interactive; the game animates them into a slot. Child
 /// pieces are interactive during the child's turn: tap to select, or drag onto
 /// a slot to place.
-class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
+class GamePiece extends PositionComponent
+    with TapCallbacks, DragCallbacks, FingertipDrag {
   GamePiece({
     required this.emoji,
     required this.color,
@@ -48,7 +50,13 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
 
   /// The pointer has travelled past [_tapSlop] — a real drag, not a tap.
   bool _dragging = false;
-  final Vector2 _dragTravel = Vector2.zero();
+  /// Where the pointer went down, in game space. The tap/drag decision is
+  /// DISPLACEMENT from here, not the sum of the pointer's deltas: accumulated
+  /// deltas keep growing while a finger trembles in one spot, so a child with
+  /// a tremor could cross the threshold — and lose their tap — without ever
+  /// moving off the piece, which is the exact case the threshold exists to
+  /// protect.
+  Vector2? _pointerOrigin;
   late Vector2 _homePosition;
 
   /// Pointer travel (game px) below which a release counts as a tap.
@@ -120,27 +128,39 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
     if (!isChild || !interactive) return;
     _pointerDown = true;
     _dragging = false;
-    _dragTravel.setZero();
+    _pointerOrigin = event.canvasPosition.clone();
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
     if (!_pointerDown) return;
-    _dragTravel.add(event.localDelta);
 
     if (!_dragging) {
       // Still tap-like: leave the piece in the tray so a shaky tap doesn't
       // visibly nudge it.
-      if (_dragTravel.length < _tapSlop) return;
+      final origin = _pointerOrigin;
+      if (origin != null &&
+          (event.canvasEndPosition - origin).length < _tapSlop) {
+        return;
+      }
       _dragging = true;
       priority = 300;
       onPickedUp?.call(this);
       add(ScaleEffect.to(Vector2.all(1.15), EffectController(duration: 0.1)));
-      position += _dragTravel; // catch up on the travel so far
+      // Centring starts only once the gesture is confirmed as a drag — doing
+      // it on the first pointer event would yank the piece out from under a
+      // child whose tap merely wobbled. The glide covers the catch-up.
+      startFingertipFollow(event.canvasEndPosition);
       return;
     }
 
-    position += event.localDelta;
+    moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    followFingertip(dt);
   }
 
   @override
@@ -156,7 +176,11 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
     }
 
     _dragging = false;
-    onDragEnded?.call(this, position.clone()); // anchor.center → position is centre
+    // anchor.center → position is already the centre, but read it through
+    // visualCenter so the scale-up while held is accounted for.
+    final dropCenter = visualCenter;
+    stopFingertipFollow();
+    onDragEnded?.call(this, dropCenter);
   }
 
   @override
@@ -165,6 +189,7 @@ class GamePiece extends PositionComponent with TapCallbacks, DragCallbacks {
     _pointerDown = false;
     if (!_dragging) return;
     _dragging = false;
+    stopFingertipFollow();
     returnHome();
   }
 
