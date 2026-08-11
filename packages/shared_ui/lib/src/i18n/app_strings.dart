@@ -108,6 +108,39 @@ class AppStrings {
         GameLanguage.cebuano: 'Galamiton',
       });
 
+  // ── Hintay! (Wait For It) ────────────────────────────────────────────
+  /// Names both halves of the task — the waiting *and* the tap — because the
+  /// game scores a tap that came too early. An instruction that said only
+  /// "tap the star" would describe the error as the goal.
+  String get hintayInstruction => _pick(const {
+        GameLanguage.english: 'Wait for the star to wake up, then tap it!',
+        GameLanguage.tagalog:
+            'Hintayin mong magising ang bituin, tapos pindutin mo!',
+        GameLanguage.cebuano:
+            'Hulata nga momata ang bitoon, dayon tapika kini!',
+      });
+
+  /// Praises the waiting rather than the score: waiting is the skill the game
+  /// exists to build, and the child cannot see their own premature-tap count.
+  String get hintayComplete => _pick(const {
+        GameLanguage.english: 'Well done! You waited so well!',
+        GameLanguage.tagalog: 'Magaling! Ang galing mong maghintay!',
+        GameLanguage.cebuano: 'Maayo kaayo! Maayo ka kaayo mohulat!',
+      });
+
+  // ── Ano'ng Susunod? (What's Next?) ───────────────────────────────────
+  String get anongSusunodInstruction => _pick(const {
+        GameLanguage.english: 'Which picture comes next?',
+        GameLanguage.tagalog: 'Aling larawan ang susunod?',
+        GameLanguage.cebuano: 'Unsang hulagway ang sunod?',
+      });
+
+  String get anongSusunodComplete => _pick(const {
+        GameLanguage.english: 'Well done! You put them all in order!',
+        GameLanguage.tagalog: 'Magaling! Naisaayos mo lahat!',
+        GameLanguage.cebuano: 'Maayo kaayo! Nahan-ay nimo silang tanan!',
+      });
+
   // ── Settings ─────────────────────────────────────────────────────────
   String get settingsTitle => _pick(const {
         GameLanguage.english: 'Settings',

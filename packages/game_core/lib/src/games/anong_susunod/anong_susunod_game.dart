@@ -10,6 +10,7 @@ import 'components/routine_card.dart';
 import 'components/sequence_slot.dart';
 import 'routine_art_cache.dart';
 import 'routine_steps.dart';
+import '../shared/answer_label.dart';
 import '../shared/game_layout.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
@@ -54,6 +55,7 @@ class AnongSusunodGame extends FlameGame
     this.profile = DifficultyProfile.medium,
     this.strings = const AppStrings(GameLanguage.english),
     this.onCorrectPlacement,
+    this.onRoutineChanged,
     this.onWrongAnswer,
     this.onPlayCorrectSfx,
     this.onPlayWrongSfx,
@@ -62,7 +64,6 @@ class AnongSusunodGame extends FlameGame
     this.onPlayGameCompleteSfx,
     this.onPlayCorrectVo,
     this.onPlayWrongVo,
-    this.onPlayInstructionVo,
     this.onPlayTransitionVo,
     this.onPlayCelebrationVo,
   });
@@ -80,14 +81,30 @@ class AnongSusunodGame extends FlameGame
   final void Function()? onCorrectPlacement;
   final void Function()? onWrongAnswer;
 
+  /// Fired as each round opens, with the routine's id, its title already
+  /// rendered in [strings]' language, and whether this is the opening round.
+  ///
+  /// The id is for the audio layer (it selects the recording); the title is for
+  /// the Flutter overlay. Both are handed out here rather than looked up by the
+  /// screen because the game alone knows which routine the round drew.
+  ///
+  /// This carries the game's spoken opening, which is why there is no separate
+  /// `onPlayInstructionVo` here as in the other games: the question belongs
+  /// after the routine name ("Umaga. What comes next?"), and firing the two
+  /// from different places would let one silence the other.
+  final void Function(String routineId, String routineTitle, bool isFirstRound)?
+      onRoutineChanged;
+
   final VoidCallback? onPlayCorrectSfx;
   final VoidCallback? onPlayWrongSfx;
   final VoidCallback? onPlayTapSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  final VoidCallback? onPlayCorrectVo;
+
+  /// Names the step the child just seated — "Maghugas ng kamay" — instead of
+  /// praising the placement. See [AnswerLabel].
+  final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
-  final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
 
@@ -177,7 +194,8 @@ class AnongSusunodGame extends FlameGame
     );
     analyticsStartSession();
 
-    onPlayInstructionVo?.call();
+    // The spoken opening is announced by _startRound via
+    // [onRoutineChanged] — see the note there.
     _startRound();
   }
 
@@ -213,10 +231,20 @@ class AnongSusunodGame extends FlameGame
 
     analyticsStartRound(roundNumber: _currentRound + 1);
 
+    // Announce the routine before the cards appear. A child who is told the
+    // round is about "Umaga" has a frame to sort the pictures into; without it
+    // the first card is a guess.
+    onRoutineChanged?.call(
+        _routine.id, _routine.title(strings.language), _currentRound == 0);
+
     final steps = _routine.steps.take(_slotCount).toList();
 
     for (var i = 0; i < _slotCount; i++) {
-      final slot = SequenceSlot(index: i, position: Vector2.zero(), size: Vector2.all(1));
+      final slot = SequenceSlot(
+          index: i,
+          language: strings.language,
+          position: Vector2.zero(),
+          size: Vector2.all(1));
       _slots.add(slot);
       add(slot);
     }
@@ -234,7 +262,10 @@ class AnongSusunodGame extends FlameGame
     final remaining = steps.sublist(presetCount).toList()..shuffle(_random);
     for (final step in remaining) {
       final card = RoutineCard(
-          step: step, position: Vector2.zero(), size: Vector2.all(1));
+          step: step,
+          language: strings.language,
+          position: Vector2.zero(),
+          size: Vector2.all(1));
       _tray.add(card);
       add(card);
     }
@@ -474,6 +505,9 @@ class AnongSusunodGame extends FlameGame
       analyticsRecordCorrect(extraData: {'response_time_ms': elapsed});
       _adaptive.recordCorrect();
       onPlayCorrectSfx?.call();
+      // Say the step back in the child's language. Carried as the id, not the
+      // visible label — see [AnswerLabel.routineStep].
+      onPlayCorrectVo?.call(AnswerLabel(routineStep: card.step.id));
       onCorrectPlacement?.call();
     }
 

@@ -24,6 +24,14 @@ void main() {
     VoiceOverCue.itemManika,
     VoiceOverCue.itemKotse,
     VoiceOverCue.itemTeddy,
+    // Ano'ng Susunod speaks a routine name as each round opens and a step name
+    // on every correct placement; Hintay! speaks its instruction and its
+    // escalated prompt. `routines/` is a folder the pubspec had never listed
+    // before these games, which is the exact failure this test exists to catch.
+    VoiceOverCue.routineMorning,
+    VoiceOverCue.stepWashHands,
+    VoiceOverCue.waitForTheStar,
+    VoiceOverCue.tapTheStar,
   ];
 
   group('naming cues are in the asset bundle', () {

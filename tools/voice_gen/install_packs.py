@@ -31,7 +31,7 @@ ASSET_ROOT = os.path.join(REPO, 'packages', 'shared_audio', 'assets', 'audio',
 CATEGORIES = ['assessment_style', 'attention_and_regulation', 'core_praise',
               'gently_retry', 'instruction', 'reward_and_celebration',
               'transition', 'turn_taking', 'dynamic', 'colors', 'shapes',
-              'letters', 'numbers', 'items', 'phrases']
+              'letters', 'numbers', 'items', 'phrases', 'routines']
 TIER_LABEL = {'adult': 'Adult', 'young': 'Young', 'child': 'Child'}
 
 

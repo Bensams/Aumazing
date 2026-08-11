@@ -1,24 +1,39 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
+import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../../../config/game_motion.dart';
 import '../routine_art_cache.dart';
 import '../routine_steps.dart';
+import 'step_label.dart';
 
 /// A single picture card in the tray, or seated inside a slot.
 ///
 /// Selection state is shown three ways at once — a thicker outline, a lift, and
 /// a warm ring — because a child who cannot discriminate the outline colour
 /// still needs to know which card they picked.
+///
+/// The step's name is printed under the picture in [language]. TEACCH pairs the
+/// symbol with its word rather than replacing one with the other: a pre-reader
+/// works from the picture and loses nothing, and a child who is starting to
+/// read gets the same word every time they meet the step.
 class RoutineCard extends PositionComponent {
   RoutineCard({
     required this.step,
+    required this.language,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size, anchor: Anchor.center);
 
   final RoutineStep step;
+
+  /// The language the printed label is drawn in — the child's, not the
+  /// device's.
+  final GameLanguage language;
+
+  final StepLabel _label = StepLabel();
 
   bool selected = false;
 
@@ -92,12 +107,25 @@ class RoutineCard extends PositionComponent {
         ..color = selected || hinted ? _primary : _outline,
     );
 
-    final art = size.x * 0.72;
+    // The picture keeps the bulk of the card; the name takes a strip along the
+    // bottom, sized so a two-line label still clears the rounded corner.
+    final labelBand = size.y * 0.26;
+    final pictureHeight = size.y - labelBand;
+    final art = math.min(size.x * 0.72, pictureHeight * 0.9);
     drawRoutineArt(
       canvas,
       step.art,
-      Offset((size.x - art) / 2, (size.y - art) / 2),
+      Offset((size.x - art) / 2, (pictureHeight - art) / 2),
       art,
+    );
+
+    _label.paint(
+      canvas,
+      step.label(language),
+      origin: Offset(size.x * 0.06, pictureHeight),
+      width: size.x * 0.88,
+      height: labelBand,
+      fontSize: math.max(9.0, size.x * 0.13),
     );
 
     canvas.restore();
