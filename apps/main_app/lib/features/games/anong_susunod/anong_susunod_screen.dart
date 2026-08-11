@@ -60,6 +60,10 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
   bool _showPrompt = true;
   bool _gameComplete = false;
   bool _showStarSparkle = false;
+
+  /// The current routine's name, already in the child's language. Null until
+  /// the game has laid out its first round.
+  String? _routineTitle;
   late final AnongSusunodGame _game;
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
@@ -103,6 +107,7 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectPlacement: _onCorrectPlacement,
+      onRoutineChanged: _onRoutineChanged,
       onWrongAnswer: () => MascotHost.maybeOf(context)?.reassure(),
       // Audio SFX callbacks
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
@@ -113,10 +118,14 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
       // Voice-over callbacks. `whatComesNext` already exists in the assessment
       // cue set and is literally this game's title, so no new recording is
       // needed for the instruction.
-      onPlayCorrectVo: () => _voiceOverService.play(VoiceOverCue.thatsRight),
+      //
+      // A correct placement is answered by naming the step the child just put
+      // down — "Maghugas ng kamay" — rather than with praise. The recording
+      // comes out of the child's own voice pack, so the spoken step name is in
+      // the same language as the word printed on the card.
+      onPlayCorrectVo: (label) =>
+          _voiceOverService.playAnswerLabel(routineStep: label.routineStep),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
-      onPlayInstructionVo: () =>
-          _voiceOverService.play(VoiceOverCue.whatComesNext),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
@@ -136,6 +145,18 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
     });
 
     widget.sensoryController?.applyRoundConfig(step + 1);
+  }
+
+  /// Called as each round opens, with the routine the round will run.
+  ///
+  /// The opening round names the routine and then asks the question; later
+  /// rounds only name the routine, because by then the child has been asked it
+  /// three times and the answer is the same each round.
+  void _onRoutineChanged(
+      String routineId, String routineTitle, bool isFirstRound) {
+    if (!mounted) return;
+    setState(() => _routineTitle = routineTitle);
+    _voiceOverService.playRoutineTitle(routineId, alsoAsk: isFirstRound);
   }
 
   /// Called on each correct card placement (not just round completion).
@@ -246,8 +267,21 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
     }
   }
 
+  /// The caption in the prompt bubble, in the child's language.
+  ///
+  /// The routine's name leads, exactly as the spoken opening does, so the
+  /// written and heard versions of the prompt are the same sentence.
+  String _promptText(AppStrings strings) {
+    if (_gameComplete) return strings.anongSusunodComplete;
+    final title = _routineTitle;
+    final question = strings.anongSusunodInstruction;
+    return title == null ? question : '$title. $question';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final strings = context.watch<ChildProvider>().strings;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -293,9 +327,7 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen> {
             left: AppSpacing.md,
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
-              text: _gameComplete
-                  ? 'Well done! You put them all in order!'
-                  : 'Which picture comes next?',
+              text: _promptText(strings),
               isVisible: _showPrompt || _gameComplete,
             ),
           ),
