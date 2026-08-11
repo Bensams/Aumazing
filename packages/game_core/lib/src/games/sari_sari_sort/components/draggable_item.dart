@@ -5,6 +5,7 @@ import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
+import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
@@ -12,8 +13,15 @@ import '../sari_sari_sort_game.dart' show StoreCategory;
 
 /// Data describing a single sari-sari store item (Filipino context).
 class StoreItemData {
-  /// Filipino display label, e.g. 'Tinapay'.
+  /// Filipino name, e.g. 'Tinapay'. Also the item's stable identifier: it is
+  /// the analytics slug and the key the audio layer maps to a recording, so it
+  /// stays put even when the printed label is translated.
   final String name;
+
+  /// English display label, e.g. 'Bread'. Shown when the parent has chosen
+  /// English — a child in an English-language session should read the word
+  /// they are being taught, not the Filipino one.
+  final String en;
 
   /// Emoji glyph used as the item's visual.
   final String emoji;
@@ -27,17 +35,33 @@ class StoreItemData {
 
   const StoreItemData({
     required this.name,
+    required this.en,
     required this.emoji,
     required this.category,
     required this.color,
   });
+
+  /// The printed label for [language].
+  ///
+  /// Tagalog and Cebuano share [name]: these are sari-sari staples, and the
+  /// everyday word for each one (tinapay, saging, sabon, sipilyo …) is the same
+  /// in both. Only English needs its own column.
+  String label(GameLanguage language) {
+    switch (language) {
+      case GameLanguage.english:
+        return en;
+      case GameLanguage.tagalog:
+      case GameLanguage.cebuano:
+        return name;
+    }
+  }
 }
 
 /// A large, ASD-friendly draggable store item for the Sari-Sari Store Sorting
 /// game.
 ///
-/// Renders a colored rounded-rect card with an emoji glyph and a Filipino
-/// label. The child picks it up and drops it into a [CategoryBin]. The owning
+/// Renders a colored rounded-rect card with an emoji glyph and the item's
+/// label in the session's [language]. The child picks it up and drops it into a [CategoryBin]. The owning
 /// game decides whether the drop was correct via [onDropped]; this component
 /// only handles movement, lift/return animations, and the locked (sorted)
 /// state.
@@ -48,6 +72,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     required this.onPickedUp,
     required this.onDropped,
     this.onMoved,
+    this.language = GameLanguage.english,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size) {
@@ -56,6 +81,9 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
 
   final StoreItemData data;
   final Color color;
+
+  /// Language the card's label is printed in.
+  final GameLanguage language;
 
   /// Fired when the child lifts the item (drag start).
   final void Function(DraggableItem item) onPickedUp;
@@ -238,7 +266,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     );
     _labelPaint.render(
       canvas,
-      data.name,
+      data.label(language),
       Vector2(size.x / 2, size.y * 0.80),
       anchor: Anchor.center,
     );

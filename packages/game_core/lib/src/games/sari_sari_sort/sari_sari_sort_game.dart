@@ -192,23 +192,23 @@ class SariSariSortGame extends FlameGame
   /// child cannot identify is not a categorisation task, it is a guess.
   static const Map<StoreCategory, List<StoreItemData>> _catalogue = {
     StoreCategory.toys: [
-      StoreItemData(name: 'Bola', emoji: '⚽', category: StoreCategory.toys, color: Color(0xFF6C9BD2)),     // ball blue
-      StoreItemData(name: 'Manika', emoji: '🪆', category: StoreCategory.toys, color: Color(0xFFE89AB8)),   // doll pink
-      StoreItemData(name: 'Kotse', emoji: '🚗', category: StoreCategory.toys, color: Color(0xFFE07B54)),    // toy car orange
-      StoreItemData(name: 'Teddy', emoji: '🧸', category: StoreCategory.toys, color: Color(0xFFC49A6C)),    // teddy bear tan
+      StoreItemData(name: 'Bola', en: 'Ball', emoji: '⚽', category: StoreCategory.toys, color: Color(0xFF6C9BD2)),     // ball blue
+      StoreItemData(name: 'Manika', en: 'Doll', emoji: '🪆', category: StoreCategory.toys, color: Color(0xFFE89AB8)),   // doll pink
+      StoreItemData(name: 'Kotse', en: 'Toy car', emoji: '🚗', category: StoreCategory.toys, color: Color(0xFFE07B54)), // toy car orange
+      StoreItemData(name: 'Teddy', en: 'Teddy', emoji: '🧸', category: StoreCategory.toys, color: Color(0xFFC49A6C)),   // teddy bear tan
     ],
     StoreCategory.food: [
-      StoreItemData(name: 'Tinapay', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B)),  // bread tan
-      StoreItemData(name: 'Saging', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547)),   // banana yellow
-      StoreItemData(name: 'Mansanas', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E)), // apple red
-      StoreItemData(name: 'Gatas', emoji: '🥛', category: StoreCategory.food, color: Color(0xFFF1EEE2)),    // milk cream
-      StoreItemData(name: 'Tubig', emoji: '💧', category: StoreCategory.food, color: Color(0xFF8FD2EF)),    // water light blue
+      StoreItemData(name: 'Tinapay', en: 'Bread', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B)),  // bread tan
+      StoreItemData(name: 'Saging', en: 'Banana', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547)),  // banana yellow
+      StoreItemData(name: 'Mansanas', en: 'Apple', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E)), // apple red
+      StoreItemData(name: 'Gatas', en: 'Milk', emoji: '🥛', category: StoreCategory.food, color: Color(0xFFF1EEE2)),     // milk cream
+      StoreItemData(name: 'Tubig', en: 'Water', emoji: '💧', category: StoreCategory.food, color: Color(0xFF8FD2EF)),    // water light blue
     ],
     StoreCategory.essentials: [
-      StoreItemData(name: 'Sabon', emoji: '🧼', category: StoreCategory.essentials, color: Color(0xFF8BC36A)),  // soap green
-      StoreItemData(name: 'Sipilyo', emoji: '🪥', category: StoreCategory.essentials, color: Color(0xFF45C4C0)), // toothbrush teal
-      StoreItemData(name: 'Tisyu', emoji: '🧻', category: StoreCategory.essentials, color: Color(0xFFF1EEE2)),  // tissue white
-      StoreItemData(name: 'Syampu', emoji: '🧴', category: StoreCategory.essentials, color: Color(0xFFB088D9)), // shampoo purple
+      StoreItemData(name: 'Sabon', en: 'Soap', emoji: '🧼', category: StoreCategory.essentials, color: Color(0xFF8BC36A)),       // soap green
+      StoreItemData(name: 'Sipilyo', en: 'Toothbrush', emoji: '🪥', category: StoreCategory.essentials, color: Color(0xFF45C4C0)), // toothbrush teal
+      StoreItemData(name: 'Tisyu', en: 'Tissue', emoji: '🧻', category: StoreCategory.essentials, color: Color(0xFFF1EEE2)),     // tissue white
+      StoreItemData(name: 'Syampu', en: 'Shampoo', emoji: '🧴', category: StoreCategory.essentials, color: Color(0xFFB088D9)),   // shampoo purple
     ],
   };
 
@@ -376,6 +376,7 @@ class SariSariSortGame extends FlameGame
         onPickedUp: _onItemPickedUp,
         onDropped: _onItemDropped,
         onMoved: _onItemMoved,
+        language: strings.language,
         position: Vector2(x, trayY),
         size: Vector2.all(itemSize),
       );
