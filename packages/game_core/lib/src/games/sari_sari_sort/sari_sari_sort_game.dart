@@ -328,8 +328,12 @@ class SariSariSortGame extends FlameGame
       item.removeFromParent();
     }
     _items.clear();
+    _hideHints();
     _firstInputRecorded = false;
-    _hintCount = 0;
+    // _hintCount is the session total reported as `hint_count` at the end, so
+    // it deliberately survives the round reset — clearing it here meant the
+    // metric only ever described the last round. _hintsUsedThisRound is the
+    // per-round budget and is the one that starts over.
     _hintsUsedThisRound = 0;
     _consecutiveIdleHints = 0;
     _errorsSinceLastCorrect = 0;
@@ -683,10 +687,19 @@ class SariSariSortGame extends FlameGame
     analyticsRecordHint(hintType: 'gesture_demo');
   }
 
+  /// Takes every prompt off the screen — the basket glow and the ghost hand.
+  ///
+  /// The hand used to be left running, because it removes itself when its
+  /// demo finishes. But the demo is only over on its own schedule: a child who
+  /// picks the item up mid-demo is then dragging it while a second, ghostly
+  /// hand drags the same item somewhere else. Whoever is being shown what to
+  /// do has already started doing it, so the demo stops.
   void _hideHints() {
     for (final bin in _bins) {
       bin.hideHint();
     }
+    if (_ghostHand?.isMounted ?? false) _ghostHand?.removeFromParent();
+    _ghostHand = null;
   }
 
   // ── Analytics: record drags that miss every item as random touches ───

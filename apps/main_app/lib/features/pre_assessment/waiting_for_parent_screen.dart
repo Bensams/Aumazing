@@ -8,6 +8,7 @@ import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
+import '../../providers/child_provider.dart';
 import '../../widgets/mascot.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
@@ -50,11 +51,22 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
 
   late final AnimationController _starsController;
 
+  /// Narrator for the hand-off prompt. Built here rather than shared, matching
+  /// every other child-facing screen: each owns its own player pool and the
+  /// service arbitrates the floor between them.
+  late final VoiceOverService _voiceOver;
+
   @override
   void initState() {
     super.initState();
     // Still a child-facing screen — stays landscape with the activities.
     lockParentLandscape();
+
+    final childProvider = context.read<ChildProvider>();
+    _voiceOver = VoiceOverService(
+      languageCode: childProvider.voiceAssetFolder,
+      speed: childProvider.voicePlaybackRate,
+    );
 
     // Trophy bounce-in animation
     _trophyScaleController = AnimationController(
@@ -101,15 +113,29 @@ class _WaitingForParentScreenState extends State<WaitingForParentScreen>
 
     // Auto-dismiss celebration after 4.5 seconds
     _celebrationTimer = Timer(const Duration(milliseconds: 4500), () {
-      if (mounted) {
-        setState(() => _showCelebration = false);
-      }
+      if (!mounted) return;
+      setState(() => _showCelebration = false);
+      _speakHandOffPrompt();
+    });
+  }
+
+  /// Speaks the hand-off instruction as the waiting panel appears.
+  ///
+  /// The written line is the only thing telling the child what to do next, and
+  /// a pre-reader cannot use it. The delay lets the cross-fade settle so the
+  /// voice arrives with the panel it is describing rather than over the
+  /// celebration it is replacing.
+  void _speakHandOffPrompt() {
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      _voiceOver.play(VoiceOverCue.giveTheDeviceToYourParent);
     });
   }
 
   @override
   void dispose() {
     _celebrationTimer?.cancel();
+    _voiceOver.dispose();
     _trophyScaleController.dispose();
     _textFadeController.dispose();
     _starsController.dispose();

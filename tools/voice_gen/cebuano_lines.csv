@@ -59,6 +59,7 @@ instruction/CountWithMe,Mag-ihap ta.,"warm, clear, friendly kid's voice, calm pa
 instruction/DragIt,Guy-ora kini.,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/FindTheSame,Pangitaa ang parehas.,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/FollowMe,Sunda ko.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/GiveTheDeviceToYourParent,Ihatag na ang gadget sa imong ginikanan.,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/LetsBegin,Magsugod na ta.,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/Listen,Paminaw.,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/MatchIt,Itugma kini.,"warm, clear, friendly kid's voice, calm pace",neutral
