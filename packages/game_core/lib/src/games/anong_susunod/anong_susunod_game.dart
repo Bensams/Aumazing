@@ -157,6 +157,9 @@ class AnongSusunodGame extends FlameGame
   // ── Lifecycle ────────────────────────────────────────────────────────
 
   @override
+  Color backgroundColor() => const Color(0x00000000); // Transparent
+
+  @override
   Future<void> onLoad() async {
     await super.onLoad();
 
