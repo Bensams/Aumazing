@@ -255,6 +255,12 @@ enum VoiceOverCue {
   itemSipilyo,
   itemTisyu,
   itemSyampu,
+  // Toys. The sari-sari sort gained a toys category on the SPED teacher's
+  // advice; these four are the only item names in it.
+  itemBola,
+  itemManika,
+  itemKotse,
+  itemTeddy,
 }
 
 /// Maps each [VoiceOverCue] to its category.
@@ -451,6 +457,10 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.itemSipilyo: VoiceOverCategory.items,
   VoiceOverCue.itemTisyu: VoiceOverCategory.items,
   VoiceOverCue.itemSyampu: VoiceOverCategory.items,
+  VoiceOverCue.itemBola: VoiceOverCategory.items,
+  VoiceOverCue.itemManika: VoiceOverCategory.items,
+  VoiceOverCue.itemKotse: VoiceOverCategory.items,
+  VoiceOverCue.itemTeddy: VoiceOverCategory.items,
 };
 
 /// Maps each [VoiceOverCue] to its asset file path (relative to the package
@@ -674,6 +684,10 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.itemSipilyo: 'voice_over/items/Sipilyo.wav',
   VoiceOverCue.itemTisyu: 'voice_over/items/Tisyu.wav',
   VoiceOverCue.itemSyampu: 'voice_over/items/Syampu.wav',
+  VoiceOverCue.itemBola: 'voice_over/items/Bola.wav',
+  VoiceOverCue.itemManika: 'voice_over/items/Manika.wav',
+  VoiceOverCue.itemKotse: 'voice_over/items/Kotse.wav',
+  VoiceOverCue.itemTeddy: 'voice_over/items/Teddy.wav',
 };
 
 /// Audio context for voice-over playback that mixes with background music.
@@ -1547,6 +1561,10 @@ class VoiceOverService {
     'sipilyo': VoiceOverCue.itemSipilyo,
     'tisyu': VoiceOverCue.itemTisyu,
     'syampu': VoiceOverCue.itemSyampu,
+    'bola': VoiceOverCue.itemBola,
+    'manika': VoiceOverCue.itemManika,
+    'kotse': VoiceOverCue.itemKotse,
+    'teddy': VoiceOverCue.itemTeddy,
   };
 
   // ── Immediate Answer Feedback ───────────────────────────────────────

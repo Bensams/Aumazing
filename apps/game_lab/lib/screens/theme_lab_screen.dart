@@ -233,9 +233,9 @@ class _ThemeLabScreenState extends State<ThemeLabScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              _binChip(strings.binToys, palette.primary),
               _binChip(strings.binFood, palette.accent),
-              _binChip(strings.binDrinks, palette.primary),
-              _binChip(strings.binToiletries, palette.accent),
+              _binChip(strings.binEssentials, palette.accent),
             ],
           ),
         ],

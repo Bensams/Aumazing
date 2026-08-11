@@ -161,3 +161,7 @@ turn_taking/ThankYouForWaiting.wav,Thank you for waiting.,no,0.5,0.5,neutral
 turn_taking/Wait.wav,Wait.,no,0.5,0.5,neutral
 turn_taking/WatchMeFirst.wav,Watch me first.,no,0.5,0.5,neutral
 turn_taking/YourTurn.wav,Your turn!,no,0.5,0.5,neutral
+items/Bola.wav,Bola.,yes,0.5,0.5,neutral
+items/Manika.wav,Manika.,yes,0.5,0.5,neutral
+items/Kotse.wav,Kotse.,yes,0.5,0.5,neutral
+items/Teddy.wav,Teddy.,yes,0.5,0.5,neutral

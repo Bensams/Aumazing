@@ -100,6 +100,17 @@ assignments were curated from KIE's written descriptions, not by listening.
 | `ceb_lexianne` | ceb | human voice actor ("Lexianne") | ❌ no release on file |
 | `*_adult_*`, `*_young_*`, `*_child_*` (18 packs) | en / tl / ceb | KIE → `google/gemini-3-1-flash-tts` | ⚠️ see §1 |
 
+**Added 2026-08-11:** `items/Bola`, `items/Manika`, `items/Kotse`, `items/Teddy`
+— 4 cues × 18 packs = 72 clips, for the Sari-Sari Sort `toys` category. Same
+model and voice configuration as the rest of §2.2, so §1 applies to them
+unchanged. Reproduce with:
+
+```
+python generate_kie.py --lang all --only "items/Bola,items/Manika,items/Kotse,items/Teddy" --yes
+python to_mp3.py --src out/kie/gemini --dst out/mp3
+python install_packs.py
+```
+
 The `en` / `tl` / `ceb` default packs were **removed** on 2026-08-07. They were
 mixed-provenance — original cues of unrecorded origin, plus `letters/`,
 `numbers/` and `items/` borrowed from generated packs by `fill_default_packs.py`

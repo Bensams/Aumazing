@@ -73,10 +73,23 @@ class AppStrings {
       });
 
   // ── Sari-Sari Store Sorting ──────────────────────────────────────────
+  /// Names the object and the action, rather than the bare verb "Sort".
+  ///
+  /// A one-word instruction assumes the child already knows what is being
+  /// sorted and into what. This phrasing is modelled on how the SPED teacher
+  /// actually gives the task aloud — "move the picture to its proper places" —
+  /// so the on-screen prompt, the spoken cue and the adult in the room are all
+  /// saying the same sentence.
   String get sortInstruction => _pick(const {
-        GameLanguage.english: 'Put each item in the right basket!',
-        GameLanguage.tagalog: 'Ilagay ang bawat bagay sa tamang basket!',
-        GameLanguage.cebuano: 'Ibutang ang matag butang sa saktong basket!',
+        GameLanguage.english: 'Move the picture to the right basket!',
+        GameLanguage.tagalog: 'Ilipat ang larawan sa tamang basket!',
+        GameLanguage.cebuano: 'Ibalhin ang hulagway sa saktong basket!',
+      });
+
+  String get binToys => _pick(const {
+        GameLanguage.english: 'Toys',
+        GameLanguage.tagalog: 'Laruan',
+        GameLanguage.cebuano: 'Dulaan',
       });
 
   String get binFood => _pick(const {
@@ -85,13 +98,11 @@ class AppStrings {
         GameLanguage.cebuano: 'Pagkaon',
       });
 
-  String get binDrinks => _pick(const {
-        GameLanguage.english: 'Drinks',
-        GameLanguage.tagalog: 'Inumin',
-        GameLanguage.cebuano: 'Ilimnon',
-      });
-
-  String get binToiletries => _pick(const {
+  /// Everything a household needs that is neither a toy nor food — soap,
+  /// toothbrush, tissue, shampoo. "Gamit" / "Galamiton" is the word a Filipino
+  /// child hears for this at home, and is wider than "toiletries", which is
+  /// what this category used to be called before it was allowed to grow.
+  String get binEssentials => _pick(const {
         GameLanguage.english: 'Things',
         GameLanguage.tagalog: 'Gamit',
         GameLanguage.cebuano: 'Galamiton',
