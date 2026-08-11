@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the fourteen Ano'ng Susunod? routine cards, starring BPS and Reiz.
+"""Generate the fourteen Ano'ng Susunod? routine cards, starring BPS.
 
 Engine: kie.ai `google/nano-banana-edit`. Each card is generated from TWO
 reference images in one call:
@@ -14,13 +14,19 @@ card set. Prompted from the style strip alone it returns the generic child the
 strip already shows. Naming which reference governs what is what gets BPS's
 plaid shirt drawn in the card set's flat sticker style.
 
-Casting is by routine, so a child working through one sequence sees one
-familiar face:
+ONE character across the whole set, and that is not a stylistic preference.
+Casting was by routine at first — BPS for Morning and Mealtime, Reiz for
+Bedtime and Playtime — which reads fine to an adult, who understands that two
+boys can each have a bedtime. It does not read that way to the child the game
+is for. A sequencing task asks "what does he do next?", and a card set that
+answers with a different boy has changed the subject mid-question: the child now
+has to decide whether the new face is a new person before they can think about
+the order at all. Two of the routines even crossed the line inside themselves,
+because `brush_teeth` and `wash_hands` each belong to two routines and were
+pinned to one character apiece — so Gabi ran Reiz, Reiz, BPS, Reiz.
 
-  Morning + Mealtime -> BPS        Bedtime + Playtime -> Reiz
-
-`brush_teeth` and `wash_hands` each belong to two routines, so they cannot
-follow that rule; they are pinned to one character apiece and appear in both.
+Reiz keeps his sprite sheets and his place as a mascot elsewhere. He is simply
+not a second protagonist here.
 
 Usage:
   pip install pillow numpy scipy requests
@@ -73,7 +79,12 @@ COLORS = 255          # adaptive palette; the art is flat, so this is lossless
 
 # ── References ────────────────────────────────────────────────────────
 # `face` and `clothes` are kept apart because bedtime needs to change one
-# without touching the other: Reiz out of his blazer must still be Reiz.
+# without touching the other: BPS out of his plaid must still be BPS.
+#
+# One entry, deliberately — see the note at the top of the file. Adding a second
+# character here is enough to put two protagonists back into the card set, so if
+# one ever returns it should be for a card set of its own, keyed by which
+# character the child's session is running.
 CHARACTERS = {
     "bps": {
         "art": CHARACTER_ART / "BPS_chibi.png",
@@ -85,13 +96,6 @@ CHARACTERS = {
         "clothes": ("an open pale blue and orange plaid button-up shirt over a "
                     "plain white t-shirt, light grey trousers and white "
                     "sneakers"),
-    },
-    "reiz": {
-        "art": CHARACTER_ART / "Reiz_Chibi_nb.png",
-        "face": ("a friendly young Filipino boy with fair skin, dark grey "
-                 "eyes, and soft wavy black hair"),
-        "clothes": ("an open black blazer over a plain white t-shirt, a thin "
-                    "silver pendant necklace, black trousers and black shoes"),
     },
 }
 
@@ -112,7 +116,7 @@ for _c in CHARACTERS.values():
 # and a figure in a scene — so the model reads a style rather than copying one
 # drawing. Rebuild it with --rebuild-style-ref after a deliberate style change.
 STYLE_REF = SCRIPT_DIR / "assets" / "routine_card_style.png"
-STYLE_CARDS = ["brush_teeth", "eat", "wash_hands"]
+STYLE_CARDS = ["brush_teeth", "eat", "school"]
 
 STYLE = (
     "STYLE: copy the drawing style of the second reference image exactly — a "
@@ -140,11 +144,12 @@ STYLE = (
 # a card a two-year-old will not read at a glance.
 #
 # `outfit` overrides the character's default clothes. Bedtime needs it: pinned
-# to his blazer, Reiz came back asleep in a suit jacket, which contradicts the
-# pyjamas card immediately before it in the same routine. The sequence is the
-# thing being taught, so it has to survive contact with the costume.
+# to his default shirt, the boy came back asleep fully dressed, which
+# contradicts the pyjamas card immediately before it in the same routine. The
+# sequence is the thing being taught, so it has to survive contact with the
+# costume.
 CARDS = {
-    # ── Morning (umaga) — BPS ────────────────────────────────────────
+    # ── Morning (umaga) ──────────────────────────────────────────────
     "wake": ("bps",
              "The boy has just woken up: he is sitting up in bed with the "
              "pale blue blanket across his lap, both arms stretched high "
@@ -165,7 +170,7 @@ CARDS = {
                "front of a small peach school building with a blue pitched "
                "roof, a yellow door, two square windows and a little flag on "
                "top."),
-    # ── Mealtime (kainan) — sit / eat / clear are BPS ────────────────
+    # ── Mealtime (kainan) ────────────────────────────────────────────
     "sit_at_table": ("bps",
                      "The boy is sitting down at the table: he sits upright "
                      "and still on a wooden chair pulled up to a small round "
@@ -182,30 +187,30 @@ CARDS = {
                     "to the right carrying an empty white plate in both "
                     "hands, towards a pale blue kitchen sink at the right of "
                     "the picture."),
-    # ── Bedtime (gabi) — Reiz ────────────────────────────────────────
-    "bath": ("reiz",
+    # ── Bedtime (gabi) ───────────────────────────────────────────────
+    "bath": ("bps",
              "The boy is taking a bath: only his head, shoulders and one "
              "waving arm show above the white foam in a lavender bathtub with "
              "curved feet, with round soap bubbles in the air and a small "
              "yellow rubber duck floating beside him. He is smiling happily."),
-    "pajamas": ("reiz",
+    "pajamas": ("bps",
                 "The boy is putting on his pyjamas: he stands smiling in "
                 "lavender star-patterned pyjama trousers, holding up a "
                 "matching lavender star-patterned pyjama top in front of him "
                 "with both hands, about to put it on.",
                 "a plain white t-shirt and lavender pyjama trousers with a "
                 "small yellow star pattern, holding the matching pyjama top"),
-    "sleep": ("reiz",
+    "sleep": ("bps",
               "The boy is asleep: he lies on his back in bed with his head on "
               "a white pillow and a mint green blanket pulled up to his chest, "
               "both eyes peacefully closed as two curved lines, a small "
               "content smile on his face.",
               "lavender pyjamas with a small yellow star pattern"),
-    # ── Playtime (laro) — Reiz ───────────────────────────────────────
+    # ── Playtime (laro) ──────────────────────────────────────────────
     # The shelf is described as attached to a wall bracket because "a shelf
     # above him" alone came back as a plank floating in white space with the
     # ball hovering off it.
-    "get_toy": ("reiz",
+    "get_toy": ("bps",
                 "The boy is getting a toy out: he stands reaching up with one "
                 "hand and takes hold of a butter yellow ball that is sitting "
                 "ON TOP of a low wooden shelf beside him, looking up at the "
@@ -218,7 +223,7 @@ CARDS = {
                 "empty white with nothing enclosing it."),
     # First take drew the whole scene inside a bordered white panel, which the
     # background key cannot remove — it is ink, not page. Hence the repeat.
-    "play": ("reiz",
+    "play": ("bps",
              "The boy is playing: he sits on the floor on a small round mat, "
              "smiling and building a tower out of mint green, sky blue and "
              "peach toy blocks with both hands, with a few loose blocks "
@@ -226,12 +231,12 @@ CARDS = {
              "picture. Do NOT draw a square, a panel, a frame or any outlined "
              "box around the scene — the drawing sits directly on empty white "
              "with nothing enclosing it."),
-    "put_away": ("reiz",
+    "put_away": ("bps",
                  "The boy is tidying his toys away: he kneels beside an open "
                  "peach toy box and drops a mint green ball and a toy rabbit "
                  "down into it with both hands, smiling."),
-    # ── Shared step — pinned to Reiz ─────────────────────────────────
-    "wash_hands": ("reiz",
+    # ── Shared step — appears in both Kainan and Laro ────────────────
+    "wash_hands": ("bps",
                    "The boy is washing his hands: he stands on a small wooden "
                    "step stool at a white sink, rubbing both soapy hands "
                    "together under water running from a yellow tap, with "

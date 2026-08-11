@@ -156,9 +156,10 @@ class HintayGame extends FlameGame
 
   // ── Tier tuning ──────────────────────────────────────────────────────
 
-  /// Shortest wait before the star wakes. Never below ~1.2s: under that the
-  /// child can succeed by tapping reflexively, which measures nothing.
-  Duration get _minWait {
+  /// Shortest wait before the star wakes, before the round ramp. Never below
+  /// ~1.2s: under that the child can succeed by tapping reflexively, which
+  /// measures nothing.
+  Duration get _baseMinWait {
     switch (_tier.level) {
       case 1:
         return const Duration(milliseconds: 1200);
@@ -169,7 +170,7 @@ class HintayGame extends FlameGame
     }
   }
 
-  Duration get _maxWait {
+  Duration get _baseMaxWait {
     switch (_tier.level) {
       case 1:
         return const Duration(milliseconds: 2600);
@@ -180,9 +181,9 @@ class HintayGame extends FlameGame
     }
   }
 
-  /// How long the star stays awake waiting for a tap. Generous on Easy: a slow
-  /// responder should not be scored as inattentive.
-  Duration get _responseWindow {
+  /// How long the star stays awake waiting for a tap, before the round ramp.
+  /// Generous on Easy: a slow responder should not be scored as inattentive.
+  Duration get _baseResponseWindow {
     switch (_tier.level) {
       case 1:
         return const Duration(milliseconds: 3800);
@@ -192,6 +193,76 @@ class HintayGame extends FlameGame
         return const Duration(milliseconds: 3000);
     }
   }
+
+  // ── Within-session round ramp ────────────────────────────────────────
+  //
+  // The tier is the between-session axis (set by the AI's attention level or
+  // the parent). This ramp is the within-session one: later rounds hold the
+  // child longer and give a slightly tighter window, so round 4 asks more than
+  // round 1 without the task ever changing shape.
+  //
+  // Deliberately bounded inside the tier — an Easy round 4 stays easier than a
+  // Medium round 1 — so `difficulty_level` in the results stays honest and the
+  // parent-visible label keeps meaning what it says. [AdaptiveDifficulty] still
+  // steps the tier down mid-round if the child starts struggling, which is what
+  // keeps the ramp from compounding on a bad day.
+
+  /// 0.0 on the first round, 1.0 on the last.
+  double get _roundProgress =>
+      totalRounds <= 1 ? 0 : _currentRound / (totalRounds - 1);
+
+  /// Proportion the wait range grows by come the final round. Gentler on Easy:
+  /// a child on the Easy tier is being taught to wait at all, not stretched.
+  double get _waitRamp {
+    switch (_tier.level) {
+      case 1:
+        return 0.20;
+      case 3:
+        return 0.35;
+      default:
+        return 0.28;
+    }
+  }
+
+  /// Proportion the response window shrinks by come the final round. Much
+  /// smaller than [_waitRamp] on purpose: a longer wait is the skill being
+  /// trained, whereas a narrow window mostly penalises slow motor planning.
+  double get _windowRamp {
+    switch (_tier.level) {
+      case 1:
+        return 0.08;
+      case 3:
+        return 0.16;
+      default:
+        return 0.12;
+    }
+  }
+
+  /// Floor on the response window regardless of tier and round — below this a
+  /// child with slower motor planning is scored as inattentive when they are
+  /// not.
+  static const int _minResponseWindowMs = 1800;
+
+  Duration get _minWait => Duration(
+        milliseconds:
+            (_baseMinWait.inMilliseconds * (1 + _waitRamp * _roundProgress))
+                .round(),
+      );
+
+  Duration get _maxWait => Duration(
+        milliseconds:
+            (_baseMaxWait.inMilliseconds * (1 + _waitRamp * _roundProgress))
+                .round(),
+      );
+
+  Duration get _responseWindow => Duration(
+        milliseconds: math.max(
+          _minResponseWindowMs,
+          (_baseResponseWindow.inMilliseconds *
+                  (1 - _windowRamp * _roundProgress))
+              .round(),
+        ),
+      );
 
   double get _starRadius {
     final available = math.min(size.x, size.y - kTopOverlayBand);

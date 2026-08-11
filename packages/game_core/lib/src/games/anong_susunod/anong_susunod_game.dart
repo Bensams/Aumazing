@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/animation.dart' show Curves;
 import 'package:shared_ui/shared_ui.dart';
 
 import 'components/routine_card.dart';
@@ -25,17 +27,23 @@ import '../../config/difficulty_profile.dart';
 /// child already lives through, it doubles as a functional-skills intervention
 /// rather than an abstract ordering puzzle.
 ///
-/// Interaction is **tap-to-select, then tap-a-slot**. Dragging is deliberately
-/// not the only path: at 2–6, and especially with motor-planning differences,
-/// a drag that is released a few pixels early reads as a failure the child did
-/// not make. Two taps cannot be dropped.
+/// Interaction is **tap-to-select then tap-a-slot, or drag the card across** —
+/// both paths, always, on every tier. Dragging is the gesture a child reaches
+/// for unprompted and it keeps the card under the finger that means it; the tap
+/// path is what a child with motor-planning differences can still complete when
+/// a drag gets released a few pixels early. Neither is the fallback for the
+/// other, and a drag that never travels past [_dragSlop] resolves as a tap, so a
+/// tremor cannot turn a pick-up into a dropped card.
 ///
-/// Three decisions worth keeping if this is ever refactored:
+/// Four decisions worth keeping if this is ever refactored:
 ///
-/// * **The tray is shuffled every round.** Presenting steps in canonical order
-///   lets a child score full marks by always taking the leftmost card, which
-///   measures nothing. The shuffle is what makes the accuracy number mean
-///   anything at all.
+/// * **The tray is shuffled every round, and holds more cards than there are
+///   slots.** Presenting steps in canonical order lets a child score full marks
+///   by always taking the leftmost card. Handing out exactly as many cards as
+///   there are gaps is the same failure one step later: whatever the child does
+///   with the earlier cards, the last gap can only take the last card. The
+///   shuffle and the distractors together are what make the accuracy number mean
+///   anything at all — see [_foilCount].
 /// * **A wrong placement never ends the round.** The card returns to the tray,
 ///   a retry is recorded, and the prompt hierarchy escalates — highlight at two
 ///   wrong attempts, place it for them at four. The routine always completes.
@@ -45,7 +53,7 @@ import '../../config/difficulty_profile.dart';
 ///   away from right is not the same as one who is random, and no other game
 ///   in the app can tell those apart.
 class AnongSusunodGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   AnongSusunodGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -139,6 +147,20 @@ class AnongSusunodGame extends FlameGame
   /// The child's first complete ordering, captured before any correction.
   List<String>? _firstOrdering;
 
+  /// The card currently under the child's finger, once the gesture has been
+  /// confirmed as a drag rather than a tap.
+  RoutineCard? _dragCard;
+
+  /// Where the pointer went down, in game space. The tap/drag decision is
+  /// DISPLACEMENT from here rather than accumulated deltas: summed deltas keep
+  /// growing while a finger trembles in one spot, so a child with a tremor could
+  /// cross the threshold without ever moving off the card — the exact case the
+  /// threshold exists to protect.
+  Vector2? _dragOrigin;
+
+  /// Pointer travel (game px) below which a release still counts as a tap.
+  static const double _dragSlop = 14.0;
+
   Timer? _idleTimer;
   Timer? _advanceTimer;
 
@@ -170,6 +192,24 @@ class AnongSusunodGame extends FlameGame
   /// Whether the tier lets the child seat a card in a slot it does not belong
   /// in. Only the hardest tier does; it is what makes real ordering possible.
   bool get _freePlacement => _tier.level >= 3;
+
+  /// Extra cards in the tray that belong to no slot this round, drawn from the
+  /// other routines.
+  ///
+  /// Without these the task is not answerable *wrongly*. A tray holding exactly
+  /// as many cards as there are gaps means the final placement of every round is
+  /// forced, and on the Easy tier — one gap, one card — the whole round is: the
+  /// child cannot be incorrect no matter what they understand, and the session
+  /// reports a flawless score that tells the assessment model nothing. A
+  /// distractor makes the choice real while leaving the support in place; on
+  /// Easy the hints are still unlimited and the idle nudge still lights up the
+  /// right card after five seconds, so this is errorless *teaching*, not an
+  /// errorless *task*.
+  ///
+  /// One is enough. The point is that a choice exists, not that it is crowded —
+  /// a tray of near-misses would tax working memory, which is not what this game
+  /// is measuring.
+  int get _foilCount => 1;
 
   // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -224,6 +264,11 @@ class AnongSusunodGame extends FlameGame
     _slots.clear();
     _tray.clear();
     _selected = null;
+    // Every card the drag could have been holding has just left the tree; a
+    // stale reference here would keep the next round's layout skipping a card
+    // that no longer exists.
+    _dragCard = null;
+    _dragOrigin = null;
     _wrongPerSlot.clear();
     _hintsUsedThisRound = 0;
     _firstOrdering = null;
@@ -257,9 +302,14 @@ class AnongSusunodGame extends FlameGame
         ..preset = true;
     }
 
-    // Remaining steps go to the tray, SHUFFLED. Without this the correct card
-    // is always the leftmost one and the whole task collapses.
-    final remaining = steps.sublist(presetCount).toList()..shuffle(_random);
+    // Remaining steps go to the tray with their distractors, SHUFFLED. Without
+    // the shuffle the correct card is always the leftmost one; without the
+    // distractors the last gap can only take the last card. Either alone
+    // collapses the task — see [_foilCount].
+    final remaining = [
+      ...steps.sublist(presetCount),
+      ..._pickFoils(steps, _foilCount),
+    ]..shuffle(_random);
     for (final step in remaining) {
       final card = RoutineCard(
           step: step,
@@ -270,11 +320,40 @@ class AnongSusunodGame extends FlameGame
       add(card);
     }
 
+    // Counts only the real steps: a distractor is never something the child is
+    // required to place, so it must not enlarge the denominator the accuracy
+    // score is read against.
     _totalPlacementsRequired += _placementsThisRound;
     _slotStart = DateTime.now();
     _layout();
     _armIdle();
     analyticsShowStimulus();
+  }
+
+  /// Picks [count] distractor steps that belong to no slot in [inRound].
+  ///
+  /// Drawn from the *other* routines rather than invented, so a foil is still a
+  /// real thing the child does — "Maligo" offered during Umaga is a step they
+  /// recognise that simply does not belong here, which is the discrimination
+  /// being asked for. A nonsense card would be rejected on sight and measure
+  /// nothing.
+  ///
+  /// Matched by step id, not by identity: `brush` appears in both Umaga and
+  /// Gabi and `wash` in both Kainan and Laro, so a shared step must never come
+  /// back as a foil for the routine it is already part of.
+  List<RoutineStep> _pickFoils(List<RoutineStep> inRound, int count) {
+    if (count <= 0) return const [];
+
+    final excluded = inRound.map((s) => s.id).toSet();
+    final pool = <String, RoutineStep>{};
+    for (final routine in kRoutines) {
+      for (final step in routine.steps) {
+        if (!excluded.contains(step.id)) pool.putIfAbsent(step.id, () => step);
+      }
+    }
+
+    final candidates = pool.values.toList()..shuffle(_random);
+    return candidates.take(count).toList();
   }
 
   /// Lays slots across the upper band and the tray beneath, sized to whatever
@@ -307,9 +386,14 @@ class AnongSusunodGame extends FlameGame
     final trayY = usableTop + slotH + 14 + cardH / 2;
 
     for (var i = 0; i < _tray.length; i++) {
-      _tray[i]
-        ..position = Vector2(trayStartX + i * (cardW + trayGap), trayY)
+      final card = _tray[i];
+      card
+        ..homePosition = Vector2(trayStartX + i * (cardW + trayGap), trayY)
         ..size = Vector2(cardW, cardH);
+      // A card under the finger keeps whatever position the drag has given it;
+      // snapping it back to its slot in the tray mid-gesture would read as the
+      // card escaping the child's grip.
+      if (card != _dragCard) card.position = card.homePosition;
     }
   }
 
@@ -383,6 +467,13 @@ class AnongSusunodGame extends FlameGame
       return;
     }
 
+    _offer(slot, card);
+  }
+
+  /// Resolves [card] against [slot]. The single place a placement is judged, so
+  /// a dragged card and a tapped one are scored identically — the gesture the
+  /// child reached for must never change what the session reports about them.
+  void _offer(SequenceSlot slot, RoutineCard card) {
     if (slot.preset) return;
 
     if (slot.filled != null) {
@@ -402,6 +493,109 @@ class AnongSusunodGame extends FlameGame
     }
 
     _seat(slot, card, prompted: false);
+  }
+
+  // ── Drag (the other way to place a card) ─────────────────────────────
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    // Canvas space throughout, which is both the cards' parent space and what
+    // [FingertipDrag] expects — no camera sits between the two in this game.
+    final point = event.canvasPosition;
+
+    for (final card in _tray) {
+      if (!card.placed && card.containsLocal(point)) {
+        _dragCard = card;
+        _dragOrigin = point.clone();
+        return;
+      }
+    }
+    _dragCard = null;
+    _dragOrigin = null;
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    super.onDragUpdate(event);
+    final card = _dragCard;
+    final origin = _dragOrigin;
+    if (card == null || origin == null) return;
+
+    if (!card.isFollowingFingertip) {
+      // Still tap-like: leave the card sitting in the tray so a shaky tap does
+      // not visibly nudge it.
+      if ((event.canvasEndPosition - origin).length < _dragSlop) return;
+      // Confirmed as a drag. Lift it above the other cards and the slots, and
+      // start the glide onto the fingertip — done here rather than at
+      // onDragStart so a wobbled tap never yanks the card out from under the
+      // child.
+      _select(card);
+      card.priority = 300;
+      card.startFingertipFollow(event.canvasEndPosition);
+      return;
+    }
+
+    card.moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    final card = _dragCard;
+    _dragCard = null;
+    _dragOrigin = null;
+    if (card == null) return;
+
+    if (!card.isFollowingFingertip) {
+      // Never travelled: that was a tap, and onTapDown has already selected the
+      // card. Nothing more to do.
+      return;
+    }
+
+    // Hit-tested from the card's centre, which [FingertipDrag] has parked under
+    // the fingertip — so the slot the child was pointing at is the slot that
+    // takes the card.
+    final centre = card.visualCenter;
+    card.stopFingertipFollow();
+    card.priority = 0;
+
+    for (final slot in _slots) {
+      if (slot.containsLocal(centre)) {
+        _offer(slot, card);
+        // A rejected or ignored card is still sitting where it was dropped.
+        if (!card.placed) _returnHome(card);
+        return;
+      }
+    }
+
+    // Released over open canvas. Not an error and not scored — a child who
+    // thinks better of a card mid-drag has done nothing wrong.
+    _returnHome(card);
+    _resetIdle();
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    super.onDragCancel(event);
+    final card = _dragCard;
+    _dragCard = null;
+    _dragOrigin = null;
+    if (card == null) return;
+    card.stopFingertipFollow();
+    card.priority = 0;
+    _returnHome(card);
+  }
+
+  /// Glides [card] back to its place in the tray. Animated rather than snapped:
+  /// a card that vanishes from under the finger and reappears elsewhere is hard
+  /// to follow, and the movement is what shows the child the card is still
+  /// theirs to try again.
+  void _returnHome(RoutineCard card) {
+    card.add(MoveToEffect(
+      card.homePosition.clone(),
+      EffectController(duration: 0.2, curve: Curves.easeOut),
+    ));
   }
 
   /// Returns a seated card to the tray so the child can rearrange it.
@@ -528,6 +722,12 @@ class AnongSusunodGame extends FlameGame
     final ordering = _slots.map((s) => s.filled!.id).toList();
     final correct = _routine.steps.take(_slotCount).map((s) => s.id).toList();
 
+    // Whether this is the child's first complete ordering of the round. The
+    // measure is of their unaided attempt, so it is banked exactly once —
+    // whichever branch below resolves it. Adding it in both (the shape this had
+    // first) double-counts every round a child gets wrong and then repairs,
+    // reporting twice the sequence error they actually made.
+    final isFirstOrdering = _firstOrdering == null;
     _firstOrdering ??= ordering;
 
     if (_freePlacement && !_listEquals(ordering, correct)) {
@@ -535,7 +735,9 @@ class AnongSusunodGame extends FlameGame
       // the attempt, then hand the mismatched cards back so they can fix it —
       // the fix itself is the learning, and it is recorded as a correction
       // rather than a failure.
-      _sequenceDistanceTotal += _positionalDistance(ordering, correct);
+      if (isFirstOrdering) {
+        _sequenceDistanceTotal += _positionalDistance(ordering, correct);
+      }
 
       var returned = 0;
       for (var i = 0; i < _slots.length; i++) {
@@ -553,7 +755,7 @@ class AnongSusunodGame extends FlameGame
         _armIdle();
         return;
       }
-    } else if (_firstOrdering != null) {
+    } else if (isFirstOrdering) {
       _sequenceDistanceTotal += _positionalDistance(_firstOrdering!, correct);
     }
 
