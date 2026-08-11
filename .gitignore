@@ -67,6 +67,9 @@ apps/main_app/env/dev.json
 # Generated sprite clips + extracted frames (scripts/generate_sprites.py)
 .sprite_cache/
 
+# Raw routine-card generations (scripts/generate_routine_cards.py)
+.card_cache/
+
 # Discarded sprite takes kept for inspection, not shipped or versioned
 packages/shared_ui/assets/characters/Archive/
 
