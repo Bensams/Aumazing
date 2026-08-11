@@ -377,9 +377,51 @@ the new ones instead of re-rolling clips that already settled.
 Letter and numeral names were not auditioned per language and should be, before
 adoption: Filipino and Cebuano use English-style letter names, so the manifests
 carry the bare letter and rely on the `scene` prompt to keep the delivery in the
-right language. Numerals are written as native words (`Tatlo` / `Tulo`), and the
-sari-sari item names are identical across all three manifests on purpose — they
-have to match the Filipino word printed on the item the child is looking at.
+right language. Numerals are written as native words (`Tatlo` / `Tulo`).
+
+### The item names are spoken in English in an English session
+
+They were not, originally: all three manifests carried the same Filipino word,
+because the label printed on the item card was Filipino in every language. That
+changed — an English session now prints *Bread*, *Soap*, *Toothbrush* — and a
+card that reads "Bread" while the narrator says "Tinapay" teaches the child that
+the word under the picture is not the word for the picture.
+
+**The filename stays Filipino; only the English pack's audio changed.** The path
+is the cue id, not the text: `items/Tinapay.wav` is what
+`VoiceOverService._itemMap` resolves and what `StoreItemData.name` carries into
+analytics, and both stay put across every language. Each pack then supplies that
+cue in its own language, exactly as the rest of the library already works —
+`en_*/items/Tinapay.mp3` says "Bread", `tl_*` and `ceb_*` still say "Tinapay".
+Nothing in Dart had to change.
+
+Regenerated 2026-08-11, 108 clips (18 items x 6 English voices):
+
+```bash
+# lines.csv now carries the English text; tagalog_lines.csv / cebuano_lines.csv are untouched
+./.venv/Scripts/python.exe generate_kie.py --lang en --only items/ --workers 8 --yes
+```
+
+The repair pass needs the **rest of the pack present** to compute a voice centre
+— repairing 18 clips against their own median just makes them consistent with
+each other, not with the voice the child hears for everything else. So the
+installed pack was decoded into a scratch tree beside the new takes, and
+`--only items/` kept the paid calls on the new clips:
+
+| | outlier rate |
+|---|---|
+| straight from the API | 40.7% (44/108) |
+| after one pass (3 attempts) | 10.2% (11/108) |
+| after a second pass (4 attempts) | **4.6% (5/108)** |
+
+`install_packs.py` was deliberately **not** run: it prunes any pack folder it
+does not find in its source tree, and the source tree held English items only.
+The 108 files were conformed, encoded and copied over their existing
+counterparts by name instead.
+
+The five items no longer in the game's catalogue (Biskwit, Kendi, Juice, Kape,
+Softdrink) were regenerated too, so the manifest stays coherent if they ever
+come back.
 
 ## Reruns are cheap
 
