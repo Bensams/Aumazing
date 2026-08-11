@@ -7,10 +7,12 @@ import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
+import 'package:aumazing/services/tour_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -145,6 +147,106 @@ void main() {
       expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
       expect(find.text('Bind with Google'), findsNothing);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the guided tour runs on the first visit and is not repeated after it',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.textContaining('A quick tour'), findsOneWidget);
+
+      // Step two spotlights the child panel.
+      await tester.tap(find.text('Next'));
+      await _settleUi(tester);
+      expect(find.textContaining('quick stats'), findsOneWidget);
+
+      await tester.tap(find.text('Skip'));
+      await _settleUi(tester);
+      expect(find.textContaining('A quick tour'), findsNothing);
+      expect(await TourService.instance.hasSeenParentTour(), isTrue);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    },
+  );
+
+  testWidgets(
+    'the help button replays the tour for a parent who has seen it',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(
+        {'parent_dashboard_tour_seen_v1': true},
+      );
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.textContaining('A quick tour'), findsNothing);
+
+      await tester.tap(find.byTooltip('Dashboard guide'));
+      await _settleUi(tester);
+      expect(find.textContaining('A quick tour'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    },
+  );
+
+  testWidgets(
+    'the tour explains how to reach child mode and get back',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+
+      // Walk forward until the child-mode pair of steps comes up.
+      var guard = 0;
+      while (find.textContaining('hand the device to your child').evaluate().isEmpty &&
+          guard++ < 10) {
+        await tester.tap(find.text('Next'));
+        await _settleUi(tester);
+      }
+      expect(find.textContaining('hand the device to your child'),
+          findsOneWidget);
+
+      await tester.tap(find.text('Next'));
+      await _settleUi(tester);
+      expect(find.textContaining('parent PIN'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
     },
   );
 }

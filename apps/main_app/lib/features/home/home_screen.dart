@@ -15,6 +15,8 @@ import '../../services/active_games_service.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
+import '../../services/tour_service.dart';
+import 'widgets/guided_tour_overlay.dart';
 import '../premium/premium_upgrade_screen.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
@@ -43,6 +45,26 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLeftPanelExpanded = true;
   /// Portrait only: whether the child summary card is showing its details.
   bool _isSummaryExpanded = false;
+
+  /// Whether the guided tour is currently dimming the dashboard.
+  bool _isTourActive = false;
+
+  // Tour targets. Landscape and portrait draw different widgets for the
+  // same thing, so each has its own key; the tour skips whichever pair is
+  // not on screen.
+  final _childPanelKey = GlobalKey();
+  final _summaryCardKey = GlobalKey();
+  final _settingsWideKey = GlobalKey();
+  final _settingsPortraitKey = GlobalKey();
+  final _signOutWideKey = GlobalKey();
+  final _signOutPortraitKey = GlobalKey();
+  final _assessmentButtonKey = GlobalKey();
+  final _childModeKey = GlobalKey();
+  final _therapyKey = GlobalKey();
+  final _assessmentStatusKey = GlobalKey();
+  final _scoresKey = GlobalKey();
+  final _screenTimeKey = GlobalKey();
+  final _recentActivityKey = GlobalKey();
 
   @override
   void initState() {
@@ -153,6 +175,143 @@ class _HomeScreenState extends State<HomeScreen> {
 
     context.read<AssessmentProvider>().loadAssessments(childId);
     context.read<ProgressProvider>().loadProgress(childId);
+
+    await _maybeStartTour();
+  }
+
+  // ── Guided tour ─────────────────────────────────────────────────────
+
+  /// Runs the walkthrough automatically on the parent's first visit only.
+  Future<void> _maybeStartTour() async {
+    if (await TourService.instance.hasSeenParentTour()) return;
+    if (!mounted || _isTourActive) return;
+    setState(() => _isTourActive = true);
+  }
+
+  /// Replays the walkthrough from the help button.
+  void _startTour() {
+    if (_isTourActive) return;
+    setState(() => _isTourActive = true);
+  }
+
+  void _endTour() {
+    TourService.instance.markParentTourSeen();
+    if (mounted) setState(() => _isTourActive = false);
+  }
+
+  /// The walkthrough itself: one short sentence per control, in the order a
+  /// parent meets them. Steps whose target is missing (wrong layout, card
+  /// hidden) are skipped by the overlay, so both keys of a pair can be
+  /// listed and only the mounted one is shown.
+  List<TourStep> _tourSteps() {
+    return [
+      const TourStep(
+        title: 'Welcome',
+        body: 'A quick tour of the parent dashboard — tap Next to step '
+            'through it, or Skip to explore on your own.',
+        icon: Icons.waving_hand_rounded,
+      ),
+      TourStep(
+        targetKey: _childPanelKey,
+        title: 'Your child',
+        body: "Your child's name, age and quick stats live here.",
+        icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _summaryCardKey,
+        title: 'Your child',
+        body: "Tap this card to expand your child's quick stats and your "
+            'account details.',
+        icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _assessmentButtonKey,
+        title: 'Assessment',
+        body: 'Start the pre-assessment here to find your child\'s starting '
+            'level and get a recommended module.',
+        icon: Icons.assessment_rounded,
+      ),
+      TourStep(
+        targetKey: _childModeKey,
+        title: 'Child mode',
+        body: 'Tap here, then hand the device to your child — the games open '
+            'in a full-screen, child-safe lobby.',
+        icon: Icons.child_care_rounded,
+      ),
+      TourStep(
+        targetKey: _childModeKey,
+        title: 'Coming back',
+        body: 'To return here, tap the lock button at the top of the child '
+            'screen and enter your parent PIN.',
+        icon: Icons.lock_rounded,
+      ),
+      TourStep(
+        targetKey: _therapyKey,
+        title: 'Therapy directory',
+        body: 'Find therapy centers near you and get directions.',
+        icon: Icons.location_on_rounded,
+      ),
+      TourStep(
+        targetKey: _screenTimeKey,
+        title: 'Screen time',
+        body: "Today's play time against the daily limit you set in Settings.",
+        icon: Icons.timer_rounded,
+      ),
+      TourStep(
+        targetKey: _assessmentStatusKey,
+        title: 'Recommended module',
+        body: 'The activity your child should work on next — tap it to open '
+            'that learning path straight away.',
+        icon: Icons.recommend_rounded,
+      ),
+      TourStep(
+        targetKey: _scoresKey,
+        title: 'Assessment scores',
+        body: 'How your child scored on each assessment activity.',
+        icon: Icons.bar_chart_rounded,
+      ),
+      TourStep(
+        targetKey: _recentActivityKey,
+        title: 'Recent activity',
+        body: 'The last few sessions your child played, with score and time '
+            'spent.',
+        icon: Icons.history_rounded,
+      ),
+      TourStep(
+        targetKey: _settingsWideKey,
+        title: 'Settings',
+        body: 'Set the parent PIN, screen-time limit, sounds and profile '
+            'details here.',
+        icon: Icons.settings_rounded,
+      ),
+      TourStep(
+        targetKey: _settingsPortraitKey,
+        title: 'Settings',
+        body: 'Set the parent PIN, screen-time limit, sounds and profile '
+            'details here.',
+        icon: Icons.settings_rounded,
+      ),
+      TourStep(
+        targetKey: _signOutWideKey,
+        title: 'Sign out',
+        body: 'Signs you out of your account — your child\'s progress stays '
+            'saved.',
+        icon: Icons.logout_rounded,
+      ),
+      TourStep(
+        targetKey: _signOutPortraitKey,
+        title: 'Sign out',
+        body: 'Signs you out of your account — your child\'s progress stays '
+            'saved.',
+        icon: Icons.logout_rounded,
+      ),
+      const TourStep(
+        title: 'That\'s it',
+        body: 'You can replay this tour any time from the ? button at the '
+            'top of the dashboard.',
+        icon: Icons.help_outline_rounded,
+      ),
+    ];
   }
 
   Future<void> _signOut() async {
@@ -228,19 +387,32 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient:
-              context.watch<ChildProvider>().activePalette.parentBackground,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Phones run this screen in portrait; tablets stay landscape.
-            return constraints.maxWidth >= constraints.maxHeight
-                ? _buildWideLayout()
-                : _buildPortraitLayout();
-          },
-        ),
+      body: Stack(
+        // The tour overlay is only worth anything at full screen size, so
+        // the stack takes the whole body rather than the dashboard's
+        // intrinsic size.
+        fit: StackFit.expand,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient:
+                  context.watch<ChildProvider>().activePalette.parentBackground,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Phones run this screen in portrait; tablets stay landscape.
+                return constraints.maxWidth >= constraints.maxHeight
+                    ? _buildWideLayout()
+                    : _buildPortraitLayout();
+              },
+            ),
+          ),
+          if (_isTourActive)
+            GuidedTourOverlay(
+              steps: _tourSteps(),
+              onFinish: _endTour,
+            ),
+        ],
       ),
     );
   }
@@ -251,6 +423,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         // ── Left Panel: Child Summary (no SafeArea, sticks to edge) ────
         AnimatedContainer(
+          key: _childPanelKey,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
           width: _isLeftPanelExpanded ? 280 : 56,
@@ -317,12 +490,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _buildPremiumBanner(),
       _buildScreenTimeStatus(),
       const SizedBox(height: AppSpacing.md),
-      _buildAssessmentStatus(),
+      KeyedSubtree(key: _assessmentStatusKey, child: _buildAssessmentStatus()),
       const SizedBox(height: AppSpacing.md),
-      _buildProgressSection(),
+      KeyedSubtree(key: _scoresKey, child: _buildProgressSection()),
       const SizedBox(height: AppSpacing.md),
       _buildAdvancedTrends(),
-      _buildRecentActivity(),
+      KeyedSubtree(key: _recentActivityKey, child: _buildRecentActivity()),
     ];
   }
 
@@ -339,6 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final email = _authService.currentUser?.email ?? '';
 
         return Container(
+          key: _summaryCardKey,
           decoration: BoxDecoration(
             color: AppColors.white.withAlpha(200),
             borderRadius: BorderRadius.circular(16),
@@ -392,6 +566,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       IconButton(
+                        icon: const Icon(Icons.help_outline_rounded),
+                        tooltip: 'Dashboard guide',
+                        onPressed: _startTour,
+                        color: AppColors.textSecondary,
+                      ),
+                      IconButton(
+                        key: _settingsPortraitKey,
                         icon: const Icon(Icons.settings_rounded),
                         tooltip: 'Settings',
                         onPressed: _showSettingsModal,
@@ -463,6 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       bottom: AppSpacing.xs,
                     ),
                     child: TextButton.icon(
+                      key: _signOutPortraitKey,
                       onPressed: _signOut,
                       icon: const Icon(Icons.logout_rounded, size: 18),
                       label: const Text('Sign Out'),
@@ -570,12 +752,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     IconButton(
+                      icon: const Icon(Icons.help_outline_rounded),
+                      tooltip: 'Dashboard guide',
+                      onPressed: _startTour,
+                      color: AppColors.textSecondary,
+                    ),
+                    IconButton(
+                      key: _settingsWideKey,
                       icon: const Icon(Icons.settings_rounded),
                       tooltip: 'Settings',
                       onPressed: _showSettingsModal,
                       color: AppColors.textSecondary,
                     ),
                     IconButton(
+                      key: _signOutWideKey,
                       icon: const Icon(Icons.logout_rounded),
                       tooltip: 'Sign Out',
                       onPressed: _signOut,
@@ -767,6 +957,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<AssessmentProvider>(
       builder: (context, assessProv, _) {
         final assessment = AppPrimaryButton(
+          key: _assessmentButtonKey,
           label: assessProv.hasPreAssessment
               ? 'Assessment'
               : 'Start Pre-Assessment',
@@ -776,6 +967,7 @@ class _HomeScreenState extends State<HomeScreen> {
               : Icons.play_circle_filled_rounded,
         );
         final childMode = _ActionCard(
+          key: _childModeKey,
           icon: Icons.child_care_rounded,
           label: 'Enter Child Mode',
           subtitle: 'Hand device to child',
@@ -783,6 +975,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: _enterChildMode,
         );
         final therapy = _ActionCard(
+          key: _therapyKey,
           icon: Icons.location_on_rounded,
           label: 'Therapy Directory',
           subtitle: 'Centers near you',
@@ -890,6 +1083,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
         final fraction = (usedMin / limit).clamp(0.0, 1.0);
         return Padding(
+          key: _screenTimeKey,
           padding: const EdgeInsets.only(top: AppSpacing.sm),
           child: Row(
             children: [
@@ -1596,6 +1790,7 @@ class _CtaBand extends StatelessWidget {
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
+    super.key,
     required this.icon,
     required this.label,
     required this.subtitle,
