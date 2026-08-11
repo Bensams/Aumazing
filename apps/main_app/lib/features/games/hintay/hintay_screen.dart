@@ -104,12 +104,17 @@ class _HintayScreenState extends State<HintayScreen> {
       onPlayTapSfx: () => audioService.playGameTapSfx(),
       onPlayLevelCompleteSfx: () => audioService.playLevelCompleteSfx(),
       onPlayGameCompleteSfx: () => audioService.playGameCompleteCelebration(),
-      // Voice-over callbacks. `eyesHere` is reused from the existing
-      // Attention-and-Regulation cue set rather than recording a new line —
-      // "eyes here" is exactly the instruction this game gives.
-      onPlayCorrectVo: () => _voiceOverService.play(VoiceOverCue.goodLooking),
+      // Voice-over callbacks. Every cue below resolves inside the child's own
+      // voice pack, so the spoken language follows the language the parent set
+      // in exactly the same way the on-screen text does.
+      //
+      // `goodWaiting` rather than generic praise: it names the thing the child
+      // actually did right, which in this game is the waiting and not the tap.
+      onPlayCorrectVo: () => _voiceOverService.play(VoiceOverCue.goodWaiting),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
-      onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.eyesHere),
+      onPlayInstructionVo: () =>
+          _voiceOverService.play(VoiceOverCue.waitForTheStar),
+      onPlayHintVo: () => _voiceOverService.play(VoiceOverCue.tapTheStar),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
@@ -242,6 +247,8 @@ class _HintayScreenState extends State<HintayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = context.watch<ChildProvider>().strings;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -288,8 +295,8 @@ class _HintayScreenState extends State<HintayScreen> {
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
               text: _gameComplete
-                  ? 'Well done! You waited so well!'
-                  : 'Wait for the star to wake up, then tap it!',
+                  ? strings.hintayComplete
+                  : strings.hintayInstruction,
               isVisible: _showPrompt || _gameComplete,
             ),
           ),

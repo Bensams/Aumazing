@@ -19,7 +19,13 @@
 /// but there is nothing here worth naming", and the audio layer stays quiet
 /// rather than substituting praise.
 class AnswerLabel {
-  const AnswerLabel({this.color, this.shape, this.letter, this.item});
+  const AnswerLabel({
+    this.color,
+    this.shape,
+    this.letter,
+    this.item,
+    this.routineStep,
+  });
 
   /// Colour name, e.g. `'red'`. Case-insensitive.
   final String? color;
@@ -33,17 +39,29 @@ class AnswerLabel {
   /// A named object, e.g. a sari-sari store item (`'Gatas'`).
   final String? item;
 
+  /// An Ano'ng Susunod routine step, carried as its language-independent
+  /// `RoutineStep.id` (`'wash'`, `'bath'`) rather than its printed label.
+  ///
+  /// The id is what the audio layer maps to a recording, and the recording is
+  /// already in the child's language — passing the visible Tagalog or Cebuano
+  /// text instead would force the audio layer to know every translation.
+  final String? routineStep;
+
   /// Nothing to name — the correct answer was a position, a turn, or an
   /// action rather than a thing with a name.
   static const AnswerLabel none = AnswerLabel();
 
   /// Whether any dimension of this answer can be named.
   bool get isEmpty =>
-      color == null && shape == null && letter == null && item == null;
+      color == null &&
+      shape == null &&
+      letter == null &&
+      item == null &&
+      routineStep == null;
 
   @override
   String toString() => 'AnswerLabel(color: $color, shape: $shape, '
-      'letter: $letter, item: $item)';
+      'letter: $letter, item: $item, routineStep: $routineStep)';
 }
 
 /// Called when the child answers correctly, carrying what they got right so
