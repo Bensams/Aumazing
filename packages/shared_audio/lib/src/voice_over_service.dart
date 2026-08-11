@@ -47,6 +47,7 @@ enum VoiceOverCategory {
   letters,    // Letter names: "A", "C", etc. (Trace It)
   numbers,    // Numeral names: "One", "Two", etc. (Trace It)
   items,      // Sari-sari store item names: "Tinapay", "Gatas", etc.
+  routines,   // Ano'ng Susunod routine titles and step names: "Umaga", "Maligo"
 }
 
 /// Individual voice-over cues mapped to their .wav asset files.
@@ -131,6 +132,19 @@ enum VoiceOverCue {
   pickTheColor,
   pickTheShape,
   tapHere,
+
+  /// "Wait for the star to wake up, then tap it." — the Hintay! instruction.
+  ///
+  /// A dedicated line rather than the reused `eyesHere`: that cue orients
+  /// attention but never says the task is to *wait*, which is the whole of
+  /// what this game measures.
+  waitForTheStar,
+
+  /// "Tap the star!" — spoken only as the escalated prompt when the child has
+  /// missed the cue and the pointing hand alone was not enough. Never on the
+  /// cue itself, which would put a spoken word inside the response-time
+  /// measurement.
+  tapTheStar,
   touchThePicture,
   watchCarefully,
   yourTurnInstruction,
@@ -268,6 +282,31 @@ enum VoiceOverCue {
   itemManika,
   itemKotse,
   itemTeddy,
+
+  // ── Ano'ng Susunod routine cues ─────────────────────────────────────
+  //
+  // The four routine names, spoken as each round opens, and the fourteen step
+  // names, spoken back when the child seats a card correctly. Naming the step
+  // is what turns a correct placement into another exposure to the word for it
+  // — the same reason the sari-sari items are named back.
+  routineMorning,
+  routineMealtime,
+  routineBedtime,
+  routinePlaytime,
+  stepWakeUp,
+  stepBrushTeeth,
+  stepBreakfast,
+  stepSchool,
+  stepWashHands,
+  stepSitAtTable,
+  stepEat,
+  stepClearPlate,
+  stepBath,
+  stepPajamas,
+  stepSleep,
+  stepGetToy,
+  stepPlay,
+  stepPutAway,
 }
 
 /// Maps each [VoiceOverCue] to its category.
@@ -336,6 +375,8 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.pickTheColor: VoiceOverCategory.instruction,
   VoiceOverCue.pickTheShape: VoiceOverCategory.instruction,
   VoiceOverCue.tapHere: VoiceOverCategory.instruction,
+  VoiceOverCue.waitForTheStar: VoiceOverCategory.instruction,
+  VoiceOverCue.tapTheStar: VoiceOverCategory.instruction,
   VoiceOverCue.touchThePicture: VoiceOverCategory.instruction,
   VoiceOverCue.watchCarefully: VoiceOverCategory.instruction,
   VoiceOverCue.yourTurnInstruction: VoiceOverCategory.instruction,
@@ -469,6 +510,26 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.itemManika: VoiceOverCategory.items,
   VoiceOverCue.itemKotse: VoiceOverCategory.items,
   VoiceOverCue.itemTeddy: VoiceOverCategory.items,
+
+  // Routines
+  VoiceOverCue.routineMorning: VoiceOverCategory.routines,
+  VoiceOverCue.routineMealtime: VoiceOverCategory.routines,
+  VoiceOverCue.routineBedtime: VoiceOverCategory.routines,
+  VoiceOverCue.routinePlaytime: VoiceOverCategory.routines,
+  VoiceOverCue.stepWakeUp: VoiceOverCategory.routines,
+  VoiceOverCue.stepBrushTeeth: VoiceOverCategory.routines,
+  VoiceOverCue.stepBreakfast: VoiceOverCategory.routines,
+  VoiceOverCue.stepSchool: VoiceOverCategory.routines,
+  VoiceOverCue.stepWashHands: VoiceOverCategory.routines,
+  VoiceOverCue.stepSitAtTable: VoiceOverCategory.routines,
+  VoiceOverCue.stepEat: VoiceOverCategory.routines,
+  VoiceOverCue.stepClearPlate: VoiceOverCategory.routines,
+  VoiceOverCue.stepBath: VoiceOverCategory.routines,
+  VoiceOverCue.stepPajamas: VoiceOverCategory.routines,
+  VoiceOverCue.stepSleep: VoiceOverCategory.routines,
+  VoiceOverCue.stepGetToy: VoiceOverCategory.routines,
+  VoiceOverCue.stepPlay: VoiceOverCategory.routines,
+  VoiceOverCue.stepPutAway: VoiceOverCategory.routines,
 };
 
 /// Maps each [VoiceOverCue] to its asset file path (relative to the package
@@ -557,6 +618,8 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.pickTheColor: 'voice_over/instruction/PickTheColor.wav',
   VoiceOverCue.pickTheShape: 'voice_over/instruction/PickTheShape.wav',
   VoiceOverCue.tapHere: 'voice_over/instruction/TapHere.wav',
+  VoiceOverCue.waitForTheStar: 'voice_over/instruction/WaitForTheStar.wav',
+  VoiceOverCue.tapTheStar: 'voice_over/instruction/TapTheStar.wav',
   VoiceOverCue.touchThePicture: 'voice_over/instruction/TouchThePicture.wav',
   VoiceOverCue.watchCarefully: 'voice_over/instruction/WatchCarefully.wav',
   VoiceOverCue.yourTurnInstruction: 'voice_over/instruction/YourTurn.wav',
@@ -698,6 +761,26 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.itemManika: 'voice_over/items/Manika.wav',
   VoiceOverCue.itemKotse: 'voice_over/items/Kotse.wav',
   VoiceOverCue.itemTeddy: 'voice_over/items/Teddy.wav',
+
+  // Routines
+  VoiceOverCue.routineMorning: 'voice_over/routines/Morning.wav',
+  VoiceOverCue.routineMealtime: 'voice_over/routines/Mealtime.wav',
+  VoiceOverCue.routineBedtime: 'voice_over/routines/Bedtime.wav',
+  VoiceOverCue.routinePlaytime: 'voice_over/routines/Playtime.wav',
+  VoiceOverCue.stepWakeUp: 'voice_over/routines/WakeUp.wav',
+  VoiceOverCue.stepBrushTeeth: 'voice_over/routines/BrushTeeth.wav',
+  VoiceOverCue.stepBreakfast: 'voice_over/routines/Breakfast.wav',
+  VoiceOverCue.stepSchool: 'voice_over/routines/School.wav',
+  VoiceOverCue.stepWashHands: 'voice_over/routines/WashHands.wav',
+  VoiceOverCue.stepSitAtTable: 'voice_over/routines/SitAtTable.wav',
+  VoiceOverCue.stepEat: 'voice_over/routines/Eat.wav',
+  VoiceOverCue.stepClearPlate: 'voice_over/routines/ClearPlate.wav',
+  VoiceOverCue.stepBath: 'voice_over/routines/Bath.wav',
+  VoiceOverCue.stepPajamas: 'voice_over/routines/Pajamas.wav',
+  VoiceOverCue.stepSleep: 'voice_over/routines/Sleep.wav',
+  VoiceOverCue.stepGetToy: 'voice_over/routines/GetToy.wav',
+  VoiceOverCue.stepPlay: 'voice_over/routines/Play.wav',
+  VoiceOverCue.stepPutAway: 'voice_over/routines/PutAway.wav',
 };
 
 /// Audio context for voice-over playback that mixes with background music.
@@ -1584,6 +1667,36 @@ class VoiceOverService {
     'teddy': VoiceOverCue.itemTeddy,
   };
 
+  /// Ano'ng Susunod step ids → the recording that names that step.
+  ///
+  /// Keyed on `RoutineStep.id`, which is language-independent: the recording
+  /// under it is Tagalog in a Tagalog pack and Cebuano in a Cebuano one, so the
+  /// spoken label follows the child's language without the game knowing.
+  static const _routineStepMap = {
+    'wake': VoiceOverCue.stepWakeUp,
+    'brush': VoiceOverCue.stepBrushTeeth,
+    'breakfast': VoiceOverCue.stepBreakfast,
+    'school': VoiceOverCue.stepSchool,
+    'wash': VoiceOverCue.stepWashHands,
+    'sit': VoiceOverCue.stepSitAtTable,
+    'eat': VoiceOverCue.stepEat,
+    'clear': VoiceOverCue.stepClearPlate,
+    'bath': VoiceOverCue.stepBath,
+    'pajamas': VoiceOverCue.stepPajamas,
+    'sleep': VoiceOverCue.stepSleep,
+    'toy': VoiceOverCue.stepGetToy,
+    'play': VoiceOverCue.stepPlay,
+    'away': VoiceOverCue.stepPutAway,
+  };
+
+  /// Ano'ng Susunod routine ids → the recording that names the routine.
+  static const _routineTitleMap = {
+    'umaga': VoiceOverCue.routineMorning,
+    'kainan': VoiceOverCue.routineMealtime,
+    'gabi': VoiceOverCue.routineBedtime,
+    'laro': VoiceOverCue.routinePlaytime,
+  };
+
   // ── Immediate Answer Feedback ───────────────────────────────────────
 
   /// Cues that name back what the child just got right, in spoken order.
@@ -1601,9 +1714,14 @@ class VoiceOverService {
     String? shape,
     String? letter,
     String? item,
+    String? routineStep,
   }) {
     VoiceOverCue? lookup(Map<String, VoiceOverCue> table, String? value) =>
         value == null ? null : table[value.trim().toLowerCase()];
+
+    // A routine step is a whole phrase ("Maghugas ng kamay"), never combined
+    // with a colour or shape, so it answers on its own.
+    if (lookup(_routineStepMap, routineStep) case final cue?) return [cue];
 
     // A glyph label is either a letter or a numeral; try both tables.
     final glyphCue =
@@ -1647,12 +1765,14 @@ class VoiceOverService {
     String? shape,
     String? letter,
     String? item,
+    String? routineStep,
   }) async {
     final cues = answerLabelCues(
       color: color,
       shape: shape,
       letter: letter,
       item: item,
+      routineStep: routineStep,
     );
     if (cues.isEmpty) return;
     // Claim the immediate-feedback layer for the ticket this call is about to
@@ -1670,5 +1790,37 @@ class VoiceOverService {
       // anything; leaving it armed would mislabel the next line.
       _claimingImmediate = false;
     }
+  }
+
+  /// The recording that names the routine with [routineId], or null when the
+  /// library has none for it.
+  @visibleForTesting
+  static VoiceOverCue? routineTitleCue(String routineId) =>
+      _routineTitleMap[routineId.trim().toLowerCase()];
+
+  /// Say which routine the round is about — "Umaga", "Pagkaon" — from the
+  /// `Routine.id` the game is running.
+  ///
+  /// With [alsoAsk], the question follows in the same breath ("Umaga. What
+  /// comes next?"). It is one sequence rather than two calls because the floor
+  /// is last-claim-wins: two separate calls in the same moment would silence
+  /// the first, and the child would hear only half the opening.
+  ///
+  /// Silent for an unknown id rather than substituting anything: a routine the
+  /// library has no recording for should pass without a word, not with the
+  /// wrong one.
+  Future<void> playRoutineTitle(String routineId,
+      {bool alsoAsk = false}) async {
+    final cue = routineTitleCue(routineId);
+    final cues = [
+      if (cue != null) cue,
+      if (alsoAsk) VoiceOverCue.whatComesNext,
+    ];
+    if (cues.isEmpty) return;
+    if (cues.length == 1) {
+      await play(cues.first);
+      return;
+    }
+    await playSequence(cues);
   }
 }

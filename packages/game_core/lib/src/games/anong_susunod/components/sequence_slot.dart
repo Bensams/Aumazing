@@ -1,10 +1,13 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextPainter, TextSpan, TextStyle;
+import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../routine_art_cache.dart';
 import '../routine_steps.dart';
+import 'step_label.dart';
 
 /// One numbered position in the visual schedule.
 ///
@@ -16,11 +19,17 @@ import '../routine_steps.dart';
 class SequenceSlot extends PositionComponent {
   SequenceSlot({
     required this.index,
+    required this.language,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size, anchor: Anchor.center);
 
   final int index;
+
+  /// The language the seated step's printed name is drawn in.
+  final GameLanguage language;
+
+  final StepLabel _label = StepLabel();
 
   /// The step seated here, or null while the slot is empty.
   RoutineStep? filled;
@@ -78,13 +87,28 @@ class SequenceSlot extends PositionComponent {
       );
     }
 
-    if (filled != null) {
-      final art = size.x * 0.7;
+    final step = filled;
+    if (step != null) {
+      // The ordinal badge sits at the top and the name along the bottom, so the
+      // picture takes the band between them.
+      final top = size.x * 0.28;
+      final labelBand = size.y * 0.2;
+      final pictureHeight = size.y - top - labelBand;
+      final art = math.min(size.x * 0.7, pictureHeight * 0.94);
       drawRoutineArt(
         canvas,
-        filled!.art,
-        Offset((size.x - art) / 2, (size.y - art) / 2 + size.y * 0.06),
+        step.art,
+        Offset((size.x - art) / 2, top + (pictureHeight - art) / 2),
         art,
+      );
+
+      _label.paint(
+        canvas,
+        step.label(language),
+        origin: Offset(size.x * 0.06, size.y - labelBand),
+        width: size.x * 0.88,
+        height: labelBand,
+        fontSize: math.max(9.0, size.x * 0.11),
       );
     }
 

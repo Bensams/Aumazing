@@ -166,3 +166,23 @@ items/Bola,Bola.,"warm, clear, friendly kid's voice, calm pace",neutral
 items/Manika,Manika.,"warm, clear, friendly kid's voice, calm pace",neutral
 items/Kotse,Kotse.,"warm, clear, friendly kid's voice, calm pace",neutral
 items/Teddy,Teddy.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/WaitForTheStar,"Hulata nga momata ang bitoon, dayon tapika kini.","warm, clear, friendly kid's voice, calm pace",calm
+instruction/TapTheStar,Tapika ang bitoon!,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Morning,Buntag.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Mealtime,Pagkaon.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Bedtime,Gabii.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Playtime,Dula.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/WakeUp,Pagmata.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/BrushTeeth,Manepilyo.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Breakfast,Mokaon og pamahaw.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/School,Moadto sa eskwelahan.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/WashHands,Manghugas ug kamot.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/SitAtTable,Molingkod sa lamesa.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Eat,Mokaon.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/ClearPlate,Hiposa ang plato.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Bath,Maligo.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Pajamas,Mosul-ob og pajama.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Sleep,Matulog.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/GetToy,Kuhaa ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/Play,Magdula.,"warm, clear, friendly kid's voice, calm pace",neutral
+routines/PutAway,Ihipos ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
