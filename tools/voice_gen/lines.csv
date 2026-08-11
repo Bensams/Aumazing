@@ -59,6 +59,7 @@ instruction/CountWithMe.wav,Count with me.,no,0.5,0.5,neutral
 instruction/DragIt.wav,Drag it.,no,0.5,0.5,neutral
 instruction/FindTheSame.wav,Find the same.,no,0.5,0.5,neutral
 instruction/FollowMe.wav,Follow me.,no,0.5,0.5,neutral
+instruction/GiveTheDeviceToYourParent.wav,Please give the device to your parent.,no,0.5,0.5,neutral
 instruction/LetsBegin.wav,Let's begin.,no,0.5,0.5,neutral
 instruction/Listen.wav,Listen.,no,0.5,0.5,neutral
 instruction/MatchIt.wav,Match it.,no,0.5,0.5,neutral

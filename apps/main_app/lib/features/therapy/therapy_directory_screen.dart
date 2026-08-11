@@ -174,60 +174,93 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     );
   }
 
+  /// Width the action button is given when it sits beside the title.
+  static const double _actionButtonWidth = 180;
+
   Widget _buildHeader(GamePalette palette, bool isPremium) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-      child: Row(
-        children: [
-          Material(
-            color: AppColors.white.withValues(alpha: 0.85),
-            shape: const CircleBorder(),
-            child: IconButton(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
-              tooltip: 'Back',
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // On a portrait phone the title and the button were each squeezed to
+          // about a third of the width: "Therapy Directory" wrapped across
+          // three lines and the button's own label was ellipsised to
+          // "Unlock lo…". Below this width the button drops onto its own row
+          // and runs full width, where it reads in full.
+          final stacked = constraints.maxWidth < _actionButtonWidth * 2.6;
+
+          final button = isPremium
+              ? AppPrimaryButton(
+                  label: _ranked == null ? 'Find near me' : 'Update location',
+                  icon: Icons.my_location_rounded,
+                  width: stacked ? null : _actionButtonWidth,
+                  isLoading: _locating,
+                  onPressed: _locating ? null : _findNearMe,
+                )
+              : AppPrimaryButton(
+                  label: 'Unlock locator',
+                  icon: Icons.star_rounded,
+                  width: stacked ? null : _actionButtonWidth,
+                  onPressed: _openUpgrade,
+                );
+
+          final titleRow = Row(
+            children: [
+              Material(
+                color: AppColors.white.withValues(alpha: 0.85),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
+                  tooltip: 'Back',
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Therapy Directory',
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: palette.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      isPremium
+                          ? 'SPED and therapy centers in Davao City'
+                          : 'City-level directory — Premium unlocks details '
+                              'and distance',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Therapy Directory',
-                  style: AppTextStyles.headlineSmall.copyWith(
-                    color: palette.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  isPremium
-                      ? 'SPED and therapy centers in Davao City'
-                      : 'City-level directory — Premium unlocks details '
-                          'and distance',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.mutedForeground),
-                ),
+                titleRow,
+                const SizedBox(height: AppSpacing.sm),
+                button,
               ],
-            ),
-          ),
-          if (isPremium)
-            AppPrimaryButton(
-              label: _ranked == null ? 'Find near me' : 'Update location',
-              icon: Icons.my_location_rounded,
-              width: 180,
-              isLoading: _locating,
-              onPressed: _locating ? null : _findNearMe,
-            )
-          else
-            AppPrimaryButton(
-              label: 'Unlock locator',
-              icon: Icons.star_rounded,
-              width: 180,
-              onPressed: _openUpgrade,
-            ),
-        ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: titleRow),
+              const SizedBox(width: AppSpacing.md),
+              button,
+            ],
+          );
+        },
       ),
     );
   }

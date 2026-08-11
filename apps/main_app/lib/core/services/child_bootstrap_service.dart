@@ -30,8 +30,6 @@ class ChildBootstrapService {
 
   static const missingChildProfileMessage =
       'Please complete Initial Child Info.';
-  static const invalidChildAgeMessage =
-      'Aumazing currently supports children ages 2 to 6.';
 
   final AuthService _authService;
   final ConnectivityService _connectivityService;
