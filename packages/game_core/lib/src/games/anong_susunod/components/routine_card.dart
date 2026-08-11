@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../../../config/game_motion.dart';
+import '../../shared/fingertip_drag.dart';
 import '../routine_art_cache.dart';
 import '../routine_steps.dart';
 import 'step_label.dart';
@@ -19,13 +20,18 @@ import 'step_label.dart';
 /// symbol with its word rather than replacing one with the other: a pre-reader
 /// works from the picture and loses nothing, and a child who is starting to
 /// read gets the same word every time they meet the step.
-class RoutineCard extends PositionComponent {
+///
+/// Drag is driven by the game rather than by `DragCallbacks` here: the game
+/// already owns the tap routing, and one component deciding both gestures is
+/// what keeps a drag and a tap onto the same slot scored identically.
+class RoutineCard extends PositionComponent with FingertipDrag {
   RoutineCard({
     required this.step,
     required this.language,
     required Vector2 position,
     required Vector2 size,
-  }) : super(position: position, size: size, anchor: Anchor.center);
+  })  : homePosition = position.clone(),
+        super(position: position, size: size, anchor: Anchor.center);
 
   final RoutineStep step;
 
@@ -40,8 +46,15 @@ class RoutineCard extends PositionComponent {
   /// Set while the card is being nudged by the prompt hierarchy.
   bool hinted = false;
 
-  /// Seated in a slot: drawn flat, and no longer tappable in the tray.
+  /// Seated in a slot: the slot draws the step from here on, so this stops
+  /// rendering and stops answering to touches. Without the first of those the
+  /// same step shows in two places at once, which is precisely the ambiguity a
+  /// visual schedule exists to remove.
   bool placed = false;
+
+  /// Where this card rests in the tray. A drag is released back to it, and the
+  /// game's layout pass keeps it current as the canvas resizes.
+  Vector2 homePosition;
 
   double _t = 0;
 
@@ -54,6 +67,9 @@ class RoutineCard extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     _t += dt;
+    // Ticked rather than event-driven so the grab offset keeps decaying while a
+    // finger is held still — see [FingertipDrag].
+    followFingertip(dt);
   }
 
   bool containsLocal(Vector2 point) {
@@ -64,6 +80,9 @@ class RoutineCard extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    // Seated: the slot is drawing this step now.
+    if (placed) return;
+
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
     final radius = size.x * 0.14;
 
