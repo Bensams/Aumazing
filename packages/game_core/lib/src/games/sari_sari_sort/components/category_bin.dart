@@ -53,15 +53,28 @@ class CategoryBin extends PositionComponent {
     _isHint = false;
   }
 
+  /// Fraction of the basket width given over to the picture; the rest is the
+  /// word.
+  ///
+  /// Picture *and* word, side by side, because the two readings of a basket are
+  /// not interchangeable: a child who cannot yet read has only the picture, and
+  /// a child who is learning to read needs the word paired with the picture
+  /// often enough for the pairing to stick. Stacking them vertically was the
+  /// old arrangement and it forced the word into whatever height was left over.
+  static const double _pictureFraction = 0.36;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     _emojiPaint = TextPaint(
-      style: TextStyle(fontSize: size.y * 0.34),
+      style: TextStyle(fontSize: size.y * 0.46),
     );
     _labelPaint = TextPaint(
       style: TextStyle(
-        fontSize: size.y * 0.16,
+        // Sized against the basket's own height rather than a fixed point size,
+        // so the word grows with the basket instead of the basket having to
+        // accommodate a word that never changes.
+        fontSize: size.y * 0.30,
         fontWeight: FontWeight.w800,
         color: const Color(0xFF4A4458),
       ),
@@ -107,25 +120,28 @@ class CategoryBin extends PositionComponent {
       borderWidth: _isHint ? 4.0 : 3.0,
     );
 
+    // Picture on the left, word on the right, both vertically centred.
     _emojiPaint.render(
       canvas,
       emoji,
-      Vector2(size.x / 2, size.y * 0.40),
+      Vector2(size.x * _pictureFraction / 2, size.y / 2),
       anchor: Anchor.center,
     );
 
     // White backing pill so the label stays legible on the bold basket color.
+    final pillLeft = size.x * _pictureFraction;
+    final pillWidth = size.x * (1 - _pictureFraction) - size.x * 0.06;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.x * 0.08, size.y * 0.68, size.x * 0.84, size.y * 0.22),
-        Radius.circular(size.y * 0.11),
+        Rect.fromLTWH(pillLeft, size.y * 0.22, pillWidth, size.y * 0.56),
+        Radius.circular(size.y * 0.28),
       ),
       Paint()..color = const Color(0xFFFFFFFF).withAlpha(225),
     );
     _labelPaint.render(
       canvas,
       label,
-      Vector2(size.x / 2, size.y * 0.80),
+      Vector2(pillLeft + pillWidth / 2, size.y / 2),
       anchor: Anchor.center,
     );
   }

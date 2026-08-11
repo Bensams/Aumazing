@@ -13,7 +13,7 @@ void main() {
   const item = StoreItemData(
     name: 'Gatas',
     emoji: '🥛',
-    category: StoreCategory.drinks,
+    category: StoreCategory.food,
     color: Color(0xFFF1EEE2),
   );
 

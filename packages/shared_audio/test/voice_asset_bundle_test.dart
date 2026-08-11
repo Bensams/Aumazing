@@ -18,6 +18,12 @@ void main() {
     VoiceOverCue.itemGatas,
     VoiceOverCue.colorGold,
     VoiceOverCue.shapeHeart,
+    // The Sari-Sari toy shelf: these four are the whole `toys` category, so a
+    // missing clip is silence on every correct answer in that bin.
+    VoiceOverCue.itemBola,
+    VoiceOverCue.itemManika,
+    VoiceOverCue.itemKotse,
+    VoiceOverCue.itemTeddy,
   ];
 
   group('naming cues are in the asset bundle', () {
