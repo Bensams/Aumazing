@@ -85,7 +85,10 @@ class DefaultGoogleAuthClient implements GoogleAuthClient {
     final googleUser = await _googleSignIn.authenticate();
     final tokens = await _tokensForUser(googleUser);
     if (tokens == null) {
-      throw AuthException('Failed to retrieve Google ID token.');
+      throw AuthException(
+        'Google Sign-In could not be completed. '
+        'Please try again, or sign in with your email instead.',
+      );
     }
     return tokens;
   }
@@ -97,7 +100,10 @@ class DefaultGoogleAuthClient implements GoogleAuthClient {
 
     final idToken = googleUser.authentication.idToken;
     if (idToken == null) {
-      throw AuthException('Failed to retrieve Google ID token.');
+      throw AuthException(
+        'Google Sign-In could not be completed. '
+        'Please try again, or sign in with your email instead.',
+      );
     }
 
     final scopes = ['email', 'profile'];
@@ -662,11 +668,12 @@ class AuthService {
       case GoogleSignInExceptionCode.uiUnavailable:
         return 'Sign-in was interrupted. Please try again.';
       default:
-        final detail = e.description?.trim();
-        return 'Google Sign-In could not complete (${e.code.name}'
-            '${detail == null || detail.isEmpty ? '' : ': $detail'}).\n'
-            'This usually means the Android OAuth client is missing, or its '
-            'SHA-1 fingerprint / package name do not match this build.';
+        // The cause here is almost always a build misconfiguration (missing
+        // Android OAuth client, mismatched SHA-1 / package name). That is a
+        // sentence for the developer reading the log above, not for the parent
+        // reading the dialog, who can do nothing with it either way.
+        return 'Google Sign-In could not be completed. '
+            'Please try again, or sign in with your email instead.';
     }
   }
 
@@ -715,7 +722,10 @@ class AuthService {
       if (result.status == LoginStatus.success) {
         final String? accessToken = result.accessToken?.tokenString;
         if (accessToken == null) {
-          throw AuthException('Failed to retrieve Facebook access token.');
+          throw AuthException(
+            'Facebook sign-in could not be completed. '
+            'Please try again, or sign in with your email instead.',
+          );
         }
         debugPrint('[FacebookAuth] Access token obtained');
 
@@ -746,7 +756,10 @@ class AuthService {
       rethrow;
     } catch (e) {
       debugPrint('[FacebookAuth] Unexpected error: $e');
-      throw AuthException('Facebook sign-in error: $e');
+      throw AuthException(
+        'Facebook sign-in could not be completed. '
+        'Please try again, or sign in with your email instead.',
+      );
     }
   }
 
