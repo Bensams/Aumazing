@@ -70,20 +70,20 @@ instruction/TapHere.wav,Tap here.,no,0.5,0.5,neutral
 instruction/TouchThePicture.wav,Touch the picture.,no,0.5,0.5,neutral
 instruction/WatchCarefully.wav,Watch carefully.,no,0.5,0.5,neutral
 instruction/YourTurn.wav,Your turn!,no,0.5,0.5,neutral
-items/Biskwit.wav,Biskwit.,yes,0.5,0.5,neutral
-items/Gatas.wav,Gatas.,yes,0.5,0.5,neutral
+items/Biskwit.wav,Biscuit.,yes,0.5,0.5,neutral
+items/Gatas.wav,Milk.,yes,0.5,0.5,neutral
 items/Juice.wav,Juice.,yes,0.5,0.5,neutral
-items/Kape.wav,Kape.,yes,0.5,0.5,neutral
-items/Kendi.wav,Kendi.,yes,0.5,0.5,neutral
-items/Mansanas.wav,Mansanas.,yes,0.5,0.5,neutral
-items/Sabon.wav,Sabon.,yes,0.5,0.5,neutral
-items/Saging.wav,Saging.,yes,0.5,0.5,neutral
-items/Sipilyo.wav,Sipilyo.,yes,0.5,0.5,neutral
-items/Softdrink.wav,Softdrink.,yes,0.5,0.5,neutral
-items/Syampu.wav,Syampu.,yes,0.5,0.5,neutral
-items/Tinapay.wav,Tinapay.,yes,0.5,0.5,neutral
-items/Tisyu.wav,Tisyu.,yes,0.5,0.5,neutral
-items/Tubig.wav,Tubig.,yes,0.5,0.5,neutral
+items/Kape.wav,Coffee.,yes,0.5,0.5,neutral
+items/Kendi.wav,Candy.,yes,0.5,0.5,neutral
+items/Mansanas.wav,Apple.,yes,0.5,0.5,neutral
+items/Sabon.wav,Soap.,yes,0.5,0.5,neutral
+items/Saging.wav,Banana.,yes,0.5,0.5,neutral
+items/Sipilyo.wav,Toothbrush.,yes,0.5,0.5,neutral
+items/Softdrink.wav,Soft drink.,yes,0.5,0.5,neutral
+items/Syampu.wav,Shampoo.,yes,0.5,0.5,neutral
+items/Tinapay.wav,Bread.,yes,0.5,0.5,neutral
+items/Tisyu.wav,Tissue.,yes,0.5,0.5,neutral
+items/Tubig.wav,Water.,yes,0.5,0.5,neutral
 letters/A.wav,A.,yes,0.5,0.5,neutral
 letters/C.wav,C.,yes,0.5,0.5,neutral
 letters/E.wav,E.,yes,0.5,0.5,neutral
@@ -162,9 +162,9 @@ turn_taking/ThankYouForWaiting.wav,Thank you for waiting.,no,0.5,0.5,neutral
 turn_taking/Wait.wav,Wait.,no,0.5,0.5,neutral
 turn_taking/WatchMeFirst.wav,Watch me first.,no,0.5,0.5,neutral
 turn_taking/YourTurn.wav,Your turn!,no,0.5,0.5,neutral
-items/Bola.wav,Bola.,yes,0.5,0.5,neutral
-items/Manika.wav,Manika.,yes,0.5,0.5,neutral
-items/Kotse.wav,Kotse.,yes,0.5,0.5,neutral
+items/Bola.wav,Ball.,yes,0.5,0.5,neutral
+items/Manika.wav,Doll.,yes,0.5,0.5,neutral
+items/Kotse.wav,Toy car.,yes,0.5,0.5,neutral
 items/Teddy.wav,Teddy.,yes,0.5,0.5,neutral
 instruction/WaitForTheStar.wav,"Wait for the star to wake up, then tap it.",no,0.4,0.5,calm
 instruction/TapTheStar.wav,Tap the star!,no,0.5,0.5,neutral
