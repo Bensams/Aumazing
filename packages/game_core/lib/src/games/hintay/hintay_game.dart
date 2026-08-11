@@ -55,6 +55,7 @@ class HintayGame extends FlameGame
     this.onPlayCorrectVo,
     this.onPlayWrongVo,
     this.onPlayInstructionVo,
+    this.onPlayHintVo,
     this.onPlayTransitionVo,
     this.onPlayCelebrationVo,
   });
@@ -89,6 +90,13 @@ class HintayGame extends FlameGame
   final VoidCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
+
+  /// Spoken alongside the pointing hand when the cue has been missed — the
+  /// verbal rung of the prompt hierarchy, above the gestural one.
+  ///
+  /// Deliberately not spoken when the star wakes: a word landing inside the
+  /// response window would be measured as part of the child's reaction time.
+  final VoidCallback? onPlayHintVo;
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
 
@@ -287,6 +295,7 @@ class HintayGame extends FlameGame
         _hintsUsedThisRound++;
         analyticsRecordHint(hintType: 'cue_missed_pointer');
         _showGhostHand();
+        onPlayHintVo?.call();
       });
     }
 
