@@ -10,6 +10,7 @@ import 'package:shared_ui/shared_ui.dart';
 import 'components/category_bin.dart';
 import '../shared/answer_label.dart';
 import 'components/draggable_item.dart';
+import 'components/store_backdrop.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
@@ -19,13 +20,18 @@ import '../shared/game_layout.dart';
 
 /// The three sari-sari store categories the child sorts items into.
 ///
-/// Slugs intentionally mirror the concept document
-/// (food / drinks / toiletries) so telemetry lines up with the planned
-/// XGBoost feature set.
+/// Slugs feed telemetry and the planned XGBoost feature set, so they are named
+/// after the *concept* rather than the container it first shipped in. Two
+/// historical slugs map forward: sessions recorded before this change carry
+/// `drinks` (now folded into [food], because a drink is a kind of food and
+/// splitting them asked the child to make a distinction they do not yet have)
+/// and `toiletries` (now [essentials], which is the same set widened to
+/// whatever a household actually needs). Treat both as aliases when reading
+/// old sessions; see docs for the mapping.
 enum StoreCategory {
+  toys('toys', 'Laruan', '🧸', Color(0xFFE8737D)),
   food('food', 'Pagkain', '🍱', Color(0xFFFF8C42)),
-  drinks('drinks', 'Inumin', '🥤', Color(0xFF42B4E8)),
-  toiletries('toiletries', 'Gamit', '🧼', Color(0xFF5DAF8E));
+  essentials('essentials', 'Gamit', '🧼', Color(0xFF5DAF8E));
 
   const StoreCategory(this.slug, this.label, this.emoji, this.color);
 
@@ -121,12 +127,12 @@ class SariSariSortGame extends FlameGame
   /// The localized basket label for a category, following [strings].
   String _binLabel(StoreCategory category) {
     switch (category) {
+      case StoreCategory.toys:
+        return strings.binToys;
       case StoreCategory.food:
         return strings.binFood;
-      case StoreCategory.drinks:
-        return strings.binDrinks;
-      case StoreCategory.toiletries:
-        return strings.binToiletries;
+      case StoreCategory.essentials:
+        return strings.binEssentials;
     }
   }
 
@@ -172,28 +178,46 @@ class SariSariSortGame extends FlameGame
   Timer? _noResponseTimer;
 
   /// Item catalogue, grouped by category. Filipino sari-sari staples.
+  ///
+  /// Kept near-even (5 / 4 / 4) on purpose. [_pickRoundItems] fills a tray by
+  /// round-robining the categories, so a lopsided catalogue does not skew a
+  /// single round — but it does skew which items a child ever *meets* across a
+  /// session, and a category they rarely see is a category they never learn.
+  ///
+  /// Two exclusions are deliberate. Drinks are no longer their own category:
+  /// they sit in [StoreCategory.food], because asking a child to separate what
+  /// you drink from what you eat is a finer distinction than the one the game
+  /// is teaching. And the small, fiddly items (kendi, biskwit) are gone —
+  /// they read as specks at any size that fits three across, and a picture the
+  /// child cannot identify is not a categorisation task, it is a guess.
   static const Map<StoreCategory, List<StoreItemData>> _catalogue = {
+    StoreCategory.toys: [
+      StoreItemData(name: 'Bola', emoji: '⚽', category: StoreCategory.toys, color: Color(0xFF6C9BD2)),     // ball blue
+      StoreItemData(name: 'Manika', emoji: '🪆', category: StoreCategory.toys, color: Color(0xFFE89AB8)),   // doll pink
+      StoreItemData(name: 'Kotse', emoji: '🚗', category: StoreCategory.toys, color: Color(0xFFE07B54)),    // toy car orange
+      StoreItemData(name: 'Teddy', emoji: '🧸', category: StoreCategory.toys, color: Color(0xFFC49A6C)),    // teddy bear tan
+    ],
     StoreCategory.food: [
-      StoreItemData(name: 'Tinapay', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B)),   // bread tan
-      StoreItemData(name: 'Biskwit', emoji: '🍪', category: StoreCategory.food, color: Color(0xFFC68A4E)),   // biscuit brown
-      StoreItemData(name: 'Kendi', emoji: '🍬', category: StoreCategory.food, color: Color(0xFFFF7EB0)),     // candy pink
-      StoreItemData(name: 'Saging', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547)),    // banana yellow
-      StoreItemData(name: 'Mansanas', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E)),  // apple red
+      StoreItemData(name: 'Tinapay', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B)),  // bread tan
+      StoreItemData(name: 'Saging', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547)),   // banana yellow
+      StoreItemData(name: 'Mansanas', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E)), // apple red
+      StoreItemData(name: 'Gatas', emoji: '🥛', category: StoreCategory.food, color: Color(0xFFF1EEE2)),    // milk cream
+      StoreItemData(name: 'Tubig', emoji: '💧', category: StoreCategory.food, color: Color(0xFF8FD2EF)),    // water light blue
     ],
-    StoreCategory.drinks: [
-      StoreItemData(name: 'Tubig', emoji: '💧', category: StoreCategory.drinks, color: Color(0xFF8FD2EF)),    // water light blue
-      StoreItemData(name: 'Gatas', emoji: '🥛', category: StoreCategory.drinks, color: Color(0xFFF1EEE2)),    // milk cream
-      StoreItemData(name: 'Juice', emoji: '🧃', category: StoreCategory.drinks, color: Color(0xFFFFA64D)),    // juice orange
-      StoreItemData(name: 'Softdrink', emoji: '🥤', category: StoreCategory.drinks, color: Color(0xFFD64545)), // cola red
-      StoreItemData(name: 'Kape', emoji: '☕', category: StoreCategory.drinks, color: Color(0xFF7A5230)),     // coffee brown
-    ],
-    StoreCategory.toiletries: [
-      StoreItemData(name: 'Sabon', emoji: '🧼', category: StoreCategory.toiletries, color: Color(0xFF8BC36A)),  // soap green
-      StoreItemData(name: 'Sipilyo', emoji: '🪥', category: StoreCategory.toiletries, color: Color(0xFF45C4C0)), // toothbrush teal
-      StoreItemData(name: 'Tisyu', emoji: '🧻', category: StoreCategory.toiletries, color: Color(0xFFF1EEE2)),  // tissue white
-      StoreItemData(name: 'Syampu', emoji: '🧴', category: StoreCategory.toiletries, color: Color(0xFFB088D9)), // shampoo purple
+    StoreCategory.essentials: [
+      StoreItemData(name: 'Sabon', emoji: '🧼', category: StoreCategory.essentials, color: Color(0xFF8BC36A)),  // soap green
+      StoreItemData(name: 'Sipilyo', emoji: '🪥', category: StoreCategory.essentials, color: Color(0xFF45C4C0)), // toothbrush teal
+      StoreItemData(name: 'Tisyu', emoji: '🧻', category: StoreCategory.essentials, color: Color(0xFFF1EEE2)),  // tissue white
+      StoreItemData(name: 'Syampu', emoji: '🧴', category: StoreCategory.essentials, color: Color(0xFFB088D9)), // shampoo purple
     ],
   };
+
+  /// The catalogue, exposed for tests: category balance and the invariant that
+  /// an item's own [StoreItemData.category] matches the list it sits in are
+  /// both things that break silently and only show up as a game that marks a
+  /// correct answer wrong.
+  @visibleForTesting
+  static Map<StoreCategory, List<StoreItemData>> get catalogue => _catalogue;
 
   /// Tracks recently used items per category to reduce repetition.
   final Set<String> _usedItems = {};
@@ -219,19 +243,64 @@ class SariSariSortGame extends FlameGame
   }
 
   // ── Layout ───────────────────────────────────────────────────────────
+  //
+  // The store, top to bottom, in landscape:
+  //
+  //   ├─ kTopOverlayBand ─────────────────────────────────────────────┤
+  //   ╱╲╱╲╱╲ awning ╱╲╱╲╱╲            ┆ ┆ sachets in the margins only
+  //     ┌──────┐  ┌──────┐  ┌──────┐   shelf: the tray of items
+  //     │  🍞  │  │  ⚽  │  │  🧼  │
+  //     └──────┘  └──────┘  └──────┘
+  //   ▄▄▄▄▄▄▄▄▄▄▄▄ counter ▄▄▄▄▄▄▄▄▄▄▄▄
+  //     ╔════════╗ ╔════════╗ ╔════════╗  baskets: picture AND word
+  //     ║🧸Laruan║ ║🍱Pagkain║║🧼 Gamit ║
+  //     ╚════════╝ ╚════════╝ ╚════════╝
+  //
+  // Everything is derived from the live canvas rather than fixed, because the
+  // one thing this layout must never do is push a basket under the overlay
+  // band — an object beneath an overlay has its touch eaten, so the child sees
+  // a target they cannot hit. [_playfieldTop] is the hard floor and every
+  // other measurement hangs off it.
 
-  /// Width of a category bin. Shared so the item tray can be sized against
-  /// the space the bins leave it.
-  double get _binWidth => math.min(size.x / 4.2, size.y / 1.9);
+  /// Top of the usable playfield: below the app's overlay strip.
+  double get _playfieldTop => kTopOverlayBand;
 
-  /// Y of the top of the bin row — the floor the draggable tray must clear.
-  double get _binTop => size.y - _binWidth * 0.95 - size.y * 0.06;
+  /// Height of the awning, which sits at the very top of the playfield.
+  ///
+  /// Capped in absolute terms as well as proportionally: on a short landscape
+  /// canvas a percentage-only awning eats the shelf the items stand on.
+  double get _awningHeight => math.min(size.y * 0.12, 46);
+
+  /// Width of a category bin.
+  ///
+  /// Wider than it is tall, unlike the old square bin. A basket label is a
+  /// word, and a word needs horizontal room — at 200% font scale a square
+  /// basket has to shrink its own text to fit, which is exactly the outcome
+  /// the teacher asked us to avoid ("dako, dako siya").
+  double get _binWidth => math.min(size.x / 3.5, size.y * 0.72);
+
+  double get _binHeight => math.min(_binWidth * 0.62, _playfieldHeight * 0.42);
+
+  double get _playfieldHeight => size.y - _playfieldTop;
+
+  /// Y of the counter surface — the line the baskets stand on.
+  double get _counterTop => _binTop - _playfieldHeight * 0.04;
+
+  /// Y of the top of the bin row — the floor the item shelf must clear.
+  double get _binTop => size.y - _binHeight - _playfieldHeight * 0.06;
 
   void _buildBins() {
     final gameW = size.x;
 
+    add(StoreBackdrop(
+      position: Vector2(0, _playfieldTop),
+      size: Vector2(gameW, size.y - _playfieldTop),
+      awningHeight: _awningHeight,
+      counterTop: _counterTop - _playfieldTop,
+    ));
+
     final binW = _binWidth;
-    final binH = binW * 0.95;
+    final binH = _binHeight;
     final binY = _binTop;
     final gap = (gameW - 3 * binW) / 4;
 
@@ -269,14 +338,30 @@ class SariSariSortGame extends FlameGame
     final roundItems = _pickRoundItems();
 
     final gameW = size.x;
-    final gameH = size.y;
-    final trayAvail = _binTop - kTopOverlayBand;
-    var itemSize = math.min(gameW / 6.5, gameH / 3.6);
-    if (itemSize > trayAvail * 0.92) itemSize = trayAvail * 0.92;
-    final gap = itemSize * 0.4;
-    final totalW = roundItems.length * itemSize + (roundItems.length - 1) * gap;
+
+    // The shelf is the band between the awning and the counter. Items are sized
+    // to fill it rather than to a fixed fraction of the canvas: bigger objects
+    // were the single most repeated piece of feedback from the classroom, and
+    // the shelf is the only space they are allowed to grow into.
+    final shelfTop = _playfieldTop + _awningHeight;
+    final shelfAvail = _counterTop - shelfTop;
+
+    // Sachets hang in the outer 8% of the canvas, so the shelf keeps clear of
+    // them — decoration must never crowd a target the child has to grab.
+    const sideMargin = 0.08;
+    final shelfWidth = gameW * (1 - 2 * sideMargin);
+
+    var itemSize = math.min(gameW / 5.0, shelfAvail * 0.88);
+    final gap = itemSize * 0.35;
+    var totalW = roundItems.length * itemSize + (roundItems.length - 1) * gap;
+    // Only shrink when the row genuinely cannot fit — a smaller tap target is
+    // always the last resort, never the first adjustment.
+    if (totalW > shelfWidth) {
+      itemSize *= shelfWidth / totalW;
+      totalW = shelfWidth;
+    }
     final startX = (gameW - totalW) / 2;
-    final trayY = kTopOverlayBand + (trayAvail - itemSize) / 2;
+    final trayY = shelfTop + (shelfAvail - itemSize) / 2;
 
     for (var i = 0; i < roundItems.length; i++) {
       final data = roundItems[i];

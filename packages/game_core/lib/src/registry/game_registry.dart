@@ -262,7 +262,8 @@ class GameRegistry {
     GameEntry(
       id: 'sari_sari_sort',
       name: 'Sari-Sari Store Sorting',
-      description: 'Drag each item into the right basket at the store!',
+      description:
+          'Move each picture to the right basket — toys, food, or things!',
       icon: Icons.storefront_rounded,
       logoAsset: _logo('sari_sari_sort'),
       categories: [SkillCategory.playSkills, SkillCategory.communication],
