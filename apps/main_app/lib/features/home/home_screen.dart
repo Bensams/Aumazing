@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/child_profile_policy.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/child_bootstrap_service.dart';
 import '../../core/widgets/sync_status_banner.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
@@ -132,16 +133,23 @@ class _HomeScreenState extends State<HomeScreen> {
           'musicVolume=${childProvider.musicVolume}');
     }
 
+    // Only an actually-unusable birth date (missing or in the future) sends the
+    // parent back to setup. Ages outside 2–6 are accepted here to stay
+    // consistent with the child-setup screen and ChildBootstrapService, neither
+    // of which enforces a range any more.
     final profile = childProvider.profile;
+    final validation = profile == null
+        ? ChildBirthDateValidation.missing
+        : validateBirthDate(profile.birthDate);
     if (profile == null ||
-        validateBirthDate(profile.birthDate) !=
-            ChildBirthDateValidation.valid) {
+        validation == ChildBirthDateValidation.missing ||
+        validation == ChildBirthDateValidation.futureDate) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder:
               (_) => const ChildProfileSetupScreen(
                 initialErrorMessage:
-                    'Aumazing currently supports children ages 2 to 6.',
+                    ChildBootstrapService.missingChildProfileMessage,
               ),
         ),
         (_) => false,
