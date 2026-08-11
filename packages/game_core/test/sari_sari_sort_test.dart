@@ -76,6 +76,39 @@ void main() {
           catalogue[StoreCategory.food]!.map((d) => d.name).toList();
       expect(foodNames, containsAll(['Gatas', 'Tubig']));
     });
+
+    test('every item prints an English word in an English session', () {
+      // 'Teddy' is the same word in both, so identical labels are allowed —
+      // what is not allowed is a blank or an untranslated Filipino staple.
+      const stillFilipino = {
+        'Bola',
+        'Manika',
+        'Kotse',
+        'Tinapay',
+        'Saging',
+        'Mansanas',
+        'Gatas',
+        'Tubig',
+        'Sabon',
+        'Sipilyo',
+        'Tisyu',
+        'Syampu',
+      };
+      for (final item in catalogue.values.expand((l) => l)) {
+        final en = item.label(GameLanguage.english);
+        expect(en.trim(), isNotEmpty,
+            reason: '${item.name} has no English label');
+        expect(stillFilipino, isNot(contains(en)),
+            reason: '${item.name} still prints Filipino in English');
+      }
+    });
+
+    test('Tagalog and Cebuano keep the Filipino item name', () {
+      for (final item in catalogue.values.expand((l) => l)) {
+        expect(item.label(GameLanguage.tagalog), item.name);
+        expect(item.label(GameLanguage.cebuano), item.name);
+      }
+    });
   });
 
   group('bin labels', () {
