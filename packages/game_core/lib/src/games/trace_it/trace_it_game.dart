@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'components/trace_guide_dot.dart';
 import 'trace_glyphs.dart';
@@ -185,6 +186,12 @@ class TraceItGame extends FlameGame
   List<Vector2> get _currentPath =>
       _strokeIndex < _strokePaths.length ? _strokePaths[_strokeIndex] : const [];
 
+  /// The resampled guide path the child is being asked to trace right now, in
+  /// canvas coordinates. Test-only: it is the ground truth a coverage test has
+  /// to drag along, and the glyph is picked at random.
+  @visibleForTesting
+  List<Vector2> get debugCurrentPath => List.unmodifiable(_currentPath);
+
   @override
   Color backgroundColor() => const Color(0x00000000); // Transparent
 
@@ -310,13 +317,42 @@ class TraceItGame extends FlameGame
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
     if (!_dragging) return;
-    _dragPoint += event.localDelta;
+
+    // The pointer's absolute position, not the running sum of its deltas.
+    // `onDragStart` records `canvasPosition` while updates reported
+    // `localDelta`, which are only the same space when nothing sits between
+    // the game and the canvas — and any drift between them accumulates for as
+    // long as the finger stays down, so the crayon line slid further from the
+    // fingertip the longer a child traced.
+    final previous = _dragPoint.clone();
+    _dragPoint = event.canvasEndPosition.clone();
     _ink.last.add(Offset(_dragPoint.x, _dragPoint.y));
-    _absorbPoint(_dragPoint);
+
+    // Flame reports one event per pointer sample, and a child sweeping quickly
+    // leaves gaps between them far wider than the tolerance. Only the sampled
+    // points used to count, so a fast, perfectly-aimed trace scored as a dotted
+    // line — coverage never reached the threshold and the stroke would not
+    // complete. Walk the segment instead, so what is measured is the line the
+    // finger drew rather than where it happened to be polled.
+    _absorbSegment(previous, _dragPoint);
 
     if (_strokeCoverage() >= _coverageThreshold && _endpointsCovered()) {
       _dragging = false;
       _completeStroke();
+    }
+  }
+
+  /// Feeds the whole segment [from] → [to] into coverage tracking.
+  ///
+  /// Sampled at half the tolerance so no target point inside the segment's
+  /// reach can be stepped over, and capped so a stray teleport (a second finger
+  /// landing, say) cannot stall the frame.
+  void _absorbSegment(Vector2 from, Vector2 to) {
+    final distance = from.distanceTo(to);
+    final step = _tolerance * 0.5;
+    final steps = distance <= step ? 1 : math.min((distance / step).ceil(), 64);
+    for (var i = 1; i <= steps; i++) {
+      _absorbPoint(from + (to - from) * (i / steps));
     }
   }
 

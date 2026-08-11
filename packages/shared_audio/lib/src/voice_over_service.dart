@@ -117,6 +117,13 @@ enum VoiceOverCue {
   dragIt,
   findTheSame,
   followMe,
+  /// "Please give the device to your parent." — spoken once the child has
+  /// finished every assessment game and the screen is waiting on a grown-up.
+  ///
+  /// It lives in Instruction rather than Transition because Transition is drawn
+  /// at random by [VoiceOverService.playTransition]; a hand-the-device line
+  /// surfacing between two rounds of a game would be nonsense.
+  giveTheDeviceToYourParent,
   letsBegin,
   listen,
   matchIt,
@@ -321,6 +328,7 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.dragIt: VoiceOverCategory.instruction,
   VoiceOverCue.findTheSame: VoiceOverCategory.instruction,
   VoiceOverCue.followMe: VoiceOverCategory.instruction,
+  VoiceOverCue.giveTheDeviceToYourParent: VoiceOverCategory.instruction,
   VoiceOverCue.letsBegin: VoiceOverCategory.instruction,
   VoiceOverCue.listen: VoiceOverCategory.instruction,
   VoiceOverCue.matchIt: VoiceOverCategory.instruction,
@@ -540,6 +548,8 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.dragIt: 'voice_over/instruction/DragIt.wav',
   VoiceOverCue.findTheSame: 'voice_over/instruction/FindTheSame.wav',
   VoiceOverCue.followMe: 'voice_over/instruction/FollowMe.wav',
+  VoiceOverCue.giveTheDeviceToYourParent:
+      'voice_over/instruction/GiveTheDeviceToYourParent.wav',
   VoiceOverCue.letsBegin: 'voice_over/instruction/LetsBegin.wav',
   VoiceOverCue.listen: 'voice_over/instruction/Listen.wav',
   VoiceOverCue.matchIt: 'voice_over/instruction/MatchIt.wav',
@@ -1104,7 +1114,14 @@ class VoiceOverService {
   /// that has not been regenerated since they were introduced simply falls back
   /// to its sentence-final recording: the phrase sounds less connected, which
   /// is what it sounded like before, rather than dropping the colour entirely.
-  static const Map<VoiceOverCue, VoiceOverCue> _cueFallbacks = {};
+  static const Map<VoiceOverCue, VoiceOverCue> _cueFallbacks = {
+    // "Wait." is the shorter truth of the same moment: the child has finished
+    // and a grown-up is coming. Packs generated before this line existed say
+    // that instead of leaving the hand-off screen silent, which is the one
+    // outcome the screen cannot afford — the child would sit there with no
+    // idea what is being asked of them.
+    VoiceOverCue.giveTheDeviceToYourParent: VoiceOverCue.wait,
+  };
 
   /// Applies the current [speed] to [player] before it starts a clip.
   ///

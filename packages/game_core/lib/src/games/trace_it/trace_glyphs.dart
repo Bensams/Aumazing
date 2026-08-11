@@ -134,9 +134,12 @@ class TraceGlyphs {
       [Offset(0.68, 0.15), Offset(0.35, 0.15), Offset(0.35, 0.85), Offset(0.68, 0.85)],
       [Offset(0.35, 0.50), Offset(0.62, 0.50)],
     ]),
+    // The stem runs from the apex, not from mid-air: starting it at y=0.30
+    // left a visible gap above it, so the guide read as a disconnected tick
+    // beside the diagonal rather than the spine of a 4.
     const TraceGlyph(label: '4', strokes: [
       [Offset(0.60, 0.15), Offset(0.28, 0.60), Offset(0.78, 0.60)],
-      [Offset(0.62, 0.30), Offset(0.62, 0.85)],
+      [Offset(0.62, 0.15), Offset(0.62, 0.85)],
     ]),
     TraceGlyph(label: '5', strokes: [
       _join([
