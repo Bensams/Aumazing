@@ -12,6 +12,7 @@ import 'package:game_core/src/games/sari_sari_sort/sari_sari_sort_game.dart';
 void main() {
   const item = StoreItemData(
     name: 'Gatas',
+    en: 'Milk',
     emoji: '🥛',
     category: StoreCategory.food,
     color: Color(0xFFF1EEE2),
