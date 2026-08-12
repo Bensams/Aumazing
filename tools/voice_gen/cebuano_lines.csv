@@ -186,3 +186,5 @@ routines/Sleep,Matulog.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/GetToy,Kuhaa ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/Play,Magdula.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/PutAway,Ihipos ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
+dynamic/CanIHaveThe,Mahimo ba nakong pangayoon ang,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/ThankYouFriend,"Salamat, higala!","warm, clear, friendly kid's voice, calm pace",happy
