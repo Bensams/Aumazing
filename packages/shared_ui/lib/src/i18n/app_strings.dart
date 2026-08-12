@@ -128,6 +128,24 @@ class AppStrings {
         GameLanguage.cebuano: 'Maayo kaayo! Maayo ka kaayo mohulat!',
       });
 
+  // ── Kumusta! (Greet Back) ────────────────────────────────────────────
+  /// Names the buddy's action first, then the child's, in that order: the
+  /// child's job is a *reply*, and an instruction that opened with "wave" would
+  /// describe a solo action instead of an exchange.
+  String get kumustaInstruction => _pick(const {
+        GameLanguage.english: 'Your friend is greeting you. Greet back!',
+        GameLanguage.tagalog: 'Binabati ka ng kaibigan mo. Batiin mo rin siya!',
+        GameLanguage.cebuano: 'Gitimbaya ka sa imong higala. Timbayaa pod siya!',
+      });
+
+  /// Praises the greeting, not the count. The child cannot see how many they
+  /// got wrong, and the thing worth naming is that the exchange happened.
+  String get kumustaComplete => _pick(const {
+        GameLanguage.english: 'Well done! You are a great friend!',
+        GameLanguage.tagalog: 'Magaling! Ang bait mong kaibigan!',
+        GameLanguage.cebuano: 'Maayo kaayo! Maayo ka nga higala!',
+      });
+
   // ── Ano'ng Susunod? (What's Next?) ───────────────────────────────────
   String get anongSusunodInstruction => _pick(const {
         GameLanguage.english: 'Which picture comes next?',

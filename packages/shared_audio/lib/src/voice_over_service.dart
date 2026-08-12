@@ -166,6 +166,16 @@ enum VoiceOverCue {
   /// settles — a word landing inside the response window would be measured as
   /// part of the gaze-following latency, the one number this game exists for.
   lookOverThere,
+  /// "Say hello back!" — the Kumusta! instruction.
+  ///
+  /// A dedicated line for the same reason [waitForTheStar] is one. `showMe`
+  /// stood in here first and asks for the wrong thing: it is the assessment
+  /// library's "demonstrate something for me", which describes the child
+  /// performing for an adult rather than answering another person's greeting.
+  /// The whole skill is that a social bid arrived and it is now the child's
+  /// turn to return it — the word "back" is doing the work, and nothing else
+  /// in the library says it.
+  sayHelloBack,
   touchThePicture,
   watchCarefully,
   yourTurnInstruction,
@@ -400,6 +410,7 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.tapTheStar: VoiceOverCategory.instruction,
   VoiceOverCue.lookWhereImLooking: VoiceOverCategory.instruction,
   VoiceOverCue.lookOverThere: VoiceOverCategory.instruction,
+  VoiceOverCue.sayHelloBack: VoiceOverCategory.instruction,
   VoiceOverCue.touchThePicture: VoiceOverCategory.instruction,
   VoiceOverCue.watchCarefully: VoiceOverCategory.instruction,
   VoiceOverCue.yourTurnInstruction: VoiceOverCategory.instruction,
@@ -646,6 +657,7 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.lookWhereImLooking:
       'voice_over/instruction/LookWhereImLooking.wav',
   VoiceOverCue.lookOverThere: 'voice_over/instruction/LookOverThere.wav',
+  VoiceOverCue.sayHelloBack: 'voice_over/instruction/SayHelloBack.wav',
   VoiceOverCue.touchThePicture: 'voice_over/instruction/TouchThePicture.wav',
   VoiceOverCue.watchCarefully: 'voice_over/instruction/WatchCarefully.wav',
   VoiceOverCue.yourTurnInstruction: 'voice_over/instruction/YourTurn.wav',
