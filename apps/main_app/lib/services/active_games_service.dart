@@ -34,6 +34,7 @@ class ActiveGamesService {
     'Trace It': 'trace_it',
     'Hintay!': 'hintay',
     "Ano'ng Susunod?": 'anong_susunod',
+    'Tulong, Kaibigan!': 'tulong_kaibigan',
   };
 
   /// Returns the set of active game IDs (e.g. `{'copy_me', 'match_it'}`).
