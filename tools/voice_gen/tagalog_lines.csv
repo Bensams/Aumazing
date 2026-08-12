@@ -186,3 +186,9 @@ routines/Sleep,Matulog.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/GetToy,Kunin ang laruan.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/Play,Maglaro.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/PutAway,Ibalik ang laruan.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/HowIsHeFeeling,Ano'ng nararamdaman niya?,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Happy,Masaya.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Sad,Malungkot.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Scared,Takot.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Surprised,Gulat.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Angry,Galit.,"warm, clear, friendly kid's voice, calm pace",neutral

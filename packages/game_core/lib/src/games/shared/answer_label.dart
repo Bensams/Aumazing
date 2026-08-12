@@ -25,6 +25,7 @@ class AnswerLabel {
     this.letter,
     this.item,
     this.routineStep,
+    this.emotion,
   });
 
   /// Colour name, e.g. `'red'`. Case-insensitive.
@@ -47,6 +48,16 @@ class AnswerLabel {
   /// text instead would force the audio layer to know every translation.
   final String? routineStep;
 
+  /// An Ano'ng Nararamdaman emotion, carried as its language-independent
+  /// [Emotion.slug] (`'sad'`, `'scared'`) rather than its printed label, for
+  /// the same reason [routineStep] is.
+  ///
+  /// The audio layer must speak it **warmly and neutrally, not acted out in
+  /// the emotion**. A sad-sounding "sad" hands the answer over in the tone and
+  /// teaches the child to read the narrator instead of the face — which is
+  /// exactly the crutch the card is there to remove.
+  final String? emotion;
+
   /// Nothing to name — the correct answer was a position, a turn, or an
   /// action rather than a thing with a name.
   static const AnswerLabel none = AnswerLabel();
@@ -57,11 +68,13 @@ class AnswerLabel {
       shape == null &&
       letter == null &&
       item == null &&
-      routineStep == null;
+      routineStep == null &&
+      emotion == null;
 
   @override
   String toString() => 'AnswerLabel(color: $color, shape: $shape, '
-      'letter: $letter, item: $item, routineStep: $routineStep)';
+      'letter: $letter, item: $item, routineStep: $routineStep, '
+      'emotion: $emotion)';
 }
 
 /// Called when the child answers correctly, carrying what they got right so

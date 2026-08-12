@@ -53,6 +53,15 @@ export 'src/games/anong_susunod/routine_art_cache.dart';
 export 'src/games/anong_susunod/components/routine_card.dart';
 export 'src/games/anong_susunod/components/sequence_slot.dart';
 
+// Games — Ano'ng Nararamdaman? (How does he feel?)
+export 'src/games/anong_nararamdaman/anong_nararamdaman_game.dart';
+export 'src/games/anong_nararamdaman/emotions.dart';
+export 'src/games/anong_nararamdaman/emotion_art_cache.dart';
+export 'src/games/anong_nararamdaman/emotion_art_painter.dart';
+export 'src/games/anong_nararamdaman/components/choice_card.dart';
+export 'src/games/anong_nararamdaman/components/scene_panel.dart';
+export 'src/games/anong_nararamdaman/components/buddy_face.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
