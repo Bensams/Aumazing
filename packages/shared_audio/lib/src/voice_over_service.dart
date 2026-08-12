@@ -145,6 +145,27 @@ enum VoiceOverCue {
   /// cue itself, which would put a spoken word inside the response-time
   /// measurement.
   tapTheStar,
+
+  /// "Look where your friend is looking, then tap it." — the Sabay Tayo!
+  /// instruction.
+  ///
+  /// A dedicated line for the same reason [waitForTheStar] is one. The closest
+  /// existing cues each describe a different task: `eyesHere` pulls the child's
+  /// attention *to the speaker*, which is the opposite of following it away;
+  /// `watchCarefully` and `findTheSame` name a watching and a matching task
+  /// respectively, and a child who follows either instruction literally can
+  /// answer this game wrong. Nothing in the library says *someone else is
+  /// looking at something — find it*, which is the entire skill.
+  lookWhereImLooking,
+
+  /// "Look over there!" — the escalated verbal prompt in Sabay Tayo!, spoken
+  /// alongside the pointing arm.
+  ///
+  /// Deliberately still a direction rather than an answer: it tells the child
+  /// to follow the cue, not which object to tap. Never spoken as the gaze
+  /// settles — a word landing inside the response window would be measured as
+  /// part of the gaze-following latency, the one number this game exists for.
+  lookOverThere,
   touchThePicture,
   watchCarefully,
   yourTurnInstruction,
@@ -377,6 +398,8 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.tapHere: VoiceOverCategory.instruction,
   VoiceOverCue.waitForTheStar: VoiceOverCategory.instruction,
   VoiceOverCue.tapTheStar: VoiceOverCategory.instruction,
+  VoiceOverCue.lookWhereImLooking: VoiceOverCategory.instruction,
+  VoiceOverCue.lookOverThere: VoiceOverCategory.instruction,
   VoiceOverCue.touchThePicture: VoiceOverCategory.instruction,
   VoiceOverCue.watchCarefully: VoiceOverCategory.instruction,
   VoiceOverCue.yourTurnInstruction: VoiceOverCategory.instruction,
@@ -620,6 +643,9 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.tapHere: 'voice_over/instruction/TapHere.wav',
   VoiceOverCue.waitForTheStar: 'voice_over/instruction/WaitForTheStar.wav',
   VoiceOverCue.tapTheStar: 'voice_over/instruction/TapTheStar.wav',
+  VoiceOverCue.lookWhereImLooking:
+      'voice_over/instruction/LookWhereImLooking.wav',
+  VoiceOverCue.lookOverThere: 'voice_over/instruction/LookOverThere.wav',
   VoiceOverCue.touchThePicture: 'voice_over/instruction/TouchThePicture.wav',
   VoiceOverCue.watchCarefully: 'voice_over/instruction/WatchCarefully.wav',
   VoiceOverCue.yourTurnInstruction: 'voice_over/instruction/YourTurn.wav',

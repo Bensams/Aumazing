@@ -186,3 +186,5 @@ routines/Sleep,Matulog.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/GetToy,Kuhaa ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/Play,Magdula.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/PutAway,Ihipos ang dulaan.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/LookWhereImLooking,"Tan-awa kung asa nagtan-aw ang imong higala, dayon tapika kini.","warm, clear, friendly kid's voice, calm pace",calm
+instruction/LookOverThere,Tan-awa didto!,"warm, clear, friendly kid's voice, calm pace",neutral

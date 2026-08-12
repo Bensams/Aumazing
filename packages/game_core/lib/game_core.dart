@@ -53,6 +53,12 @@ export 'src/games/anong_susunod/routine_art_cache.dart';
 export 'src/games/anong_susunod/components/routine_card.dart';
 export 'src/games/anong_susunod/components/sequence_slot.dart';
 
+// Games — Sabay Tayo! (joint attention)
+export 'src/games/sabay_tayo/sabay_tayo_game.dart';
+export 'src/games/sabay_tayo/components/attention_object.dart';
+export 'src/games/sabay_tayo/components/buddy_character.dart';
+export 'src/games/sabay_tayo/components/buddy_art_cache.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 
