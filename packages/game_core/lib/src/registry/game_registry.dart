@@ -10,6 +10,7 @@ import '../games/sari_sari_sort/sari_sari_sort_game.dart';
 import '../games/trace_it/trace_it_game.dart';
 import '../games/hintay/hintay_game.dart';
 import '../games/anong_susunod/anong_susunod_game.dart';
+import '../games/anong_nararamdaman/anong_nararamdaman_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -426,6 +427,59 @@ class GameRegistry {
       }) {
         return AnongSusunodGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
+          strings: config.strings,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'anong_nararamdaman',
+      name: "Ano'ng Nararamdaman?",
+      description: 'How is your friend feeling? Find the face that matches!',
+      icon: Icons.sentiment_satisfied_alt_rounded,
+      logoAsset: _logo('anong_nararamdaman'),
+      // Social interaction first: reading a friend's face is the target skill.
+      // Communication is not a courtesy tag — every trial ends with the emotion
+      // word spoken back, so the game is also an emotion-vocabulary drill.
+      categories: [
+        SkillCategory.socialInteraction,
+        SkillCategory.communication,
+      ],
+      gradientColors: [
+        const Color(0xFFFFDDD4),
+        const Color(0xFFE8DEFA),
+        const Color(0xFFD4E8FA),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return AnongNararamdamanGame(
+          totalRounds: config.totalRounds,
+          itemsPerRound: config.itemsPerRound,
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,

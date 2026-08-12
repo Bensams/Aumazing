@@ -141,6 +141,33 @@ class AppStrings {
         GameLanguage.cebuano: 'Maayo kaayo! Nahan-ay nimo silang tanan!',
       });
 
+  // ── Ano'ng Nararamdaman? (How does he feel?) ─────────────────────────
+  /// Asks about the friend in the picture, not about the child. "How does *he*
+  /// feel?" is a question with a findable answer on screen; "how would you
+  /// feel?" is a question about the child's own interior, which this game
+  /// neither asks nor scores.
+  String get anongNararamdamanInstruction => _pick(const {
+        GameLanguage.english: 'How is your friend feeling?',
+        GameLanguage.tagalog: "Ano'ng nararamdaman ng kaibigan mo?",
+        GameLanguage.cebuano: 'Unsay gibati sa imong higala?',
+      });
+
+  /// Tier 3's second question. Phrased as an offer of help rather than a duty
+  /// ("what *should* you do"), so a child who picks a different kindness has
+  /// answered a question, not failed a rule.
+  String get anongNararamdamanResponse => _pick(const {
+        GameLanguage.english: 'What could you do to help?',
+        GameLanguage.tagalog: 'Ano ang pwede mong gawin para tumulong?',
+        GameLanguage.cebuano: 'Unsay mahimo nimo aron makatabang?',
+      });
+
+  /// Praises the looking, which is the skill, rather than the number right.
+  String get anongNararamdamanComplete => _pick(const {
+        GameLanguage.english: 'Well done! You looked so carefully!',
+        GameLanguage.tagalog: 'Magaling! Ang husay mong tumingin!',
+        GameLanguage.cebuano: 'Maayo kaayo! Maayo ka kaayo motan-aw!',
+      });
+
   // ── Settings ─────────────────────────────────────────────────────────
   String get settingsTitle => _pick(const {
         GameLanguage.english: 'Settings',
