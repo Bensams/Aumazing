@@ -195,3 +195,5 @@ emotions/Sad,Malungkot.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Scared,Takot.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Surprised,Gulat.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Angry,Galit.,"warm, clear, friendly kid's voice, calm pace",neutral
+dynamic/CanIHaveThe,Puwede ko bang hingin ang,"warm, clear, friendly kid's voice, calm pace",neutral
+turn_taking/ThankYouFriend,"Salamat, kaibigan!","warm, clear, friendly kid's voice, calm pace",happy

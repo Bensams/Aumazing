@@ -35,6 +35,7 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
         {"game_id": "kumusta", "name": "Kumusta!"},
         {"game_id": "anong_nararamdaman", "name": "Ano'ng Nararamdaman?"},
+        {"game_id": "tulong_kaibigan", "name": "Tulong, Kaibigan!"},
     ],
     "social": [
         # Ordered developmentally, easiest prerequisite first, because the
@@ -51,6 +52,7 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         # feels asks the child to infer an inner state from a face, which comes
         # later than joining, greeting or alternating with them.
         {"game_id": "anong_nararamdaman", "name": "Ano'ng Nararamdaman?"},
+        {"game_id": "tulong_kaibigan", "name": "Tulong, Kaibigan!"},
     ],
     "play": [
         {"game_id": "match_it", "name": "Match It"},
