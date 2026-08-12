@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tablets (smallest width >= 600dp) start in landscape so Android never
+     letterboxes the window into a phone-shaped portrait strip.
+
+     6 = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, which keeps both
+     landscape directions available as the tablet is turned around. -->
+<resources>
+    <integer name="app_start_screen_orientation">6</integer>
+</resources>
