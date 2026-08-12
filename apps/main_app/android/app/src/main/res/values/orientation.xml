@@ -4,7 +4,12 @@
      only see the (possibly already letterboxed) Flutter window.
 
      Values are android.content.pm.ActivityInfo constants. This default applies
-     to phones: SCREEN_ORIENTATION_PORTRAIT. See values-sw600dp for tablets. -->
+     to phones: SCREEN_ORIENTATION_PORTRAIT. See values-sw600dp for tablets.
+
+     Not the last word: the qualifier is matched against the *app's*
+     configuration, which some OEM builds (HyperOS) shrink to the letterboxed
+     window — a 720dp tablet reports 577dp and lands on this phone default.
+     MainActivity re-decides in onCreate from the real display size. -->
 <resources>
     <integer name="app_start_screen_orientation">1</integer>
 </resources>
