@@ -211,12 +211,19 @@ enum VoiceOverCue {
   myTurn,
   nowYouTry,
   ready,
+  /// A direct social reinforcer after the child shares the requested item.
+  /// `thankYouForWaiting` is intentionally not reused: it praises waiting,
+  /// which is a different behaviour from responding to another person's need.
+  thankYouFriend,
   thankYouForWaiting,
   wait,
   watchMeFirst,
   yourTurn,
 
   // ── Dynamic (action) cues ──────────────────────────────────────────
+  /// Opening of the composed request "Can I have the" + item name.
+  /// Kept separate so every existing localized item recording can be reused.
+  canIHaveThe,
   tapThe,
   dragThe,
   dropThe,
@@ -464,12 +471,14 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.myTurn: VoiceOverCategory.turnTaking,
   VoiceOverCue.nowYouTry: VoiceOverCategory.turnTaking,
   VoiceOverCue.ready: VoiceOverCategory.turnTaking,
+  VoiceOverCue.thankYouFriend: VoiceOverCategory.turnTaking,
   VoiceOverCue.thankYouForWaiting: VoiceOverCategory.turnTaking,
   VoiceOverCue.wait: VoiceOverCategory.turnTaking,
   VoiceOverCue.watchMeFirst: VoiceOverCategory.turnTaking,
   VoiceOverCue.yourTurn: VoiceOverCategory.turnTaking,
 
   // Dynamic
+  VoiceOverCue.canIHaveThe: VoiceOverCategory.dynamic,
   VoiceOverCue.tapThe: VoiceOverCategory.dynamic,
   VoiceOverCue.dragThe: VoiceOverCategory.dynamic,
   VoiceOverCue.dropThe: VoiceOverCategory.dynamic,
@@ -726,6 +735,8 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.myTurn: 'voice_over/turn_taking/MyTurn.wav',
   VoiceOverCue.nowYouTry: 'voice_over/turn_taking/NowYouTry.wav',
   VoiceOverCue.ready: 'voice_over/turn_taking/Ready.wav',
+  VoiceOverCue.thankYouFriend:
+      'voice_over/turn_taking/ThankYouFriend.wav',
   VoiceOverCue.thankYouForWaiting:
       'voice_over/turn_taking/ThankYouForWaiting.wav',
   VoiceOverCue.wait: 'voice_over/turn_taking/Wait.wav',
@@ -733,6 +744,7 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.yourTurn: 'voice_over/turn_taking/YourTurn.wav',
 
   // Dynamic
+  VoiceOverCue.canIHaveThe: 'voice_over/dynamic/CanIHaveThe.wav',
   VoiceOverCue.tapThe: 'voice_over/dynamic/TapThe.wav',
   VoiceOverCue.dragThe: 'voice_over/dynamic/DragThe.wav',
   VoiceOverCue.dropThe: 'voice_over/dynamic/DropThe.wav',
@@ -1921,4 +1933,23 @@ class VoiceOverService {
   /// Its own method rather than a bare [play] call so the game does not have to
   /// import the cue set, matching how [playRoutineTitle] serves Ano'ng Susunod.
   Future<void> playEmotionQuestion() => play(VoiceOverCue.howIsHeFeeling);
+  /// Speak a friend's request for [item] — "Can I have the … bola?" — as one
+  /// utterance, from the item's stable Filipino name.
+  ///
+  /// Composed here rather than in the game layer for the same reason
+  /// [playRoutineTitle] is: the game knows *what* was asked for, the audio
+  /// layer knows how to say it, and only this side knows the phrase has to go
+  /// out as a single [playSequence]. Two separate calls would lose the first
+  /// half to the last-claim-wins floor, and the child would hear a dangling
+  /// "can I have the" with no object.
+  ///
+  /// Silent for an item the library cannot name. "Can I have the" alone is not
+  /// a shorter version of the request, it is an unfinished sentence — and this
+  /// is also what keeps [answerLabelCues] inside the audio layer, where its
+  /// `@visibleForTesting` contract says it belongs.
+  Future<void> playItemRequest(String? item) async {
+    final itemCues = answerLabelCues(item: item);
+    if (itemCues.isEmpty) return;
+    await playSequence([VoiceOverCue.canIHaveThe, ...itemCues]);
+  }
 }

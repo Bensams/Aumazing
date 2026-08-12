@@ -212,11 +212,9 @@ class SariSariSortGame extends FlameGame
     ],
   };
 
-  /// The catalogue, exposed for tests: category balance and the invariant that
-  /// an item's own [StoreItemData.category] matches the list it sits in are
-  /// both things that break silently and only show up as a game that marks a
-  /// correct answer wrong.
-  @visibleForTesting
+  /// Shared item catalogue. Tulong, Kaibigan deliberately presents these same
+  /// cards and recordings so an already-learned object stays recognizable
+  /// when the task changes from sorting it to sharing it with a person.
   static Map<StoreCategory, List<StoreItemData>> get catalogue => _catalogue;
 
   /// Tracks recently used items per category to reduce repetition.

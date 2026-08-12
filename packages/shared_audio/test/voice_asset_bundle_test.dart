@@ -42,6 +42,13 @@ void main() {
     // tells the child the task is to greet *back* rather than to pick a
     // picture. A pack missing it does not degrade — it changes the game.
     VoiceOverCue.sayHelloBack,
+    // Tulong, Kaibigan! composes its request from `canIHaveThe` plus an item
+    // name, and thanks the child with `thankYouFriend`. The composed half is
+    // why both are sampled here: a missing `canIHaveThe` does not fall silent,
+    // it plays a bare item name — which sounds like the game naming an object
+    // rather than a friend asking for one.
+    VoiceOverCue.canIHaveThe,
+    VoiceOverCue.thankYouFriend,
   ];
 
   group('naming cues are in the asset bundle', () {
