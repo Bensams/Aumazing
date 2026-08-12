@@ -17,6 +17,7 @@ Game-ID ↔ Skill-area mapping:
     my_turn_your_turn  → Social
     hintay             → Attention (go/no-go; the only direct measure)
     anong_susunod      → Play, Communication (routine sequencing / visual schedule)
+    kumusta            → Social, Communication (responding to a greeting bid)
 """
 
 from typing import Any
@@ -32,8 +33,12 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "do_what_i_say", "name": "Do What I Say"},
         {"game_id": "sari_sari_sort", "name": "Sari-Sari Store Sorting"},
         {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
+        {"game_id": "kumusta", "name": "Kumusta!"},
     ],
     "social": [
+        # Listed first: responding to another person's bid is the earliest
+        # social skill of the two, and the one turn-taking builds on.
+        {"game_id": "kumusta", "name": "Kumusta!"},
         {"game_id": "my_turn_your_turn", "name": "My Turn, Your Turn"},
     ],
     "play": [

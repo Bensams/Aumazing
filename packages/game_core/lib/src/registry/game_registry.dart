@@ -10,6 +10,7 @@ import '../games/sari_sari_sort/sari_sari_sort_game.dart';
 import '../games/trace_it/trace_it_game.dart';
 import '../games/hintay/hintay_game.dart';
 import '../games/anong_susunod/anong_susunod_game.dart';
+import '../games/kumusta/kumusta_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -429,6 +430,57 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'kumusta',
+      name: 'Kumusta!',
+      description: 'Your buddy says hello — greet them back!',
+      icon: Icons.waving_hand_rounded,
+      logoAsset: _logo('kumusta'),
+      // The one game aimed squarely at social interaction: responding to
+      // another person's bid. Also tagged communication, since a returned
+      // greeting is a non-verbal conversational turn.
+      categories: [
+        SkillCategory.socialInteraction,
+        SkillCategory.communication,
+      ],
+      gradientColors: [
+        const Color(0xFFFFE8D4),
+        const Color(0xFFFFF3D4),
+        const Color(0xFFD4EEFA),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return KumustaGame(
+          totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
