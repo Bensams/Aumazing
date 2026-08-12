@@ -7,6 +7,7 @@ import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/painting.dart' show TextStyle;
 
 import '../../sari_sari_sort/components/draggable_item.dart';
+import '../../shared/sprite_fit.dart';
 import '../buddy_art_cache.dart';
 
 class BuddyComponent extends PositionComponent {
@@ -115,10 +116,18 @@ class BuddyComponent extends PositionComponent {
         cellW,
         cellH,
       );
+      // Fit the cell inside the body box instead of filling it. The box is
+      // derived from the playfield and its proportions vary with the device;
+      // stretching the character to match turned the buddy into a smear on
+      // every short landscape canvas. See [fitSpriteCell].
       canvas.drawImageRect(
         image,
         src,
-        Rect.fromLTWH(0, bodyTop, size.x, size.y - bodyTop),
+        fitSpriteCell(
+          Rect.fromLTWH(0, bodyTop, size.x, size.y - bodyTop),
+          cellW,
+          cellH,
+        ),
         Paint()
           ..filterQuality = FilterQuality.medium
           ..color = Color.fromARGB(alpha, 255, 255, 255),

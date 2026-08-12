@@ -159,7 +159,13 @@ class TulongKaibiganGame extends FlameGame
   void _buildBuddies() {
     final count = _tier == 3 ? 2 : 1;
     final buddyW = math.min(size.x * (count == 2 ? 0.28 : 0.34), 310.0);
-    final buddyH = size.y - kTopOverlayBand - 120;
+    // The tray the child drags from needs the bottom of the field, but taking
+    // a flat 120px for it collapsed the buddy on a short canvas: at 960x300
+    // that left an 84px-tall box, so even drawn at the right proportions the
+    // buddy was a thumbnail. A proportional reserve keeps the character
+    // legible on a phone and still leaves the tray its room on a tablet.
+    final playfield = size.y - kTopOverlayBand;
+    final buddyH = playfield * 0.78;
     for (var i = 0; i < count; i++) {
       final x = count == 1
           ? size.x - buddyW - size.x * 0.06
