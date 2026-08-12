@@ -53,6 +53,13 @@ export 'src/games/anong_susunod/routine_art_cache.dart';
 export 'src/games/anong_susunod/components/routine_card.dart';
 export 'src/games/anong_susunod/components/sequence_slot.dart';
 
+// Games — Kumusta! (Greet Back)
+export 'src/games/kumusta/kumusta_game.dart';
+export 'src/games/kumusta/greetings.dart';
+export 'src/games/kumusta/buddy_art_cache.dart';
+export 'src/games/kumusta/components/buddy.dart';
+export 'src/games/kumusta/components/greeting_button.dart';
+
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
 

@@ -32,6 +32,10 @@ void main() {
     VoiceOverCue.stepWashHands,
     VoiceOverCue.waitForTheStar,
     VoiceOverCue.tapTheStar,
+    // Kumusta! opens every round with this line, and it is the only thing that
+    // tells the child the task is to greet *back* rather than to pick a
+    // picture. A pack missing it does not degrade — it changes the game.
+    VoiceOverCue.sayHelloBack,
   ];
 
   group('naming cues are in the asset bundle', () {
