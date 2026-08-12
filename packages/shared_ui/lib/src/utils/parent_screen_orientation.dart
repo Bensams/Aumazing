@@ -1,16 +1,31 @@
-import 'dart:ui';
-
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+import 'device_form_factor.dart';
+
+/// The orientations a child-facing screen allows: landscape, both ways.
+const List<DeviceOrientation> kChildOrientations = [
+  DeviceOrientation.landscapeLeft,
+  DeviceOrientation.landscapeRight,
+];
+
+/// The orientations a parent-facing screen allows on a device whose smallest
+/// screen width is [smallestWidthDp].
+///
+/// Phones get portrait; tablets stay landscape, matching the startup
+/// orientation Android picked from `res/values-sw600dp/orientation.xml`. A
+/// tablet must never be handed portrait here: Android would letterbox the
+/// window into a phone-shaped strip and the app would never get back out.
+List<DeviceOrientation> parentOrientationsFor(double smallestWidthDp) =>
+    smallestWidthDp < kTabletSmallestWidthDp
+        ? const [DeviceOrientation.portraitUp]
+        : kChildOrientations;
 
 /// Locks landscape on every device. For the screens the *child* uses — child
 /// mode, the games, and the assessment activities — which are designed wide.
 /// Parent-facing screens use [lockParentAdaptive] instead.
 void lockParentLandscape() {
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  SystemChrome.setPreferredOrientations(kChildOrientations);
 }
 
 /// Call when leaving a child-facing screen — restores the parent policy.
@@ -23,11 +38,9 @@ void unlockParentOrientation() {
 /// holds their phone upright), while tablets stay landscape to match the
 /// child experience.
 void lockParentAdaptive() {
-  if (_isPhoneSized) {
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  } else {
-    lockParentLandscape();
-  }
+  SystemChrome.setPreferredOrientations(
+    parentOrientationsFor(deviceSmallestWidthDp),
+  );
 }
 
 /// True when the parent UI is running in its portrait phone layout. Screens
@@ -35,7 +48,7 @@ void lockParentAdaptive() {
 ///
 /// Prefer `MediaQuery`-based checks inside `build`; this is for the cases
 /// where the decision has to be made outside the widget tree.
-bool get isParentPortraitDevice => _isPhoneSized;
+bool get isParentPortraitDevice => isPhoneFormFactor;
 
 /// Wraps a parent-facing screen that has no [State] of its own, locking the
 /// adaptive parent orientation while it is mounted. Stateful screens call
@@ -63,11 +76,4 @@ class _ParentAdaptiveOrientationState extends State<ParentAdaptiveOrientation> {
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-/// Material breakpoint: shortest side under 600dp is a phone.
-bool get _isPhoneSized {
-  final view = PlatformDispatcher.instance.implicitView;
-  if (view == null) return false;
-  return view.physicalSize.shortestSide / view.devicePixelRatio < 600;
 }
