@@ -141,6 +141,28 @@ class AppStrings {
         GameLanguage.cebuano: 'Maayo kaayo! Nahan-ay nimo silang tanan!',
       });
 
+  // ── Sabay Tayo! (joint attention) ────────────────────────────────────
+  /// Names the *looking* before the tapping, and in that order. The tap is
+  /// only how the child answers; what the game asks is that they find where
+  /// someone else's attention has gone. An instruction that led with "tap the
+  /// toy" would describe a different task, and one the child could pass
+  /// without ever looking at the buddy.
+  String get sabayTayoInstruction => _pick(const {
+        GameLanguage.english: 'Look where your friend is looking, then tap it!',
+        GameLanguage.tagalog:
+            'Tingnan mo kung saan nakatingin ang kaibigan mo, tapos pindutin mo!',
+        GameLanguage.cebuano:
+            'Tan-awa kung asa nagtan-aw ang imong higala, dayon tapika kini!',
+      });
+
+  /// Praises the looking-together rather than the count of correct taps —
+  /// sharing attention with someone is the thing that was practised.
+  String get sabayTayoComplete => _pick(const {
+        GameLanguage.english: 'Well done! You looked together!',
+        GameLanguage.tagalog: 'Magaling! Sabay kayong tumingin!',
+        GameLanguage.cebuano: 'Maayo kaayo! Dungan mong nagtan-aw!',
+      });
+
   // ── Settings ─────────────────────────────────────────────────────────
   String get settingsTitle => _pick(const {
         GameLanguage.english: 'Settings',
