@@ -47,8 +47,13 @@ Future<void> main() async {
     return false; // let the default handler report it
   };
 
-  // Phones auto-rotate; tablets are landscape-only. Games re-lock landscape
-  // themselves when entered.
+  // Phones are portrait on parent screens; tablets are landscape-only. Games
+  // re-lock landscape themselves when entered.
+  //
+  // Ask the platform for the device size first: the Flutter window can already
+  // be letterboxed at this point, and classifying from it would lock a tablet
+  // into the portrait strip that caused the letterboxing.
+  await initializeDeviceFormFactor();
   lockParentAdaptive();
 
   // Enable fullscreen mode to hide mobile header/status bar
@@ -167,4 +172,3 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 }
-
