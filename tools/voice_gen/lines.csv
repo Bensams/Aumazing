@@ -186,3 +186,5 @@ routines/Sleep.wav,Sleep.,yes,0.5,0.5,neutral
 routines/GetToy.wav,Get the toy.,no,0.5,0.5,neutral
 routines/Play.wav,Play.,yes,0.5,0.5,neutral
 routines/PutAway.wav,Put the toy away.,no,0.5,0.5,neutral
+instruction/LookWhereImLooking.wav,"Look where your friend is looking, then tap it.",no,0.4,0.5,calm
+instruction/LookOverThere.wav,Look over there!,no,0.5,0.5,neutral

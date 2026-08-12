@@ -34,10 +34,17 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
     ],
     "social": [
+        # Listed first: joint attention — following another person's gaze to a
+        # shared referent — is the earliest social skill on the developmental
+        # ladder, and the one every other entry here already assumes. A child
+        # who cannot share attention with a partner cannot meaningfully take
+        # turns with one, so this is the module to start from.
+        {"game_id": "sabay_tayo", "name": "Sabay Tayo!"},
         {"game_id": "my_turn_your_turn", "name": "My Turn, Your Turn"},
     ],
     "play": [
         {"game_id": "match_it", "name": "Match It"},
+        {"game_id": "sabay_tayo", "name": "Sabay Tayo!"},
         {"game_id": "sari_sari_sort", "name": "Sari-Sari Store Sorting"},
         {"game_id": "trace_it", "name": "Trace It"},
         {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
