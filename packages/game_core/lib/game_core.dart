@@ -58,6 +58,12 @@ export 'src/games/sabay_tayo/sabay_tayo_game.dart';
 export 'src/games/sabay_tayo/components/attention_object.dart';
 export 'src/games/sabay_tayo/components/buddy_character.dart';
 export 'src/games/sabay_tayo/components/buddy_art_cache.dart';
+// Games — Kumusta! (Greet Back)
+export 'src/games/kumusta/kumusta_game.dart';
+export 'src/games/kumusta/greetings.dart';
+export 'src/games/kumusta/buddy_art_cache.dart';
+export 'src/games/kumusta/components/buddy.dart';
+export 'src/games/kumusta/components/greeting_button.dart';
 
 // Analytics - Full XGBoost-Ready Analytics System
 export 'src/analytics/analytics.dart';
