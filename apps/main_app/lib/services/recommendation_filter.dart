@@ -47,6 +47,7 @@ class RecommendationFilter {
     'Sabay Tayo!': 'sabay_tayo',
     'Kumusta!': 'kumusta',
     "Ano'ng Nararamdaman?": 'anong_nararamdaman',
+    'Tulong, Kaibigan!': 'tulong_kaibigan',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose

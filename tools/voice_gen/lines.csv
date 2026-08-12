@@ -195,3 +195,5 @@ emotions/Sad.wav,Sad.,yes,0.5,0.5,neutral
 emotions/Scared.wav,Scared.,yes,0.5,0.5,neutral
 emotions/Surprised.wav,Surprised.,yes,0.5,0.5,neutral
 emotions/Angry.wav,Angry.,yes,0.5,0.5,neutral
+dynamic/CanIHaveThe.wav,Can I have the,no,0.35,0.5,neutral
+turn_taking/ThankYouFriend.wav,"Thank you, friend!",no,0.5,0.5,happy
