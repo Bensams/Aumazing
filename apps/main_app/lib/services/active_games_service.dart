@@ -36,6 +36,7 @@ class ActiveGamesService {
     "Ano'ng Susunod?": 'anong_susunod',
     'Sabay Tayo!': 'sabay_tayo',
     'Kumusta!': 'kumusta',
+    "Ano'ng Nararamdaman?": 'anong_nararamdaman',
   };
 
   /// Returns the set of active game IDs (e.g. `{'copy_me', 'match_it'}`).

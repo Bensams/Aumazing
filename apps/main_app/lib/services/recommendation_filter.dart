@@ -46,6 +46,7 @@ class RecommendationFilter {
     "Ano'ng Susunod?": 'anong_susunod',
     'Sabay Tayo!': 'sabay_tayo',
     'Kumusta!': 'kumusta',
+    "Ano'ng Nararamdaman?": 'anong_nararamdaman',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose

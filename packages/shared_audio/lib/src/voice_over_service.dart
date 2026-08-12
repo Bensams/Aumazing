@@ -48,6 +48,7 @@ enum VoiceOverCategory {
   numbers,    // Numeral names: "One", "Two", etc. (Trace It)
   items,      // Sari-sari store item names: "Tinapay", "Gatas", etc.
   routines,   // Ano'ng Susunod routine titles and step names: "Umaga", "Maligo"
+  emotions,   // Ano'ng Nararamdaman emotion names: "Masaya", "Takot"
 }
 
 /// Individual voice-over cues mapped to their .wav asset files.
@@ -338,6 +339,24 @@ enum VoiceOverCue {
   stepGetToy,
   stepPlay,
   stepPutAway,
+
+  // ── Ano'ng Nararamdaman emotion cues ────────────────────────────────
+  //
+  // The instruction and the five emotion names, spoken back when the child
+  // finds the matching face.
+  //
+  // Every one of these must be read **warmly and neutrally — never acted out
+  // in the emotion it names**. A sad-sounding "Malungkot" delivers the answer
+  // in the tone of voice, so a child can score full marks by listening to the
+  // narrator instead of looking at the face, which is precisely the skill the
+  // card is there to test. It also models emotional contagion where the game
+  // is trying to model labelling.
+  howIsHeFeeling,
+  emotionHappy,
+  emotionSad,
+  emotionScared,
+  emotionSurprised,
+  emotionAngry,
 }
 
 /// Maps each [VoiceOverCue] to its category.
@@ -564,6 +583,14 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.stepGetToy: VoiceOverCategory.routines,
   VoiceOverCue.stepPlay: VoiceOverCategory.routines,
   VoiceOverCue.stepPutAway: VoiceOverCategory.routines,
+
+  // Emotions
+  VoiceOverCue.howIsHeFeeling: VoiceOverCategory.emotions,
+  VoiceOverCue.emotionHappy: VoiceOverCategory.emotions,
+  VoiceOverCue.emotionSad: VoiceOverCategory.emotions,
+  VoiceOverCue.emotionScared: VoiceOverCategory.emotions,
+  VoiceOverCue.emotionSurprised: VoiceOverCategory.emotions,
+  VoiceOverCue.emotionAngry: VoiceOverCategory.emotions,
 };
 
 /// Maps each [VoiceOverCue] to its asset file path (relative to the package
@@ -819,6 +846,14 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.stepGetToy: 'voice_over/routines/GetToy.wav',
   VoiceOverCue.stepPlay: 'voice_over/routines/Play.wav',
   VoiceOverCue.stepPutAway: 'voice_over/routines/PutAway.wav',
+
+  // Emotions
+  VoiceOverCue.howIsHeFeeling: 'voice_over/emotions/HowIsHeFeeling.wav',
+  VoiceOverCue.emotionHappy: 'voice_over/emotions/Happy.wav',
+  VoiceOverCue.emotionSad: 'voice_over/emotions/Sad.wav',
+  VoiceOverCue.emotionScared: 'voice_over/emotions/Scared.wav',
+  VoiceOverCue.emotionSurprised: 'voice_over/emotions/Surprised.wav',
+  VoiceOverCue.emotionAngry: 'voice_over/emotions/Angry.wav',
 };
 
 /// Audio context for voice-over playback that mixes with background music.
@@ -1727,6 +1762,19 @@ class VoiceOverService {
     'away': VoiceOverCue.stepPutAway,
   };
 
+  /// Ano'ng Nararamdaman emotion slugs → the recording that names the emotion.
+  ///
+  /// Keyed on `Emotion.slug`, which is language-independent, exactly as
+  /// [_routineStepMap] is: the recording under `'sad'` is Tagalog in a Tagalog
+  /// pack, so the game never has to know the translation.
+  static const _emotionMap = {
+    'happy': VoiceOverCue.emotionHappy,
+    'sad': VoiceOverCue.emotionSad,
+    'scared': VoiceOverCue.emotionScared,
+    'surprised': VoiceOverCue.emotionSurprised,
+    'angry': VoiceOverCue.emotionAngry,
+  };
+
   /// Ano'ng Susunod routine ids → the recording that names the routine.
   static const _routineTitleMap = {
     'umaga': VoiceOverCue.routineMorning,
@@ -1753,6 +1801,7 @@ class VoiceOverService {
     String? letter,
     String? item,
     String? routineStep,
+    String? emotion,
   }) {
     VoiceOverCue? lookup(Map<String, VoiceOverCue> table, String? value) =>
         value == null ? null : table[value.trim().toLowerCase()];
@@ -1760,6 +1809,9 @@ class VoiceOverService {
     // A routine step is a whole phrase ("Maghugas ng kamay"), never combined
     // with a colour or shape, so it answers on its own.
     if (lookup(_routineStepMap, routineStep) case final cue?) return [cue];
+
+    // An emotion name answers on its own for the same reason.
+    if (lookup(_emotionMap, emotion) case final cue?) return [cue];
 
     // A glyph label is either a letter or a numeral; try both tables.
     final glyphCue =
@@ -1804,6 +1856,7 @@ class VoiceOverService {
     String? letter,
     String? item,
     String? routineStep,
+    String? emotion,
   }) async {
     final cues = answerLabelCues(
       color: color,
@@ -1811,6 +1864,7 @@ class VoiceOverService {
       letter: letter,
       item: item,
       routineStep: routineStep,
+      emotion: emotion,
     );
     if (cues.isEmpty) return;
     // Claim the immediate-feedback layer for the ticket this call is about to
@@ -1861,4 +1915,10 @@ class VoiceOverService {
     }
     await playSequence(cues);
   }
+
+  /// Ask Ano'ng Nararamdaman's question: "How is he feeling?"
+  ///
+  /// Its own method rather than a bare [play] call so the game does not have to
+  /// import the cue set, matching how [playRoutineTitle] serves Ano'ng Susunod.
+  Future<void> playEmotionQuestion() => play(VoiceOverCue.howIsHeFeeling);
 }

@@ -189,3 +189,9 @@ routines/PutAway,Ibalik ang laruan.,"warm, clear, friendly kid's voice, calm pac
 instruction/LookWhereImLooking,"Tingnan mo kung saan nakatingin ang kaibigan mo, tapos pindutin mo.","warm, clear, friendly kid's voice, calm pace",calm
 instruction/LookOverThere,Tingnan mo doon!,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/SayHelloBack,Bumati ka rin!,"warm, clear, friendly kid's voice, calm pace",happy
+emotions/HowIsHeFeeling,Ano'ng nararamdaman niya?,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Happy,Masaya.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Sad,Malungkot.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Scared,Takot.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Surprised,Gulat.,"warm, clear, friendly kid's voice, calm pace",neutral
+emotions/Angry,Galit.,"warm, clear, friendly kid's voice, calm pace",neutral
