@@ -44,6 +44,7 @@ class RecommendationFilter {
     'Trace It': 'trace_it',
     'Hintay!': 'hintay',
     "Ano'ng Susunod?": 'anong_susunod',
+    'Sabay Tayo!': 'sabay_tayo',
   };
 
   /// Filter [response]'s module recommendations, keeping only those whose

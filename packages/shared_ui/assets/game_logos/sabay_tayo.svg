@@ -1,0 +1,79 @@
+<!--
+  Sabay Tayo! — a face turned to one side, eyes pushed hard toward the object
+  it is looking at, and a dashed line of sight landing on that object. The tile
+  has to read as *look where I'm looking*, so the gaze is the loudest element:
+  the pupils sit almost against the edge of the whites, which is the same
+  exaggeration the generated look_* sprite sheets use for the same reason.
+
+  Two objects, not one. A single ball would let the tile read as "here is a
+  ball"; the second, unlooked-at object is what makes the picture about the
+  choosing. It is drawn dimmer, exactly as the game leaves the distractors
+  un-hinted. No <text>: an unbundled font would silently render as nothing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <clipPath id="tile"><rect width="240" height="240" rx="48"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFC9A8"/>
+      <stop offset="0.55" stop-color="#9FDCC4"/>
+      <stop offset="1" stop-color="#B9A8DE"/>
+    </linearGradient>
+    <radialGradient id="spot" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.4" stop-color="#FFF4C4" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#FFF4C4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="240" height="240" rx="48" fill="url(#bg)"/>
+
+    <!-- Drifting specks, same decorative language as the other tiles -->
+    <g fill="#FFFFFF" opacity="0.16">
+      <circle cx="30" cy="46" r="6"/>
+      <circle cx="212" cy="120" r="5"/>
+      <circle cx="40" cy="206" r="7"/>
+    </g>
+
+    <!-- The un-looked-at object: present, deliberately quiet. -->
+    <g opacity="0.42">
+      <rect x="26" y="44" width="46" height="46" rx="13" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="49" cy="67" r="14" fill="#E8A0A0"/>
+    </g>
+
+    <!-- The attended object, lit. -->
+    <circle cx="183" cy="66" r="44" fill="url(#spot)"/>
+    <g>
+      <rect x="158" y="41" width="50" height="50" rx="14" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="183" cy="66" r="16" fill="#6C9BD2"/>
+      <path d="M167,66 h32 M183,50 v32" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+
+    <!-- Line of sight, from the eyes to the lit object. Dashed rather than
+         solid: it is a direction being followed, not a thing on the field. -->
+    <path d="M132,138 L172,84" fill="none" stroke="#FFFFFF" stroke-width="6"
+          stroke-linecap="round" stroke-dasharray="2 16" opacity="0.85"/>
+
+    <!-- The buddy: head turned up-right, body squared to the child. -->
+    <g transform="translate(104 168)">
+      <rect x="-40" y="14" width="80" height="76" rx="26" fill="#6C9BD2" stroke="#FFFFFF" stroke-width="4"/>
+      <circle cx="6" cy="-22" r="52" fill="#F2D3B8" stroke="#FFFFFF" stroke-width="4"/>
+
+      <!-- The eyes carry the whole tile. Pupils shoved to the upper right,
+           just short of the edge of the white. -->
+      <g>
+        <ellipse cx="-14" cy="-28" rx="16" ry="17" fill="#FFFFFF"/>
+        <ellipse cx="26" cy="-28" rx="16" ry="17" fill="#FFFFFF"/>
+        <circle cx="-6" cy="-34" r="8.5" fill="#4A4458"/>
+        <circle cx="34" cy="-34" r="8.5" fill="#4A4458"/>
+      </g>
+
+      <!-- Brows lifted toward the object; a neutral mouth. The child should
+           never have to read emotion to know where to look. -->
+      <g fill="none" stroke="#4A4458" stroke-width="4.5" stroke-linecap="round">
+        <path d="M-28,-50 q13,-8 26,-4"/>
+        <path d="M14,-54 q13,-8 26,-4"/>
+        <path d="M-6,4 h26"/>
+      </g>
+    </g>
+  </g>
+</svg>
