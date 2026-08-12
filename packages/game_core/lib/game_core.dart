@@ -38,6 +38,11 @@ export 'src/games/sari_sari_sort/sari_sari_sort_game.dart';
 export 'src/games/sari_sari_sort/components/draggable_item.dart';
 export 'src/games/sari_sari_sort/components/category_bin.dart';
 
+// Games — Tulong, Kaibigan! (Sharing & Requesting)
+export 'src/games/tulong_kaibigan/tulong_kaibigan_game.dart';
+export 'src/games/tulong_kaibigan/buddy_art_cache.dart';
+export 'src/games/tulong_kaibigan/components/buddy_component.dart';
+
 // Games — Trace It
 export 'src/games/trace_it/trace_it_game.dart';
 export 'src/games/trace_it/trace_glyphs.dart';

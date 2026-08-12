@@ -141,6 +141,26 @@ class AppStrings {
         GameLanguage.cebuano: 'Maayo kaayo! Nahan-ay nimo silang tanan!',
       });
 
+  // ── Tulong, Kaibigan! (sharing & requesting) ─────────────────────────
+  /// Names the person before the object. The task is not "move the banana",
+  /// it is "give it to the one who asked" — and on the hardest tier, where two
+  /// friends ask in turn, a child who only heard the object would have no way
+  /// to know they had been told the harder half of the question.
+  String get tulongKaibiganInstruction => _pick(const {
+        GameLanguage.english: 'Give your friend what they asked for!',
+        GameLanguage.tagalog: 'Ibigay mo sa kaibigan mo ang hiningi niya!',
+        GameLanguage.cebuano: 'Ihatag sa imong higala ang iyang gipangayo!',
+      });
+
+  /// Praises the helping rather than the count. Sharing on request is the
+  /// behaviour being built; how many items were handed over is not something
+  /// the child can see or should be scored on out loud.
+  String get tulongKaibiganComplete => _pick(const {
+        GameLanguage.english: 'Well done! You helped your friends!',
+        GameLanguage.tagalog: 'Magaling! Natulungan mo ang mga kaibigan mo!',
+        GameLanguage.cebuano: 'Maayo kaayo! Natabangan nimo ang imong mga higala!',
+      });
+
   // ── Settings ─────────────────────────────────────────────────────────
   String get settingsTitle => _pick(const {
         GameLanguage.english: 'Settings',
