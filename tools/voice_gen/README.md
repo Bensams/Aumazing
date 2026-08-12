@@ -161,6 +161,58 @@ back to its language's default pack.
 > the voice could change mid-session. Every language now defaults to its
 > `*_adult_woman` pack, which is one speaker throughout.
 
+### The emotion cues, and why none of them is acted
+
+Ano'ng Nararamdaman? added a sixth cue family, **generated and installed** on
+2026-08-12:
+
+| family | count | where it is heard |
+|---|---|---|
+| `emotions/` | 6 (HowIsHeFeeling + the five emotion names) | Ano'ng Nararamdaman? |
+
+108 clips: 6 lines x 3 languages x 6 voices, on `google/gemini-3-1-flash-tts`.
+Every pack now reports 193/193 in `check_library.py`.
+
+**Every line in this family carries `emotion=neutral` in all three manifests,
+including `Happy.` and `Angry.`, and that is not an oversight.** The manifest's
+`emotion` column feeds `GEMINI_STYLE`, which sets the model's delivery. Setting
+`Angry.` to an angry style produces a narrator who *sounds* angry while naming
+the card — which hands the child the answer in the tone of voice. The game is
+testing whether they can read a face; a child who can hear the answer never has
+to look at one, and the session then reports face-reading skill it never
+measured. It also models emotional contagion in an app whose whole point is
+labelling. `neutral` maps to *Vocal Smile*: warm, friendly, and uninformative
+about the word being said. Keep it that way.
+
+The sequence, following the letters/numbers/items precedent below:
+
+```bash
+./.venv/Scripts/python.exe generate_kie.py --lang all --only emotions/ --workers 8 --yes
+# the repair pass needs the REST of the pack present to compute a voice centre,
+# so decode the installed packs into a scratch tree beside the new takes first
+./.venv/Scripts/python.exe repair_consistency.py --root out/kie/gemini --only emotions/ --attempts 3
+./.venv/Scripts/python.exe repair_consistency.py --root out/kie/gemini --only emotions/ --attempts 4
+./.venv/Scripts/python.exe conform_library.py --root out/kie/gemini
+./.venv/Scripts/python.exe to_mp3.py --src out/kie/gemini --dst out/mp3
+python check_library.py
+```
+
+| | outlier rate |
+|---|---|
+| straight from the API | 13.9% (15/108) |
+| after one pass (3 attempts) | — |
+| after a second pass (4 attempts) | **1.9% (2/108)** |
+
+`install_packs.py` was again deliberately **not** run — it prunes any pack
+folder it does not find in its source tree, and the source tree held emotions
+only. The 108 files were conformed, encoded and copied over by name instead,
+and the 18 `emotions/` folders were added to `shared_audio/pubspec.yaml`.
+
+`ceb_lexianne` is human-recorded and has none of these; it is not a default, so
+it falls back to its language's default pack.
+
+**Not yet auditioned.** Nobody has listened to these.
+
 ### Dead air is the thing that makes composed phrases drag
 
 A composed phrase — "Tap the" + "Yellow" + "Star", or the naming feedback
