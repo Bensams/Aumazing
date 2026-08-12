@@ -44,6 +44,25 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     SkillCategory.socialInteraction,
   ];
 
+  // ── Category card sizing (step 1) ──────────────────────────────────────
+  // Bounds, not fixed sizes: a card takes its share of the available width
+  // between these, and its height follows. Big enough for a child to aim at,
+  // never so big that it becomes a full-height column on a large tablet.
+  static const _categoryCardMinWidth = 168.0;
+  static const _categoryCardMaxWidth = 260.0;
+  static const _categoryCardMinHeight = 260.0;
+  static const _categoryCardMaxHeight = 360.0;
+
+  /// Height as a multiple of width — portrait-ish, so the icon, label and
+  /// game count stack comfortably without the card going square.
+  static const _categoryCardHeightRatio = 1.25;
+
+  /// Height of the game cards in step 2 (All Games and each category).
+  /// [_GameCard] is 186 wide, so this keeps the same portrait-ish tile the
+  /// category step uses: room for the 104pt logo above the name strip, and
+  /// nothing like the full-height column it used to stretch into.
+  static const _gameRowHeight = 240.0;
+
   /// The category the child tapped, or null while showing the buttons.
   SkillCategory? _selected;
 
@@ -1061,14 +1080,60 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
-      child: Row(
-        children: [
-          for (var i = 0; i < buttons.length; i++) ...[
-            Expanded(child: buttons[i]),
-            if (i != buttons.length - 1) const SizedBox(width: AppSpacing.md),
-          ],
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) => _categoryRow(buttons, constraints),
       ),
+    );
+  }
+
+  /// Lays the category cards out as compact tiles rather than full-height
+  /// columns.
+  ///
+  /// This row sits inside an [Expanded], which hands its child a *tight*
+  /// height — so a plain `Row` of `Expanded` children stretched every card
+  /// from the header to the bottom of the screen, and on a 1152x720 tablet
+  /// that left the icon and label marooned in the middle of a very tall panel.
+  /// Each card is given its own bounded box instead, and the group is centred
+  /// in whatever space is left.
+  ///
+  /// Sizes come from the incoming constraints, never from the device: the
+  /// cards take an equal share of the available width within
+  /// [_categoryCardMinWidth]..[_categoryCardMaxWidth], and their height
+  /// follows that width at a fixed ratio within [_categoryCardMinHeight]..
+  /// [_categoryCardMaxHeight] — shrinking below that only when the viewport
+  /// itself is shorter. When the share would fall under the minimum the row
+  /// scrolls sideways instead of squeezing the cards.
+  Widget _categoryRow(List<Widget> buttons, BoxConstraints constraints) {
+    const gap = AppSpacing.md;
+    final gaps = gap * (buttons.length - 1);
+
+    final share = (constraints.maxWidth - gaps) / buttons.length;
+    final cardWidth = share.clamp(_categoryCardMinWidth, _categoryCardMaxWidth);
+    final cardHeight = (cardWidth * _categoryCardHeightRatio)
+        .clamp(_categoryCardMinHeight, _categoryCardMaxHeight)
+        // A short landscape phone gets shorter cards, not an overflow.
+        .clamp(0.0, constraints.maxHeight);
+
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      // Cards size themselves; nothing stretches to the tallest sibling.
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          SizedBox(width: cardWidth, height: cardHeight, child: buttons[i]),
+          if (i != buttons.length - 1) const SizedBox(width: gap),
+        ],
+      ],
+    );
+
+    final fits = cardWidth * buttons.length + gaps <= constraints.maxWidth;
+    return Center(
+      child: fits
+          ? row
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: row,
+            ),
     );
   }
 
@@ -1087,31 +1152,46 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: SizedBox(
-        height: 200,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          itemCount: games.length,
-          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-          itemBuilder: (_, i) {
-            // Per-game difficulty: parent override → AI per-area → fallback.
-            final difficulty = GameLauncher.difficultyFor(
-              context,
-              games[i],
-              fallback: fallbackLevel,
-            );
-            final card = _GameCard(
-              entry: games[i],
-              difficulty: difficulty,
-              onTap: () => _launch(games[i].id, difficulty),
-            );
-            // First card anchors the guided-start pointing hand.
-            return i == 0
-                ? KeyedSubtree(key: _guideCardKey, child: card)
-                : card;
-          },
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // The bare SizedBox below used to be handed a *tight* height by the
+          // Expanded above it, which a SizedBox cannot shrink out of — so the
+          // 200 was ignored and every game card ran the full height of the
+          // screen. Centring first makes the height loose, and only then does
+          // the box actually bound the row.
+          final height = _gameRowHeight.clamp(0.0, constraints.maxHeight);
+          return Center(
+            child: SizedBox(
+              height: height,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                itemCount: games.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: AppSpacing.md),
+                itemBuilder: (_, i) {
+                  // Per-game difficulty: parent override → AI per-area →
+                  // fallback.
+                  final difficulty = GameLauncher.difficultyFor(
+                    context,
+                    games[i],
+                    fallback: fallbackLevel,
+                  );
+                  final card = _GameCard(
+                    entry: games[i],
+                    difficulty: difficulty,
+                    onTap: () => _launch(games[i].id, difficulty),
+                  );
+                  // First card anchors the guided-start pointing hand.
+                  return i == 0
+                      ? KeyedSubtree(key: _guideCardKey, child: card)
+                      : card;
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }
