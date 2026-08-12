@@ -10,6 +10,7 @@ import '../games/sari_sari_sort/sari_sari_sort_game.dart';
 import '../games/trace_it/trace_it_game.dart';
 import '../games/hintay/hintay_game.dart';
 import '../games/anong_susunod/anong_susunod_game.dart';
+import '../games/sabay_tayo/sabay_tayo_game.dart';
 import 'skill_category.dart';
 
 /// Metadata for a single playable mini-game.
@@ -426,6 +427,57 @@ class GameRegistry {
       }) {
         return AnongSusunodGame(
           totalRounds: config.totalRounds,
+          childId: config.childId,
+          gameVersion: config.gameVersion,
+          strings: config.strings,
+          onStepChanged: onStepChanged,
+          onGameComplete: ({
+            required int score,
+            required int totalItems,
+            required int errorCount,
+            required int totalResponseTimeMs,
+            required Map<String, dynamic> extras,
+            analytics,
+          }) {
+            onGameComplete(
+              score: score,
+              totalItems: totalItems,
+              errorCount: errorCount,
+              totalResponseTimeMs: totalResponseTimeMs,
+            );
+          },
+        );
+      },
+    ),
+    GameEntry(
+      id: 'sabay_tayo',
+      name: 'Sabay Tayo!',
+      description: 'Look where your buddy is looking, then tap what they see!',
+      icon: Icons.visibility_rounded,
+      logoAsset: _logo('sabay_tayo'),
+      // Social Interaction first and foremost: following another person's gaze
+      // to a shared referent is the earliest social skill on the developmental
+      // ladder, and the only game here that trains it directly. Play Skills is
+      // secondary — the tap-the-object layer is a play task wrapped around it.
+      categories: [SkillCategory.socialInteraction, SkillCategory.playSkills],
+      gradientColors: [
+        const Color(0xFFFFE4D4),
+        const Color(0xFFD4F4E8),
+        const Color(0xFFE8DEFA),
+      ],
+      create: ({
+        required GameConfig config,
+        required void Function(int) onStepChanged,
+        required void Function({
+          required int score,
+          required int totalItems,
+          required int errorCount,
+          required int totalResponseTimeMs,
+        }) onGameComplete,
+      }) {
+        return SabayTayoGame(
+          totalRounds: config.totalRounds,
+          itemsPerRound: config.itemsPerRound,
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,

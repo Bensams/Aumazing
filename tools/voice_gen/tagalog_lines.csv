@@ -186,3 +186,5 @@ routines/Sleep,Matulog.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/GetToy,Kunin ang laruan.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/Play,Maglaro.,"warm, clear, friendly kid's voice, calm pace",neutral
 routines/PutAway,Ibalik ang laruan.,"warm, clear, friendly kid's voice, calm pace",neutral
+instruction/LookWhereImLooking,"Tingnan mo kung saan nakatingin ang kaibigan mo, tapos pindutin mo.","warm, clear, friendly kid's voice, calm pace",calm
+instruction/LookOverThere,Tingnan mo doon!,"warm, clear, friendly kid's voice, calm pace",neutral
