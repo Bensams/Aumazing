@@ -5,6 +5,8 @@ import 'package:flame/cache.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../shared/sprite_fit.dart';
+
 /// Decoded mascot sprite sheets for the buddy in "Sabay Tayo!", held for the
 /// lifetime of the process.
 ///
@@ -195,10 +197,15 @@ void drawBuddy(
     cellH,
   );
 
+  // Fit rather than fill. [dest] is the component's own box, whose proportions
+  // are picked for the layout and are not the cell's, so filling it squashed
+  // the buddy horizontally on every device — mildly, but always. The eyes are
+  // the cue this entire game rests on, and a distorted face is a harder one to
+  // read than an undistorted one.
   canvas.drawImageRect(
     sheet,
     src,
-    dest,
+    fitSpriteCell(dest, cellW, cellH),
     ui.Paint()..filterQuality = ui.FilterQuality.medium,
   );
 }
