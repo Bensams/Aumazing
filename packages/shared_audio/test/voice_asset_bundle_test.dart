@@ -32,6 +32,12 @@ void main() {
     VoiceOverCue.stepWashHands,
     VoiceOverCue.waitForTheStar,
     VoiceOverCue.tapTheStar,
+    // Sabay Tayo! speaks its instruction as the game opens and its escalated
+    // prompt when a gaze has gone unfollowed. Both are the newest cues in the
+    // library, so they are the likeliest to have been added to the enum and
+    // the asset table without the recordings ever reaching the packs.
+    VoiceOverCue.lookWhereImLooking,
+    VoiceOverCue.lookOverThere,
   ];
 
   group('naming cues are in the asset bundle', () {
