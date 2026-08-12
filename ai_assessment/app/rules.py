@@ -32,9 +32,11 @@ AREA_MODULE_MAP: dict[str, list[dict[str, Any]]] = {
         {"game_id": "do_what_i_say", "name": "Do What I Say"},
         {"game_id": "sari_sari_sort", "name": "Sari-Sari Store Sorting"},
         {"game_id": "anong_susunod", "name": "Ano'ng Susunod?"},
+        {"game_id": "anong_nararamdaman", "name": "Ano'ng Nararamdaman?"},
     ],
     "social": [
         {"game_id": "my_turn_your_turn", "name": "My Turn, Your Turn"},
+        {"game_id": "anong_nararamdaman", "name": "Ano'ng Nararamdaman?"},
     ],
     "play": [
         {"game_id": "match_it", "name": "Match It"},

@@ -25,3 +25,6 @@ flutter:
     # Routine picture cards for Ano'ng Susunod?. Transparent PNGs, trimmed and
     # re-padded to a square so every card composes identically.
     - assets/routine_cards/
+    # Emotion faces, situation scenes and caring-response cards for
+    # Ano'ng Nararamdaman?. Same treatment as the routine cards.
+    - assets/emotion_cards/
