@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -995,30 +997,77 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
+        // What each action needs to read in full, measured from its own
+        // label at the ambient text scale. A fixed 540 breakpoint clipped
+        // "Start Pre-Assessment" once the tablet sidebar had taken its
+        // share of the width.
+        final assessmentMin = AppPrimaryButton.minWidthFor(
+          context,
+          label: assessProv.hasPreAssessment
+              ? 'Assessment'
+              : 'Start Pre-Assessment',
+          icon: Icons.play_circle_filled_rounded,
+        );
+        final cardMin = _ActionCard.minWidthFor(
+          context,
+          labels: const ['Enter Child Mode', 'Therapy Directory'],
+        );
+
         return LayoutBuilder(
           builder: (context, constraints) {
-            // Three across needs real width — a portrait phone gets one
-            // full-width action per row instead of three squeezed cards.
-            if (constraints.maxWidth < 540) {
+            const gap = AppSpacing.md;
+            final width = constraints.maxWidth;
+
+            // Three across only when every label fits at once. Spare space
+            // is shared proportionally, so the assessment CTA — the widest
+            // label — keeps the largest column.
+            if (width >= assessmentMin + cardMin * 2 + gap * 2) {
+              // IntrinsicHeight keeps the three tiles the same height even
+              // when one of them wraps its label.
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(flex: assessmentMin.round(), child: assessment),
+                    const SizedBox(width: gap),
+                    Expanded(flex: cardMin.round(), child: childMode),
+                    const SizedBox(width: gap),
+                    Expanded(flex: cardMin.round(), child: therapy),
+                  ],
+                ),
+              );
+            }
+
+            // Two columns: the long CTA takes a full-width row of its own
+            // and the two shorter cards pair up beneath it.
+            if (width >= cardMin * 2 + gap && width >= assessmentMin) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   assessment,
-                  const SizedBox(height: AppSpacing.md),
-                  childMode,
-                  const SizedBox(height: AppSpacing.md),
-                  therapy,
+                  const SizedBox(height: gap),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: childMode),
+                        const SizedBox(width: gap),
+                        Expanded(child: therapy),
+                      ],
+                    ),
+                  ),
                 ],
               );
             }
 
-            return Row(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: assessment),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: childMode),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: therapy),
+                assessment,
+                const SizedBox(height: gap),
+                childMode,
+                const SizedBox(height: gap),
+                therapy,
               ],
             );
           },
@@ -1060,7 +1109,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 label: 'Upgrade',
                 icon: Icons.star_rounded,
-                buttonWidth: 140,
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) =>
@@ -1293,7 +1341,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   label: 'Start Post-Assessment',
                   icon: Icons.play_arrow_rounded,
-                  buttonWidth: 230,
                   onPressed: () => _pushChildFacing(
                     const PostAssessmentProgressScreen(),
                   ),
@@ -1448,7 +1495,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 label: 'Unlock',
                 icon: Icons.star_rounded,
-                buttonWidth: 130,
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) =>
@@ -1742,7 +1788,6 @@ class _CtaBand extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
-    required this.buttonWidth,
   });
 
   final Widget leading;
@@ -1750,18 +1795,46 @@ class _CtaBand extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
-  final double buttonWidth;
+
+  /// Comfortable width for a CTA beside a message — a short label like
+  /// "Upgrade" still reads as a proper button rather than a chip.
+  static const double _preferredButtonWidth = 190;
+
+  /// Below this the message stops being readable, so the CTA moves under
+  /// it instead of taking more width.
+  static const double _minMessageWidth = 220;
 
   @override
   Widget build(BuildContext context) {
+    // What the label itself demands, before any layout preference.
+    final labelMin =
+        AppPrimaryButton.minWidthFor(context, label: label, icon: icon);
+    final textScale =
+        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling)
+                .scale(14) /
+            14;
+    final messageMin = _minMessageWidth * textScale;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Below this the text column would be narrower than the button.
-        final stacked = constraints.maxWidth < buttonWidth * 2.6;
+        const gap = AppSpacing.sm;
+        // Side by side only when the message *and* the CTA each keep a
+        // readable width. The old `buttonWidth * 2.6` rule ignored what the
+        // label needed and clipped "Upgrade" to "Upgr…".
+        final stacked = constraints.maxWidth < messageMin + gap + labelMin;
+        final buttonWidth = stacked
+            ? null
+            : math.max(
+                labelMin,
+                math.min(
+                  _preferredButtonWidth,
+                  constraints.maxWidth - messageMin - gap,
+                ),
+              );
         final button = AppPrimaryButton(
           label: label,
           icon: icon,
-          width: stacked ? null : buttonWidth,
+          width: buttonWidth,
           onPressed: onPressed,
         );
         final message = Row(
@@ -1778,7 +1851,7 @@ class _CtaBand extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               message,
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: gap),
               button,
             ],
           );
@@ -1787,7 +1860,7 @@ class _CtaBand extends StatelessWidget {
         return Row(
           children: [
             Expanded(child: message),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: gap),
             button,
           ],
         );
@@ -1811,6 +1884,31 @@ class _ActionCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+
+  /// Horizontal padding, leading circle, and the gap after it — what a card
+  /// spends before its label gets any width.
+  static const double _chrome = AppSpacing.lg * 2 + 44 + AppSpacing.sm;
+
+  /// Width the widest of [labels] needs beside the card's icon, allowing it
+  /// two lines, at the ambient text scale.
+  static double minWidthFor(
+    BuildContext context, {
+    required List<String> labels,
+  }) {
+    var widest = 0.0;
+    for (final label in labels) {
+      widest = math.max(
+        widest,
+        minWidthToFitLines(
+          context,
+          text: label,
+          style: AppTextStyles.titleMedium,
+          maxLines: 2,
+        ),
+      );
+    }
+    return widest + _chrome;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1842,23 +1940,29 @@ class _ActionCard extends StatelessWidget {
                 child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // The action's name is a CTA label: it wraps rather than
+                    // ellipsising, so "Therapy Directory" reads in full in a
+                    // narrow column.
                     Text(
                       label,
                       style: AppTextStyles.titleMedium.copyWith(
                         color: AppColors.textPrimary,
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                      maxLines: 2,
                     ),
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                      maxLines: 2,
                     ),
                   ],
                 ),

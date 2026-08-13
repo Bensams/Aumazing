@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -174,10 +176,30 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     );
   }
 
-  /// Width the action button is given when it sits beside the title.
-  static const double _actionButtonWidth = 180;
+  /// Width the action button prefers when it sits beside the title, where
+  /// there is room for it. Never less than the label actually needs.
+  static const double _preferredActionWidth = 190;
+
+  /// Below this the title and subtitle stop reading comfortably, so the
+  /// button drops onto its own row rather than competing for the width.
+  static const double _minHeaderWidth = 260;
 
   Widget _buildHeader(GamePalette palette, bool isPremium) {
+    final label = isPremium
+        ? (_ranked == null ? 'Find near me' : 'Update location')
+        : 'Unlock locator';
+    final icon = isPremium ? Icons.my_location_rounded : Icons.star_rounded;
+
+    // What the label really needs at the current text scale. A fixed 180
+    // clipped "Unlock locator" to "Unlock lo…".
+    final labelMin =
+        AppPrimaryButton.minWidthFor(context, label: label, icon: icon);
+    final textScale =
+        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling)
+                .scale(14) /
+            14;
+    final headerMin = _minHeaderWidth * textScale;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
@@ -186,22 +208,33 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
           // On a portrait phone the title and the button were each squeezed to
           // about a third of the width: "Therapy Directory" wrapped across
           // three lines and the button's own label was ellipsised to
-          // "Unlock lo…". Below this width the button drops onto its own row
-          // and runs full width, where it reads in full.
-          final stacked = constraints.maxWidth < _actionButtonWidth * 2.6;
+          // "Unlock lo…". They share a row only when the header *and* the CTA
+          // each keep a readable width; otherwise the button drops onto its
+          // own row and runs full width.
+          final stacked =
+              constraints.maxWidth < headerMin + AppSpacing.md + labelMin;
+          final buttonWidth = stacked
+              ? null
+              : math.max(
+                  labelMin,
+                  math.min(
+                    _preferredActionWidth,
+                    constraints.maxWidth - headerMin - AppSpacing.md,
+                  ),
+                );
 
           final button = isPremium
               ? AppPrimaryButton(
-                  label: _ranked == null ? 'Find near me' : 'Update location',
-                  icon: Icons.my_location_rounded,
-                  width: stacked ? null : _actionButtonWidth,
+                  label: label,
+                  icon: icon,
+                  width: buttonWidth,
                   isLoading: _locating,
                   onPressed: _locating ? null : _findNearMe,
                 )
               : AppPrimaryButton(
-                  label: 'Unlock locator',
-                  icon: Icons.star_rounded,
-                  width: stacked ? null : _actionButtonWidth,
+                  label: label,
+                  icon: icon,
+                  width: buttonWidth,
                   onPressed: _openUpgrade,
                 );
 
