@@ -79,11 +79,25 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('Assessment Summary'), findsOneWidget);
-    // All three cards are on one scrolling page rather than in columns.
-    expect(find.text('Game Results'), findsOneWidget);
-    expect(find.text('Developmental Profile'), findsOneWidget);
-    expect(find.text('Recommendations'), findsOneWidget);
+    expect(find.text(AssessmentLabels.title), findsOneWidget);
+    // Every section is on one scrolling page rather than in columns, in the
+    // canonical order.
+    expect(
+      tester
+          .widgetList<AssessmentSectionCard>(
+            find.byType(AssessmentSectionCard),
+          )
+          .map((card) => card.label),
+      const [
+        AssessmentLabels.overallPerformance,
+        AssessmentLabels.developmentalProfile,
+        AssessmentLabels.gameResults,
+        AssessmentLabels.recommendedSettings,
+      ],
+    );
+    // Review mode: retake is offered, the celebration is not replayed.
+    expect(find.text(AssessmentLabels.retakeAssessment), findsOneWidget);
+    expect(find.text(AssessmentLabels.disclaimer), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
