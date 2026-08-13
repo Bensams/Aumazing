@@ -28,6 +28,14 @@ class SensoryPreferenceResult {
   /// When the analysis was performed.
   final DateTime analyzedAt;
 
+  /// Whether the recommendation can be acted on.
+  ///
+  /// False when the per-round telemetry behind it was missing or could not
+  /// be attributed to the sensory conditions — a recommendation derived from
+  /// that would be a guess dressed up as a measurement, so it is surfaced as
+  /// unavailable (and always at [ConfidenceLevel.low]) instead.
+  final bool available;
+
   const SensoryPreferenceResult({
     required this.recommendedMusicEnabled,
     required this.recommendedHapticEnabled,
@@ -36,6 +44,7 @@ class SensoryPreferenceResult {
     required this.configScores,
     this.attentionSummary,
     required this.analyzedAt,
+    this.available = true,
   });
 
   Map<String, dynamic> toMap() => {
@@ -43,6 +52,7 @@ class SensoryPreferenceResult {
         'recommended_haptic_enabled': recommendedHapticEnabled ? 1 : 0,
         'best_config': bestConfig.name,
         'confidence': confidence.name,
+        'available': available ? 1 : 0,
         'config_scores':
             configScores.map((k, v) => MapEntry(k.name, v)),
         'attention_summary': attentionSummary?.toMap(),
@@ -72,7 +82,25 @@ class SensoryPreferenceAnalyzer {
   /// [allMetrics] should contain metrics from all 4 games x 5 rounds
   /// (up to 20 entries). Rounds are grouped by [SensoryRoundPurpose]
   /// and scored using the composite model.
-  SensoryPreferenceResult analyze(List<SensoryRoundMetrics> allMetrics) {
+  ///
+  /// Pass `telemetryReliable: false` when the per-round measurements behind
+  /// [allMetrics] were incomplete: the result is then marked unavailable and
+  /// pinned to [ConfidenceLevel.low] rather than presented as a finding.
+  SensoryPreferenceResult analyze(
+    List<SensoryRoundMetrics> allMetrics, {
+    bool telemetryReliable = true,
+  }) {
+    if (allMetrics.isEmpty) {
+      return SensoryPreferenceResult(
+        recommendedMusicEnabled: false,
+        recommendedHapticEnabled: false,
+        bestConfig: SensoryRoundPurpose.baseline,
+        confidence: ConfidenceLevel.low,
+        configScores: const {},
+        analyzedAt: DateTime.now(),
+        available: false,
+      );
+    }
     // Group metrics by sensory purpose (excluding attention round)
     final grouped = <SensoryRoundPurpose, List<SensoryRoundMetrics>>{};
     final attentionRounds = <SensoryRoundMetrics>[];
@@ -126,7 +154,9 @@ class SensoryPreferenceAnalyzer {
     }
 
     // Calculate confidence
-    final confidence = _calculateConfidence(scores, bestConfig);
+    final confidence = telemetryReliable
+        ? _calculateConfidence(scores, bestConfig)
+        : ConfidenceLevel.low;
 
     // Analyze attention metrics from round 5
     AttentionMetrics? attentionSummary;
@@ -142,6 +172,7 @@ class SensoryPreferenceAnalyzer {
       configScores: scores,
       attentionSummary: attentionSummary,
       analyzedAt: DateTime.now(),
+      available: telemetryReliable && scores.isNotEmpty,
     );
   }
 
