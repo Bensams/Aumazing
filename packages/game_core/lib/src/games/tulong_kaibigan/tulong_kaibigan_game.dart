@@ -2,7 +2,6 @@ import 'dart:async' as async;
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/game.dart';
@@ -52,10 +51,11 @@ class TulongKaibiganMetrics {
     return opportunities == 0 ? 0 : wrongRecipients / opportunities;
   }
 
-  double get averageDragHesitationMs => dragHesitationsMs.isEmpty
-      ? 0
-      : dragHesitationsMs.reduce((a, b) => a + b) /
-          dragHesitationsMs.length;
+  double get averageDragHesitationMs =>
+      dragHesitationsMs.isEmpty
+          ? 0
+          : dragHesitationsMs.reduce((a, b) => a + b) /
+              dragHesitationsMs.length;
 }
 
 class TulongKaibiganGame extends FlameGame
@@ -92,7 +92,8 @@ class TulongKaibiganGame extends FlameGame
     required int errorCount,
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
-  }) onGameComplete;
+  })
+  onGameComplete;
   final String childId;
   final int totalRounds;
   final int itemsPerRound;
@@ -128,12 +129,14 @@ class TulongKaibiganGame extends FlameGame
   int _errorsThisTrial = 0;
   int _hintsThisRound = 0;
   DateTime? _requestShownAt;
+  DraggableItem? _draggingItem;
   async.Timer? _bubbleTimer;
   async.Timer? _idleTimer;
   GhostHand? _ghostHand;
 
   int get _tier => profile.level.clamp(1, 3);
-  bool get _mayHint => !profile.noHints &&
+  bool get _mayHint =>
+      !profile.noHints &&
       (profile.unlimitedHints ||
           _hintsThisRound < (profile.hintsPerRound ?? 0));
   TulongRequest get _activeRequest => _requests[_requestIndex];
@@ -156,27 +159,190 @@ class TulongKaibiganGame extends FlameGame
     _setupRound();
   }
 
+  // ── Layout ───────────────────────────────────────────────────────────
+  //
+  // The field is split into two columns, so the child reads the request on the
+  // left and answers it on the right:
+  //
+  //   ├─ kTopOverlayBand ───────────────────────────────────────────────┤
+  //   │                                                                 │
+  //   │   ┌── character ──┐  ┌─────────── options ─────────────┐        │
+  //   │   │   bubble      │  │   ┌─────┐   ┌─────┐             │        │
+  //   │   │   buddy       │  │   └─────┘   └─────┘             │        │
+  //   │   └───────────────┘  └─────────────────────────────────┘        │
+  //   ├─ bottom inset ──────────────────────────────────────────────────┤
+  //
+  // Every position below is derived from the live canvas, never from a fixed
+  // pixel budget: this game runs on a 2400x1600 tablet and on a 800x360 phone,
+  // and it previously pinned the buddy to the right edge and the tray to a
+  // fraction of the *raw* screen height, which put the bottom row under the
+  // tablet's navigation bar.
+
+  /// The area a game object may occupy: below the Flutter overlay strip and
+  /// above the bottom safe area, inset from both side edges.
+  @visibleForTesting
+  static Rect playAreaFor(Vector2 canvas) {
+    final inset = math.min(canvas.x * 0.04, 36.0);
+    final top = kTopOverlayBand + 8;
+    final bottom = canvas.y - math.max(canvas.y * 0.05, 16.0);
+    return Rect.fromLTRB(
+      inset,
+      top,
+      math.max(canvas.x - inset, inset + 1),
+      math.max(bottom, top + 1),
+    );
+  }
+
+  /// The left column: 42% of the width, minus a bottom reserve so the app's
+  /// mascot does not stand on the character.
+  ///
+  /// A tier-3 round puts two buddies here; they split this column rather than
+  /// widening it, so the answer cards keep their side of the field whatever the
+  /// difficulty.
+  @visibleForTesting
+  static Rect characterRegionFor(Vector2 canvas) {
+    final play = playAreaFor(canvas);
+    final mascotReserve = math.min(kBottomMascotBand, play.height * 0.22);
+    return Rect.fromLTRB(
+      play.left,
+      play.top,
+      play.left + play.width * 0.42,
+      math.max(play.bottom - mascotReserve, play.top + 1),
+    );
+  }
+
+  /// The right column: 57% of the width, leaving a gutter between the two.
+  @visibleForTesting
+  static Rect optionsRegionFor(Vector2 canvas) {
+    final play = playAreaFor(canvas);
+    return Rect.fromLTRB(
+      play.right - play.width * 0.57,
+      play.top,
+      play.right,
+      play.bottom,
+    );
+  }
+
+  /// The largest character box with the sprite's own proportions that fits
+  /// [column], centred in it. Capped so a big tablet does not blow the buddy up
+  /// to fill half the screen.
+  @visibleForTesting
+  static Vector2 buddyBoxFor(Rect column) {
+    // The sprite cell is 406x490 and only the lower 79% of the box holds the
+    // body (the rest is the request bubble), so a box this shape wastes no
+    // room around the character.
+    const ratio = 0.655;
+    var h = math.min(column.height, 460.0);
+    var w = h * ratio;
+    if (w > column.width) {
+      w = column.width;
+      h = w / ratio;
+    }
+    return Vector2(math.max(w, 1), math.max(h, 1));
+  }
+
+  /// Square card slots for [count] options, laid out inside [region] and
+  /// guaranteed to stay within it.
+  ///
+  /// Two cards go side by side on a wide region and stack on a tall one; three
+  /// go in a row when there is room and otherwise fall back to a 2+1 grid whose
+  /// last row is centred.
+  @visibleForTesting
+  static List<Rect> layoutOptionSlots({
+    required Rect region,
+    required int count,
+    double maxCardSide = 200,
+  }) {
+    if (count <= 0 || region.width <= 0 || region.height <= 0) return const [];
+    final columns = _optionColumnsFor(count, region);
+    final rows = (count / columns).ceil();
+    const gapFactor = 0.18;
+    final byWidth = region.width / (columns + gapFactor * (columns - 1));
+    final byHeight = region.height / (rows + gapFactor * (rows - 1));
+    final side = math.min(math.min(byWidth, byHeight), maxCardSide);
+    final gap = side * gapFactor;
+    final gridHeight = rows * side + (rows - 1) * gap;
+    final top = region.top + (region.height - gridHeight) / 2;
+
+    final slots = <Rect>[];
+    for (var i = 0; i < count; i++) {
+      final row = i ~/ columns;
+      final inRow = math.min(columns, count - row * columns);
+      final rowWidth = inRow * side + (inRow - 1) * gap;
+      final left = region.left + (region.width - rowWidth) / 2;
+      slots.add(
+        Rect.fromLTWH(
+          left + (i % columns) * (side + gap),
+          top + row * (side + gap),
+          side,
+          side,
+        ),
+      );
+    }
+    return slots;
+  }
+
+  static int _optionColumnsFor(int count, Rect region) {
+    if (count <= 1) return 1;
+    final ratio = region.width / region.height;
+    if (count == 2) return ratio >= 1.0 ? 2 : 1;
+    return ratio >= 1.6 ? 3 : 2;
+  }
+
   void _buildBuddies() {
     final count = _tier == 3 ? 2 : 1;
-    final buddyW = math.min(size.x * (count == 2 ? 0.28 : 0.34), 310.0);
-    // The tray the child drags from needs the bottom of the field, but taking
-    // a flat 120px for it collapsed the buddy on a short canvas: at 960x300
-    // that left an 84px-tall box, so even drawn at the right proportions the
-    // buddy was a thumbnail. A proportional reserve keeps the character
-    // legible on a phone and still leaves the tray its room on a tablet.
-    final playfield = size.y - kTopOverlayBand;
-    final buddyH = playfield * 0.78;
     for (var i = 0; i < count; i++) {
-      final x = count == 1
-          ? size.x - buddyW - size.x * 0.06
-          : size.x * (i == 0 ? 0.04 : 0.68);
       final buddy = BuddyComponent(
         kind: i == 0 ? BuddyKind.bps : BuddyKind.reiz,
-        position: Vector2(x, kTopOverlayBand + 8),
-        size: Vector2(buddyW, buddyH),
+        position: Vector2.zero(),
+        size: Vector2.all(1),
       );
       _buddies.add(buddy);
       add(buddy);
+    }
+    _layoutBuddies();
+  }
+
+  /// Centres each buddy vertically in its share of the character column.
+  void _layoutBuddies() {
+    if (_buddies.isEmpty || size.x <= 0 || size.y <= 0) return;
+    final region = characterRegionFor(size);
+    final columnWidth = region.width / _buddies.length;
+    final gutter = _buddies.length > 1 ? columnWidth * 0.08 : 0.0;
+    for (var i = 0; i < _buddies.length; i++) {
+      final column = Rect.fromLTWH(
+        region.left + i * columnWidth + gutter / 2,
+        region.top,
+        columnWidth - gutter,
+        region.height,
+      );
+      final box = buddyBoxFor(column);
+      _buddies[i]
+        ..size = box
+        ..position = Vector2(
+          column.center.dx - box.x / 2,
+          region.center.dy - box.y / 2,
+        );
+    }
+  }
+
+  /// Places the answer cards into the option column.
+  void _layoutItems() {
+    if (_items.isEmpty || size.x <= 0 || size.y <= 0) return;
+    final slots = layoutOptionSlots(
+      region: optionsRegionFor(size),
+      count: _items.length,
+    );
+    if (slots.length != _items.length) return;
+    for (var i = 0; i < _items.length; i++) {
+      final slot = slots[i];
+      final item =
+          _items[i]
+            ..size = Vector2(slot.width, slot.height)
+            ..homePosition = Vector2(slot.left, slot.top);
+      // A card under the finger keeps whatever position the drag gave it;
+      // snapping it back mid-gesture would read as it escaping the child's grip.
+      if (item != _draggingItem) item.position = item.homePosition.clone();
     }
   }
 
@@ -214,22 +380,26 @@ class TulongKaibiganGame extends FlameGame
       }
     }
 
-    final tray = _trayFor(request.item);
-    final itemSize = math.min(size.y * 0.24, size.x / 6.2);
-    final gap = itemSize * 0.18;
-    final totalWidth = tray.length * itemSize + (tray.length - 1) * gap;
-    final startX = (size.x - totalWidth) / 2;
-    final y = size.y - itemSize - size.y * 0.035;
-    for (var i = 0; i < tray.length; i++) {
-      final data = tray[i];
+    final options = _trayFor(request.item);
+    // A trial can be set up before the canvas has a size (a zero-sized region
+    // yields no slots). Park the cards off-screen rather than indexing past the
+    // end of an empty list; [_layoutItems] places them the moment a real size
+    // arrives via [onGameResize].
+    final slots = layoutOptionSlots(
+      region: optionsRegionFor(size),
+      count: options.length,
+    );
+    for (var i = 0; i < options.length; i++) {
+      final data = options[i];
+      final slot = i < slots.length ? slots[i] : Rect.zero;
       final item = DraggableItem(
         data: data,
         color: data.color,
         onPickedUp: _onPickedUp,
         onDropped: _onDropped,
         language: strings.language,
-        position: Vector2(startX + i * (itemSize + gap), y),
-        size: Vector2.all(itemSize),
+        position: Vector2(slot.left, slot.top),
+        size: Vector2(math.max(slot.width, 1), math.max(slot.height, 1)),
       );
       _items.add(item);
       add(item);
@@ -249,31 +419,27 @@ class TulongKaibiganGame extends FlameGame
     _startIdleTimer();
   }
 
-  List<StoreItemData> _trayFor(StoreItemData requested) {
-    final desired = _tier == 1 ? 1 : (_tier == 2 ? itemsPerRound.clamp(2, 3) : 4);
-    final all = SariSariSortGame.catalogue.values.expand((items) => items).toList()
-      ..shuffle(_random);
-    final tray = <StoreItemData>[requested];
-    for (final item in all) {
-      if (tray.length >= desired) break;
-      if (item.name != requested.name) tray.add(item);
-    }
-    tray.shuffle(_random);
-    return tray;
-  }
+  List<StoreItemData> _trayFor(StoreItemData requested) => buildOptions(
+    requested: requested,
+    optionCount: optionCountForTier(_tier),
+    random: _random,
+  );
 
   void _onPickedUp(DraggableItem item) {
+    _draggingItem = item;
     _idleTimer?.cancel();
     _hidePrompts();
     onPlayDragSfx?.call();
     final started = _requestShownAt;
     if (started != null) {
-      socialMetrics.dragHesitationsMs
-          .add(DateTime.now().difference(started).inMilliseconds);
+      socialMetrics.dragHesitationsMs.add(
+        DateTime.now().difference(started).inMilliseconds,
+      );
     }
   }
 
   void _onDropped(DraggableItem item, Vector2 point) {
+    _draggingItem = null;
     onPlayDropSfx?.call();
     BuddyComponent? target;
     var targetIndex = -1;
@@ -300,16 +466,19 @@ class TulongKaibiganGame extends FlameGame
     analyticsRecordValidAction();
 
     if (outcome == TulongDropOutcome.correct) {
-      final responseMs = _requestShownAt == null
-          ? 0
-          : DateTime.now().difference(_requestShownAt!).inMilliseconds;
+      final responseMs =
+          _requestShownAt == null
+              ? 0
+              : DateTime.now().difference(_requestShownAt!).inMilliseconds;
       _score++;
       _totalResponseTimeMs += responseMs;
-      analyticsRecordCorrect(extraData: {
-        'item': item.data.name,
-        'recipient': targetIndex,
-        'response_time_ms': responseMs,
-      });
+      analyticsRecordCorrect(
+        extraData: {
+          'item': item.data.name,
+          'recipient': targetIndex,
+          'response_time_ms': responseMs,
+        },
+      );
       onCorrectDrop?.call();
       onPlayCorrectSfx?.call();
       onPlayCorrectVo?.call(AnswerLabel(item: item.data.name));
@@ -322,19 +491,27 @@ class TulongKaibiganGame extends FlameGame
 
     _errorsThisTrial++;
     if (outcome == TulongDropOutcome.wrongRecipient) {
-      analyticsAddRoundData('wrong_recipient_attempts', socialMetrics.wrongRecipients);
+      analyticsAddRoundData(
+        'wrong_recipient_attempts',
+        socialMetrics.wrongRecipients,
+      );
       analyticsRecordRetry();
     } else {
       _plainErrors++;
-      analyticsRecordWrong(extraData: {
-        'item': item.data.name,
-        'expected_item': _activeRequest.item.name,
-        'recipient': targetIndex,
-      });
+      analyticsRecordWrong(
+        extraData: {
+          'item': item.data.name,
+          'expected_item': _activeRequest.item.name,
+          'recipient': targetIndex,
+        },
+      );
       analyticsRecordRetry();
     }
     if (!bubbleVisible) {
-      analyticsAddRoundData('bubble_recall_errors', socialMetrics.bubbleRecallErrors);
+      analyticsAddRoundData(
+        'bubble_recall_errors',
+        socialMetrics.bubbleRecallErrors,
+      );
     }
     onPlayWrongSfx?.call();
     onPlayWrongVo?.call();
@@ -374,13 +551,21 @@ class TulongKaibiganGame extends FlameGame
     onPlayCelebrationVo?.call();
     analyticsMarkCompleted();
     analyticsAddGameSpecificMetric(
-        'wrongRecipientRate', socialMetrics.wrongRecipientRate);
+      'wrongRecipientRate',
+      socialMetrics.wrongRecipientRate,
+    );
     analyticsAddGameSpecificMetric(
-        'dragHesitationMs', socialMetrics.averageDragHesitationMs);
+      'dragHesitationMs',
+      socialMetrics.averageDragHesitationMs,
+    );
     analyticsAddGameSpecificMetric(
-        'bubbleRecallErrors', socialMetrics.bubbleRecallErrors);
+      'bubbleRecallErrors',
+      socialMetrics.bubbleRecallErrors,
+    );
     analyticsAddGameSpecificMetric(
-        'promptLevelUsed', socialMetrics.promptLevelUsed);
+      'promptLevelUsed',
+      socialMetrics.promptLevelUsed,
+    );
     analyticsCompleteSession();
     Future.delayed(const Duration(milliseconds: 600), () {
       onGameComplete(
@@ -397,7 +582,10 @@ class TulongKaibiganGame extends FlameGame
     if (profile == DifficultyProfile.assessment || !_mayHint) return;
     _hintsThisRound++;
     final level = _errorsThisTrial.clamp(1, 4);
-    socialMetrics.promptLevelUsed = math.max(socialMetrics.promptLevelUsed, level);
+    socialMetrics.promptLevelUsed = math.max(
+      socialMetrics.promptLevelUsed,
+      level,
+    );
     final requester = _buddies[_activeRequest.buddyIndex];
     requester.pulseBubble();
     if (level >= 2 && _buddies.length > 1) {
@@ -405,8 +593,13 @@ class TulongKaibiganGame extends FlameGame
         _buddies[i].dimmed = i != _activeRequest.buddyIndex;
       }
     }
-    final correct = _items.firstWhere((i) => i.data.name == _activeRequest.item.name);
-    if (level >= 3) correct.add(ScaleEffect.to(Vector2.all(1.12), EffectController(duration: 0.25)));
+    final correct = _items.firstWhere(
+      (i) => i.data.name == _activeRequest.item.name,
+    );
+    if (level >= 3)
+      correct.add(
+        ScaleEffect.to(Vector2.all(1.12), EffectController(duration: 0.25)),
+      );
     if (level >= 4 || (profile == DifficultyProfile.medium && !_mayHint)) {
       _ghostHand?.removeFromParent();
       _ghostHand = GhostHand.drag(
@@ -448,11 +641,54 @@ class TulongKaibiganGame extends FlameGame
     required TulongRequest request,
   }) {
     if (targetBuddyIndex < 0) return TulongDropOutcome.motorMiss;
-    if (item.name == request.item.name && targetBuddyIndex != request.buddyIndex) {
+    if (item.name == request.item.name &&
+        targetBuddyIndex != request.buddyIndex) {
       return TulongDropOutcome.wrongRecipient;
     }
     if (item.name != request.item.name) return TulongDropOutcome.wrongItem;
     return TulongDropOutcome.correct;
+  }
+
+  /// How many answer cards a single trial shows.
+  ///
+  /// Deliberately *not* [itemsPerRound] — that is how many requests the buddy
+  /// makes before the round ends, and reusing it for the tray is what made an
+  /// easy round show a single card that was always the right one, i.e. a choice
+  /// with nothing to choose between. Two options on easy, three above it.
+  @visibleForTesting
+  static int optionCountForTier(int tier) => tier <= 1 ? 2 : 3;
+
+  /// The answer cards for one trial: [requested] exactly once, plus unique
+  /// distractors, shuffled so the correct card is never in a learnable spot.
+  ///
+  /// Distractors are drawn from the requested item's own shelf first, so the
+  /// wrong answers are things the buddy might plausibly have asked for rather
+  /// than an obvious odd-one-out.
+  @visibleForTesting
+  static List<StoreItemData> buildOptions({
+    required StoreItemData requested,
+    required int optionCount,
+    math.Random? random,
+  }) {
+    final rng = random ?? math.Random();
+    final target = optionCount.clamp(2, 3);
+    final sameShelf = <StoreItemData>[];
+    final elsewhere = <StoreItemData>[];
+    for (final item in SariSariSortGame.catalogue.values.expand((i) => i)) {
+      if (item.name == requested.name) continue;
+      (item.category == requested.category ? sameShelf : elsewhere).add(item);
+    }
+    sameShelf.shuffle(rng);
+    elsewhere.shuffle(rng);
+
+    final chosen = <String>{requested.name};
+    final options = <StoreItemData>[requested];
+    for (final item in [...sameShelf, ...elsewhere]) {
+      if (options.length >= target) break;
+      if (chosen.add(item.name)) options.add(item);
+    }
+    options.shuffle(rng);
+    return options;
   }
 
   @visibleForTesting
@@ -463,18 +699,23 @@ class TulongKaibiganGame extends FlameGame
     Set<String> excludedNames = const {},
   }) {
     final rng = random ?? math.Random();
-    var pool = SariSariSortGame.catalogue.values
-        .expand((items) => items)
-        .where((item) => !excludedNames.contains(item.name))
-        .toList();
+    var pool =
+        SariSariSortGame.catalogue.values
+            .expand((items) => items)
+            .where((item) => !excludedNames.contains(item.name))
+            .toList();
     if (pool.length < count) {
-      pool = SariSariSortGame.catalogue.values.expand((items) => items).toList();
+      pool =
+          SariSariSortGame.catalogue.values.expand((items) => items).toList();
     }
     pool.shuffle(rng);
-    return List.generate(count, (index) => TulongRequest(
-          buddyIndex: tier == 3 ? index % 2 : 0,
-          item: pool[index % pool.length],
-        ));
+    return List.generate(
+      count,
+      (index) => TulongRequest(
+        buddyIndex: tier == 3 ? index % 2 : 0,
+        item: pool[index % pool.length],
+      ),
+    );
   }
 
   @override
@@ -484,6 +725,15 @@ class TulongKaibiganGame extends FlameGame
       Offset(event.canvasPosition.x, event.canvasPosition.y),
       isValid: false,
     );
+  }
+
+  @override
+  void onGameResize(Vector2 newSize) {
+    super.onGameResize(newSize);
+    // Runs before onLoad on the very first frame, so both helpers no-op until
+    // there is something to place.
+    _layoutBuddies();
+    _layoutItems();
   }
 
   @override
