@@ -7,12 +7,9 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/local_db_service.dart';
-import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
-import '../../model/support_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
-import '../../services/rubric/rubric_labels.dart';
 
 import '../games/copy_me/copy_me_screen.dart';
 import '../games/do_what_i_say/do_what_i_say_screen.dart';
@@ -372,8 +369,15 @@ class _PreAssessmentProgressScreenState
     // Use the finalized results from the provider (which have proper data)
     final finalResults = assessProv.preResults;
 
-    // Generate profile — use AI if available, otherwise rule-based fallback
-    final profile = _buildSupportProfile(aiResponse, finalResults);
+    // Finalize and persist the profile for this run. The parent's later
+    // Assessment Summary reads this same profile back rather than
+    // recomputing it, so both views always agree.
+    final profile = await assessProv.finalizeSupportProfile(
+      _childId,
+      aiResponse: aiResponse,
+    );
+
+    if (!mounted) return;
 
     // Navigate to the waiting-for-parent screen
     Navigator.of(context).pushReplacement(
@@ -385,163 +389,6 @@ class _PreAssessmentProgressScreenState
         ),
       ),
     );
-  }
-
-  /// Build a [SupportProfile] from the AI response or rule-based fallback.
-  ///
-  /// The Developmental Profile labels (communication, socialInteraction,
-  /// playSkills, attention, sensory) always come from the [RubricResult]
-  /// produced by [RubricScoringService] so that rubric scoring is the
-  /// single source of truth for the profile UI.
-  ///
-  /// When AI is available, the Recommendations section (difficulty, prompt
-  /// style, session length, etc.) is driven by the AI response. When AI is
-  /// unavailable, recommendations fall back to sensible defaults derived
-  /// from the rubric labels.
-  SupportProfile _buildSupportProfile(
-    AiAssessmentResponse? aiResponse,
-    List<AssessmentResult> finalResults,
-  ) {
-    final assessProv = context.read<AssessmentProvider>();
-    final rubric = assessProv.rubricResult;
-
-    // ── Developmental Profile labels from rubric ──────────────────────
-    final String communication;
-    final String socialInteraction;
-    final String playSkills;
-    final String attention;
-    final List<String> sensoryNotes;
-
-    if (rubric != null) {
-      communication = _mapPerformanceLabel(rubric.communicationLabel);
-      socialInteraction =
-          _mapPerformanceLabel(rubric.socialInteractionLabel);
-      playSkills = _mapPerformanceLabel(rubric.playSkillsLabel);
-      attention = _mapAttentionLabel(rubric.behaviorAttentionLabel);
-      sensoryNotes = [rubric.sensoryPreferenceLabel.displayName];
-
-      debugPrint('[PreAssessment] 📐 Using rubric-based profile labels: '
-          'comm=$communication, social=$socialInteraction, '
-          'play=$playSkills, attn=$attention, '
-          'sensory=${rubric.sensoryPreferenceLabel.displayName}');
-    } else {
-      // Rubric not available — use neutral defaults
-      debugPrint('[PreAssessment] ⚠️ Rubric result not available, '
-          'using neutral defaults for profile labels');
-      communication = 'emerging';
-      socialInteraction = 'emerging';
-      playSkills = 'emerging';
-      attention = 'moderate';
-      sensoryNotes = const [];
-    }
-
-    // ── Recommendations from AI or rubric-based defaults ─────────────
-    if (aiResponse != null) {
-      debugPrint('[PreAssessment] ✅ Using AI-based recommendations: '
-          '${aiResponse.profileDisplayName} '
-          '(${aiResponse.confidencePercent}), '
-          'support_level=${aiResponse.supportLevel}');
-
-      final profile = aiResponse.predictedProfile;
-
-      return SupportProfile(
-        communication: communication,
-        socialInteraction: socialInteraction,
-        playSkills: playSkills,
-        attention: attention,
-        sensoryNotes: sensoryNotes,
-        recommendedDifficulty: aiResponse.supportLevel == 'high'
-            ? 'beginner'
-            : aiResponse.supportLevel == 'moderate'
-                ? 'intermediate'
-                : 'advanced',
-        recommendedPromptStyle: aiResponse.supportLevel == 'high'
-            ? 'visual'
-            : aiResponse.supportLevel == 'moderate'
-                ? 'combined'
-                : 'verbal',
-        recommendedSessionMinutes: aiResponse.supportLevel == 'high'
-            ? 3
-            : aiResponse.supportLevel == 'moderate'
-                ? 5
-                : 7,
-        lowStimulationMode: profile == 'attention_support',
-        turnTakingPractice: profile == 'social_support',
-        promptRepetition: aiResponse.supportLevel == 'high'
-            ? 3
-            : aiResponse.supportLevel == 'moderate'
-                ? 2
-                : 1,
-      );
-    } else {
-      // Fallback: derive recommendations from rubric labels
-      debugPrint('[PreAssessment] ⚠️ Using rubric-based recommendations '
-          '(AI unavailable)');
-
-      // Derive difficulty from rubric performance labels
-      final emergingCount = [communication, socialInteraction, playSkills]
-          .where((l) => l == 'emerging')
-          .length;
-      final strongCount = [communication, socialInteraction, playSkills]
-          .where((l) => l == 'strong')
-          .length;
-
-      final String difficulty;
-      if (strongCount >= 2) {
-        difficulty = 'advanced';
-      } else if (emergingCount >= 2) {
-        difficulty = 'beginner';
-      } else {
-        difficulty = 'intermediate';
-      }
-
-      final sessionMin = attention == 'short attention' ? 3 : 5;
-      final lowStim = attention == 'short attention';
-      final needsTurnPractice = socialInteraction == 'emerging';
-      final promptRep = emergingCount >= 2
-          ? 3
-          : emergingCount >= 1
-              ? 2
-              : 1;
-
-      return SupportProfile(
-        communication: communication,
-        socialInteraction: socialInteraction,
-        playSkills: playSkills,
-        attention: attention,
-        sensoryNotes: sensoryNotes,
-        recommendedDifficulty: difficulty,
-        recommendedPromptStyle: 'combined',
-        recommendedSessionMinutes: sessionMin,
-        lowStimulationMode: lowStim,
-        turnTakingPractice: needsTurnPractice,
-        promptRepetition: promptRep,
-      );
-    }
-  }
-
-  /// Map [PerformanceLabel] to the string used by [SupportProfile].
-  String _mapPerformanceLabel(PerformanceLabel label) {
-    switch (label) {
-      case PerformanceLabel.strength:
-        return 'strong';
-      case PerformanceLabel.emerging:
-        return 'good';
-      case PerformanceLabel.needsSupport:
-        return 'emerging';
-    }
-  }
-
-  /// Map [AttentionLabel] to the string used by [SupportProfile].
-  String _mapAttentionLabel(AttentionLabel label) {
-    switch (label) {
-      case AttentionLabel.sustainedAttention:
-        return 'sustained';
-      case AttentionLabel.variableAttention:
-        return 'moderate';
-      case AttentionLabel.needsAttentionSupport:
-        return 'short attention';
-    }
   }
 
   @override

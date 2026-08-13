@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../model/ai_assessment_response.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
+import '../model/support_profile.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../model/area_level.dart';
 import '../services/ai_assessment_service.dart';
@@ -16,6 +17,7 @@ import '../services/entitlement_service.dart';
 import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
 import '../services/research_consent_service.dart';
+import '../services/support_profile_builder.dart';
 import '../services/assessment_service.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
@@ -58,6 +60,13 @@ class AssessmentProvider extends ChangeNotifier {
   /// Sensory round metrics collected during the pre-assessment sensory experiment.
   List<SensoryRoundMetrics>? _sensoryMetrics;
 
+  /// The support profile finalized with the latest assessment run.
+  ///
+  /// Built once when the assessment completes and persisted, so the parent's
+  /// later review shows the profile and recommendations *as finalized* rather
+  /// than recomputing them from the child's current (mutable) settings.
+  SupportProfile? _supportProfile;
+
   AssessmentProvider({
     AssessmentService? assessmentService,
     core_db.LocalDbService? localDb,
@@ -86,6 +95,10 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// The latest rubric-based scoring result, or null if not yet computed.
   RubricResult? get rubricResult => _rubricResult;
+
+  /// The support profile finalized with the latest assessment run, or null
+  /// when no assessment has been finalized (or persisted) for this child.
+  SupportProfile? get supportProfile => _supportProfile;
 
   /// The sessions collected during the current assessment round.
   List<GameplaySession> get currentSessions =>
@@ -135,6 +148,7 @@ class AssessmentProvider extends ChangeNotifier {
       // Restore the last AI prediction (area levels drive the learning path
       // and per-game difficulty; it only lives in memory otherwise).
       await _restoreAiPrediction(childId);
+      await _restoreSupportProfile(childId);
       await _restorePathProgress(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
@@ -249,6 +263,48 @@ class AssessmentProvider extends ChangeNotifier {
           'for child=$childId');
     } catch (e) {
       debugPrint('[AssessmentProvider] restoreAiPrediction failed: $e');
+    }
+  }
+
+  static String _supportProfileKey(String childId) =>
+      'support_profile_$childId';
+
+  /// Builds and stores the support profile for the just-finalized run.
+  ///
+  /// Call once, after [finalizePreAssessment] and [predictWithAI], with the
+  /// prediction that was actually used. The profile is persisted so the
+  /// parent's later "Assessment Summary" renders the very same values — a
+  /// retake overwrites it, matching how a retake replaces the results.
+  Future<SupportProfile> finalizeSupportProfile(
+    String childId, {
+    AiAssessmentResponse? aiResponse,
+  }) async {
+    final profile = SupportProfileBuilder.build(
+      rubric: _rubricResult,
+      aiResponse: aiResponse ?? _aiPrediction,
+    );
+    _supportProfile = profile;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _supportProfileKey(childId), jsonEncode(profile.toMap()));
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persistSupportProfile failed: $e');
+    }
+    notifyListeners();
+    return profile;
+  }
+
+  Future<void> _restoreSupportProfile(String childId) async {
+    if (_supportProfile != null) return; // in-memory result wins
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_supportProfileKey(childId));
+      if (raw == null) return;
+      _supportProfile =
+          SupportProfile.fromMap(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restoreSupportProfile failed: $e');
     }
   }
 
@@ -711,6 +767,7 @@ class AssessmentProvider extends ChangeNotifier {
     _aiPrediction = null;
     _rubricResult = null;
     _sensoryMetrics = null;
+    _supportProfile = null;
     notifyListeners();
   }
 }
