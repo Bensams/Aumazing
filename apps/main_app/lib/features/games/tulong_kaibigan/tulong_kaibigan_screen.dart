@@ -8,8 +8,8 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../session_recording.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
 import '../../pre_assessment/sensory/sensory.dart';
@@ -40,6 +40,10 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
+
+  /// Guards against a duplicate game-complete callback recording the
+  /// session (or advancing the flow) twice.
+  bool _completionHandled = false;
   late final int _totalRounds;
   late final TulongKaibiganGame _game;
   late final DateTime _sessionStartTime;
@@ -123,23 +127,32 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
     }
   }
 
-  void _onGameComplete({
+  Future<void> _onGameComplete({
     required int score,
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
-  }) {
+  }) async {
+    // The engine can fire this more than once on a fast finish; the flow
+    // past this point pops routes, so run it exactly once.
+    if (_completionHandled) return;
+    _completionHandled = true;
+
     setState(() => _gameComplete = true);
     MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
     final child = context.read<ChildProvider>();
     if (child.vibrationEnabled) {
       context.read<HapticService>().gameCompleteFeedback();
     }
-    context.read<AssessmentProvider>().recordGameSession(
+    widget.sensoryController?.stampRoundSensoryState(analytics);
+    // The write must land before the flow advances, so a completed game is
+    // never celebrated over a session that was silently lost.
+    await GameSessionRecording.record(
+      context,
       childId: child.profile?.id ?? 'unknown',
       gameId: 'tulong_kaibigan',
-      context: widget.assessmentContext,
+      assessmentContext: widget.assessmentContext,
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
@@ -148,7 +161,9 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
       analytics: analytics,
       bgMusicEnabled: child.musicEnabled,
       hapticFeedbackEnabled: child.vibrationEnabled,
+      applySessionSensoryDefaults: widget.sensoryController == null,
     );
+    if (!mounted) return;
     if (widget.onComplete != null) {
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;

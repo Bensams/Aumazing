@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../model/ai_assessment_response.dart';
 import '../model/assessment_result.dart';
+import '../model/assessment_run_snapshot.dart';
 import '../model/gameplay_session.dart';
 import '../model/support_profile.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
@@ -32,10 +33,10 @@ import '../services/rubric/rubric.dart';
 class AssessmentProvider extends ChangeNotifier {
   // Lazily constructed so the provider can be created in widget tests
   // without a live Supabase instance (the defaults touch Supabase).
-  AssessmentService? _assessmentServiceOverride;
+  AssessmentGateway? _assessmentServiceOverride;
   core_db.LocalDbService? _localDbOverride;
 
-  AssessmentService get _assessmentService =>
+  AssessmentGateway get _assessmentService =>
       _assessmentServiceOverride ??= AssessmentService();
   core_db.LocalDbService get _localDb =>
       _localDbOverride ??= core_db.localDbService;
@@ -45,14 +46,46 @@ class AssessmentProvider extends ChangeNotifier {
   Map<String, dynamic>? _recommendation;
   bool _isLoading = false;
 
-  /// The currently active pre-assessment sessions being collected.
+  /// The sessions collected for the *current* assessment run only.
+  ///
+  /// Only sessions whose run id, child id and gameplay context all match the
+  /// active run are kept here — see [recordGameSession]. Practice play and
+  /// anything left over from an abandoned run can therefore never reach
+  /// finalization or the model.
   final List<GameplaySession> _currentSessions = [];
+
+  /// Per-round telemetry of the current run, keyed by game id.
+  ///
+  /// The sensory experiment needs the real rounds (not the game totals) to
+  /// attribute performance to the sensory configuration that was actually
+  /// active, so the analytics object travels alongside the session.
+  final Map<String, GameSessionMetrics> _currentRunAnalytics = {};
+
+  /// Dedupe keys for sessions already written during the current run, so a
+  /// duplicate completion callback cannot produce a second record.
+  final Set<String> _recordedSessionKeys = {};
 
   /// The ID of the current assessment run (created at the start of pre/post assessment).
   String? _currentAssessmentRunId;
 
+  /// The child and type the active run belongs to — a session is only
+  /// collected when it matches both.
+  String? _currentRunChildId;
+  String? _currentRunType;
+
   /// AI-based prediction result (null if API unavailable or not yet called).
+  ///
+  /// This is the *latest* prediction — after a post-assessment it describes
+  /// the post run. Anything that needs the pre-assessment baseline must read
+  /// [preSnapshot] instead.
   AiAssessmentResponse? _aiPrediction;
+
+  /// Frozen records of the last completed pre and post runs.
+  AssessmentRunSnapshot? _preSnapshot;
+  AssessmentRunSnapshot? _postSnapshot;
+
+  /// Why the last finalization failed, or null when it succeeded.
+  String? _lastFinalizationError;
 
   /// Rubric-based scoring result (null if not yet computed).
   RubricResult? _rubricResult;
@@ -68,10 +101,33 @@ class AssessmentProvider extends ChangeNotifier {
   SupportProfile? _supportProfile;
 
   AssessmentProvider({
-    AssessmentService? assessmentService,
+    AssessmentGateway? assessmentService,
     core_db.LocalDbService? localDb,
   })  : _assessmentServiceOverride = assessmentService,
         _localDbOverride = localDb;
+
+  /// The gameplay context sessions of an assessment run carry.
+  static String expectedContextFor(String type) =>
+      type == 'post' ? 'post_assessment' : 'pre_assessment';
+
+  /// The subset of [sessions] that genuinely belongs to one assessment run.
+  ///
+  /// Finalization and AI prediction go through here so a practice session, a
+  /// session for a different child, or a leftover from a previous or
+  /// abandoned run can never be scored as part of this one.
+  static List<GameplaySession> sessionsForRun(
+    Iterable<GameplaySession> sessions, {
+    required String runId,
+    required String childId,
+    required String expectedContext,
+  }) =>
+      [
+        for (final session in sessions)
+          if (session.assessmentRunId == runId &&
+              session.childId == childId &&
+              session.context == expectedContext)
+            session,
+      ];
 
   List<AssessmentResult> get preResults => _preResults;
   List<AssessmentResult> get postResults => _postResults;
@@ -91,7 +147,20 @@ class AssessmentProvider extends ChangeNotifier {
       hasPostAssessment && !EntitlementService.instance.isPremium;
 
   /// The latest AI prediction result, or null if unavailable.
+  ///
+  /// After a post-assessment this describes the *post* run. Use
+  /// [preSnapshot] for the pre-assessment baseline.
   AiAssessmentResponse? get aiPrediction => _aiPrediction;
+
+  /// The frozen pre-assessment run: its results, profile and its own
+  /// prediction. Null when no pre-assessment has been finalized.
+  AssessmentRunSnapshot? get preSnapshot => _preSnapshot;
+
+  /// The frozen post-assessment run, or null when there is none.
+  AssessmentRunSnapshot? get postSnapshot => _postSnapshot;
+
+  /// Why the last finalization failed, or null when it succeeded.
+  String? get lastFinalizationError => _lastFinalizationError;
 
   /// The latest rubric-based scoring result, or null if not yet computed.
   RubricResult? get rubricResult => _rubricResult;
@@ -106,6 +175,13 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// The current assessment run ID (available after [startAssessmentRun]).
   String? get currentAssessmentRunId => _currentAssessmentRunId;
+
+  /// Whether an assessment run has been created and is accepting sessions.
+  bool get hasActiveAssessmentRun => _currentAssessmentRunId != null;
+
+  /// Per-round telemetry recorded for [gameId] during the current run.
+  GameSessionMetrics? analyticsForGame(String gameId) =>
+      _currentRunAnalytics[gameId];
 
   String? get recommendedModuleId =>
       _recommendation?['module_id'] as String?;
@@ -136,19 +212,27 @@ class AssessmentProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _preResults = latestPerGame(
-          await _localDb.getAssessmentResults(childId: childId, type: 'pre'));
-      _postResults = latestPerGame(await _localDb.getAssessmentResults(
-          childId: childId, type: 'post'));
+      // The locally persisted state (snapshots, profile, prediction) is
+      // restored even when the results query fails, so an unreadable local
+      // DB degrades to "no new rows" rather than to a blank summary.
+      try {
+        _preResults = latestPerGame(
+            await _localDb.getAssessmentResults(childId: childId, type: 'pre'));
+        _postResults = latestPerGame(await _localDb.getAssessmentResults(
+            childId: childId, type: 'post'));
 
-      if (_preResults.isNotEmpty) {
-        _recommendation = _assessmentService.recommendModule(_preResults);
+        if (_preResults.isNotEmpty) {
+          _recommendation = _assessmentService.recommendModule(_preResults);
+        }
+      } catch (e) {
+        debugPrint('[AssessmentProvider] result query failed: $e');
       }
 
       // Restore the last AI prediction (area levels drive the learning path
       // and per-game difficulty; it only lives in memory otherwise).
       await _restoreAiPrediction(childId);
       await _restoreSupportProfile(childId);
+      await _restoreSnapshots(childId);
       await _restorePathProgress(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
@@ -169,22 +253,100 @@ class AssessmentProvider extends ChangeNotifier {
       'ai_prediction_source_$childId';
   static String _aiPredictionRunKey(String childId) =>
       'ai_prediction_run_$childId';
+  static String _aiPredictionTypeKey(String childId) =>
+      'ai_prediction_type_$childId';
 
   Future<void> _persistAiPrediction(
-      String childId, AiAssessmentResponse prediction, String modelSource) async {
+    String childId,
+    AiAssessmentResponse prediction,
+    String modelSource, {
+    required String assessmentType,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
           _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
-      // Remember which model produced it (and from which run's sessions) so
-      // a rubric fallback can be upgraded to a real prediction later.
+      // Remember which model produced it (from which run's sessions, and
+      // whether that run was the pre or the post assessment) so a rubric
+      // fallback can be upgraded to a real prediction later — and so the
+      // upgrade relabels the right result set.
       await prefs.setString(_aiPredictionSourceKey(childId), modelSource);
+      await prefs.setString(_aiPredictionTypeKey(childId), assessmentType);
       final runId = _currentAssessmentRunId;
       if (runId != null) {
         await prefs.setString(_aiPredictionRunKey(childId), runId);
       }
     } catch (e) {
       debugPrint('[AssessmentProvider] persistAiPrediction failed: $e');
+    }
+  }
+
+  // ── Immutable per-run snapshots ───────────────────────────────────────
+
+  static String _snapshotKey(String childId, String type) =>
+      'assessment_snapshot_${type}_$childId';
+
+  /// Freezes the just-finalized run: its results, the profile finalized with
+  /// it, and the prediction made from its own sessions.
+  ///
+  /// Persisted per type, so the pre-assessment summary keeps showing the
+  /// pre-assessment even after a post-assessment has replaced the "latest"
+  /// prediction, and the post comparison always has a stable baseline.
+  Future<AssessmentRunSnapshot> captureRunSnapshot(
+    String childId, {
+    required String assessmentType,
+    AiAssessmentResponse? prediction,
+    SupportProfile? profile,
+  }) async {
+    final results = assessmentType == 'post' ? _postResults : _preResults;
+    final snapshot = AssessmentRunSnapshot(
+      assessmentType: assessmentType,
+      childId: childId,
+      assessmentRunId: _currentAssessmentRunId,
+      completedAt: DateTime.now(),
+      results: List.unmodifiable(results),
+      profile: profile ?? _supportProfile,
+      prediction: prediction ?? _aiPrediction,
+    );
+
+    if (assessmentType == 'post') {
+      _postSnapshot = snapshot;
+    } else {
+      _preSnapshot = snapshot;
+      // A retake of the pre-assessment invalidates the old comparison.
+      _postSnapshot = null;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _snapshotKey(childId, assessmentType),
+        jsonEncode(snapshot.toJson()),
+      );
+      if (assessmentType == 'pre') {
+        await prefs.remove(_snapshotKey(childId, 'post'));
+      }
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persistRunSnapshot failed: $e');
+    }
+    notifyListeners();
+    return snapshot;
+  }
+
+  Future<void> _restoreSnapshots(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      AssessmentRunSnapshot? read(String type) {
+        final raw = prefs.getString(_snapshotKey(childId, type));
+        if (raw == null) return null;
+        return AssessmentRunSnapshot.fromJson(
+            jsonDecode(raw) as Map<String, dynamic>);
+      }
+
+      _preSnapshot ??= read('pre');
+      _postSnapshot ??= read('post');
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restoreSnapshots failed: $e');
     }
   }
 
@@ -236,9 +398,20 @@ class AssessmentProvider extends ChangeNotifier {
         await prefs.setString(
             _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
         await prefs.setString(_aiPredictionSourceKey(childId), modelSource);
-        _preResults = _preResults
-            .map((r) => r.copyWithRubric(modelSource: modelSource))
-            .toList();
+        // Relabel only the run the stored prediction actually came from —
+        // upgrading a post-assessment prediction must not rewrite the
+        // pre-assessment's model source.
+        final storedType =
+            prefs.getString(_aiPredictionTypeKey(childId)) ?? 'pre';
+        if (storedType == 'post') {
+          _postResults = _postResults
+              .map((r) => r.copyWithRubric(modelSource: modelSource))
+              .toList();
+        } else {
+          _preResults = _preResults
+              .map((r) => r.copyWithRubric(modelSource: modelSource))
+              .toList();
+        }
         debugPrint('[AssessmentProvider] ⬆️ Upgraded rubric_based prediction '
             'to $modelSource for child=$childId (run=$runId)');
         notifyListeners();
@@ -310,24 +483,63 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Starts a new assessment run and stores the run ID.
   ///
-  /// Must be called before [recordGameSession] during pre/post assessment
-  /// so that all sessions and results are linked to this run.
+  /// Run-scoped state is wiped *before* the run is created, so sessions,
+  /// telemetry, rubric scores and sensory metrics left behind by a previous
+  /// or abandoned run cannot contaminate this one. Callers must await this
+  /// (and check it did not throw) before letting the child play: without a
+  /// run id every session would be written unattached.
+  ///
+  /// Throws if the run could not be created; the provider is then left with
+  /// no active run so the caller can offer a retry.
   Future<String> startAssessmentRun({
     required String childId,
     required String type,
   }) async {
-    _currentAssessmentRunId = await _assessmentService.startAssessmentRun(
+    _resetRunState();
+    notifyListeners();
+
+    final runId = await _assessmentService.startAssessmentRun(
       childId: childId,
       type: type,
     );
+
+    _currentAssessmentRunId = runId;
+    _currentRunChildId = childId;
+    _currentRunType = type;
+
     debugPrint('[AssessmentProvider] Assessment run started: '
-        '$_currentAssessmentRunId (type: $type)');
+        '$runId (type: $type)');
     notifyListeners();
-    return _currentAssessmentRunId!;
+    return runId;
   }
 
-  /// Records a single mini-game session during pre/post assessment.
-  Future<void> recordGameSession({
+  /// Forgets everything scoped to a single assessment run.
+  void _resetRunState() {
+    _currentSessions.clear();
+    _currentRunAnalytics.clear();
+    _recordedSessionKeys.clear();
+    _currentAssessmentRunId = null;
+    _currentRunChildId = null;
+    _currentRunType = null;
+    _sensoryMetrics = null;
+    _rubricResult = null;
+    _lastFinalizationError = null;
+  }
+
+  /// Whether [context] is an assessment context (rather than free practice).
+  static bool _isAssessmentContext(String context) =>
+      context == 'pre_assessment' || context == 'post_assessment';
+
+  /// Records a single mini-game session.
+  ///
+  /// Awaited by every game screen: the write must land before the flow treats
+  /// the game as finished, otherwise a run can be finalized over sessions
+  /// that were never persisted. Repeated calls for the same game *instance*
+  /// (same start time) are ignored, so a duplicate completion callback cannot
+  /// create a second record. Returns the recorded session, or the one already
+  /// recorded for a duplicate call; rethrows on a failed write so the caller
+  /// can offer a retry.
+  Future<GameplaySession?> recordGameSession({
     required String childId,
     required String gameId,
     required String context,
@@ -339,29 +551,68 @@ class AssessmentProvider extends ChangeNotifier {
     GameSessionMetrics? analytics,
     bool bgMusicEnabled = true,
     bool hapticFeedbackEnabled = true,
+    bool applySessionSensoryDefaults = true,
   }) async {
-    final session = await _assessmentService.recordSession(
-      childId: childId,
-      gameId: gameId,
-      context: context,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: startedAt,
-      assessmentRunId: _currentAssessmentRunId,
-      analytics: analytics,
-      bgMusicEnabled: bgMusicEnabled,
-      hapticFeedbackEnabled: hapticFeedbackEnabled,
-    );
+    // Practice play is never part of an assessment run — tagging it with the
+    // active run id is what let practice sessions reach finalization.
+    final isAssessment = _isAssessmentContext(context);
+    final runId = isAssessment ? _currentAssessmentRunId : null;
 
-    _currentSessions.add(session);
+    final key = '${runId ?? 'none'}|$childId|$gameId|$context'
+        '|${startedAt.microsecondsSinceEpoch}';
+    if (_recordedSessionKeys.contains(key)) {
+      debugPrint('[AssessmentProvider] Duplicate completion for $gameId '
+          'ignored (session already recorded)');
+      for (final session in _currentSessions) {
+        if (session.gameId == gameId && session.startedAt == startedAt) {
+          return session;
+        }
+      }
+      return null;
+    }
+    _recordedSessionKeys.add(key);
+
+    final GameplaySession session;
+    try {
+      session = await _assessmentService.recordSession(
+        childId: childId,
+        gameId: gameId,
+        context: context,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: startedAt,
+        assessmentRunId: runId,
+        analytics: analytics,
+        bgMusicEnabled: bgMusicEnabled,
+        hapticFeedbackEnabled: hapticFeedbackEnabled,
+        applySessionSensoryDefaults: applySessionSensoryDefaults,
+      );
+    } catch (e) {
+      // Nothing was written — let the caller try again.
+      _recordedSessionKeys.remove(key);
+      debugPrint('[AssessmentProvider] recordGameSession failed: $e');
+      rethrow;
+    }
+
+    // Collect only what belongs to the active run.
+    final runType = _currentRunType;
+    if (isAssessment &&
+        runId != null &&
+        runType != null &&
+        childId == _currentRunChildId &&
+        context == expectedContextFor(runType)) {
+      _currentSessions.add(session);
+      if (analytics != null) _currentRunAnalytics[gameId] = analytics;
+    }
 
     // Practice completions advance the learning path (sequential unlock).
     if (context == 'practice') {
       await markPathGameCompleted(childId, gameId);
     }
     notifyListeners();
+    return session;
   }
 
   // ── Learning-path progress (sequential unlock) ─────────────────────────
@@ -416,18 +667,51 @@ class AssessmentProvider extends ChangeNotifier {
     _sensoryMetrics = metrics;
   }
 
+  /// The sessions of the active run, filtered to those that really belong
+  /// to it. Empty when there is no active run.
+  List<GameplaySession> runSessions() {
+    final runId = _currentAssessmentRunId;
+    final childId = _currentRunChildId;
+    final type = _currentRunType;
+    if (runId == null || childId == null || type == null) return const [];
+    return sessionsForRun(
+      _currentSessions,
+      runId: runId,
+      childId: childId,
+      expectedContext: expectedContextFor(type),
+    );
+  }
+
   /// Finalizes the pre-assessment after all 4 mini-games are played.
-  /// Creates assessment results and generates a recommendation.
-  Future<void> finalizePreAssessment(String childId) async {
+  ///
+  /// Creates assessment results and generates a recommendation. Returns false
+  /// — and leaves [lastFinalizationError] set — when there is no active run,
+  /// when the run collected no usable sessions, or when a write failed. The
+  /// caller must not present a successful result in that case.
+  Future<bool> finalizePreAssessment(String childId) async {
     _isLoading = true;
+    _lastFinalizationError = null;
     notifyListeners();
 
     try {
+      final sessions = runSessions();
+      if (_currentAssessmentRunId == null) {
+        _lastFinalizationError = 'No assessment run was started.';
+        return false;
+      }
+      if (sessions.isEmpty) {
+        _lastFinalizationError =
+            'No gameplay sessions were recorded for this assessment.';
+        debugPrint('[AssessmentProvider] finalizePreAssessment: no sessions '
+            'for run $_currentAssessmentRunId');
+        return false;
+      }
+
       // Group sessions by game and create assessment results
-      final gameIds = _currentSessions.map((s) => s.gameId).toSet();
+      final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
         final gameSessions =
-            _currentSessions.where((s) => s.gameId == gameId).toList();
+            sessions.where((s) => s.gameId == gameId).toList();
         final result = await _assessmentService.createAssessmentResult(
           childId: childId,
           type: 'pre',
@@ -454,14 +738,13 @@ class AssessmentProvider extends ChangeNotifier {
                 ? sensoryAnalyzer.analyze(_sensoryMetrics!)
                 : SensoryPreferenceLabel.noSensorySupportNeeded;
 
-        // Score all areas
-        final playSkills = rubricScorer.scorePlaySkills(_currentSessions);
-        final communication =
-            rubricScorer.scoreCommunication(_currentSessions);
+        // Score all areas — from this run's sessions only.
+        final playSkills = rubricScorer.scorePlaySkills(sessions);
+        final communication = rubricScorer.scoreCommunication(sessions);
         final socialInteraction =
-            rubricScorer.scoreSocialInteraction(_currentSessions);
+            rubricScorer.scoreSocialInteraction(sessions);
         final behaviorAttention =
-            rubricScorer.scoreBehaviorAttention(_currentSessions);
+            rubricScorer.scoreBehaviorAttention(sessions);
 
         // Get recommendation
         final recommendation = recommender.recommend(
@@ -534,8 +817,11 @@ class AssessmentProvider extends ChangeNotifier {
       debugPrint('[AssessmentProvider] Pre-assessment finalized. '
           'Recommended: ${_recommendation?['module_name']} '
           'Level ${_recommendation?['starting_level']}');
+      return true;
     } catch (e) {
+      _lastFinalizationError = 'Could not save the assessment results.';
       debugPrint('[AssessmentProvider] finalizePreAssessment error: $e');
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -543,16 +829,35 @@ class AssessmentProvider extends ChangeNotifier {
   }
 
   /// Finalizes the post-assessment and computes improvement.
+  ///
+  /// Returns the comparison map. `has_data` is false — and
+  /// [lastFinalizationError] is set — when there is no active run, when the
+  /// run collected no usable sessions, when a write failed, or when there is
+  /// no pre-assessment to compare against.
   Future<Map<String, dynamic>> finalizePostAssessment(
       String childId) async {
     _isLoading = true;
+    _lastFinalizationError = null;
     notifyListeners();
 
     try {
-      final gameIds = _currentSessions.map((s) => s.gameId).toSet();
+      final sessions = runSessions();
+      if (_currentAssessmentRunId == null) {
+        _lastFinalizationError = 'No assessment run was started.';
+        return {'has_data': false};
+      }
+      if (sessions.isEmpty) {
+        _lastFinalizationError =
+            'No gameplay sessions were recorded for this assessment.';
+        debugPrint('[AssessmentProvider] finalizePostAssessment: no sessions '
+            'for run $_currentAssessmentRunId');
+        return {'has_data': false};
+      }
+
+      final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
         final gameSessions =
-            _currentSessions.where((s) => s.gameId == gameId).toList();
+            sessions.where((s) => s.gameId == gameId).toList();
         final result = await _assessmentService.createAssessmentResult(
           childId: childId,
           type: 'post',
@@ -566,24 +871,21 @@ class AssessmentProvider extends ChangeNotifier {
       _postResults = latestPerGame(_postResults);
 
       // Mark the assessment run as completed
-      if (_currentAssessmentRunId != null) {
-        await _assessmentService.completeAssessmentRun(
-          _currentAssessmentRunId!,
-        );
-      }
+      await _assessmentService.completeAssessmentRun(
+        _currentAssessmentRunId!,
+      );
 
       // Re-score the rubric from the post sessions so the AI fallback and
       // profile reflect the child's NEW performance, not the pre-assessment.
       try {
         const rubricScorer = RubricScoringService();
         _rubricResult = RubricResult(
-          playSkillsLabel: rubricScorer.scorePlaySkills(_currentSessions),
-          communicationLabel:
-              rubricScorer.scoreCommunication(_currentSessions),
+          playSkillsLabel: rubricScorer.scorePlaySkills(sessions),
+          communicationLabel: rubricScorer.scoreCommunication(sessions),
           socialInteractionLabel:
-              rubricScorer.scoreSocialInteraction(_currentSessions),
+              rubricScorer.scoreSocialInteraction(sessions),
           behaviorAttentionLabel:
-              rubricScorer.scoreBehaviorAttention(_currentSessions),
+              rubricScorer.scoreBehaviorAttention(sessions),
           sensoryPreferenceLabel: _rubricResult?.sensoryPreferenceLabel ??
               SensoryPreferenceLabel.noSensorySupportNeeded,
           recommendedModule: _rubricResult?.recommendedModule ?? '',
@@ -598,11 +900,21 @@ class AssessmentProvider extends ChangeNotifier {
       // AI prediction and clears them itself (same contract as the pre
       // flow's finalizePreAssessment → predictWithAI sequence).
 
-      return _assessmentService.compareAssessments(
-        preResults: _preResults,
+      // The baseline is the frozen pre snapshot when there is one, so a
+      // post-assessment always compares against the run the parent was
+      // actually shown as "before".
+      final baseline = _preSnapshot?.results ?? _preResults;
+      final comparison = _assessmentService.compareAssessments(
+        preResults: baseline,
         postResults: _postResults,
       );
+      if (comparison['has_data'] != true) {
+        _lastFinalizationError =
+            'There is no pre-assessment to compare these results with.';
+      }
+      return comparison;
     } catch (e) {
+      _lastFinalizationError = 'Could not save the assessment results.';
       debugPrint('[AssessmentProvider] finalizePostAssessment error: $e');
       return {'has_data': false};
     } finally {
@@ -613,12 +925,25 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Predict developmental profile using the AI Assessment API.
   ///
-  /// Sends the collected [_currentSessions] to the XGBoost model and
-  /// stores the result in [_aiPrediction]. Returns null if the API is
+  /// Predicts from the *current run's* sessions only — practice play and
+  /// abandoned runs are filtered out — and attributes the result to that
+  /// run's type: a post-assessment prediction labels the post results and
+  /// never rewrites the pre-assessment ones. Returns null if the API is
   /// unreachable, allowing the caller to fall back to rule-based scoring.
-  Future<AiAssessmentResponse?> predictWithAI(String childId) async {
+  Future<AiAssessmentResponse?> predictWithAI(
+    String childId, {
+    String? assessmentType,
+  }) async {
+    final type = assessmentType ?? _currentRunType ?? 'pre';
+    final runSessionList = runSessions();
     debugPrint('[AssessmentProvider] 🔮 predictWithAI called for '
-        'child=$childId with ${_currentSessions.length} sessions');
+        'child=$childId with ${runSessionList.length} $type sessions');
+    if (runSessionList.isEmpty) {
+      debugPrint('[AssessmentProvider] ⚠️ No sessions for the active run — '
+          'skipping prediction');
+      _currentSessions.clear();
+      return null;
+    }
     final onDevice = OnDeviceAiAssessmentService();
     final service = AiAssessmentService();
     try {
@@ -627,7 +952,7 @@ class AssessmentProvider extends ChangeNotifier {
       var modelSource = 'xgboost_onnx';
       var prediction = await onDevice.predictFromSessions(
         childId: childId,
-        sessions: _currentSessions,
+        sessions: runSessionList,
       );
       if (prediction != null) {
         debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
@@ -635,7 +960,7 @@ class AssessmentProvider extends ChangeNotifier {
         modelSource = 'xgboost';
         prediction = await service.predictFromSessions(
           childId: childId,
-          sessions: _currentSessions,
+          sessions: runSessionList,
         );
       }
 
@@ -652,15 +977,23 @@ class AssessmentProvider extends ChangeNotifier {
       if (prediction != null) {
         // Persist so the learning path and per-game difficulty survive app
         // restarts (the prediction otherwise only lives in memory).
-        await _persistAiPrediction(childId, prediction, modelSource);
+        await _persistAiPrediction(childId, prediction, modelSource,
+            assessmentType: type);
         // New assessment → new path → the sequence restarts at step 1.
         await _resetPathProgress(childId);
 
-        // Mark all pre-assessment results as AI-assessed so they can be
-        // distinguished from rubric-only results.
-        _preResults = _preResults
-            .map((r) => r.copyWithRubric(modelSource: modelSource))
-            .toList();
+        // Mark this run's results as AI-assessed so they can be
+        // distinguished from rubric-only results. Only the results of the
+        // run the prediction came from are touched.
+        if (type == 'post') {
+          _postResults = _postResults
+              .map((r) => r.copyWithRubric(modelSource: modelSource))
+              .toList();
+        } else {
+          _preResults = _preResults
+              .map((r) => r.copyWithRubric(modelSource: modelSource))
+              .toList();
+        }
 
         debugPrint('[AssessmentProvider] ✅ AI prediction SUCCESS: '
             '${prediction.profileDisplayName} '
@@ -749,11 +1082,12 @@ class AssessmentProvider extends ChangeNotifier {
           'AI-training consent for child $childId');
       return null;
     }
-    if (_rubricResult == null || _currentSessions.isEmpty) return null;
+    final sessions = runSessions();
+    if (_rubricResult == null || sessions.isEmpty) return null;
     const exporter = XGBoostExportService();
     return exporter.generateRow(
       childId: childId,
-      sessions: _currentSessions,
+      sessions: sessions,
       rubricResult: _rubricResult!,
     );
   }
@@ -762,12 +1096,11 @@ class AssessmentProvider extends ChangeNotifier {
     _preResults.clear();
     _postResults.clear();
     _recommendation = null;
-    _currentSessions.clear();
-    _currentAssessmentRunId = null;
+    _resetRunState();
     _aiPrediction = null;
-    _rubricResult = null;
-    _sensoryMetrics = null;
     _supportProfile = null;
+    _preSnapshot = null;
+    _postSnapshot = null;
     notifyListeners();
   }
 }

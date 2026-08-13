@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:game_core/game_core.dart';
 import 'package:shared_audio/shared_audio.dart';
 
 import 'sensory_round_config.dart';
@@ -51,6 +52,31 @@ class SensoryRoundController {
 
   /// All round configurations (unmodifiable).
   List<SensoryRoundConfig> get rounds => List.unmodifiable(_rounds);
+
+  /// The configuration for a 1-based round number, or null when the game
+  /// reported a round the experiment has no configuration for.
+  SensoryRoundConfig? configForRound(int roundNumber) {
+    for (final config in _rounds) {
+      if (config.roundNumber == roundNumber) return config;
+    }
+    return null;
+  }
+
+  /// Stamps each recorded round with the sensory configuration that was
+  /// actually active during it.
+  ///
+  /// Without this the persisted round rows carry the *session's* music and
+  /// haptic flags, which are constant across the whole game and therefore
+  /// erase the very contrast the experiment measures.
+  void stampRoundSensoryState(GameSessionMetrics? analytics) {
+    if (analytics == null) return;
+    for (final round in analytics.rounds) {
+      final config = configForRound(round.roundNumber);
+      if (config == null) continue;
+      round.musicEnabled = config.musicEnabled;
+      round.hapticEnabled = config.hapticEnabled;
+    }
+  }
 
   /// The original audio config saved before pre-assessment started.
   AudioConfig get originalAudioConfig => _originalAudioConfig;

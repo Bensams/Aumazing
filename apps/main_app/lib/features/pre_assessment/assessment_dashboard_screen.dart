@@ -26,7 +26,12 @@ class AssessmentDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<AssessmentProvider, ChildProvider>(
       builder: (context, assessProv, childProv, _) {
-        final results = assessProv.preResults;
+        // Always the finalized PRE-assessment: its own results, its own
+        // profile and the prediction made from its own sessions. Reading
+        // `aiPrediction` here would show the post-assessment's levels under
+        // the pre-assessment's scores once a post-assessment has been run.
+        final snapshot = assessProv.preSnapshot;
+        final results = snapshot?.results ?? assessProv.preResults;
 
         if (results.isEmpty) {
           return const Scaffold(
@@ -38,6 +43,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
         // stored; those fall back to the rubric scorer so an existing child
         // still sees a complete summary.
         final profile =
+            snapshot?.profile ??
             assessProv.supportProfile ??
             const ScoringService().generateProfile(
               results: results,
@@ -48,7 +54,8 @@ class AssessmentDashboardScreen extends StatelessWidget {
           child: AssessmentResultView(
             results: results,
             profile: profile,
-            aiResponse: assessProv.aiPrediction,
+            aiResponse: snapshot?.prediction ??
+                (assessProv.hasPostAssessment ? null : assessProv.aiPrediction),
             presentation: AssessmentResultPresentation.review,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),

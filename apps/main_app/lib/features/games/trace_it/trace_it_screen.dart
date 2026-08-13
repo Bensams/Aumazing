@@ -8,8 +8,8 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../session_recording.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
@@ -59,6 +59,10 @@ class _TraceItScreenState extends State<TraceItScreen> {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
+
+  /// Guards against a duplicate game-complete callback recording the
+  /// session (or advancing the flow) twice.
+  bool _completionHandled = false;
   bool _showStarSparkle = false;
   late final TraceItGame _game;
   late final DateTime _sessionStartTime;
@@ -147,13 +151,18 @@ class _TraceItScreenState extends State<TraceItScreen> {
     }
   }
 
-  void _onGameComplete({
+  Future<void> _onGameComplete({
     required int score,
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
-  }) {
+  }) async {
+    // The engine can fire this more than once on a fast finish; the flow
+    // past this point pops routes, so run it exactly once.
+    if (_completionHandled) return;
+    _completionHandled = true;
+
     setState(() => _gameComplete = true);
 
     // Celebrate with the child before the reward overlay lands. The overlay
@@ -165,13 +174,15 @@ class _TraceItScreenState extends State<TraceItScreen> {
     }
 
     final childProvider = context.read<ChildProvider>();
-    final assessmentProvider = context.read<AssessmentProvider>();
     final childId = childProvider.profile?.id ?? 'unknown';
 
-    assessmentProvider.recordGameSession(
+    // The write must land before the flow advances, so a completed game is
+    // never celebrated over a session that was silently lost.
+    await GameSessionRecording.record(
+      context,
       childId: childId,
       gameId: 'trace_it',
-      context: widget.assessmentContext,
+      assessmentContext: widget.assessmentContext,
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
@@ -181,6 +192,7 @@ class _TraceItScreenState extends State<TraceItScreen> {
       bgMusicEnabled: childProvider.musicEnabled,
       hapticFeedbackEnabled: childProvider.vibrationEnabled,
     );
+    if (!mounted) return;
 
     if (widget.onComplete != null) {
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);

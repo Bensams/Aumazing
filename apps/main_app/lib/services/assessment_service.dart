@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:game_core/game_core.dart';
+import 'package:shared_ui/shared_ui.dart';
 import 'package:uuid/uuid.dart';
 
 import '../model/assessment_result.dart';
@@ -8,12 +9,57 @@ import '../core/services/local_db_service.dart' as core_db;
 import '../core/services/auth_service.dart';
 import '../core/services/sync_service.dart' as core_sync;
 
+/// The assessment operations [AssessmentProvider] depends on.
+///
+/// Declared as an interface so the provider's run lifecycle can be exercised
+/// against an in-memory double — the real [AssessmentService] talks to SQLite,
+/// Supabase auth and the sync service, none of which exist in a unit test.
+abstract interface class AssessmentGateway {
+  Future<String> startAssessmentRun({
+    required String childId,
+    required String type,
+  });
+
+  Future<void> completeAssessmentRun(String runId);
+
+  Future<GameplaySession> recordSession({
+    required String childId,
+    required String gameId,
+    required String context,
+    required int score,
+    required int totalItems,
+    required int errorCount,
+    required int totalResponseTimeMs,
+    required DateTime startedAt,
+    String? assessmentRunId,
+    GameSessionMetrics? analytics,
+    bool bgMusicEnabled,
+    bool hapticFeedbackEnabled,
+    bool applySessionSensoryDefaults,
+  });
+
+  Future<AssessmentResult> createAssessmentResult({
+    required String childId,
+    required String type,
+    required String gameId,
+    required List<GameplaySession> sessions,
+    String? assessmentRunId,
+  });
+
+  Map<String, dynamic> recommendModule(List<AssessmentResult> preResults);
+
+  Map<String, dynamic> compareAssessments({
+    required List<AssessmentResult> preResults,
+    required List<AssessmentResult> postResults,
+  });
+}
+
 /// Scoring, recommendation, and assessment logic.
 ///
 /// Uses the offline-first [core_db.LocalDbService] which writes records
 /// with `sync_status = 'pending'` so the [core_sync.SyncService] can
 /// push them to Supabase in the background.
-class AssessmentService {
+class AssessmentService implements AssessmentGateway {
   final core_db.LocalDbService _localDb;
   final AuthService _authService;
   final core_sync.SyncService _syncService;
@@ -54,6 +100,7 @@ class AssessmentService {
   ///
   /// Returns the generated run ID which should be passed to all subsequent
   /// [recordSession] and [createAssessmentResult] calls for this assessment.
+  @override
   Future<String> startAssessmentRun({
     required String childId,
     required String type, // 'pre' or 'post'
@@ -86,6 +133,7 @@ class AssessmentService {
   }
 
   /// Marks an assessment run as completed.
+  @override
   Future<void> completeAssessmentRun(String runId) async {
     final db = await _localDb.database;
     final now = DateTime.now();
@@ -110,6 +158,7 @@ class AssessmentService {
 
   // ── Record a gameplay session ─────────────────────────────────────────
 
+  @override
   Future<GameplaySession> recordSession({
     required String childId,
     required String gameId,
@@ -123,6 +172,11 @@ class AssessmentService {
     GameSessionMetrics? analytics,
     bool bgMusicEnabled = true,
     bool hapticFeedbackEnabled = true,
+    // The sensory experiment toggles music and haptics *per round*, and
+    // stamps each round with the configuration that was active for it.
+    // Overwriting those with the session-level flags would erase exactly the
+    // signal the experiment exists to measure, so that flow passes false.
+    bool applySessionSensoryDefaults = true,
   }) async {
     final session = GameplaySession(
       id: _uuid.v4(),
@@ -160,8 +214,10 @@ class AssessmentService {
     // Insert per-round metrics if analytics data is available
     if (analytics != null) {
       for (final round in analytics.rounds) {
-        round.musicEnabled = session.bgMusicEnabled;
-        round.hapticEnabled = session.hapticFeedbackEnabled;
+        if (applySessionSensoryDefaults) {
+          round.musicEnabled = session.bgMusicEnabled;
+          round.hapticEnabled = session.hapticFeedbackEnabled;
+        }
         await _localDb.insertGameRound(
           sessionId: session.id,
           round: round,
@@ -182,6 +238,7 @@ class AssessmentService {
 
   // ── Create an assessment result from gameplay sessions ────────────────
 
+  @override
   Future<AssessmentResult> createAssessmentResult({
     required String childId,
     required String type,
@@ -237,6 +294,48 @@ class AssessmentService {
     return result;
   }
 
+  // ── Canonical scoring ─────────────────────────────────────────────────
+
+  /// Projects assessment results onto the shared [ResultGameScore] shape so
+  /// every surface scores a run through the one policy in
+  /// [AssessmentScoring] — see its doc comment for why per-game accuracy is
+  /// the *adjusted* accuracy and why the overall figure is item-weighted.
+  static List<ResultGameScore> gameScores(List<AssessmentResult> results) => [
+        for (final result in results)
+          ResultGameScore(
+            gameId: result.gameId,
+            name: result.gameId,
+            emoji: '',
+            accuracy: result.adjustedAccuracy,
+            correctCount: result.score,
+            errorCount: result.errorCount,
+            totalItems: result.totalItems,
+          ),
+      ];
+
+  /// Item-weighted overall adjusted accuracy for a set of results.
+  ///
+  /// Games are *not* weighted equally: a 20-item game counts twice as much
+  /// as a 10-item one, exactly as the result screens display it.
+  static double overallAccuracy(List<AssessmentResult> results) =>
+      AssessmentScoring.overallAdjustedAccuracy(gameScores(results));
+
+  /// Item-weighted mean response time in ms, matching [overallAccuracy]'s
+  /// weighting so accuracy and speed describe the same population of items.
+  ///
+  /// Returns 0 when no result reports any items.
+  static double weightedAvgResponseTimeMs(List<AssessmentResult> results) {
+    var weighted = 0.0;
+    var items = 0;
+    for (final result in results) {
+      if (result.totalItems <= 0) continue;
+      weighted += result.avgResponseTimeMs * result.totalItems;
+      items += result.totalItems;
+    }
+    if (items <= 0) return 0.0;
+    return weighted / items;
+  }
+
   // ── Recommendation Engine (rule-based) ────────────────────────────────
 
   /// Determines the recommended starting module and level based on
@@ -247,6 +346,7 @@ class AssessmentService {
   /// - 'module_name': String
   /// - 'starting_level': int (1-5)
   /// - 'confidence': double (0.0-1.0)
+  @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) {
     if (preResults.isEmpty) {
       return {
@@ -257,16 +357,13 @@ class AssessmentService {
       };
     }
 
-    // Calculate composite score across all pre-assessment games.
-    final avgAccuracy =
-        preResults.map((r) => r.adjustedAccuracy).reduce((a, b) => a + b) /
-            preResults.length;
+    // Composite score across all pre-assessment games, item-weighted so a
+    // long game is not worth the same as a short one.
+    final avgAccuracy = overallAccuracy(preResults);
     final avgErrors =
         preResults.map((r) => r.errorCount).reduce((a, b) => a + b) /
             preResults.length;
-    final avgResponseTime =
-        preResults.map((r) => r.avgResponseTimeMs).reduce((a, b) => a + b) /
-            preResults.length;
+    final avgResponseTime = weightedAvgResponseTimeMs(preResults);
 
     // Simple rule-based classification:
     // High accuracy + low errors + fast response → higher level
@@ -303,7 +400,12 @@ class AssessmentService {
   // ── Pre vs Post Comparison ────────────────────────────────────────────
 
   /// Compares pre- and post-assessment results for a child.
-  /// Returns improvement metrics.
+  ///
+  /// Both sides are scored with the canonical item-weighted adjusted-accuracy
+  /// policy ([AssessmentScoring.overallAdjustedAccuracy]) so the improvement
+  /// figure is expressed in the same units the parent sees on either result
+  /// screen. Response time is weighted the same way.
+  @override
   Map<String, dynamic> compareAssessments({
     required List<AssessmentResult> preResults,
     required List<AssessmentResult> postResults,
@@ -312,19 +414,11 @@ class AssessmentService {
       return {'has_data': false};
     }
 
-    final preAvgAccuracy =
-        preResults.map((r) => r.adjustedAccuracy).reduce((a, b) => a + b) /
-            preResults.length;
-    final postAvgAccuracy =
-        postResults.map((r) => r.adjustedAccuracy).reduce((a, b) => a + b) /
-            postResults.length;
+    final preAvgAccuracy = overallAccuracy(preResults);
+    final postAvgAccuracy = overallAccuracy(postResults);
 
-    final preAvgTime =
-        preResults.map((r) => r.avgResponseTimeMs).reduce((a, b) => a + b) /
-            preResults.length;
-    final postAvgTime =
-        postResults.map((r) => r.avgResponseTimeMs).reduce((a, b) => a + b) /
-            postResults.length;
+    final preAvgTime = weightedAvgResponseTimeMs(preResults);
+    final postAvgTime = weightedAvgResponseTimeMs(postResults);
 
     return {
       'has_data': true,
