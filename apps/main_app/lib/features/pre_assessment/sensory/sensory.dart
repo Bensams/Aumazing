@@ -11,3 +11,4 @@ export 'sensory_preference_analyzer.dart';
 export 'sensory_round_config.dart';
 export 'sensory_round_controller.dart';
 export 'sensory_round_metrics.dart';
+export 'sensory_round_telemetry.dart';

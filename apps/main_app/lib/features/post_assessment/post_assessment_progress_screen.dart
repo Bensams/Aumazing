@@ -32,6 +32,9 @@ class PostAssessmentProgressScreen extends StatefulWidget {
       _PostAssessmentProgressScreenState();
 }
 
+/// Where the screen is in its own lifecycle.
+enum _FlowState { initializing, ready, initFailed, finishing, finishFailed }
+
 class _PostAssessmentProgressScreenState
     extends State<PostAssessmentProgressScreen> {
   int _currentGameIndex = 0;
@@ -39,7 +42,12 @@ class _PostAssessmentProgressScreenState
   Timer? _countdownTimer;
   int _countdown = 7;
   bool _gameLaunched = false;
-  bool _finishing = false;
+
+  _FlowState _flowState = _FlowState.initializing;
+  String? _errorMessage;
+
+  /// Guards the per-game completion handler against a duplicate callback.
+  int? _completedGameIndex;
 
   // Same order as the pre-assessment so results are comparable per game.
   static const _gameOrder = [
@@ -64,10 +72,34 @@ class _PostAssessmentProgressScreenState
     super.initState();
     // The child performs these activities — landscape like the games.
     lockParentLandscape();
-    context.read<AssessmentProvider>().startAssessmentRun(
-          childId: _childId,
-          type: 'post',
-        );
+    _initializeRun();
+  }
+
+  /// Creates the assessment run before anything can be played.
+  ///
+  /// The countdown used to start while the run was still being created, so a
+  /// fast first game could be recorded with no run id and then be missing
+  /// from the finalized results.
+  Future<void> _initializeRun() async {
+    setState(() {
+      _flowState = _FlowState.initializing;
+      _errorMessage = null;
+    });
+    try {
+      await context
+          .read<AssessmentProvider>()
+          .startAssessmentRun(childId: _childId, type: 'post');
+    } catch (e) {
+      debugPrint('[PostAssessment] run initialization failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _flowState = _FlowState.initFailed;
+        _errorMessage = AssessmentLabels.couldNotStart;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _flowState = _FlowState.ready);
     _startCountdown();
   }
 
@@ -142,6 +174,11 @@ class _PostAssessmentProgressScreenState
   }
 
   void _onGameComplete() {
+    // A second callback for the same game would pop a route that is no
+    // longer there and skip a game.
+    if (_completedGameIndex == _currentGameIndex) return;
+    _completedGameIndex = _currentGameIndex;
+
     final childProvider = context.read<ChildProvider>();
     if (childProvider.profile == null) {
       Navigator.of(context).pop(); // Pop the game screen
@@ -178,46 +215,158 @@ class _PostAssessmentProgressScreenState
   }
 
   Future<void> _finishAssessment() async {
-    if (_finishing) return;
-    setState(() => _finishing = true);
+    if (_flowState == _FlowState.finishing) return;
+    setState(() {
+      _flowState = _FlowState.finishing;
+      _errorMessage = null;
+    });
 
     final assessProv = context.read<AssessmentProvider>();
     final childId = _childId;
 
-    // Capture the pre-assessment area levels BEFORE the new prediction
-    // overwrites them — they're the baseline of the comparison.
-    final preAreaLevels = Map<String, AreaLevel>.of(
-        assessProv.aiPrediction?.areaLevels ?? const {});
+    try {
+      // The baseline is the frozen pre-assessment snapshot, not the current
+      // "latest" prediction: by the time this runs the post prediction is
+      // about to replace it, and the parent must be shown the run they were
+      // originally given as "before".
+      final preAreaLevels = Map<String, AreaLevel>.of(
+          assessProv.preSnapshot?.prediction?.areaLevels ??
+              assessProv.aiPrediction?.areaLevels ??
+              const {});
 
-    // Saves post results per game and computes the improvement summary.
-    final improvement = await assessProv.finalizePostAssessment(childId);
+      // Saves post results per game and computes the improvement summary.
+      final improvement = await assessProv.finalizePostAssessment(childId);
 
-    if (!mounted) return;
+      if (improvement['has_data'] != true) {
+        if (!mounted) return;
+        setState(() {
+          _flowState = _FlowState.finishFailed;
+          _errorMessage = assessProv.lastFinalizationError ??
+              AssessmentLabels.couldNotSave;
+        });
+        return;
+      }
 
-    // Re-run the on-device AI on the post sessions: new area levels, new
-    // module recommendations, and a fresh learning path (progress resets).
-    final postPrediction = await assessProv.predictWithAI(childId);
+      if (!mounted) return;
 
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => PostAssessmentResultScreen(
-          improvement: improvement,
-          preAreaLevels: preAreaLevels,
-          postAreaLevels: postPrediction?.areaLevels ?? const {},
+      // Re-run the on-device AI on the post sessions: new area levels, new
+      // module recommendations, and a fresh learning path (progress resets).
+      final postPrediction =
+          await assessProv.predictWithAI(childId, assessmentType: 'post');
+
+      // Freeze this run alongside the untouched pre snapshot.
+      await assessProv.captureRunSnapshot(
+        childId,
+        assessmentType: 'post',
+        prediction: postPrediction,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PostAssessmentResultScreen(
+            improvement: improvement,
+            preAreaLevels: preAreaLevels,
+            postAreaLevels: postPrediction?.areaLevels ?? const {},
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[PostAssessment] finish failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _flowState = _FlowState.finishFailed;
+        _errorMessage = AssessmentLabels.couldNotSave;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (_flowState) {
+      _FlowState.initializing => _buildBusyScreen('Getting the games ready...'),
+      _FlowState.finishing => _buildBusyScreen('Saving the results...'),
+      _FlowState.initFailed => _buildErrorScreen(onRetry: _initializeRun),
+      _FlowState.finishFailed => _buildErrorScreen(onRetry: _finishAssessment),
+      _FlowState.ready => _buildTransitionScreen(),
+    };
+  }
+
+  /// A safe placeholder while the run is being created or saved. There is
+  /// deliberately no Play button here: there is nothing to play into yet.
+  Widget _buildBusyScreen(String message) {
+    return Scaffold(
+      body: Container(
+        decoration:
+            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_finishing) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    return _buildTransitionScreen();
+  /// A recoverable failure: the parent can retry, or leave without a
+  /// half-finished run being presented as a real result.
+  Widget _buildErrorScreen({required Future<void> Function() onRetry}) {
+    return Scaffold(
+      body: Container(
+        decoration:
+            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('\u{1F615}', style: TextStyle(fontSize: 48)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorMessage ?? AssessmentLabels.couldNotStart,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: 220,
+                      child: AppPrimaryButton(
+                        label: AssessmentLabels.tryAgain,
+                        icon: Icons.refresh_rounded,
+                        onPressed: () => onRetry(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Not now'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildTransitionScreen() {

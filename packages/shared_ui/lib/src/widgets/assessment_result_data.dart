@@ -79,6 +79,15 @@ abstract final class AssessmentLabels {
   static const retakeAssessment = 'Retake Assessment';
   static const backToDashboard = 'Back to Dashboard';
   static const home = 'Home';
+  static const tryAgain = 'Try Again';
+
+  /// Shown when a run could not be started, saved or finalized.
+  static const couldNotStart =
+      'We could not start the assessment. Please check your connection and '
+      'try again.';
+  static const couldNotSave =
+      'We could not save this assessment. Nothing has been lost — please try '
+      'again.';
 }
 
 /// A single developmental area with its predicted level.
