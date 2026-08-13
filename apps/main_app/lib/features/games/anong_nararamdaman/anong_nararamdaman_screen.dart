@@ -133,6 +133,13 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
           _voiceOverService.playAnswerLabel(emotion: label.emotion),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.playEmotionQuestion(),
+      // Every trial opens by saying what happened — "Nahulog ang kanyang ice
+      // cream." — and asks the question in the same breath. The caption is
+      // printed under the picture as well, but a child who cannot read it would
+      // otherwise be asked how someone feels about an event nobody told them
+      // about.
+      onPlaySceneVo: (sceneId) =>
+          _voiceOverService.playSceneCaption(sceneId, alsoAsk: true),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
