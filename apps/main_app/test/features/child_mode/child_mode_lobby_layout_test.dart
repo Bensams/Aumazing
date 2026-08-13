@@ -18,6 +18,9 @@ const _tabletLandscape = Size(1152, 720);
 /// no longer fit side by side.
 const _smallLandscape = Size(640, 360);
 
+/// A typical phone held sideways for child mode (a 392x850 phone rotated).
+const _phoneLandscape = Size(850, 392);
+
 const _categoryLabels = [
   'All',
   'Play Skills',
@@ -39,6 +42,10 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  // The form factor drives the step-2 layout; pin it per test rather than
+  // inferring it from the test surface.
+  tearDown(() => debugSetDeviceSmallestWidthDp(null));
 
   testWidgets('category cards are bounded tiles on a landscape tablet', (
     tester,
@@ -123,37 +130,119 @@ void main() {
     await _disposeLobby(tester);
   });
 
-  // Step 2 — the row of games behind "All", "Play Skills", "Communication"
-  // and "Social Interaction". Same tight-height trap as the category cards:
-  // its SizedBox(height: 200) could not shrink out of the Expanded above it.
+  // Step 2 — the games behind "All", "Play Skills", "Communication" and
+  // "Social Interaction". Same tight-height trap as the category cards: the
+  // SizedBox(height: 200) could not shrink out of the Expanded above it.
   for (final category in _categoryLabels) {
-    testWidgets('$category opens a row of bounded game cards', (tester) async {
+    testWidgets('$category wraps its games into a grid on a tablet', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(_tabletLandscape);
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      debugSetDeviceSmallestWidthDp(720);
 
       await _pumpLobby(tester);
-      await tester.tap(_card(category));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(tester.takeException(), isNull);
+      await _openCategory(tester, category);
 
-      // The row is showing: the header now names the category (or All Games).
-      final cards = find.byType(GameLogo);
-      expect(cards, findsWidgets);
-
-      final row = tester.getSize(
-        find.ancestor(of: cards.first, matching: find.byType(ListView)).first,
-      );
+      expect(find.byType(GridView), findsOneWidget);
       expect(
-        row.height,
-        lessThan(_tabletLandscape.height / 2),
-        reason: '$category game cards fill the screen height',
+        find.byWidgetPredicate(
+          (w) => w is ListView && w.scrollDirection == Axis.horizontal,
+        ),
+        findsNothing,
+        reason: '$category still uses the phone row on a tablet',
       );
-      expect(row.height, inInclusiveRange(200, 320));
+
+      final cards = _gameCards(tester);
+      expect(cards, isNotEmpty);
+      for (final card in cards) {
+        // The bug: cards inherited the Expanded's tight height.
+        expect(
+          card.height,
+          lessThan(_tabletLandscape.height / 2),
+          reason: '$category game cards fill the screen height',
+        );
+        expect(card.height, closeTo(240, 2));
+        expect(card.width, closeTo(186, 2));
+        expect(card.size, cards.first.size);
+      }
+
+      // Cards laid out on more than one line — i.e. actually wrapped.
+      final rows = cards.map((r) => r.top.roundToDouble()).toSet();
+      expect(
+        rows.length,
+        category == 'Social Interaction' ? 1 : greaterThanOrEqualTo(2),
+        reason: '$category did not wrap as expected',
+      );
+      expect(rows.length, lessThanOrEqualTo(3));
 
       await _disposeLobby(tester);
     });
   }
+
+  testWidgets('a tall category scrolls vertically on a tablet', (tester) async {
+    await tester.binding.setSurfaceSize(_tabletLandscape);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    debugSetDeviceSmallestWidthDp(720);
+
+    await _pumpLobby(tester);
+    await _openCategory(tester, 'All');
+
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    expect(grid.scrollDirection, Axis.vertical);
+
+    // All 12 games do not fit in the visible rows, so the grid scrolls.
+    await tester.drag(find.byType(GridView), const Offset(0, -120));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    await _disposeLobby(tester);
+  });
+
+  testWidgets('a phone keeps the single horizontal row', (tester) async {
+    await tester.binding.setSurfaceSize(_phoneLandscape);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    debugSetDeviceSmallestWidthDp(392);
+
+    await _pumpLobby(tester);
+    await _openCategory(tester, 'All');
+
+    expect(find.byType(GridView), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is ListView && w.scrollDirection == Axis.horizontal,
+      ),
+      findsOneWidget,
+    );
+
+    final cards = _gameCards(tester);
+    expect(cards.first.height, lessThanOrEqualTo(240));
+
+    await _disposeLobby(tester);
+  });
+}
+
+/// Rects of the game cards currently laid out, in order.
+List<Rect> _gameCards(WidgetTester tester) =>
+    tester
+        .widgetList<GameLogo>(find.byType(GameLogo))
+        .map(
+          (logo) => tester.getRect(
+            find
+                .ancestor(
+                  of: find.byWidget(logo),
+                  matching: find.byType(InkWell),
+                )
+                .first,
+          ),
+        )
+        .toList();
+
+Future<void> _openCategory(WidgetTester tester, String label) async {
+  await tester.tap(_card(label));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  expect(tester.takeException(), isNull);
 }
 
 /// The card behind a category label — the box the layout actually sizes.
