@@ -49,6 +49,12 @@ void main() {
     // rather than a friend asking for one.
     VoiceOverCue.canIHaveThe,
     VoiceOverCue.thankYouFriend,
+    // Ano'ng Nararamdaman narrates each situation as it appears, and
+    // `emotions/scenes/` is a folder of its own — Flutter's asset globs are not
+    // recursive, so listing `emotions/` in the pubspec does not carry it. That
+    // is exactly the "on disk but not in the bundle" gap this file exists to
+    // catch.
+    VoiceOverCue.sceneIceCreamFell,
   ];
 
   group('naming cues are in the asset bundle', () {

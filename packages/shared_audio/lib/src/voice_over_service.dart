@@ -364,6 +364,23 @@ enum VoiceOverCue {
   emotionScared,
   emotionSurprised,
   emotionAngry,
+
+  // The narration of each situation picture — "His ice cream fell down."
+  //
+  // Read the same warm, neutral way as the emotion names above, and for the
+  // same reason: a sentence performed in the feeling it describes hands the
+  // child the answer through the tone, so the card stops testing the face.
+  // These say only what happened, never how the buddy feels about it.
+  sceneGift,
+  sceneFinishedDrawing,
+  sceneIceCreamFell,
+  sceneSpilledDrink,
+  sceneDogBarked,
+  sceneLoudThunder,
+  sceneJackInBox,
+  sceneSurpriseBalloons,
+  sceneTowerFell,
+  scenePuzzleStuck,
 }
 
 /// Maps each [VoiceOverCue] to its category.
@@ -600,6 +617,18 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.emotionScared: VoiceOverCategory.emotions,
   VoiceOverCue.emotionSurprised: VoiceOverCategory.emotions,
   VoiceOverCue.emotionAngry: VoiceOverCategory.emotions,
+
+  // Emotion scenes
+  VoiceOverCue.sceneGift: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneFinishedDrawing: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneIceCreamFell: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneSpilledDrink: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneDogBarked: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneLoudThunder: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneJackInBox: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneSurpriseBalloons: VoiceOverCategory.emotions,
+  VoiceOverCue.sceneTowerFell: VoiceOverCategory.emotions,
+  VoiceOverCue.scenePuzzleStuck: VoiceOverCategory.emotions,
 };
 
 /// Maps each [VoiceOverCue] to its asset file path (relative to the package
@@ -866,6 +895,20 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.emotionScared: 'voice_over/emotions/Scared.wav',
   VoiceOverCue.emotionSurprised: 'voice_over/emotions/Surprised.wav',
   VoiceOverCue.emotionAngry: 'voice_over/emotions/Angry.wav',
+
+  // Emotion scenes
+  VoiceOverCue.sceneGift: 'voice_over/emotions/scenes/Gift.wav',
+  VoiceOverCue.sceneFinishedDrawing:
+      'voice_over/emotions/scenes/FinishedDrawing.wav',
+  VoiceOverCue.sceneIceCreamFell: 'voice_over/emotions/scenes/IceCreamFell.wav',
+  VoiceOverCue.sceneSpilledDrink: 'voice_over/emotions/scenes/SpilledDrink.wav',
+  VoiceOverCue.sceneDogBarked: 'voice_over/emotions/scenes/DogBarked.wav',
+  VoiceOverCue.sceneLoudThunder: 'voice_over/emotions/scenes/LoudThunder.wav',
+  VoiceOverCue.sceneJackInBox: 'voice_over/emotions/scenes/JackInBox.wav',
+  VoiceOverCue.sceneSurpriseBalloons:
+      'voice_over/emotions/scenes/SurpriseBalloons.wav',
+  VoiceOverCue.sceneTowerFell: 'voice_over/emotions/scenes/TowerFell.wav',
+  VoiceOverCue.scenePuzzleStuck: 'voice_over/emotions/scenes/PuzzleStuck.wav',
 };
 
 /// Audio context for voice-over playback that mixes with background music.
@@ -1787,6 +1830,24 @@ class VoiceOverService {
     'angry': VoiceOverCue.emotionAngry,
   };
 
+  /// Ano'ng Nararamdaman scene ids → the recording that narrates the picture.
+  ///
+  /// Keyed on `EmotionScene.id`, language-independent for the same reason
+  /// [_emotionMap] is: the recording under `'ice_cream_fell'` is Tagalog in a
+  /// Tagalog pack, so the game never has to know the translation.
+  static const _sceneMap = {
+    'gift': VoiceOverCue.sceneGift,
+    'finished_drawing': VoiceOverCue.sceneFinishedDrawing,
+    'ice_cream_fell': VoiceOverCue.sceneIceCreamFell,
+    'spilled_drink': VoiceOverCue.sceneSpilledDrink,
+    'dog_barked': VoiceOverCue.sceneDogBarked,
+    'loud_thunder': VoiceOverCue.sceneLoudThunder,
+    'jack_in_box': VoiceOverCue.sceneJackInBox,
+    'surprise_balloons': VoiceOverCue.sceneSurpriseBalloons,
+    'tower_fell': VoiceOverCue.sceneTowerFell,
+    'puzzle_stuck': VoiceOverCue.scenePuzzleStuck,
+  };
+
   /// Ano'ng Susunod routine ids → the recording that names the routine.
   static const _routineTitleMap = {
     'umaga': VoiceOverCue.routineMorning,
@@ -1933,6 +1994,42 @@ class VoiceOverService {
   /// Its own method rather than a bare [play] call so the game does not have to
   /// import the cue set, matching how [playRoutineTitle] serves Ano'ng Susunod.
   Future<void> playEmotionQuestion() => play(VoiceOverCue.howIsHeFeeling);
+
+  /// The recording that narrates the situation with [sceneId], or null when the
+  /// library has none for it.
+  @visibleForTesting
+  static VoiceOverCue? sceneCue(String sceneId) =>
+      _sceneMap[sceneId.trim().toLowerCase()];
+
+  /// Narrate the situation on screen — "His ice cream fell down." — from the
+  /// `EmotionScene.id` the game is showing.
+  ///
+  /// This is the round's opening line, and it is what makes the question
+  /// answerable for a child who cannot yet read the caption printed under the
+  /// picture: the event arrives as speech, and only the feeling is left to be
+  /// read off the face.
+  ///
+  /// With [alsoAsk], the question follows in the same breath ("His ice cream
+  /// fell down. How is he feeling?"). One sequence rather than two calls, for
+  /// the reason [playRoutineTitle] documents: the floor is last-claim-wins, so
+  /// two calls in the same moment would drop the narration and leave the child
+  /// with a question about a picture nobody described.
+  ///
+  /// Silent for an unknown id rather than substituting anything — a scene with
+  /// no recording should pass without a word, not with the wrong one.
+  Future<void> playSceneCaption(String sceneId, {bool alsoAsk = false}) async {
+    final cue = sceneCue(sceneId);
+    final cues = [
+      if (cue != null) cue,
+      if (alsoAsk) VoiceOverCue.howIsHeFeeling,
+    ];
+    if (cues.isEmpty) return;
+    if (cues.length == 1) {
+      await play(cues.first);
+      return;
+    }
+    await playSequence(cues);
+  }
   /// Speak a friend's request for [item] — "Can I have the … bola?" — as one
   /// utterance, from the item's stable Filipino name.
   ///
