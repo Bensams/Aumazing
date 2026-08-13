@@ -126,9 +126,14 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                             const SizedBox(width: 10),
                           ],
                           Flexible(
+                            // Wraps to a second line before ellipsizing, so
+                            // a long label stays readable at large text
+                            // scales instead of being cut off.
                             child: Text(
                               widget.label,
                               style: AppTextStyles.buttonLarge,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),

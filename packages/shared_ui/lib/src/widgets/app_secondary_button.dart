@@ -75,10 +75,15 @@ class _AppSecondaryButtonState extends State<AppSecondaryButton> {
                           Icon(widget.icon, color: AppColors.foreground, size: 20),
                           const SizedBox(width: 10),
                         ],
-                        Text(
-                          widget.label,
-                          style: AppTextStyles.buttonMedium.copyWith(
-                            color: AppColors.foreground,
+                        // Flexible so a long label wraps instead of
+                        // overflowing a narrow button (e.g. "Retake
+                        // Assessment" on a portrait phone at 1.3x text).
+                        Flexible(
+                          child: Text(
+                            widget.label,
+                            style: AppTextStyles.buttonMedium.copyWith(
+                              color: AppColors.foreground,
+                            ),
                           ),
                         ),
                       ],
