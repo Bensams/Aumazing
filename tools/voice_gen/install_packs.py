@@ -28,10 +28,15 @@ import voices as VOX
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 ASSET_ROOT = os.path.join(REPO, 'packages', 'shared_audio', 'assets', 'audio',
                           'voice_over')
+# Every leaf folder a pack can contain. Flutter cannot glob asset directories
+# and does not recurse into them, so each one needs its own line -- including
+# `emotions/scenes`, which is nested inside `emotions` and would otherwise land
+# on disk without ever reaching the bundle.
 CATEGORIES = ['assessment_style', 'attention_and_regulation', 'core_praise',
               'gently_retry', 'instruction', 'reward_and_celebration',
               'transition', 'turn_taking', 'dynamic', 'colors', 'shapes',
-              'letters', 'numbers', 'items', 'phrases', 'routines']
+              'letters', 'numbers', 'items', 'phrases', 'routines',
+              'emotions', 'emotions/scenes']
 TIER_LABEL = {'adult': 'Adult', 'young': 'Young', 'child': 'Child'}
 
 

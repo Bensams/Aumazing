@@ -70,6 +70,7 @@ class AnongNararamdamanGame extends FlameGame
     this.onPlayCorrectVo,
     this.onPlayWrongVo,
     this.onPlayInstructionVo,
+    this.onPlaySceneVo,
     this.onPlayTransitionVo,
     this.onPlayCelebrationVo,
   });
@@ -108,6 +109,17 @@ class AnongNararamdamanGame extends FlameGame
   /// The gently-retry line. It must read as "look again" — see the class doc.
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
+
+  /// Narrates the situation that just came up, by `EmotionScene.id` — "His ice
+  /// cream fell down." Fired once per trial, as the picture appears.
+  ///
+  /// The caption is printed under the picture, but a child who cannot read it
+  /// is being asked about an event nobody told them about; spoken, the event is
+  /// given and only the feeling is left to work out. The handler is expected to
+  /// ask the question in the same breath, which is why [onPlayInstructionVo] is
+  /// not fired for the opening trial when this callback is supplied.
+  final void Function(String sceneId)? onPlaySceneVo;
+
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
 
@@ -247,7 +259,10 @@ class AnongNararamdamanGame extends FlameGame
     add(_panel);
     add(_buddy);
 
-    onPlayInstructionVo?.call();
+    // When scenes are narrated, the opening question rides along with the first
+    // scene's narration instead of being asked here — asking twice in the same
+    // breath would drop one of the two lines to the last-claim-wins floor.
+    if (onPlaySceneVo == null) onPlayInstructionVo?.call();
     _startRound();
   }
 
@@ -332,6 +347,9 @@ class AnongNararamdamanGame extends FlameGame
     // The transition starts after the cards exist, so the change on the face is
     // the last thing to move and therefore the thing attention lands on.
     _buddy.playTransition();
+
+    // Narrate what happened, now that there is something on screen to narrate.
+    onPlaySceneVo?.call(scene.id);
 
     _trialStart = DateTime.now();
     analyticsShowStimulus();
