@@ -26,14 +26,45 @@ class BuddyComponent extends PositionComponent {
   double _frameClock = 0;
   int _frame = 0;
 
-  Rect get handTarget => Rect.fromCenter(
-        center: Offset(size.x * 0.52, size.y * 0.70),
-        width: size.x * 0.72,
-        height: size.y * 0.52,
-      );
+  /// Height of the request bubble, drawn across the top of the component.
+  double get _bubbleHeight => size.y * 0.30;
 
-  Vector2 get handCenter =>
-      position + Vector2(size.x * 0.52, size.y * 0.70);
+  /// The box the character is drawn into, below the bubble.
+  Rect get _bodyBox {
+    final top = _bubbleHeight * 0.70;
+    return Rect.fromLTWH(0, top, size.x, size.y - top);
+  }
+
+  /// Where the character actually lands inside [_bodyBox].
+  ///
+  /// The sprite is letterboxed to keep its proportions (see [fitSpriteCell]),
+  /// so on a box that is wider or taller than the cell the drawn character is
+  /// narrower than the component. Hit-testing against the component instead of
+  /// the drawing is what let a child "hand" an item to empty space beside the
+  /// buddy — and, worse, miss the buddy they were aiming at.
+  Rect get drawnBody {
+    final image = TulongBuddyArt.of(kind, pose);
+    if (image == null) return _bodyBox;
+    return fitSpriteCell(
+      _bodyBox,
+      image.width / pose.cols,
+      image.height / pose.rows,
+    );
+  }
+
+  Rect get handTarget {
+    final body = drawnBody;
+    return Rect.fromCenter(
+      center: Offset(body.center.dx, body.top + body.height * 0.62),
+      width: body.width * 0.92,
+      height: body.height * 0.66,
+    );
+  }
+
+  Vector2 get handCenter {
+    final body = drawnBody;
+    return position + Vector2(body.center.dx, body.top + body.height * 0.62);
+  }
 
   bool accepts(Vector2 gamePoint) {
     final local = gamePoint - position;
@@ -54,12 +85,18 @@ class BuddyComponent extends PositionComponent {
   void pulseBubble() {
     bubbleVisible = true;
     _pulse = true;
-    add(SequenceEffect([
-      ScaleEffect.to(Vector2.all(1.04),
-          EffectController(duration: 0.18, curve: Curves.easeOut)),
-      ScaleEffect.to(Vector2.all(1),
-          EffectController(duration: 0.18, curve: Curves.easeIn)),
-    ], onComplete: () => _pulse = false));
+    add(
+      SequenceEffect([
+        ScaleEffect.to(
+          Vector2.all(1.04),
+          EffectController(duration: 0.18, curve: Curves.easeOut),
+        ),
+        ScaleEffect.to(
+          Vector2.all(1),
+          EffectController(duration: 0.18, curve: Curves.easeIn),
+        ),
+      ], onComplete: () => _pulse = false),
+    );
   }
 
   void celebrate() {
@@ -91,8 +128,9 @@ class BuddyComponent extends PositionComponent {
   void render(Canvas canvas) {
     final alpha = dimmed ? 95 : 255;
     final image = TulongBuddyArt.of(kind, pose);
-    final bubbleHeight = size.y * 0.30;
-    final bodyTop = bubbleHeight * 0.70;
+    final bubbleHeight = _bubbleHeight;
+    final body = _bodyBox;
+    final bodyTop = body.top;
 
     if (image == null) {
       canvas.drawCircle(
@@ -123,11 +161,7 @@ class BuddyComponent extends PositionComponent {
       canvas.drawImageRect(
         image,
         src,
-        fitSpriteCell(
-          Rect.fromLTWH(0, bodyTop, size.x, size.y - bodyTop),
-          cellW,
-          cellH,
-        ),
+        fitSpriteCell(body, cellW, cellH),
         Paint()
           ..filterQuality = FilterQuality.medium
           ..color = Color.fromARGB(alpha, 255, 255, 255),
@@ -135,8 +169,26 @@ class BuddyComponent extends PositionComponent {
     }
 
     if (bubbleVisible && request != null) {
+      // Sit the bubble over the character the child is looking at, not over the
+      // component's own box: when the sprite is letterboxed the two are not the
+      // same, and a bubble pinned to the box drifts off to one side. It stays
+      // above [_bodyBox] either way, so it never covers a face.
+      final drawn = drawnBody;
+      final bubbleW = math.min(
+        size.x * 0.76,
+        math.max(drawn.width * 0.86, 1.0),
+      );
+      final bubbleRect = Rect.fromLTWH(
+        (drawn.center.dx - bubbleW / 2).clamp(
+          0.0,
+          math.max(size.x - bubbleW, 0.0),
+        ),
+        0,
+        bubbleW,
+        bubbleHeight,
+      );
       final bubble = RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.x * 0.08, 0, size.x * 0.68, bubbleHeight),
+        bubbleRect,
         Radius.circular(bubbleHeight * 0.28),
       );
       canvas.drawRRect(bubble, Paint()..color = const Color(0xFFFFFFFF));
@@ -150,7 +202,7 @@ class BuddyComponent extends PositionComponent {
       TextPaint(style: TextStyle(fontSize: bubbleHeight * 0.58)).render(
         canvas,
         request!.emoji,
-        Vector2(size.x * 0.42, bubbleHeight * 0.50),
+        Vector2(bubbleRect.center.dx, bubbleHeight * 0.50),
         anchor: Anchor.center,
       );
     }
