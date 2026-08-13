@@ -8,8 +8,8 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-import '../../../providers/assessment_provider.dart';
 import '../../../providers/child_provider.dart';
+import '../session_recording.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
 import '../../child_mode/game_end_choice_dialog.dart';
@@ -60,6 +60,10 @@ class _MatchItScreenState extends State<MatchItScreen> {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
+
+  /// Guards against a duplicate game-complete callback recording the
+  /// session (or advancing the flow) twice.
+  bool _completionHandled = false;
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
   late final MatchItGame _game;
@@ -158,13 +162,18 @@ class _MatchItScreenState extends State<MatchItScreen> {
     }
   }
 
-  void _onGameComplete({
+  Future<void> _onGameComplete({
     required int score,
     required int totalItems,
     required int errorCount,
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
-  }) {
+  }) async {
+    // The engine can fire this more than once on a fast finish; the flow
+    // past this point pops routes, so run it exactly once.
+    if (_completionHandled) return;
+    _completionHandled = true;
+
     setState(() => _gameComplete = true);
 
     // Celebrate with the child before the reward overlay lands. The overlay
@@ -178,13 +187,19 @@ class _MatchItScreenState extends State<MatchItScreen> {
 
     // Record the session in the assessment provider
     final childProvider = context.read<ChildProvider>();
-    final assessmentProvider = context.read<AssessmentProvider>();
     final childId = childProvider.profile?.id ?? 'unknown';
 
-    assessmentProvider.recordGameSession(
+    // Attribute each round to the sensory condition that was active for it
+    // before the session (and its rounds) are written.
+    widget.sensoryController?.stampRoundSensoryState(analytics);
+
+    // The write must land before the flow advances — otherwise an assessment
+    // can be finalized without this game in it.
+    await GameSessionRecording.record(
+      context,
       childId: childId,
       gameId: 'match_it',
-      context: widget.assessmentContext,
+      assessmentContext: widget.assessmentContext,
       score: score,
       totalItems: totalItems,
       errorCount: errorCount,
@@ -193,7 +208,9 @@ class _MatchItScreenState extends State<MatchItScreen> {
       analytics: analytics,
       bgMusicEnabled: childProvider.musicEnabled,
       hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      applySessionSensoryDefaults: widget.sensoryController == null,
     );
+    if (!mounted) return;
 
     // If onComplete callback is provided (game flow mode), call it instead of showing built-in reward
     if (widget.onComplete != null) {

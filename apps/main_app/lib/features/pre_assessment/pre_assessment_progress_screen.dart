@@ -45,10 +45,24 @@ class PreAssessmentProgressScreen extends StatefulWidget {
       _PreAssessmentProgressScreenState();
 }
 
+/// Where the screen is in its own lifecycle.
+enum _FlowState { initializing, ready, initFailed, finishing, finishFailed }
+
 class _PreAssessmentProgressScreenState
     extends State<PreAssessmentProgressScreen> {
   int _currentGameIndex = 0;
   final List<AssessmentResult> _results = [];
+
+  /// Nothing may be played until the assessment run exists.
+  _FlowState _flowState = _FlowState.initializing;
+  String? _errorMessage;
+
+  /// True when a game reported no usable per-round telemetry, which makes
+  /// the sensory comparison unreliable.
+  bool _sensoryTelemetryReliable = true;
+
+  /// Guards the per-game completion handler against a duplicate callback.
+  int? _completedGameIndex;
 
   /// Controls per-round sensory settings (music/haptic toggling).
   late final SensoryRoundController _sensoryController;
@@ -74,33 +88,53 @@ class _PreAssessmentProgressScreenState
     // The child performs these activities — landscape like the games.
     lockParentLandscape();
     _initSensoryController();
-    _saveSensoryConsent();
-    _startAssessmentRun();
+    _initializeRun();
+  }
+
+  /// Creates the assessment run, then persists the consent decision against
+  /// it, and only then lets the child start playing.
+  ///
+  /// The countdown and the Play button used to start while the run was still
+  /// being created, so an early first game could be recorded with no run id
+  /// — and the consent row was written against a run that did not exist yet.
+  Future<void> _initializeRun() async {
+    setState(() {
+      _flowState = _FlowState.initializing;
+      _errorMessage = null;
+    });
+
+    final assessProv = context.read<AssessmentProvider>();
+    final childId = _childId;
+
+    try {
+      await assessProv.startAssessmentRun(childId: childId, type: 'pre');
+      await _saveSensoryConsent(assessProv.currentAssessmentRunId, childId);
+    } catch (e) {
+      debugPrint('[PreAssessment] run initialization failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _flowState = _FlowState.initFailed;
+        _errorMessage = AssessmentLabels.couldNotStart;
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _flowState = _FlowState.ready);
     _startCountdown();
   }
 
-  /// Create an assessment run record so all sessions and results
-  /// are linked together under a single run ID.
-  void _startAssessmentRun() {
-    final assessProv = context.read<AssessmentProvider>();
-    assessProv.startAssessmentRun(
-      childId: _childId,
-      type: 'pre',
-    );
-  }
-
-  /// Persist the parent's sensory consent decision to the local database.
-  void _saveSensoryConsent() {
+  /// Persist the parent's sensory consent decision against the run.
+  Future<void> _saveSensoryConsent(String? runId, String childId) async {
     final consentGiven =
         widget.sensoryConsentResult == SensoryConsentResult.accepted;
-    final assessProv = context.read<AssessmentProvider>();
-    localDbService.insertSensoryConsent(
-      childId: _childId,
-      assessmentRunId: assessProv.currentAssessmentRunId,
+    await localDbService.insertSensoryConsent(
+      childId: childId,
+      assessmentRunId: runId,
       consentGiven: consentGiven,
     );
     debugPrint(
-      '[PreAssessment] Saved sensory consent: $consentGiven for $_childId',
+      '[PreAssessment] Saved sensory consent: $consentGiven for $childId',
     );
   }
 
@@ -188,9 +222,14 @@ class _PreAssessmentProgressScreenState
   ]) {
     // NOTE: recordGameSession() is NOT called here because each game screen
     // (CopyMeScreen, DoWhatISayScreen, MyTurnYourTurnScreen, MatchItScreen)
-    // already calls recordGameSession() with the full GameSessionMetrics
+    // already awaits recordGameSession() with the full GameSessionMetrics
     // analytics object. Calling it here as well would double-record sessions
     // and lose the analytics data (failed taps, retries, off-task actions).
+
+    // A second callback for the same game would push a duplicate result and
+    // pop a route that is no longer there.
+    if (_completedGameIndex == _currentGameIndex) return;
+    _completedGameIndex = _currentGameIndex;
 
     // Extract randomTouchCount from extras if available (passed by game screens)
     final randomTouchCount = (extras['random_touch_count'] as int?) ?? 0;
@@ -211,67 +250,34 @@ class _PreAssessmentProgressScreenState
       rawMetrics: extras,
     ));
 
-    // Collect sensory round metrics from aggregate game data
-    _collectSensoryMetrics(
-      gameId: gameId,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-    );
+    // Collect the real per-round telemetry for the sensory experiment.
+    _collectSensoryMetrics(gameId);
 
     // Show reward overlay before advancing to next game
     _showRewardThenAdvance();
   }
 
-  /// Create sensory round metrics from aggregate game completion data.
+  /// Collects this game's *measured* rounds for the sensory experiment.
   ///
-  /// Since [_onGameComplete] receives aggregate data (not per-round), we
-  /// distribute the totals evenly across the [SensoryRoundController]'s
-  /// round configurations so the [SensoryPreferenceAnalyzer] can compare
-  /// performance under each sensory condition.
-  void _collectSensoryMetrics({
-    required String gameId,
-    required int score,
-    required int totalItems,
-    required int errorCount,
-    required int totalResponseTimeMs,
-  }) {
-    final rounds = _sensoryController.rounds;
-    if (rounds.isEmpty) return;
+  /// Each [GameRoundMetrics] the game recorded is attributed to the
+  /// [SensoryRoundConfig] that was active while it was played. When a game
+  /// reports no per-round telemetry (or rounds the experiment has no
+  /// configuration for) the comparison is flagged unreliable, and the
+  /// recommendation is surfaced as unavailable rather than invented.
+  void _collectSensoryMetrics(String gameId) {
+    final analytics =
+        context.read<AssessmentProvider>().analyticsForGame(gameId);
+    final collection = SensoryRoundTelemetry.collect(
+      gameId: gameId,
+      analytics: analytics,
+      rounds: _sensoryController.rounds,
+    );
 
-    final itemsPerRound =
-        totalItems > 0 ? (totalItems / rounds.length).ceil() : 1;
-    final correctPerRound = score > 0 ? (score / rounds.length) : 0.0;
-    final wrongPerRound = errorCount > 0 ? (errorCount / rounds.length) : 0.0;
-    final timePerRound = totalResponseTimeMs > 0
-        ? (totalResponseTimeMs / rounds.length)
-        : 0.0;
-
-    for (final round in rounds) {
-      final accuracy = itemsPerRound > 0
-          ? (correctPerRound / itemsPerRound).clamp(0.0, 1.0)
-          : 0.0;
-
-      _sensoryMetrics.add(SensoryRoundMetrics(
-        gameId: gameId,
-        roundNumber: round.roundNumber,
-        sensoryConfig: round,
-        correctCount: correctPerRound.round(),
-        wrongCount: wrongPerRound.round(),
-        accuracy: accuracy,
-        totalResponseTimeMs: timePerRound.round(),
-        avgResponseTimeMs:
-            itemsPerRound > 0 ? timePerRound / itemsPerRound : 0.0,
-        tapCount: correctPerRound.round() + wrongPerRound.round(),
-        idleTimeSeconds: 0.0, // Not available from aggregate data
-        randomTouchCount: 0, // Not available from aggregate data
-        timeToFirstTouchMs: 0.0, // Not available from aggregate data
-        timeToCompletionMs: timePerRound,
-        hintCount: 0,
-        promptCount: 0,
-        retryCount: 0,
-      ));
+    _sensoryMetrics.addAll(collection.metrics);
+    if (!collection.reliable) {
+      _sensoryTelemetryReliable = false;
+      debugPrint('[PreAssessment] Per-round telemetry missing or '
+          'unattributable for $gameId — sensory recommendation downgraded');
     }
   }
 
@@ -312,88 +318,206 @@ class _PreAssessmentProgressScreenState
   }
 
   Future<void> _finishAssessment() async {
-    // ── Sensory preference analysis ──────────────────────────────────────
-    if (_sensoryController.consentGiven && _sensoryMetrics.isNotEmpty) {
-      final analyzer = SensoryPreferenceAnalyzer();
-      _sensoryPreferenceResult = analyzer.analyze(_sensoryMetrics);
-      debugPrint(
-        '[PreAssessment] Sensory analysis complete: '
-        'music=${_sensoryPreferenceResult!.recommendedMusicEnabled}, '
-        'haptic=${_sensoryPreferenceResult!.recommendedHapticEnabled}, '
-        'confidence=${_sensoryPreferenceResult!.confidence}',
-      );
+    if (_flowState == _FlowState.finishing) return;
+    setState(() {
+      _flowState = _FlowState.finishing;
+      _errorMessage = null;
+    });
 
-      // Save sensory round metrics to local DB
-      final assessProv = context.read<AssessmentProvider>();
-      final metricsMapList =
-          _sensoryMetrics.map((m) => m.toMap()).toList();
-      await localDbService.insertSensoryRoundMetrics(
-        childId: _childId,
-        assessmentRunId: assessProv.currentAssessmentRunId,
-        metricsMapList: metricsMapList,
-      );
-      debugPrint(
-        '[PreAssessment] Saved ${metricsMapList.length} sensory round metrics',
-      );
-
-      // Save sensory preference result to local DB
-      await localDbService.insertSensoryPreference(
-        childId: _childId,
-        assessmentRunId: assessProv.currentAssessmentRunId,
-        preferenceMap: _sensoryPreferenceResult!.toMap(),
-      );
-      debugPrint('[PreAssessment] Saved sensory preference result');
-    }
-
-    // Restore original audio/haptic settings now that testing is done
-    await _sensoryController.restoreOriginalSettings();
-
-    if (!mounted) return;
-
-    // Finalize the pre-assessment: creates assessment results in local DB
-    // and triggers Supabase sync via the sync service
     final assessProv = context.read<AssessmentProvider>();
-    await assessProv.finalizePreAssessment(_childId);
+    final childId = _childId;
 
-    // Reload to get the finalized results
-    await assessProv.loadAssessments(_childId);
+    try {
+      // -- Sensory preference analysis --------------------------------
+      if (_sensoryController.consentGiven && _sensoryMetrics.isNotEmpty) {
+        final analyzer = SensoryPreferenceAnalyzer();
+        _sensoryPreferenceResult = analyzer.analyze(
+          _sensoryMetrics,
+          telemetryReliable: _sensoryTelemetryReliable,
+        );
+        debugPrint(
+          '[PreAssessment] Sensory analysis complete: '
+          'available=${_sensoryPreferenceResult!.available}, '
+          'music=${_sensoryPreferenceResult!.recommendedMusicEnabled}, '
+          'haptic=${_sensoryPreferenceResult!.recommendedHapticEnabled}, '
+          'confidence=${_sensoryPreferenceResult!.confidence}',
+        );
 
-    if (!mounted) return;
+        // Save sensory round metrics to local DB
+        final metricsMapList = _sensoryMetrics.map((m) => m.toMap()).toList();
+        await localDbService.insertSensoryRoundMetrics(
+          childId: childId,
+          assessmentRunId: assessProv.currentAssessmentRunId,
+          metricsMapList: metricsMapList,
+        );
+        debugPrint('[PreAssessment] Saved ${metricsMapList.length} sensory '
+            'round metrics');
 
-    // Call AI Assessment API for XGBoost-based prediction
-    debugPrint('[PreAssessment] Calling AI Assessment API...');
-    final aiResponse = await assessProv.predictWithAI(_childId);
+        // Save sensory preference result to local DB
+        await localDbService.insertSensoryPreference(
+          childId: childId,
+          assessmentRunId: assessProv.currentAssessmentRunId,
+          preferenceMap: _sensoryPreferenceResult!.toMap(),
+        );
+        debugPrint('[PreAssessment] Saved sensory preference result');
+      }
 
-    if (!mounted) return;
+      // Hand the measured rounds to the rubric so its sensory label reflects
+      // what was actually observed.
+      assessProv.setSensoryMetrics(_sensoryMetrics);
 
-    // Use the finalized results from the provider (which have proper data)
-    final finalResults = assessProv.preResults;
+      // Restore original audio/haptic settings now that testing is done
+      await _sensoryController.restoreOriginalSettings();
 
-    // Finalize and persist the profile for this run. The parent's later
-    // Assessment Summary reads this same profile back rather than
-    // recomputing it, so both views always agree.
-    final profile = await assessProv.finalizeSupportProfile(
-      _childId,
-      aiResponse: aiResponse,
-    );
+      // Finalize the pre-assessment: creates assessment results in local DB
+      // and triggers Supabase sync via the sync service. A failure here means
+      // there is no result to show -- surface it instead of a fake success.
+      final finalized = await assessProv.finalizePreAssessment(childId);
+      if (!finalized) {
+        if (!mounted) return;
+        setState(() {
+          _flowState = _FlowState.finishFailed;
+          _errorMessage = assessProv.lastFinalizationError ??
+              AssessmentLabels.couldNotSave;
+        });
+        return;
+      }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // Navigate to the waiting-for-parent screen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => WaitingForParentScreen(
-          results: finalResults.isNotEmpty ? finalResults : _results,
-          profile: profile,
-          aiResponse: aiResponse,
+      // Call AI Assessment API for XGBoost-based prediction. It runs before
+      // any reload, because the prediction needs this run's sessions.
+      debugPrint('[PreAssessment] Calling AI Assessment API...');
+      final aiResponse =
+          await assessProv.predictWithAI(childId, assessmentType: 'pre');
+
+      if (!mounted) return;
+
+      // Finalize and persist the profile for this run. The parent's later
+      // Assessment Summary reads this same profile back rather than
+      // recomputing it, so both views always agree.
+      final profile = await assessProv.finalizeSupportProfile(
+        childId,
+        aiResponse: aiResponse,
+      );
+
+      // Freeze this run so a later post-assessment cannot rewrite what the
+      // parent was shown as the pre-assessment.
+      final snapshot = await assessProv.captureRunSnapshot(
+        childId,
+        assessmentType: 'pre',
+        prediction: aiResponse,
+        profile: profile,
+      );
+
+      if (!mounted) return;
+
+      // Navigate to the waiting-for-parent screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => WaitingForParentScreen(
+            results: snapshot.results.isNotEmpty ? snapshot.results : _results,
+            profile: profile,
+            aiResponse: aiResponse,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[PreAssessment] finish failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _flowState = _FlowState.finishFailed;
+        _errorMessage = AssessmentLabels.couldNotSave;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (_flowState) {
+      _FlowState.initializing => _buildBusyScreen('Getting the games ready...'),
+      _FlowState.finishing => _buildBusyScreen('Saving the results...'),
+      _FlowState.initFailed => _buildErrorScreen(onRetry: _initializeRun),
+      _FlowState.finishFailed => _buildErrorScreen(onRetry: _finishAssessment),
+      _FlowState.ready => _buildTransitionScreen(),
+    };
+  }
+
+  /// A safe placeholder while the run is being created or saved. There is
+  /// deliberately no Play button here: there is nothing to play into yet.
+  Widget _buildBusyScreen(String message) {
+    return Scaffold(
+      body: Container(
+        decoration:
+            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return _buildTransitionScreen();
+  /// A recoverable failure: the parent can retry, or leave without a
+  /// half-finished run being presented as a real result.
+  Widget _buildErrorScreen({required Future<void> Function() onRetry}) {
+    return Scaffold(
+      body: Container(
+        decoration:
+            const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('\u{1F615}', style: TextStyle(fontSize: 48)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorMessage ?? AssessmentLabels.couldNotStart,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: 220,
+                      child: AppPrimaryButton(
+                        label: AssessmentLabels.tryAgain,
+                        icon: Icons.refresh_rounded,
+                        onPressed: () => onRetry(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Not now'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Shows a brief transition screen before launching each game.
