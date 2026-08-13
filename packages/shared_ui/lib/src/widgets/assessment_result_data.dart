@@ -2,9 +2,84 @@
 ///
 /// These are framework-agnostic value objects that both main_app and game_lab
 /// can construct from their own domain models (or from hardcoded mock data).
+///
+/// [AssessmentResultViewModel] is the canonical result model: it is built
+/// **once** from a finalized assessment run and rendered by both the
+/// immediate completion screen and the later Assessment Summary review, so
+/// the two can never disagree about what the assessment found.
 library;
 
 import 'package:flutter/material.dart';
+
+/// How the shared result layout is being presented.
+enum AssessmentResultPresentation {
+  /// Immediately after the child finishes: celebratory and explanatory.
+  completion,
+
+  /// Opened later by the parent: compact, built for review / retake.
+  review,
+}
+
+/// Where the developmental analysis came from.
+///
+/// The display labels are fixed terminology — both presentations show the
+/// same string for the same source.
+enum AssessmentAnalysisSource {
+  /// Cloud AI model (XGBoost API).
+  cloudAi('AI Analysis'),
+
+  /// On-device ONNX model.
+  onDeviceAi('On-Device AI'),
+
+  /// Local rubric / rule-based scoring — no model prediction available.
+  ruleBased('Rule-Based');
+
+  const AssessmentAnalysisSource(this.label);
+
+  /// Parent-facing label. Identical in completion and review mode.
+  final String label;
+
+  bool get isAi => this != AssessmentAnalysisSource.ruleBased;
+}
+
+/// Fixed section headings and copy shared by both presentations.
+///
+/// Terminology lives here so the two screens cannot drift apart (no more
+/// "Prompts" vs "Prompt Style" or "Recommendations" vs "Recommended
+/// Settings").
+abstract final class AssessmentLabels {
+  static const title = 'Assessment Summary';
+  static const overallPerformance = 'Overall Performance';
+  static const gameResults = 'Game Results';
+  static const developmentalProfile = 'Developmental Profile';
+  static const recommendedSettings = 'Recommended Settings';
+  static const recommendedActivities = 'Recommended Activities';
+  static const aiAnalysis = 'AI Analysis';
+  static const onDeviceAi = 'On-Device AI';
+  static const ruleBased = 'Rule-Based';
+
+  static const difficulty = 'Difficulty';
+  static const promptStyle = 'Prompt Style';
+  static const sessionLength = 'Session Length';
+  static const promptRepetition = 'Prompt Repetition';
+  static const lowStimulationMode = 'Low-Stimulation Mode';
+  static const turnTakingPractice = 'Turn-Taking Practice';
+
+  static const correct = 'Correct';
+  static const errors = 'Errors';
+  static const totalItems = 'Total Items';
+  static const confidence = 'Confidence';
+  static const sensory = 'Sensory';
+
+  static const disclaimer =
+      'Not a clinical diagnosis. These observations are only used to '
+      'customize your child’s learning activities.';
+
+  static const continueToHome = 'Continue to Home';
+  static const retakeAssessment = 'Retake Assessment';
+  static const backToDashboard = 'Back to Dashboard';
+  static const home = 'Home';
+}
 
 /// A single developmental area with its predicted level.
 class ResultAreaLevel {
@@ -29,21 +104,32 @@ class ResultAreaLevel {
   final double confidence;
 }
 
-/// A single game's score for the Game Scores card.
+/// A single game's result for the Game Results card.
 class ResultGameScore {
   const ResultGameScore({
     required this.gameId,
     required this.name,
     required this.emoji,
     required this.accuracy,
+    this.correctCount = 0,
+    this.errorCount = 0,
+    this.totalItems = 0,
   });
 
   final String gameId;
   final String name;
   final String emoji;
 
-  /// 0.0–1.0 accuracy.
+  /// Adjusted accuracy (0.0–1.0): `correct / (correct + errors)`.
+  ///
+  /// This — never the raw `score / totalItems` ratio — is what the UI shows
+  /// as a percentage. See [AssessmentScoring].
   final double accuracy;
+
+  /// Raw counts, displayed separately from [accuracy].
+  final int correctCount;
+  final int errorCount;
+  final int totalItems;
 }
 
 /// A recommended learning module with its starting level.
@@ -57,7 +143,7 @@ class ResultModule {
   final int startingLevel;
 }
 
-/// A single row in the Recommendations card.
+/// A single row in the Recommended Settings card.
 class ResultRecommendation {
   const ResultRecommendation({
     required this.icon,
@@ -81,47 +167,149 @@ class ResultProfileRow {
   final String level;
 }
 
-/// All data needed to render the AI Insights card.
+/// The one scoring policy used by every assessment result surface.
 ///
-/// When `null` is passed to [AssessmentResultLayout.aiData], the layout
-/// falls back to the rule-based view (no AI Insights card).
-class ResultAiData {
-  const ResultAiData({
-    required this.areaLevels,
-    required this.confidence,
-    required this.summary,
-    required this.modules,
+/// **Per-game accuracy** is [ResultGameScore.accuracy] — the *adjusted*
+/// accuracy `correct / (correct + errors)`, which penalises errors even in
+/// games that retry until the child is right (where `score / totalItems`
+/// is always 1.0).
+///
+/// **Overall accuracy** is the item-weighted mean of those adjusted
+/// accuracies: `sum(adjustedAccuracy × totalItems) / sum(totalItems)`. A raw
+/// `score / totalItems` ratio is never displayed as "Overall Performance",
+/// because it would not be comparable with the per-game percentages next to
+/// it. Raw counts are still shown, but labelled as counts.
+abstract final class AssessmentScoring {
+  /// Item-weighted overall adjusted accuracy (0.0–1.0).
+  ///
+  /// Returns 0.0 for an empty list or when every game reports zero items,
+  /// so an empty or malformed result set can never divide by zero.
+  static double overallAdjustedAccuracy(Iterable<ResultGameScore> games) {
+    var weighted = 0.0;
+    var items = 0;
+    for (final game in games) {
+      if (game.totalItems <= 0) continue;
+      weighted += game.accuracy.clamp(0.0, 1.0) * game.totalItems;
+      items += game.totalItems;
+    }
+    if (items <= 0) return 0.0;
+    return (weighted / items).clamp(0.0, 1.0);
+  }
+
+  static int correctCount(Iterable<ResultGameScore> games) =>
+      games.fold(0, (sum, g) => sum + g.correctCount);
+
+  static int errorCount(Iterable<ResultGameScore> games) =>
+      games.fold(0, (sum, g) => sum + g.errorCount);
+
+  static int totalItems(Iterable<ResultGameScore> games) =>
+      games.fold(0, (sum, g) => sum + g.totalItems);
+
+  /// Percent (0–100) for display, rounded once so both modes round alike.
+  static int percent(double ratio) => (ratio.clamp(0.0, 1.0) * 100).round();
+}
+
+/// The canonical, immutable result of one finalized assessment run.
+///
+/// Built once (see main_app's `AssessmentResultMapper`) and handed to the
+/// shared layout in either presentation mode. It deliberately carries the
+/// values *as finalized* — the sensory observations and recommendations
+/// recorded with the run — so reopening the summary after the parent has
+/// changed the child's current settings cannot rewrite history.
+@immutable
+class AssessmentResultViewModel {
+  AssessmentResultViewModel({
+    required this.assessmentType,
+    required this.games,
+    required this.areas,
+    required this.recommendations,
+    required this.source,
+    this.assessmentRunId,
+    this.completedAt,
+    this.confidence,
+    this.summary = '',
     this.profileDisplayName,
     this.supportLevel,
-    this.hasAreaLevels = true,
-    this.recommendedModuleNames = const [],
-    this.allFilteredOut = false,
-  });
+    this.learningPath = const [],
+    this.sensoryObservations = const [],
+    this.learningPathUnavailable = false,
+  })  : correctCount = AssessmentScoring.correctCount(games),
+        errorCount = AssessmentScoring.errorCount(games),
+        totalItems = AssessmentScoring.totalItems(games),
+        overallAdjustedAccuracy =
+            AssessmentScoring.overallAdjustedAccuracy(games);
 
-  /// Per-area ordinal predictions.
-  final List<ResultAreaLevel> areaLevels;
+  /// 'pre' or 'post'.
+  final String assessmentType;
 
-  /// Overall model confidence (0.0–1.0).
-  final double confidence;
+  /// Identifies the exact result set this model was built from.
+  final String? assessmentRunId;
 
-  /// Human-readable summary text.
+  /// When the run finished, when known.
+  final DateTime? completedAt;
+
+  /// Raw counts, summed across [games]. Shown as counts, never as the
+  /// overall percentage.
+  final int correctCount;
+  final int errorCount;
+  final int totalItems;
+
+  /// Item-weighted mean of the per-game adjusted accuracies (0.0–1.0).
+  final double overallAdjustedAccuracy;
+
+  final List<ResultGameScore> games;
+
+  /// Developmental areas with their finalized levels.
+  final List<ResultAreaLevel> areas;
+
+  /// Recommended settings as finalized with the run.
+  final List<ResultRecommendation> recommendations;
+
+  final AssessmentAnalysisSource source;
+
+  /// Overall model confidence (0.0–1.0), or null when there is none.
+  final double? confidence;
+
+  /// Parent-friendly narrative summary.
   final String summary;
 
-  /// Structured module recommendations with starting levels.
-  final List<ResultModule> modules;
-
-  /// Legacy single-profile display name (used when [hasAreaLevels] is false).
+  /// Legacy single-profile display name, when the model emitted one.
   final String? profileDisplayName;
 
-  /// Legacy support level string (used when [hasAreaLevels] is false).
+  /// 'low' | 'moderate' | 'high', when known.
   final String? supportLevel;
 
-  /// Whether the API returned per-area level predictions.
-  final bool hasAreaLevels;
+  /// Recommended activities in the child's "My Path" order.
+  final List<ResultModule> learningPath;
 
-  /// Fallback: plain module name strings (used when [modules] is empty).
-  final List<String> recommendedModuleNames;
+  /// Sensory notes captured when the assessment was finalized.
+  final List<String> sensoryObservations;
 
-  /// True when all recommendations were filtered out (no active games).
-  final bool allFilteredOut;
+  /// True when every recommendation was filtered out (no active games).
+  final bool learningPathUnavailable;
+
+  /// Overall performance as a whole percent.
+  int get overallPercent =>
+      AssessmentScoring.percent(overallAdjustedAccuracy);
+
+  /// Confidence as a whole percent, or null when there is no confidence.
+  int? get confidencePercent {
+    final value = confidence;
+    return value == null ? null : AssessmentScoring.percent(value);
+  }
+
+  bool get hasAreas => areas.isNotEmpty;
+  bool get hasLearningPath => learningPath.isNotEmpty;
+
+  /// Developmental Profile rows including the sensory observations, which
+  /// render as free-form text rather than a level meter.
+  List<ResultProfileRow> get profileRows => [
+        for (final area in areas)
+          ResultProfileRow(area: area.label, level: area.levelName),
+        if (sensoryObservations.isNotEmpty)
+          ResultProfileRow(
+            area: AssessmentLabels.sensory,
+            level: sensoryObservations.join(', '),
+          ),
+      ];
 }

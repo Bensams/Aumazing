@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
@@ -58,6 +59,45 @@ void main() {
         _result('my_turn_your_turn', run),
       ];
       expect(AssessmentProvider.latestPerGame(results).length, 4);
+    });
+  });
+
+  group('finalized support profile', () {
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('is built once and persisted for the later review', () async {
+      final provider = AssessmentProvider();
+      await provider.finalizeSupportProfile('child-1');
+
+      expect(provider.supportProfile, isNotNull);
+
+      // Persisted under the child's key, so reopening the Assessment
+      // Summary reads these values back instead of recomputing them.
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('support_profile_child-1'), isNotNull);
+    });
+
+    test('a retake overwrites the stored profile', () async {
+      final provider = AssessmentProvider();
+      await provider.finalizeSupportProfile('child-1');
+      final first = provider.supportProfile!;
+
+      await provider.finalizeSupportProfile('child-1');
+      final second = provider.supportProfile!;
+
+      expect(second.recommendedDifficulty, first.recommendedDifficulty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('support_profile_child-1'), isNotNull);
+    });
+
+    test('clear() forgets it', () async {
+      final provider = AssessmentProvider();
+      await provider.finalizeSupportProfile('child-1');
+      provider.clear();
+      expect(provider.supportProfile, isNull);
     });
   });
 }
