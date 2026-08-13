@@ -15,4 +15,5 @@ export 'src/widgets/widgets.dart';
 
 // Utilities
 export 'src/utils/device_form_factor.dart';
+export 'src/utils/text_fit.dart';
 export 'src/utils/parent_screen_orientation.dart';
