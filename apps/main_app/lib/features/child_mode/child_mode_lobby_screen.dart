@@ -18,6 +18,12 @@ import 'game_launcher.dart';
 import 'path_map_view.dart';
 import 'time_up_dialog.dart';
 
+/// Size of a game card in step 2 — the row on a phone, the grid on a tablet.
+/// A portrait-ish tile: room for the 104pt logo above the name strip, and
+/// nothing like the full-height column the cards used to stretch into.
+const double _kGameCardWidth = 186;
+const double _kGameCardHeight = 240;
+
 /// Child Mode Lobby.
 ///
 /// Reached from the parent dashboard's "Enter Child Mode". The child first
@@ -57,11 +63,6 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   /// game count stack comfortably without the card going square.
   static const _categoryCardHeightRatio = 1.25;
 
-  /// Height of the game cards in step 2 (All Games and each category).
-  /// [_GameCard] is 186 wide, so this keeps the same portrait-ish tile the
-  /// category step uses: room for the 104pt logo above the name strip, and
-  /// nothing like the full-height column it used to stretch into.
-  static const _gameRowHeight = 240.0;
 
   /// The category the child tapped, or null while showing the buttons.
   SkillCategory? _selected;
@@ -1137,7 +1138,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     );
   }
 
-  // ── Step 2: games in a single horizontal row ───────────────────────────
+  // ── Step 2: the category's games ───────────────────────────────────────
 
   Widget _buildGamesRow(int fallbackLevel, GamePalette palette) {
     if (_viewingPath) return _buildPathRow();
@@ -1150,48 +1151,104 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
                 .copyWith(color: AppColors.mutedForeground)),
       );
     }
+
+    /// Builds card [i], keyed on the first so the guided-start hand has
+    /// something to point at.
+    Widget cardAt(int i) {
+      // Per-game difficulty: parent override → AI per-area → fallback.
+      final difficulty = GameLauncher.difficultyFor(
+        context,
+        games[i],
+        fallback: fallbackLevel,
+      );
+      final card = _GameCard(
+        entry: games[i],
+        difficulty: difficulty,
+        onTap: () => _launch(games[i].id, difficulty),
+      );
+      return i == 0 ? KeyedSubtree(key: _guideCardKey, child: card) : card;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: LayoutBuilder(
-        builder: (context, constraints) {
-          // The bare SizedBox below used to be handed a *tight* height by the
-          // Expanded above it, which a SizedBox cannot shrink out of — so the
-          // 200 was ignored and every game card ran the full height of the
-          // screen. Centring first makes the height loose, and only then does
-          // the box actually bound the row.
-          final height = _gameRowHeight.clamp(0.0, constraints.maxHeight);
-          return Center(
-            child: SizedBox(
-              height: height,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                itemCount: games.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppSpacing.md),
-                itemBuilder: (_, i) {
-                  // Per-game difficulty: parent override → AI per-area →
-                  // fallback.
-                  final difficulty = GameLauncher.difficultyFor(
-                    context,
-                    games[i],
-                    fallback: fallbackLevel,
-                  );
-                  final card = _GameCard(
-                    entry: games[i],
-                    difficulty: difficulty,
-                    onTap: () => _launch(games[i].id, difficulty),
-                  );
-                  // First card anchors the guided-start pointing hand.
-                  return i == 0
-                      ? KeyedSubtree(key: _guideCardKey, child: card)
-                      : card;
-                },
-              ),
-            ),
-          );
-        },
+        builder: (context, constraints) => _usesGameGrid(constraints)
+            ? _gamesGrid(games.length, cardAt, constraints)
+            : _gamesScrollRow(games.length, cardAt, constraints),
+      ),
+    );
+  }
+
+  /// Tablets get the wrapped grid; phones keep the single scrolling row.
+  ///
+  /// A phone's row is already the right shape for the screen — one line of
+  /// cards, swiped sideways — and a grid there would only shrink them. The
+  /// height check keeps a short landscape phone (which is wide enough to look
+  /// like a tablet) on the row as well.
+  bool _usesGameGrid(BoxConstraints constraints) =>
+      isTabletFormFactor &&
+      constraints.maxHeight >= _kGameCardHeight * 2 + AppSpacing.md;
+
+  /// Phones: one horizontal row of cards, vertically centred.
+  ///
+  /// The bare `SizedBox` here used to be handed a *tight* height by the
+  /// `Expanded` above it, which a `SizedBox` cannot shrink out of — so its 200
+  /// was ignored and every card ran the full height of the screen. Centring
+  /// first makes the height loose, and only then does the box bound the row.
+  Widget _gamesScrollRow(
+    int count,
+    Widget Function(int) cardAt,
+    BoxConstraints constraints,
+  ) {
+    return Center(
+      child: SizedBox(
+        height: _kGameCardHeight.clamp(0.0, constraints.maxHeight),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          itemCount: count,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+          itemBuilder: (_, i) => cardAt(i),
+        ),
+      ),
+    );
+  }
+
+  /// Tablets: the same cards wrapped into two or three rows and scrolled
+  /// vertically, so a full category is taken in at a glance instead of being
+  /// swiped past one card at a time.
+  ///
+  /// The column count is whatever fits at the card's natural width, which on a
+  /// 1152dp tablet is five — turning twelve games into three rows and seven
+  /// into two. The grid shrink-wraps, so a short category (five games, one row)
+  /// stays centred rather than clinging to the top, and only scrolls once the
+  /// rows genuinely overflow.
+  Widget _gamesGrid(
+    int count,
+    Widget Function(int) cardAt,
+    BoxConstraints constraints,
+  ) {
+    const gap = AppSpacing.md;
+    final available = constraints.maxWidth - AppSpacing.lg * 2;
+    final columns =
+        ((available + gap) ~/ (_kGameCardWidth + gap)).clamp(1, count);
+    final gridWidth = columns * _kGameCardWidth + (columns - 1) * gap;
+
+    return Center(
+      child: SizedBox(
+        width: gridWidth,
+        child: GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          itemCount: count,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: gap,
+            crossAxisSpacing: gap,
+            childAspectRatio: _kGameCardWidth / _kGameCardHeight,
+          ),
+          itemBuilder: (_, i) => cardAt(i),
+        ),
       ),
     );
   }
@@ -1401,7 +1458,8 @@ class _GameCard extends StatelessWidget {
     const radius = 22.0;
     final tier = _tierLabels[difficulty] ?? 'Medium';
     return SizedBox(
-      width: 186,
+      // Sized by the grid on a tablet; this is the width the phone row uses.
+      width: _kGameCardWidth,
       // One node for the whole card. The logo's semanticLabel and the name
       // strip underneath both carried entry.name, so TalkBack read every card
       // twice ("Match It … Match It"). Merged here into a single button that
