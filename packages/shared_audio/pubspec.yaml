@@ -69,6 +69,7 @@ flutter:
     - assets/audio/voice_over/en_adult_woman/phrases/
     - assets/audio/voice_over/en_adult_woman/routines/
     - assets/audio/voice_over/en_adult_woman/emotions/
+    - assets/audio/voice_over/en_adult_woman/emotions/scenes/
     # en adult / man
     - assets/audio/voice_over/en_adult_man/assessment_style/
     - assets/audio/voice_over/en_adult_man/attention_and_regulation/
@@ -87,6 +88,7 @@ flutter:
     - assets/audio/voice_over/en_adult_man/phrases/
     - assets/audio/voice_over/en_adult_man/routines/
     - assets/audio/voice_over/en_adult_man/emotions/
+    - assets/audio/voice_over/en_adult_man/emotions/scenes/
     # en young / girl
     - assets/audio/voice_over/en_young_girl/assessment_style/
     - assets/audio/voice_over/en_young_girl/attention_and_regulation/
@@ -105,6 +107,7 @@ flutter:
     - assets/audio/voice_over/en_young_girl/phrases/
     - assets/audio/voice_over/en_young_girl/routines/
     - assets/audio/voice_over/en_young_girl/emotions/
+    - assets/audio/voice_over/en_young_girl/emotions/scenes/
     # en young / boy
     - assets/audio/voice_over/en_young_boy/assessment_style/
     - assets/audio/voice_over/en_young_boy/attention_and_regulation/
@@ -123,6 +126,7 @@ flutter:
     - assets/audio/voice_over/en_young_boy/phrases/
     - assets/audio/voice_over/en_young_boy/routines/
     - assets/audio/voice_over/en_young_boy/emotions/
+    - assets/audio/voice_over/en_young_boy/emotions/scenes/
     # en child / girl
     - assets/audio/voice_over/en_child_girl/assessment_style/
     - assets/audio/voice_over/en_child_girl/attention_and_regulation/
@@ -141,6 +145,7 @@ flutter:
     - assets/audio/voice_over/en_child_girl/phrases/
     - assets/audio/voice_over/en_child_girl/routines/
     - assets/audio/voice_over/en_child_girl/emotions/
+    - assets/audio/voice_over/en_child_girl/emotions/scenes/
     # en child / boy
     - assets/audio/voice_over/en_child_boy/assessment_style/
     - assets/audio/voice_over/en_child_boy/attention_and_regulation/
@@ -159,6 +164,7 @@ flutter:
     - assets/audio/voice_over/en_child_boy/phrases/
     - assets/audio/voice_over/en_child_boy/routines/
     - assets/audio/voice_over/en_child_boy/emotions/
+    - assets/audio/voice_over/en_child_boy/emotions/scenes/
     # tl adult / woman
     - assets/audio/voice_over/tl_adult_woman/assessment_style/
     - assets/audio/voice_over/tl_adult_woman/attention_and_regulation/
@@ -177,6 +183,7 @@ flutter:
     - assets/audio/voice_over/tl_adult_woman/phrases/
     - assets/audio/voice_over/tl_adult_woman/routines/
     - assets/audio/voice_over/tl_adult_woman/emotions/
+    - assets/audio/voice_over/tl_adult_woman/emotions/scenes/
     # tl adult / man
     - assets/audio/voice_over/tl_adult_man/assessment_style/
     - assets/audio/voice_over/tl_adult_man/attention_and_regulation/
@@ -195,6 +202,7 @@ flutter:
     - assets/audio/voice_over/tl_adult_man/phrases/
     - assets/audio/voice_over/tl_adult_man/routines/
     - assets/audio/voice_over/tl_adult_man/emotions/
+    - assets/audio/voice_over/tl_adult_man/emotions/scenes/
     # tl young / girl
     - assets/audio/voice_over/tl_young_girl/assessment_style/
     - assets/audio/voice_over/tl_young_girl/attention_and_regulation/
@@ -213,6 +221,7 @@ flutter:
     - assets/audio/voice_over/tl_young_girl/phrases/
     - assets/audio/voice_over/tl_young_girl/routines/
     - assets/audio/voice_over/tl_young_girl/emotions/
+    - assets/audio/voice_over/tl_young_girl/emotions/scenes/
     # tl young / boy
     - assets/audio/voice_over/tl_young_boy/assessment_style/
     - assets/audio/voice_over/tl_young_boy/attention_and_regulation/
@@ -231,6 +240,7 @@ flutter:
     - assets/audio/voice_over/tl_young_boy/phrases/
     - assets/audio/voice_over/tl_young_boy/routines/
     - assets/audio/voice_over/tl_young_boy/emotions/
+    - assets/audio/voice_over/tl_young_boy/emotions/scenes/
     # tl child / girl
     - assets/audio/voice_over/tl_child_girl/assessment_style/
     - assets/audio/voice_over/tl_child_girl/attention_and_regulation/
@@ -249,6 +259,7 @@ flutter:
     - assets/audio/voice_over/tl_child_girl/phrases/
     - assets/audio/voice_over/tl_child_girl/routines/
     - assets/audio/voice_over/tl_child_girl/emotions/
+    - assets/audio/voice_over/tl_child_girl/emotions/scenes/
     # tl child / boy
     - assets/audio/voice_over/tl_child_boy/assessment_style/
     - assets/audio/voice_over/tl_child_boy/attention_and_regulation/
@@ -267,6 +278,7 @@ flutter:
     - assets/audio/voice_over/tl_child_boy/phrases/
     - assets/audio/voice_over/tl_child_boy/routines/
     - assets/audio/voice_over/tl_child_boy/emotions/
+    - assets/audio/voice_over/tl_child_boy/emotions/scenes/
     # ceb adult / woman
     - assets/audio/voice_over/ceb_adult_woman/assessment_style/
     - assets/audio/voice_over/ceb_adult_woman/attention_and_regulation/
@@ -285,6 +297,7 @@ flutter:
     - assets/audio/voice_over/ceb_adult_woman/phrases/
     - assets/audio/voice_over/ceb_adult_woman/routines/
     - assets/audio/voice_over/ceb_adult_woman/emotions/
+    - assets/audio/voice_over/ceb_adult_woman/emotions/scenes/
     # ceb adult / man
     - assets/audio/voice_over/ceb_adult_man/assessment_style/
     - assets/audio/voice_over/ceb_adult_man/attention_and_regulation/
@@ -303,6 +316,7 @@ flutter:
     - assets/audio/voice_over/ceb_adult_man/phrases/
     - assets/audio/voice_over/ceb_adult_man/routines/
     - assets/audio/voice_over/ceb_adult_man/emotions/
+    - assets/audio/voice_over/ceb_adult_man/emotions/scenes/
     # ceb young / girl
     - assets/audio/voice_over/ceb_young_girl/assessment_style/
     - assets/audio/voice_over/ceb_young_girl/attention_and_regulation/
@@ -321,6 +335,7 @@ flutter:
     - assets/audio/voice_over/ceb_young_girl/phrases/
     - assets/audio/voice_over/ceb_young_girl/routines/
     - assets/audio/voice_over/ceb_young_girl/emotions/
+    - assets/audio/voice_over/ceb_young_girl/emotions/scenes/
     # ceb young / boy
     - assets/audio/voice_over/ceb_young_boy/assessment_style/
     - assets/audio/voice_over/ceb_young_boy/attention_and_regulation/
@@ -339,6 +354,7 @@ flutter:
     - assets/audio/voice_over/ceb_young_boy/phrases/
     - assets/audio/voice_over/ceb_young_boy/routines/
     - assets/audio/voice_over/ceb_young_boy/emotions/
+    - assets/audio/voice_over/ceb_young_boy/emotions/scenes/
     # ceb child / girl
     - assets/audio/voice_over/ceb_child_girl/assessment_style/
     - assets/audio/voice_over/ceb_child_girl/attention_and_regulation/
@@ -357,6 +373,7 @@ flutter:
     - assets/audio/voice_over/ceb_child_girl/phrases/
     - assets/audio/voice_over/ceb_child_girl/routines/
     - assets/audio/voice_over/ceb_child_girl/emotions/
+    - assets/audio/voice_over/ceb_child_girl/emotions/scenes/
     # ceb child / boy
     - assets/audio/voice_over/ceb_child_boy/assessment_style/
     - assets/audio/voice_over/ceb_child_boy/attention_and_regulation/
@@ -375,4 +392,5 @@ flutter:
     - assets/audio/voice_over/ceb_child_boy/phrases/
     - assets/audio/voice_over/ceb_child_boy/routines/
     - assets/audio/voice_over/ceb_child_boy/emotions/
+    - assets/audio/voice_over/ceb_child_boy/emotions/scenes/
     # END generated voice packs

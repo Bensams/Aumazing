@@ -197,3 +197,13 @@ emotions/Surprised.wav,Surprised.,yes,0.5,0.5,neutral
 emotions/Angry.wav,Angry.,yes,0.5,0.5,neutral
 dynamic/CanIHaveThe.wav,Can I have the,no,0.35,0.5,neutral
 turn_taking/ThankYouFriend.wav,"Thank you, friend!",no,0.5,0.5,happy
+emotions/scenes/Gift.wav,His friend gave him a present.,no,0.5,0.5,neutral
+emotions/scenes/FinishedDrawing.wav,He finished his drawing.,no,0.5,0.5,neutral
+emotions/scenes/IceCreamFell.wav,His ice cream fell down.,no,0.5,0.5,neutral
+emotions/scenes/SpilledDrink.wav,You bumped his drink over.,no,0.5,0.5,neutral
+emotions/scenes/DogBarked.wav,A dog barked behind the gate.,no,0.5,0.5,neutral
+emotions/scenes/LoudThunder.wav,The thunder was very loud.,no,0.5,0.5,neutral
+emotions/scenes/JackInBox.wav,The toy popped out of the box!,no,0.5,0.5,neutral
+emotions/scenes/SurpriseBalloons.wav,Balloons appeared all at once!,no,0.5,0.5,neutral
+emotions/scenes/TowerFell.wav,His block tower got knocked over.,no,0.5,0.5,neutral
+emotions/scenes/PuzzleStuck.wav,The puzzle piece will not fit.,no,0.5,0.5,neutral
