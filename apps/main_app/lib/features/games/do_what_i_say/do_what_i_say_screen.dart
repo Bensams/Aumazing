@@ -7,6 +7,7 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../dev/developer_automation_registry.dart';
 import '../../../providers/child_provider.dart';
 import '../session_recording.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
@@ -67,6 +68,9 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
   late AnimationController _celebrationFadeController;
   late Animation<double> _celebrationFadeAnimation;
   late final DoWhatISayGame _game;
+
+  /// Developer auto-play/skip handle. Null in a normal build.
+  DeveloperGameSession? _devSession;
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
 
@@ -175,6 +179,8 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
         // flow past this point pops routes, so run it exactly once.
         if (_completionHandled) return;
         _completionHandled = true;
+        // Stop any developer automation from acting on a finished game.
+        _devSession?.markComplete();
 
         setState(() {
           _gameComplete = true;
@@ -239,6 +245,12 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
           });
         }
       },
+    );
+
+    _devSession = DeveloperAutomationRegistry.instance.registerGame(
+      gameId: 'do_what_i_say',
+      assessmentContext: widget.assessmentContext,
+      game: _game,
     );
   }
 
@@ -323,6 +335,7 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
 
   @override
   void dispose() {
+    DeveloperAutomationRegistry.instance.unregister(_devSession);
     _celebrationFadeController.dispose();
     _voiceOverService.dispose();
     super.dispose();
