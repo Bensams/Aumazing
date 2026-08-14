@@ -75,6 +75,30 @@ void main() {
     }
   });
 
+  /// The assessment hand-off is the one screen with no next step the child can
+  /// find on their own: the written line is the only instruction, and a
+  /// pre-reader cannot use it. A pack missing this recording degrades to the
+  /// generic "Wait." cue, which does not say to fetch anyone — so the child
+  /// sits there. Checked per pack rather than sampled, because that degrade is
+  /// silent-by-design and would never surface as a failure.
+  group('the assessment hand-off cue is in the asset bundle', () {
+    for (final pack in kVoicePacks) {
+      // Lexianne is human-recorded, deliberately incomplete, and not a
+      // default; she falls back to ceb_adult_woman. Nothing to bundle.
+      if (pack.assetFolder == 'ceb_lexianne') continue;
+
+      test('${pack.id} bundles its own hand-off recording', () async {
+        final path = VoiceOverService.assetPathCandidates(
+          VoiceOverCue.giveTheDeviceToYourParent,
+          pack.assetFolder,
+        ).first;
+        final data = await rootBundle.load(path);
+        expect(data.lengthInBytes, greaterThan(0),
+            reason: '$path is bundled but empty');
+      });
+    }
+  });
+
   test('the end-of-game cheer is bundled', () async {
     final data = await rootBundle
         .load('packages/shared_audio/assets/audio/sfx/cheer_clap.wav');

@@ -13,7 +13,7 @@ import '../games/do_what_i_say/do_what_i_say_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
-import 'post_assessment_result_screen.dart';
+import 'post_assessment_handoff_screen.dart';
 import '../../widgets/mascot_host.dart';
 
 /// Orchestrates the sequential post-assessment game flow.
@@ -25,7 +25,14 @@ import '../../widgets/mascot_host.dart';
 /// re-runs the on-device AI so the child's levels and learning path
 /// refresh to their new ability, and shows the pre-vs-post comparison.
 class PostAssessmentProgressScreen extends StatefulWidget {
-  const PostAssessmentProgressScreen({super.key});
+  const PostAssessmentProgressScreen({super.key, this.skipToFinish = false});
+
+  /// Test seam: runs the finish-and-hand-off path as soon as the run exists,
+  /// without playing four games first. That path is only reachable after the
+  /// last game otherwise, which no widget test can drive — and it is the path
+  /// that decides whether the child or the parent sees the results.
+  @visibleForTesting
+  final bool skipToFinish;
 
   @override
   State<PostAssessmentProgressScreen> createState() =>
@@ -100,6 +107,10 @@ class _PostAssessmentProgressScreenState
     }
     if (!mounted) return;
     setState(() => _flowState = _FlowState.ready);
+    if (widget.skipToFinish) {
+      _finishAssessment();
+      return;
+    }
     _startCountdown();
   }
 
@@ -262,9 +273,11 @@ class _PostAssessmentProgressScreenState
       );
 
       if (!mounted) return;
+      // The child is still holding the device, so the child-facing hand-off
+      // comes first; the results sit behind its verification gate.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => PostAssessmentResultScreen(
+          builder: (_) => PostAssessmentHandoffScreen(
             improvement: improvement,
             preAreaLevels: preAreaLevels,
             postAreaLevels: postPrediction?.areaLevels ?? const {},
