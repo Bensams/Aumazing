@@ -32,7 +32,9 @@ enum ObjectOutline {
 ///
 /// Giving the card a colour of its own, independent of the shape, fixes that
 /// at source. The outline then guarantees the card is separable from the
-/// screen background, whatever colour the parent picked for either.
+/// screen background, whatever colour the parent picked for either — and is
+/// the *same* colour on every card, so it never reads as a cue. See
+/// [standingOutline].
 @immutable
 class GameObjectStyle {
   const GameObjectStyle({
@@ -58,23 +60,24 @@ class GameObjectStyle {
   static const double minWidth = 1;
   static const double maxWidth = 8;
 
-  /// Deliberately not parent-choosable.
+  /// The one outline colour every ordinary object card is drawn with.
   ///
-  /// The outline's entire job is to guarantee separation; letting it be
-  /// picked would let it be picked badly, which is the one thing it must
-  /// never be. Derived from the surface it sits on instead, so it is correct
-  /// by construction on any background.
-  static const Color darkOutline = Color(0xFF1A1A1F);
-  static const Color lightOutline = Color(0xFFFAFAFA);
-
-  /// An outline colour guaranteed to clear 3:1 against [surface].
+  /// Deliberately not parent-choosable, and — this is the part that matters
+  /// pedagogically — deliberately **not** derived per card.
   ///
-  /// The threshold is 0.2 because black clears 3:1 on anything with
-  /// luminance ≥ 0.1 and white clears it on anything ≤ 0.3 — picking 0.2
-  /// sits inside both bands, so every possible surface is covered with room
-  /// to spare.
-  static Color outlineColourFor(Color surface) =>
-      Contrast.relativeLuminance(surface) > 0.2 ? darkOutline : lightOutline;
+  /// An earlier version picked dark or light per card from that card's own
+  /// luminance, which is the right answer if each card is judged alone and
+  /// the wrong answer for a child. Cards are shown side by side, so a board
+  /// could carry four dark outlines and one bright white one purely because
+  /// of the fill underneath. To a child looking for the answer, the odd
+  /// outline *is* the answer: a standing outline that varies reads as
+  /// feedback. It is exactly the shape a "correct" cue takes.
+  ///
+  /// So the standing outline is a constant. Every neutral object wears the
+  /// same one, and difference in outline colour is reserved for states that
+  /// genuinely mean something — selected, hint, correct, wrong. See
+  /// `ShapePainter3D.drawCard3D`, which is the single place it is applied.
+  static const Color standingOutline = Contrast.ink;
 
   double get effectiveWidth => outlineWidth.clamp(minWidth, maxWidth);
 
@@ -93,6 +96,10 @@ class GameObjectStyle {
       );
 
   /// Serialised for SharedPreferences, e.g. `solid|3.0|ffffffff`.
+  ///
+  /// Three fields, unchanged: the outline colour was never stored (it was
+  /// derived, and is now a constant), so making it uniform needs no format
+  /// change and every value already on a device still reads back.
   String encode() {
     final colour = cardColour == null
         ? '-'
