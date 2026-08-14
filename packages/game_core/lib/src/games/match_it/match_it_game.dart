@@ -149,6 +149,12 @@ class MatchItGame extends FlameGame
   bool get _hintBudgetLeft =>
       _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
+  /// How long to wait after the last pair is matched before moving on. Sits
+  /// just behind [MatchableShape.matchExitDuration] so the final pair has
+  /// finished disappearing before the round transition begins.
+  static const Duration roundTransitionDelay =
+      Duration(milliseconds: 800 + 100);
+
   final List<MatchableShape> _leftShapes = [];
   final List<MatchableShape> _rightShapes = [];
 
@@ -253,12 +259,11 @@ class MatchItGame extends FlameGame
     // Cancel any existing timer from previous round
     _cancelNoResponseTimer();
 
-    // Clear previous shapes
-    for (final s in _leftShapes) {
-      s.removeFromParent();
-    }
-    for (final s in _rightShapes) {
-      s.removeFromParent();
+    // Clear previous shapes. Matched ones have already taken themselves off
+    // the board when their exit animation finished, so only the survivors of
+    // an interrupted round still need removing.
+    for (final s in [..._leftShapes, ..._rightShapes]) {
+      if (s.isMounted) s.removeFromParent();
     }
     _leftShapes.clear();
     _rightShapes.clear();
@@ -510,13 +515,18 @@ class MatchItGame extends FlameGame
           ? _roundPairs[leftShape.index].answerLabel
           : AnswerLabel.none);
 
+      // Both cards leave the board: brief feedback, then a fade-and-scale
+      // exit. They stop accepting input immediately (see [markMatched]), and
+      // every other card keeps its position — nothing is re-laid out.
       leftShape.markMatched();
       rightShape.markMatched();
 
       _selectedLeftIndex = null;
       _selectedRightIndex = null;
 
-      // Check if all 3 pairs matched in this round
+      // The round-completion check reads [MatchableShape.isMatched], which is
+      // set synchronously above and survives the card being removed from the
+      // board — _leftShapes holds the references until the next round.
       final allMatched = _leftShapes.every((s) => s.isMatched);
       if (allMatched) {
         // Round complete — cancel timer
@@ -544,7 +554,9 @@ class MatchItGame extends FlameGame
             _usedPairIndices.length);
           analyticsAddGameSpecificMetric('hint_count', _hintCount);
 
-          Future.delayed(const Duration(milliseconds: 600), () {
+          // Hold until the last pair has finished disappearing, so the game
+          // never cuts to the results screen over a half-faded card.
+          Future.delayed(roundTransitionDelay, () {
             onGameComplete(
               score: _score,
               totalItems: totalRounds * 3,
@@ -558,8 +570,8 @@ class MatchItGame extends FlameGame
           onPlayLevelCompleteSfx?.call();
           onPlayTransitionVo?.call();
 
-          // Next round after a brief pause
-          Future.delayed(const Duration(milliseconds: 800), _setupRound);
+          // Next round once the last pair has finished disappearing.
+          Future.delayed(roundTransitionDelay, _setupRound);
         }
       } else {
         // Partial match - continue round, restart timer for next pair
