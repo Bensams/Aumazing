@@ -42,27 +42,48 @@ class GamePreview extends StatelessWidget {
     (name: 'diamond', colour: Color(0xFF43A047)),
   ];
 
+  /// The colour of the one card drawn in its selected state, matching the
+  /// selection border the games themselves use.
+  static const Color selectionBorder = AppColors.primaryPurple;
+
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Preview: how a game round will look with these settings',
-      image: true,
-      excludeSemantics: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            gradient: background.toGradient(),
-            border: Border.all(color: AppColors.border),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          label: 'Preview: how a game round will look with these settings',
+          image: true,
+          excludeSemantics: true,
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-          ),
-          child: CustomPaint(
-            painter: _GamePreviewPainter(style: objectStyle),
-            size: Size.infinite,
+            child: Container(
+              height: height,
+              decoration: BoxDecoration(
+                gradient: background.toGradient(),
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: CustomPaint(
+                painter: _GamePreviewPainter(style: objectStyle),
+                size: Size.infinite,
+              ),
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xs),
+        // Without this line the purple card is just an odd one out, which is
+        // precisely the reading the uniform outline exists to prevent. It is
+        // labelled so a parent sees it as a demonstration of the selected
+        // state rather than as "the right answer".
+        Text(
+          'Every object has the same outline. The purple card shows what '
+          'selecting one looks like.',
+          style: AppTextStyles.bodySmall
+              .copyWith(color: AppColors.mutedForeground),
+        ),
+      ],
     );
   }
 }
@@ -99,9 +120,14 @@ class _GamePreviewPainter extends CustomPainter {
         final shape = shapes[indices[i]];
         final rect = Rect.fromLTWH(pad + i * (cardW + gap), top, cardW, cardH);
 
-        // One card is shown selected so the state border is visible too —
-        // it takes priority over the standing outline, and a parent should
-        // see that it still does.
+        // One card is shown selected so the state border is visible too — it
+        // takes priority over the standing outline, and a parent should see
+        // that it still does. The caption under the preview names it as a
+        // selection so the odd card out is never mistaken for the answer.
+        //
+        // Every other card, whatever colour it is, gets the identical
+        // standing outline; the five fills here span the range on purpose,
+        // so a parent can see that they do.
         final isSelected = selected && i == 1;
 
         ShapePainter3D.drawCard3D(
@@ -110,7 +136,7 @@ class _GamePreviewPainter extends CustomPainter {
           color: shape.colour,
           cornerRadius: radius,
           showBorder: isSelected,
-          borderColor: const Color(0xFF9B82C4),
+          borderColor: isSelected ? GamePreview.selectionBorder : null,
           borderWidth: 3,
           styleOverride: style,
         );

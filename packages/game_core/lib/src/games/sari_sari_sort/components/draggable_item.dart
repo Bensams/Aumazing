@@ -235,17 +235,18 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
-    final borderColor =
-        _showError ? const Color(0xFFE88888) : const Color(0xFFFFFFFF).withAlpha(180);
-
+    // Only the wrong-bin state draws its own border; at rest the item takes
+    // the parent's standing outline like every other object. It used to wear
+    // a white one always, which on a board of items is indistinguishable from
+    // a "this is the one" cue.
     ShapePainter3D.drawCard3D(
       canvas,
       rect,
       color: color,
       cornerRadius: _cornerRadius,
       alpha: 255, // bold, fully-saturated natural color
-      showBorder: true,
-      borderColor: borderColor,
+      showBorder: _showError,
+      borderColor: _showError ? const Color(0xFFE88888) : null,
       borderWidth: 3.0,
     );
 

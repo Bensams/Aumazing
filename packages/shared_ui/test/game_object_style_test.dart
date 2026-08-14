@@ -36,30 +36,33 @@ void main() {
   });
 
   group('outline colour', () {
-    test('clears 3:1 against any possible card colour', () {
-      // The whole reason the outline colour is derived rather than chosen:
-      // it has to be correct on every surface, including ones a parent
-      // invents with the wheel. Sweep the RGB cube rather than spot-check.
-      for (var r = 0; r <= 255; r += 17) {
-        for (var g = 0; g <= 255; g += 17) {
-          for (var b = 0; b <= 255; b += 17) {
-            final surface = Color.fromARGB(255, r, g, b);
-            final outline = GameObjectStyle.outlineColourFor(surface);
-            expect(
-              Contrast.contrastRatio(outline, surface),
-              greaterThanOrEqualTo(Contrast.graphicalObjectMinimum),
-              reason: 'outline failed on #$r,$g,$b',
-            );
-          }
-        }
-      }
+    test('is one constant, not a per-card derivation', () {
+      // The defect: an outline chosen per card put black outlines and white
+      // outlines on the same board, and the odd one out reads to a child as
+      // the answer. There is one outline colour and it is a compile-time
+      // constant, so there is nothing left that *could* vary per object.
+      expect(GameObjectStyle.standingOutline, const Color(0xFF1A1A1F));
     });
 
-    test('flips from dark to light as the surface darkens', () {
-      expect(GameObjectStyle.outlineColourFor(const Color(0xFFFFFFFF)),
-          GameObjectStyle.darkOutline);
-      expect(GameObjectStyle.outlineColourFor(const Color(0xFF1E2438)),
-          GameObjectStyle.lightOutline);
+    test('the dark neutral is a child-appropriate ink, not pure black', () {
+      // Pure black on a colourful card is harsh; the near-black keeps the
+      // edge soft while still separating the card from a light background.
+      expect(GameObjectStyle.standingOutline, isNot(const Color(0xFF000000)));
+      expect(
+        Contrast.contrastRatio(
+          GameObjectStyle.standingOutline,
+          const Color(0xFFFFFFFF),
+        ),
+        greaterThanOrEqualTo(Contrast.graphicalObjectMinimum),
+      );
+    });
+
+    test('chrome may still pick per-surface — game objects may not', () {
+      // A tick on a colour swatch is judged alone, so Contrast.legibleOn
+      // still flips. It is a separate helper precisely so nobody reaches for
+      // it when drawing an object.
+      expect(Contrast.legibleOn(const Color(0xFFFFFFFF)), Contrast.ink);
+      expect(Contrast.legibleOn(const Color(0xFF1E2438)), Contrast.paper);
     });
   });
 
@@ -98,15 +101,77 @@ void main() {
           gold, const Color(0xFF9CCBE6), 40 / 255);
       expect(Contrast.contrastRatio(gold, autoCard), lessThan(1.1));
 
-      // A fixed card has no relationship to the shape colour, and the
-      // derived outline then guarantees the card reads against anything.
+      // A fixed card has no relationship to the shape colour, so the shape
+      // stands clear of the card it sits on.
       const fixed = Color(0xFF2E2E33);
       expect(Contrast.contrastRatio(gold, fixed),
           greaterThanOrEqualTo(Contrast.graphicalObjectMinimum));
+    });
+
+    test('the uniform outline still separates a card from a light screen', () {
+      // The accepted trade of making the outline uniform: it is chosen
+      // against the *background* a game is played on, not against the card
+      // fill. Both stock backgrounds are light, so the ink outline reads.
+      for (final background in const [Color(0xFFEDE7F6), Color(0xFFFAF9F6)]) {
+        expect(
+          Contrast.contrastRatio(GameObjectStyle.standingOutline, background),
+          greaterThanOrEqualTo(Contrast.graphicalObjectMinimum),
+          reason: '$background',
+        );
+      }
+    });
+  });
+
+  group('persistence', () {
+    test('values written before the outline was made uniform still read', () {
+      // The outline colour was never one of the three stored fields, so
+      // nothing on a device needs migrating. Literals, not round-trips, so
+      // this fails if the format is ever quietly widened.
       expect(
-        Contrast.contrastRatio(
-            GameObjectStyle.outlineColourFor(fixed), fixed),
-        greaterThanOrEqualTo(Contrast.graphicalObjectMinimum),
+        GameObjectStyle.decode('solid|3.0|-'),
+        const GameObjectStyle(outline: ObjectOutline.solid, outlineWidth: 3),
+      );
+      expect(
+        GameObjectStyle.decode('dashed|8.0|ff2e2e33'),
+        const GameObjectStyle(
+          cardColour: Color(0xFF2E2E33),
+          outline: ObjectOutline.dashed,
+          outlineWidth: 8,
+        ),
+      );
+      expect(
+        GameObjectStyle.decode('none|1.0|ffffffff'),
+        const GameObjectStyle(
+          cardColour: Color(0xFFFFFFFF),
+          outline: ObjectOutline.none,
+          outlineWidth: 1,
+        ),
+      );
+    });
+
+    test('the extreme thicknesses survive a save and load', () {
+      for (final w in [GameObjectStyle.minWidth, GameObjectStyle.maxWidth]) {
+        final style = GameObjectStyle(outlineWidth: w);
+        final back = GameObjectStyle.decode(style.encode());
+        expect(back, style);
+        expect(back!.effectiveWidth, w);
+      }
+    });
+
+    test('an out-of-range stored width is clamped rather than obeyed', () {
+      // A hand-edited or corrupted preference must not produce a hairline or
+      // a stroke that swallows the card.
+      expect(
+        GameObjectStyle.decode('solid|0.0|-')!.effectiveWidth,
+        GameObjectStyle.minWidth,
+      );
+      expect(
+        GameObjectStyle.decode('solid|400.0|-')!.effectiveWidth,
+        GameObjectStyle.maxWidth,
+      );
+      expect(
+        GameObjectStyle.decode('solid|-9.0|-')!.effectiveWidth,
+        GameObjectStyle.minWidth,
       );
     });
   });

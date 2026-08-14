@@ -136,9 +136,11 @@ class SequenceShape extends PositionComponent with TapCallbacks {
     if (isWrong) alpha = 130;
     if (isHint) alpha = 120;
 
-    // Border — always show a subtle border so shapes look like tappable cards
+    // Border — a *state* border only. A card at rest takes the parent's
+    // standing outline instead, which is what makes it read as a tappable
+    // card; it used to draw its own tinted border unconditionally, so no card
+    // on the board was ever visibly plain.
     Color? borderColor;
-    bool showBorder = true;
     if (isPressed) {
       borderColor = shapeColor;
     } else if (isWrong) {
@@ -149,10 +151,8 @@ class SequenceShape extends PositionComponent with TapCallbacks {
       borderColor = shapeColor;
     } else if (isHint) {
       borderColor = const Color(0xFFFFA726);
-    } else {
-      // Default subtle border so shapes look interactive
-      borderColor = shapeColor.withAlpha(60);
     }
+    final showBorder = borderColor != null;
 
     // Hint indicator - pulsing ring around the shape
     if (isHint) {

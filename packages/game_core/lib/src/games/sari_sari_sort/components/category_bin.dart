@@ -115,9 +115,11 @@ class CategoryBin extends PositionComponent {
       color: color,
       cornerRadius: _cornerRadius,
       alpha: 255, // bold, fully-saturated basket color
-      showBorder: true,
-      borderColor: _isHint ? const Color(0xFFFFA726) : const Color(0xFFFFFFFF).withAlpha(200),
-      borderWidth: _isHint ? 4.0 : 3.0,
+      // Amber only while hinting; otherwise the standing outline. The former
+      // white resting border made every basket look pre-selected.
+      showBorder: _isHint,
+      borderColor: _isHint ? const Color(0xFFFFA726) : null,
+      borderWidth: 4.0,
     );
 
     // Picture on the left, word on the right, both vertically centred.
