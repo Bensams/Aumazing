@@ -421,30 +421,65 @@ VOICE_LINES = {
         "ceb": "Ikaw na pud.",
     },
 
-    # ── Reward & Celebration (9) ─────────────────────────────────────
+    # ── Reward & Celebration (10) ────────────────────────────────────
+    #
+    # End-of-session lines: the celebration a child hears when the whole
+    # game is over. GameFinished lives here rather than in Transition
+    # because Transition is drawn at random between rounds, and "Game
+    # finished!" surfacing mid-game tells the child the wrong thing.
+    "YouFinishedIt": {
+        "category": "reward_and_celebration",
+        "en": "You finished it!",
+        "tl": "Natapos mo na!",
+        "ceb": "Nahuman na nimo!",
+    },
+    "GameFinished": {
+        "category": "reward_and_celebration",
+        "en": "Game finished!",
+        "tl": "Tapos na ang laro!",
+        "ceb": "Human na ang dula!",
+    },
     "AwesomeWorkToday": {
         "category": "reward_and_celebration",
         "en": "Awesome work today!",
-        "tl": "Napakahusay ng gawa mo ngayon!",
-        "ceb": "Awesome kaayo ka karon!",
+        "tl": "Ang galing ng ginawa mo ngayon!",
+        "ceb": "Nindot kaayo ang buhat nimo karon!",
     },
-    "BigHighFive": {
+    "YouDidSoWell": {
         "category": "reward_and_celebration",
-        "en": "Big high five!",
-        "tl": "Apaw na high five!",
-        "ceb": "Dako nga high five!",
+        "en": "You did so well!",
+        "tl": "Ang galing mo talaga!",
+        "ceb": "Nindot kaayo imong gibuhat!",
     },
-    "Fantastic": {
+    "SuperJob": {
         "category": "reward_and_celebration",
-        "en": "Fantastic!",
-        "tl": "Kamangha-mangha!",
-        "ceb": "Fantastic!",
+        "en": "Super job!",
+        "tl": "Super galing!",
+        "ceb": "Super nindot!",
     },
     "GreatPlaying": {
         "category": "reward_and_celebration",
         "en": "Great playing!",
-        "tl": "Mahusay na paglalaro!",
-        "ceb": "Maayong pagdula!",
+        "tl": "Magaling maglaro!",
+        "ceb": "Nindot og dula!",
+    },
+    "BigHighFive": {
+        "category": "reward_and_celebration",
+        "en": "Big high five!",
+        "tl": "Malaking high-five!",
+        "ceb": "Dako nga high-five!",
+    },
+    "Fantastic": {
+        "category": "reward_and_celebration",
+        "en": "Fantastic!",
+        "tl": "Kahanga-hanga!",
+        "ceb": "Kahibulongan!",
+    },
+    "YoureAmazing": {
+        "category": "reward_and_celebration",
+        "en": "You're amazing!",
+        "tl": "Kahanga-hanga ka!",
+        "ceb": "Kahibulongan ka!",
     },
     "Hooray": {
         "category": "reward_and_celebration",
@@ -452,91 +487,64 @@ VOICE_LINES = {
         "tl": "Yehey!",
         "ceb": "Yehey!",
     },
-    "SuperJob": {
-        "category": "reward_and_celebration",
-        "en": "Super job!",
-        "tl": "Super galing!",
-        "ceb": "Super nice!",
-    },
-    "YouDidSoWell": {
-        "category": "reward_and_celebration",
-        "en": "You did so well!",
-        "tl": "Napakagaling mo!",
-        "ceb": "Maayo kaayo ka!",
-    },
-    "YouFinishedIt": {
-        "category": "reward_and_celebration",
-        "en": "You finished it!",
-        "tl": "Natapos mo rin!",
-        "ceb": "Nahuman nimo!",
-    },
-    "YoureAmazing": {
-        "category": "reward_and_celebration",
-        "en": "You're amazing!",
-        "tl": "Kahanga-hanga ka!",
-        "ceb": "Amazing kaayo ka!",
-    },
 
-    # ── Transition (10) ──────────────────────────────────────────────
-    "GameFinished": {
-        "category": "transition",
-        "en": "Game finished.",
-        "tl": "Tapos na ang laro.",
-        "ceb": "Game finished na!",
-    },
+    # ── Transition (9) ───────────────────────────────────────────────
+    #
+    # Between-activity lines only. Every one of these has to make sense
+    # spoken at random between two rounds of the same game.
     "GetReady": {
         "category": "transition",
-        "en": "Get ready.",
-        "tl": "Humanda ka.",
-        "ceb": "Get ready!",
-    },
-    "GoodJobMovingOn": {
-        "category": "transition",
-        "en": "Good job! Moving on.",
-        "tl": "Magaling! Susunod na.",
-        "ceb": "Good job! Sunod na pud.",
+        "en": "Get ready!",
+        "tl": "Maghanda ka!",
+        "ceb": "Pangandam na!",
     },
     "LetsGo": {
         "category": "transition",
         "en": "Let's go!",
         "tl": "Tara na!",
-        "ceb": "Tana!",
-    },
-    "LetsPlayAgain": {
-        "category": "transition",
-        "en": "Let's play again.",
-        "tl": "Maglaro tayo ulit.",
-        "ceb": "Mag-play ta pag-usab.",
-    },
-    "LevelComplete": {
-        "category": "transition",
-        "en": "Level complete.",
-        "tl": "Kumpleto na ang antas.",
-        "ceb": "Level complete na!",
-    },
-    "NewGame": {
-        "category": "transition",
-        "en": "New game.",
-        "tl": "Bagong laro.",
-        "ceb": "Bag-ong game.",
-    },
-    "NextActivity": {
-        "category": "transition",
-        "en": "Next activity.",
-        "tl": "Susunod na aktibidad.",
-        "ceb": "Next activity na.",
+        "ceb": "Dali na!",
     },
     "NextOne": {
         "category": "transition",
-        "en": "Next one.",
-        "tl": "Ang susunod.",
-        "ceb": "Ang sunod.",
+        "en": "Next one!",
+        "tl": "Susunod!",
+        "ceb": "Sunod!",
+    },
+    "NextActivity": {
+        "category": "transition",
+        "en": "Next activity!",
+        "tl": "Susunod na gawain!",
+        "ceb": "Sunod nga kalihokan!",
     },
     "TimeForTheNextOne": {
         "category": "transition",
-        "en": "Time for the next one.",
-        "tl": "Oras na para sa susunod.",
-        "ceb": "Oras na sa sunod.",
+        "en": "Time for the next one!",
+        "tl": "Oras na para sa susunod!",
+        "ceb": "Oras na para sa sunod!",
+    },
+    "GoodJobMovingOn": {
+        "category": "transition",
+        "en": "Good job moving on!",
+        "tl": "Magaling! Susunod na tayo!",
+        "ceb": "Maayo! Mosunod na ta!",
+    },
+    "LevelComplete": {
+        "category": "transition",
+        "en": "Level complete!",
+        "tl": "Tapos na ang level!",
+        "ceb": "Human na ang level!",
+    },
+    "NewRound": {
+        "category": "transition",
+        "en": "New round!",
+        "tl": "Bagong round!",
+        "ceb": "Bag-ong round!",
+    },
+    "LetsPlayAgain": {
+        "category": "transition",
+        "en": "Let's play again!",
+        "tl": "Maglaro tayo ulit!",
+        "ceb": "Magdula ta pag-usab!",
     },
 
     # ── Turn Taking (10) ─────────────────────────────────────────────
