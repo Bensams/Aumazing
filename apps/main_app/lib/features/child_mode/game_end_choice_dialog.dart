@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
@@ -11,16 +12,22 @@ import '../../services/screen_time_service.dart';
 import 'game_launcher.dart';
 import 'time_up_dialog.dart';
 
-/// Post-reward choice for practice (non-assessment) games: play the next
-/// game or go back to the lobby.
+/// What the child picked on the post-game choice.
+enum _EndChoice { lobby, again, next }
+
+/// Post-reward choice for practice (non-assessment) games: play the same game
+/// again, play the next game, or go back to the lobby.
 ///
-/// Icon-first and reading-free (the children may not read yet): two large
-/// buttons — the next game's icon with a play arrow, and a home icon for the
-/// lobby. Shown after the reward finishes; never in assessment flows.
+/// Icon-first and reading-free (the children may not read yet): three large
+/// buttons — a home icon for the lobby, the current game's icon with a replay
+/// arrow, and the next game's icon with a play arrow. Shown after the reward
+/// finishes; never in assessment flows.
 class GameEndChoiceDialog {
   GameEndChoiceDialog._();
 
   /// Shows the choice and performs the navigation:
+  /// - Again → replaces the current game screen with a fresh run of the same
+  ///   game (same difficulty resolution as the lobby)
   /// - Next → replaces the current game screen with the next game
   ///   (difficulty resolved like the lobby: override → per-area AI level)
   /// - Lobby → pops back to the lobby
@@ -59,14 +66,17 @@ class GameEndChoiceDialog {
     }
     final next = pathNext?.game ??
         (path.isEmpty ? GameLauncher.nextEntry(currentGameId) : null);
+    final current = GameRegistry.find(currentGameId);
     final palette = context.read<ChildProvider>().activePalette;
 
-    final playNext = await showDialog<bool>(
+    final choice = await showDialog<_EndChoice>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black26,
       builder: (_) => _GameEndChoiceContent(
         palette: palette,
+        currentGameIcon: current?.icon,
+        currentGameLogo: current?.logoAsset,
         nextGameIcon: next?.icon,
         nextGameLogo: next?.logoAsset,
         nextGameName: next?.name,
@@ -74,12 +84,20 @@ class GameEndChoiceDialog {
     );
     if (!context.mounted) return;
 
-    if (playNext == true && next != null) {
+    // Which game to launch, if any — the same one again, or the next one.
+    final replay = choice == _EndChoice.again;
+    final target = replay ? current : (choice == _EndChoice.next ? next : null);
+    if (target != null) {
       final override = context.read<ChildProvider>().difficultyOverride;
+      int? pathDifficulty = pathNext?.difficulty;
+      if (replay) {
+        final i = path.indexWhere((e) => e.game.id == currentGameId);
+        pathDifficulty = i < 0 ? null : path[i].difficulty;
+      }
       final difficulty = override?.clamp(1, 3) ??
-          pathNext?.difficulty ??
-          GameLauncher.difficultyFor(context, next);
-      final screen = GameLauncher.screenFor(next.id, difficulty);
+          pathDifficulty ??
+          GameLauncher.difficultyFor(context, target);
+      final screen = GameLauncher.screenFor(target.id, difficulty);
       if (screen != null) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => screen),
@@ -94,12 +112,16 @@ class GameEndChoiceDialog {
 class _GameEndChoiceContent extends StatelessWidget {
   const _GameEndChoiceContent({
     required this.palette,
+    required this.currentGameIcon,
+    required this.currentGameLogo,
     required this.nextGameIcon,
     required this.nextGameLogo,
     required this.nextGameName,
   });
 
   final GamePalette palette;
+  final IconData? currentGameIcon;
+  final String? currentGameLogo;
   final IconData? nextGameIcon;
   final String? nextGameLogo;
   final String? nextGameName;
@@ -126,29 +148,50 @@ class _GameEndChoiceContent extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Back to the lobby
-            _ChoiceButton(
-              background: AppColors.white,
-              borderColor: palette.primary.withValues(alpha: 0.4),
-              iconColor: palette.primary,
-              icon: Icons.home_rounded,
-              label: 'Lobby',
-              labelColor: palette.primary,
-              onTap: () => Navigator.of(context).pop(false),
+            Flexible(
+              child: _ChoiceButton(
+                background: AppColors.white,
+                borderColor: palette.primary.withValues(alpha: 0.4),
+                iconColor: palette.primary,
+                icon: Icons.home_rounded,
+                label: 'Lobby',
+                labelColor: palette.primary,
+                onTap: () => Navigator.of(context).pop(_EndChoice.lobby),
+              ),
             ),
             const SizedBox(width: AppSpacing.lg),
-            // Play the next game
-            if (nextGameIcon != null)
-              _ChoiceButton(
-                background: palette.primary,
+            // Play the same game again — sits between Lobby and Next so the
+            // familiar choice is the easiest one to reach.
+            Flexible(
+              child: _ChoiceButton(
+                background: AppColors.white,
                 borderColor: palette.primary,
-                iconColor: palette.onPrimary,
-                icon: nextGameIcon!,
-                logoAsset: nextGameLogo,
-                badgeIcon: Icons.play_arrow_rounded,
-                label: nextGameName ?? 'Next',
-                labelColor: palette.onPrimary,
-                onTap: () => Navigator.of(context).pop(true),
+                iconColor: palette.primary,
+                icon: currentGameIcon ?? Icons.replay_rounded,
+                logoAsset: currentGameLogo,
+                badgeIcon: Icons.replay_rounded,
+                label: 'Again',
+                labelColor: palette.primary,
+                onTap: () => Navigator.of(context).pop(_EndChoice.again),
               ),
+            ),
+            // Play the next game
+            if (nextGameIcon != null) ...[
+              const SizedBox(width: AppSpacing.lg),
+              Flexible(
+                child: _ChoiceButton(
+                  background: palette.primary,
+                  borderColor: palette.primary,
+                  iconColor: palette.onPrimary,
+                  icon: nextGameIcon!,
+                  logoAsset: nextGameLogo,
+                  badgeIcon: Icons.play_arrow_rounded,
+                  label: nextGameName ?? 'Next',
+                  labelColor: palette.onPrimary,
+                  onTap: () => Navigator.of(context).pop(_EndChoice.next),
+                ),
+              ),
+            ],
           ],
         ),
       ),
