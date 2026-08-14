@@ -131,6 +131,7 @@ phrases/YellowTriangle.wav,Yellow triangle.,no,0.5,0.5,neutral
 reward_and_celebration/AwesomeWorkToday.wav,Awesome work today!,no,0.6,0.5,excited
 reward_and_celebration/BigHighFive.wav,Big high five!,no,0.6,0.5,excited
 reward_and_celebration/Fantastic.wav,Fantastic!,no,0.6,0.5,excited
+reward_and_celebration/GameFinished.wav,Game finished!,no,0.6,0.5,happy
 reward_and_celebration/GreatPlaying.wav,Great playing!,no,0.6,0.5,excited
 reward_and_celebration/Hooray.wav,Hooray!,no,0.6,0.5,excited
 reward_and_celebration/SuperJob.wav,Super job!,no,0.6,0.5,excited
@@ -142,13 +143,12 @@ shapes/Diamond.wav,Diamond.,yes,0.5,0.5,neutral
 shapes/Heart.wav,Heart.,yes,0.5,0.5,neutral
 shapes/Star.wav,Star.,yes,0.5,0.5,neutral
 shapes/Triangle.wav,Triangle.,yes,0.5,0.5,neutral
-transition/GameFinished.wav,Game finished!,no,0.6,0.5,happy
 transition/GetReady.wav,Get ready!,no,0.6,0.5,happy
 transition/GoodJobMovingOn.wav,Good job moving on!,no,0.6,0.5,happy
 transition/LetsGo.wav,Let's go!,no,0.6,0.5,happy
 transition/LetsPlayAgain.wav,Let's play again!,no,0.6,0.5,happy
 transition/LevelComplete.wav,Level complete!,no,0.6,0.5,happy
-transition/NewGame.wav,New game!,no,0.6,0.5,happy
+transition/NewRound.wav,New round!,no,0.6,0.5,happy
 transition/NextActivity.wav,Next activity!,no,0.6,0.5,happy
 transition/NextOne.wav,Next one!,no,0.6,0.5,happy
 transition/TimeForTheNextOne.wav,Time for the next one!,no,0.6,0.5,happy

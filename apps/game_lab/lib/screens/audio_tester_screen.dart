@@ -81,13 +81,13 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
          'watchCarefully', 'yourTurnInstruction'].contains(name)) {
       return VoiceOverCategory.instruction;
     }
-    if (['awesomeWorkToday', 'bigHighFive', 'fantastic', 'greatPlaying',
-         'hooray', 'superJob', 'youDidSoWell', 'youFinishedIt',
+    if (['awesomeWorkToday', 'bigHighFive', 'fantastic', 'gameFinished',
+         'greatPlaying', 'hooray', 'superJob', 'youDidSoWell', 'youFinishedIt',
          'youreAmazing'].contains(name)) {
       return VoiceOverCategory.rewardAndCelebration;
     }
-    if (['gameFinished', 'getReady', 'goodJobMovingOn', 'letsGo',
-         'letsPlayAgain', 'levelComplete', 'newGame', 'nextActivity',
+    if (['getReady', 'goodJobMovingOn', 'letsGo',
+         'letsPlayAgain', 'levelComplete', 'newRound', 'nextActivity',
          'nextOne', 'timeForTheNextOne'].contains(name)) {
       return VoiceOverCategory.transition;
     }
