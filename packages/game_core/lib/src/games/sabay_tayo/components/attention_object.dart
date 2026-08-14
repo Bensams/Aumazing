@@ -238,9 +238,10 @@ class AttentionObject extends PositionComponent {
       color: data.color,
       cornerRadius: _cornerRadius,
       alpha: _dimmed ? 150 : 255,
-      showBorder: true,
-      borderColor: const Color(0xFFFFFFFF).withAlpha(180),
-      borderWidth: 3.0,
+      // No state border: the hint here is the warm wash drawn above — "lit
+      // up", not "targeted" — and at rest the object takes the parent's
+      // standing outline. The white border this used to draw always was the
+      // same mark a selected card would carry.
     );
 
     _emojiPaint.render(

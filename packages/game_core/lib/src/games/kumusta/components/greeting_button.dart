@@ -102,18 +102,26 @@ class GreetingButton extends PositionComponent {
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
+    // Two real states draw their own border; anything else is a resting card
+    // and takes the parent's standing outline.
+    //
+    //  * pulsing — prompt rung 2, the same amber the other games use for a
+    //    hint. It must stay visible under reduced motion, where the scale
+    //    animation never runs and the border is the whole prompt. It used to
+    //    be white, which is indistinguishable from a card marked correct.
+    //  * rejecting — the wrong-tap red, matching Match It and Sari-Sari Sort.
+    final Color? stateBorder = _pulsing
+        ? const Color(0xFFFFA726)
+        : (_rejecting ? const Color(0xFFE88888) : null);
+
     ShapePainter3D.drawCard3D(
       canvas,
       rect,
       color: color,
       cornerRadius: size.x * 0.16,
       alpha: 255,
-      showBorder: true,
-      // Highlighted while pulsing so the prompt still reads when motion is
-      // reduced and the scale animation never runs.
-      borderColor: _pulsing
-          ? const Color(0xFFFFFFFF)
-          : const Color(0xFFFFFFFF).withValues(alpha: _rejecting ? 0.45 : 0.70),
+      showBorder: stateBorder != null,
+      borderColor: stateBorder,
       borderWidth: _pulsing ? 6.0 : 3.0,
     );
 

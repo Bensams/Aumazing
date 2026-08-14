@@ -77,12 +77,20 @@ class ShapePainter3D {
   // ── Card background with 3D effect ─────────────────────────────────
 
   /// Draws a rounded-rect card with gradient fill, shadow, and rim light.
+  ///
+  /// A card at rest needs nothing beyond [color]: it gets the parent's
+  /// standing outline automatically. [showBorder] is for *state* only —
+  /// selected, hint, correct, wrong — and replaces the standing outline while
+  /// that state lasts. Passing it unconditionally makes every card look
+  /// marked, which is the bug this signature is shaped to prevent.
   static void drawCard3D(
     ui.Canvas canvas,
     ui.Rect rect, {
     required ui.Color color,
     double cornerRadius = 20.0,
     int alpha = 40,
+    // True only while a real state is active. The colours in use across the
+    // games: mint = correct, red = wrong, amber = hint, purple = selected.
     bool showBorder = false,
     ui.Color? borderColor,
     double borderWidth = 3.0,
@@ -149,14 +157,21 @@ class ShapePainter3D {
     //
     // Two things want to draw here and they are not the same thing:
     //
-    //  * a *state* border — selected, wrong answer, hint — which the caller
+    //  * a *state* border — selected, hint, correct, wrong — which the caller
     //    asks for and whose colour carries meaning, and
     //  * the *standing* outline, which exists so the card is separable from
     //    whatever is behind it and is drawn on every card, always.
     //
-    // The state border wins when present. Otherwise the standing outline is
-    // drawn in a colour derived from the card itself, so it is guaranteed to
-    // clear 3:1 without anyone choosing it.
+    // The state border wins when present, which is why `showBorder` must be
+    // passed only while a state is actually active. A card at rest asking for
+    // a border — a white one especially — turns a resting card into what
+    // looks like a marked one.
+    //
+    // Otherwise the standing outline is drawn, in the one constant colour
+    // every neutral card shares. It is not derived from this card: an outline
+    // that changes with the fill underneath it varies across a board, and a
+    // varying standing outline reads to a child as "this one is different",
+    // i.e. as the answer. See [GameObjectStyle.standingOutline].
     if (showBorder) {
       canvas.drawRRect(
         rrect,
@@ -167,7 +182,7 @@ class ShapePainter3D {
       );
     } else if (style.hasOutline) {
       final paint = ui.Paint()
-        ..color = GameObjectStyle.outlineColourFor(baseColor)
+        ..color = GameObjectStyle.standingOutline
         ..style = ui.PaintingStyle.stroke
         ..strokeWidth = style.effectiveWidth;
       if (style.outline == ObjectOutline.dashed) {

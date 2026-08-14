@@ -73,6 +73,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('names the selected card so it does not read as the answer',
+      (tester) async {
+    // The preview deliberately shows one card in its selected state. Without
+    // a caption the odd card out is exactly the misreading the uniform
+    // outline exists to prevent.
+    await _pump(tester, background: light, style: const GameObjectStyle());
+
+    expect(find.textContaining('same outline'), findsOneWidget);
+    expect(find.textContaining('selecting'), findsOneWidget);
+    expect(GamePreview.selectionBorder, AppColors.primaryPurple);
+  });
+
+  testWidgets('renders at 1px and 8px without overflowing', (tester) async {
+    for (final width in [GameObjectStyle.minWidth, GameObjectStyle.maxWidth]) {
+      await _pump(
+        tester,
+        background: light,
+        style: GameObjectStyle(outlineWidth: width),
+      );
+      expect(tester.takeException(), isNull, reason: '$width px');
+    }
+  });
+
   testWidgets('is announced as a preview, not as loose shapes',
       (tester) async {
     final handle = tester.ensureSemantics();

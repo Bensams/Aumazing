@@ -16,9 +16,13 @@ import '../../../providers/child_provider.dart';
 ///    fixed colour breaks that relationship.
 ///  * **Outline** — style and thickness, so the card is separable from the
 ///    screen background.
-///  * **Outline colour is not offered.** It is derived from the card so it
-///    always clears 3:1. A picker there would let the one element whose job
-///    is guaranteeing contrast be set to something that fails.
+///  * **Outline colour is not offered.** Every ordinary object uses the same
+///    one, on purpose: an outline that varies from card to card is a visible
+///    difference, and to a child looking for the answer a visible difference
+///    is the answer. Colour is reserved for real states — selection, hint,
+///    correct, wrong. Offering a picker would both break that uniformity and
+///    let the one element whose job is guaranteeing contrast be set to
+///    something that fails.
 class ObjectStylePicker extends StatefulWidget {
   const ObjectStylePicker({super.key, required this.childProv});
 
@@ -105,11 +109,14 @@ class _ObjectStylePickerState extends State<ObjectStylePicker> {
         const SizedBox(height: AppSpacing.xs),
         Text(
           _draft.hasOutline
-              ? 'The outline colour is chosen automatically so it always '
-                  'stands out against the card.'
+              ? 'Every ordinary object uses the same outline colour, so no '
+                  'single object looks like the special one. Colour only '
+                  'appears on an object your child has selected, on a hint, '
+                  'or to show an answer was right or wrong.'
               : 'Without an outline, a card can blend into the background.',
-          style: AppTextStyles.bodySmall
-              .copyWith(color: AppColors.mutedForeground),
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
       ],
     );
@@ -144,9 +151,10 @@ class _CardColourRow extends StatelessWidget {
           Semantics(
             button: true,
             selected: o.colour == selected,
-            label: o.colour == null
-                ? 'Auto, card tinted with the object colour'
-                : '${o.name} card',
+            label:
+                o.colour == null
+                    ? 'Auto, card tinted with the object colour'
+                    : '${o.name} card',
             excludeSemantics: true,
             child: InkResponse(
               onTap: () => onPick(o.colour),
@@ -162,23 +170,30 @@ class _CardColourRow extends StatelessWidget {
                       color: o.colour ?? AppColors.muted,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: o.colour == selected
-                            ? AppColors.primaryPurple
-                            : AppColors.border,
+                        color:
+                            o.colour == selected
+                                ? AppColors.primaryPurple
+                                : AppColors.border,
                         width: o.colour == selected ? 3 : 1,
                       ),
                     ),
-                    child: o.colour == null
-                        ? const Icon(Icons.auto_awesome_rounded,
-                            size: 17, color: AppColors.mutedForeground)
-                        : (o.colour == selected
-                            ? Icon(
-                                Icons.check_rounded,
-                                size: 18,
-                                color: GameObjectStyle.outlineColourFor(
-                                    o.colour!),
-                              )
-                            : null),
+                    child:
+                        o.colour == null
+                            ? const Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 17,
+                              color: AppColors.mutedForeground,
+                            )
+                            // Chrome, not a game object: a tick on one swatch is
+                            // judged on its own, so it takes whichever of ink or
+                            // paper reads on that swatch.
+                            : (o.colour == selected
+                                ? Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                  color: Contrast.legibleOn(o.colour!),
+                                )
+                                : null),
                   ),
                 ),
               ),
