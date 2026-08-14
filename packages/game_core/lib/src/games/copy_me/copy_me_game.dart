@@ -6,6 +6,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
 import 'components/sequence_shape.dart';
+import '../../automation/developer_automation.dart';
 import '../shared/answer_label.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
@@ -17,7 +18,8 @@ import '../shared/game_layout.dart';
 ///
 /// The app highlights shapes in an increasing sequence and the child
 /// must reproduce the sequence by tapping in order.
-class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+class CopyMeGame extends FlameGame
+    with TapCallbacks, EnhancedGameplayAnalyticsMixin, DeveloperAutomationHooks {
   CopyMeGame({
     required this.totalRounds,
     required this.onStepChanged,
@@ -555,4 +557,22 @@ class CopyMeGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsM
     _cancelNoResponseTimer();
     super.onRemove();
   }
+
+  // ── Developer auto-play ─────────────────────────────
+
+  /// Ready once the demo has finished and the shapes accept taps.
+  @override
+  bool get debugAwaitingInputImpl =>
+      _inputPhase &&
+      !_demonstrating &&
+      _inputIndex < _sequence.length &&
+      _shapes.length == 4 &&
+      _shapes.every((s) => s.inputEnabled);
+
+  /// Taps the next shape of the sequence the child was shown — the same call
+  /// [SequenceShape] makes, so scoring, analytics and round advancement all
+  /// run exactly as they do for a real tap.
+  @override
+  void debugPerformCorrectActionImpl() =>
+      _onShapeTapped(_sequence[_inputIndex]);
 }

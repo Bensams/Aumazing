@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../dev/developer_tools_config.dart';
+
 /// Premium entitlement state (freemium model).
 ///
 /// The source of truth is the `entitlements` table, written ONLY by the
@@ -17,7 +19,53 @@ class EntitlementService extends ChangeNotifier {
   String? _loadedUserId;
   bool _bound = false;
 
-  bool get isPremium => _isPremium;
+  /// Developer-tools only: pretends Premium is active for this process.
+  ///
+  /// Deliberately a *separate* field from [_isPremium]: the genuine cached
+  /// and backend-refreshed value keeps flowing underneath, so turning the
+  /// override off restores the real entitlement immediately and a background
+  /// [refresh] can never silently cancel an active override. Nothing here
+  /// writes to Supabase, the `entitlements` table, or SharedPreferences, and
+  /// it is not persisted — a restart drops it.
+  bool _developerPremiumOverride = false;
+
+  /// The entitlement every gate in the app reads.
+  bool get isPremium => _developerPremiumOverride || _isPremium;
+
+  /// The genuine entitlement, ignoring any developer override.
+  bool get isRealPremium => _isPremium;
+
+  /// Whether the in-memory developer override is currently forcing Premium.
+  bool get isDeveloperPremiumOverrideActive => _developerPremiumOverride;
+
+  /// Turns the developer Premium override on or off.
+  ///
+  /// A no-op unless the developer toolbox is available
+  /// ([DeveloperToolsConfig.isAvailable]), so the override cannot be reached
+  /// in a profile or release build even if something calls this.
+  void setDeveloperPremiumOverride(bool value) {
+    if (!DeveloperToolsConfig.isAvailable) return;
+    if (_developerPremiumOverride == value) return;
+    _developerPremiumOverride = value;
+    debugPrint('[Entitlement] Developer Premium override: $value '
+        '(real entitlement unchanged: $_isPremium)');
+    notifyListeners();
+  }
+
+  /// Test seam: sets the *genuine* in-memory entitlement the way a cache read
+  /// or a backend [refresh] would, without a Supabase connection. Applied
+  /// inside an `assert` so it does nothing in profile or release builds, and
+  /// it writes no cache or backend state.
+  @visibleForTesting
+  void debugSetRealPremium(bool value) {
+    assert(() {
+      if (_isPremium != value) {
+        _isPremium = value;
+        notifyListeners();
+      }
+      return true;
+    }());
+  }
 
   static String _cacheKey(String userId) => 'entitlement_premium_$userId';
 

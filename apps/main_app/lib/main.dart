@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/supabase_config.dart';
 import 'core/offline_first_integration.dart';
+import 'dev/developer_tools_overlay.dart';
 import 'features/parent_lock/parent_pin_delegate.dart';
 import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
@@ -163,6 +164,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 title: 'Aumazing',
                 debugShowCheckedModeBanner: false,
                 theme: AppTheme.light,
+                // Both are inert in a normal build: the key is null and the
+                // builder returns the navigator untouched, so nothing extra
+                // enters the tree. See DeveloperToolsConfig.
+                navigatorKey: DeveloperToolsOverlay.navigatorKey,
+                builder: DeveloperToolsOverlay.wrap,
                 home: const AumazingSplashScreen(),
               ),
             ),

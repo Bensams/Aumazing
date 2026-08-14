@@ -8,6 +8,7 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../dev/developer_automation_registry.dart';
 import '../../../providers/child_provider.dart';
 import '../session_recording.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
@@ -67,6 +68,9 @@ class _MatchItScreenState extends State<MatchItScreen> {
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
   late final MatchItGame _game;
+
+  /// Developer auto-play/skip handle. Null in a normal build.
+  DeveloperGameSession? _devSession;
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
 
@@ -126,10 +130,17 @@ class _MatchItScreenState extends State<MatchItScreen> {
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
+
+    _devSession = DeveloperAutomationRegistry.instance.registerGame(
+      gameId: 'match_it',
+      assessmentContext: widget.assessmentContext,
+      game: _game,
+    );
   }
 
   @override
   void dispose() {
+    DeveloperAutomationRegistry.instance.unregister(_devSession);
     _voiceOverService.dispose();
     super.dispose();
   }
@@ -173,6 +184,8 @@ class _MatchItScreenState extends State<MatchItScreen> {
     // past this point pops routes, so run it exactly once.
     if (_completionHandled) return;
     _completionHandled = true;
+    // Stop any developer automation from acting on a finished game.
+    _devSession?.markComplete();
 
     setState(() => _gameComplete = true);
 
