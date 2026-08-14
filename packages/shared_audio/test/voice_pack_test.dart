@@ -193,5 +193,62 @@ void main() {
         expect(first, endsWith(pack.fileExtension), reason: pack.id);
       }
     });
+
+    // The hand-off line is the only thing telling a pre-reader to fetch a
+    // grown-up, so which recording it resolves to is the whole feature.
+    group('the assessment hand-off cue', () {
+      test('resolves to the selected pack, in that pack\'s own voice', () {
+        for (final pack in kVoicePacks) {
+          if (pack.assetFolder == 'ceb_lexianne') continue;
+          expect(
+            VoiceOverService.assetPathCandidates(
+              VoiceOverCue.giveTheDeviceToYourParent,
+              pack.assetFolder,
+            ).first,
+            '$prefix/${pack.assetFolder}/instruction/'
+            'GiveTheDeviceToYourParent${pack.fileExtension}',
+            reason: '${pack.id} must speak the hand-off in its own voice, not '
+                'silently borrow another pack\'s',
+          );
+        }
+      });
+
+      // The "Wait." degrade stays as a last resort, but it must stay *last*:
+      // it says only that something is coming, not that a grown-up is needed,
+      // so a pack that has the real line must never reach it. Before this
+      // change every pack reached it, because none of them had the recording.
+      test('puts the real line ahead of the "Wait." degrade', () {
+        final candidates = VoiceOverService.assetPathCandidates(
+          VoiceOverCue.giveTheDeviceToYourParent,
+          'en_adult_woman',
+        );
+        expect(
+          candidates.first,
+          '$prefix/en_adult_woman/instruction/GiveTheDeviceToYourParent.mp3',
+        );
+        expect(candidates.last, '$prefix/en_adult_woman/turn_taking/Wait.mp3',
+            reason: 'the degrade is the safety net, not the first choice');
+      });
+
+      // Lexianne is deliberately incomplete and deliberately not a default:
+      // no fake recording was synthesized for her, so the child hears the
+      // default Cebuano voice rather than nothing. The `wait` degrade trails
+      // behind as the last resort.
+      test('falls back through the default Cebuano pack for ceb_lexianne', () {
+        expect(
+          VoiceOverService.assetPathCandidates(
+            VoiceOverCue.giveTheDeviceToYourParent,
+            'ceb_lexianne',
+          ),
+          [
+            '$prefix/ceb_lexianne/instruction/GiveTheDeviceToYourParent.wav',
+            '$prefix/ceb_adult_woman/instruction/'
+                'GiveTheDeviceToYourParent.mp3',
+            '$prefix/ceb_lexianne/turn_taking/Wait.wav',
+            '$prefix/ceb_adult_woman/turn_taking/Wait.mp3',
+          ],
+        );
+      });
+    });
   });
 }
