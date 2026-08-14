@@ -213,6 +213,66 @@ it falls back to its language's default pack.
 
 **Not yet auditioned.** Nobody has listened to these.
 
+### GameFinished is a celebration, and NewGame was lying
+
+Two cue changes on 2026-08-15, both about *when* a line is allowed to surface
+rather than how it sounds.
+
+`transition/` is drawn at random by `VoiceOverService.playTransition()` between
+rounds, so every line in it has to still be true whenever it happens to come
+up. Two were not:
+
+| cue | was | now |
+|---|---|---|
+| `GameFinished` | `transition/` | `reward_and_celebration/` |
+| `NewGame` — "New game!" | `transition/` | retired for `NewRound` — "New round!" |
+
+"Game finished!" between two rounds tells a child the game is over while it is
+still running, and "New game!" announces a new game on a transition inside the
+same one. Both are the narrator stating something false, which is worse than
+either being merely redundant — this is the one voice in the app a child is
+being taught to follow.
+
+`GameFinished` kept its recordings; only its folder moved, in all 21 pack
+folders that had one. Its manifest rows keep the `happy` delivery they were
+generated with rather than adopting the celebration block's `excited`, because
+the audio was not regenerated and the manifest should describe the take that
+actually shipped.
+
+`NewRound` is new text, so it was generated — 18 clips, 3 languages x 6 voices,
+on `google/gemini-3-1-flash-tts`:
+
+```bash
+./.venv/Scripts/python.exe generate_kie.py --lang all --only transition/NewRound --workers 6 --yes
+# the pack centre needs the rest of the pack, so decode the installed packs
+# into out/repair/<lang>/<tier>_<key>/ and drop the new takes in beside them
+./.venv/Scripts/python.exe repair_consistency.py --root out/repair --only transition/NewRound --attempts 3
+./.venv/Scripts/python.exe conform_library.py --root out/kie/gemini
+./.venv/Scripts/python.exe to_mp3.py --src out/kie/gemini --dst out/mp3 --force
+```
+
+| | outlier rate |
+|---|---|
+| straight from the API | 27.8% (5/18) |
+| after one pass (3 attempts) | **0% (0/18)** |
+
+One pass was enough here, unlike the letters/numbers/items run — a two-word
+phrase gives the model far more to anchor a voice to than a bare letter does.
+The repaired scores were 3.75→1.77, 6.27→1.83, 5.35→2.24, 3.15→0.59 and
+3.37→2.34 against a tolerance of 3.0. `conform_library.py` found nothing to
+trim on either pass.
+
+`install_packs.py` was **not** run, for the reason it is not run above: the
+source tree held one cue. The 18 files were copied in by name, and the retired
+`NewGame` files deleted from every pack. No `pubspec.yaml` change was needed —
+`transition/` and `reward_and_celebration/` are already listed for every pack.
+
+`ceb_lexianne` is human-recorded and has no `NewRound`; it is not a default, so
+it falls back to `ceb_adult_woman`. Its `NewGame` recording was deleted rather
+than renamed, since it says "new game".
+
+**Not yet auditioned.** Nobody has listened to these.
+
 ### Dead air is the thing that makes composed phrases drag
 
 A composed phrase — "Tap the" + "Yellow" + "Star", or the naming feedback

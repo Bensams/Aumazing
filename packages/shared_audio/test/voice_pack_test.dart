@@ -146,7 +146,7 @@ void main() {
       const missing = {
         VoiceOverCue.fantastic: 'reward_and_celebration/Fantastic.wav',
         VoiceOverCue.greatPlaying: 'reward_and_celebration/GreatPlaying.wav',
-        VoiceOverCue.gameFinished: 'transition/GameFinished.wav',
+        VoiceOverCue.gameFinished: 'reward_and_celebration/GameFinished.wav',
       };
 
       for (final entry in missing.entries) {
