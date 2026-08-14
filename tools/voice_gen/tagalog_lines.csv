@@ -131,6 +131,7 @@ phrases/YellowTriangle,Dilaw na tatsulok.,"warm, clear, friendly kid's voice, ca
 reward_and_celebration/AwesomeWorkToday,Ang galing ng ginawa mo ngayon!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/BigHighFive,Malaking high-five!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/Fantastic,Kahanga-hanga!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/GameFinished,Tapos na ang laro!,"happy, warm, cheerful tone",happy
 reward_and_celebration/GreatPlaying,Magaling maglaro!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/Hooray,Yehey!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/SuperJob,Super galing!,"excited, bouncy, cheerful kid's voice, high energy",excited
@@ -142,13 +143,12 @@ shapes/Diamond,Diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Heart,Puso.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Star,Bituin.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Triangle,Tatsulok.,"warm, clear, friendly kid's voice, calm pace",neutral
-transition/GameFinished,Tapos na ang laro!,"happy, warm, cheerful tone",happy
 transition/GetReady,Maghanda ka!,"happy, warm, cheerful tone",happy
 transition/GoodJobMovingOn,Magaling! Susunod na tayo!,"happy, warm, cheerful tone",happy
 transition/LetsGo,Tara na!,"happy, warm, cheerful tone",happy
 transition/LetsPlayAgain,Maglaro tayo ulit!,"happy, warm, cheerful tone",happy
 transition/LevelComplete,Tapos na ang level!,"happy, warm, cheerful tone",happy
-transition/NewGame,Bagong laro!,"happy, warm, cheerful tone",happy
+transition/NewRound,Bagong round!,"happy, warm, cheerful tone",happy
 transition/NextActivity,Susunod na gawain!,"happy, warm, cheerful tone",happy
 transition/NextOne,Susunod!,"happy, warm, cheerful tone",happy
 transition/TimeForTheNextOne,Oras na para sa susunod!,"happy, warm, cheerful tone",happy

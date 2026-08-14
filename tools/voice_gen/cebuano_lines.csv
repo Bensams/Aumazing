@@ -131,6 +131,7 @@ phrases/YellowTriangle,Dalag nga trianggulo.,"warm, clear, friendly kid's voice,
 reward_and_celebration/AwesomeWorkToday,Nindot kaayo ang buhat nimo karon!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/BigHighFive,Dako nga high-five!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/Fantastic,Kahibulongan!,"excited, bouncy, cheerful kid's voice, high energy",excited
+reward_and_celebration/GameFinished,Human na ang dula!,"happy, warm, cheerful tone",happy
 reward_and_celebration/GreatPlaying,Nindot og dula!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/Hooray,Yehey!,"excited, bouncy, cheerful kid's voice, high energy",excited
 reward_and_celebration/SuperJob,Super nindot!,"excited, bouncy, cheerful kid's voice, high energy",excited
@@ -142,13 +143,12 @@ shapes/Diamond,Diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Heart,Kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Star,Bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Triangle,Trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
-transition/GameFinished,Human na ang dula!,"happy, warm, cheerful tone",happy
 transition/GetReady,Pangandam na!,"happy, warm, cheerful tone",happy
 transition/GoodJobMovingOn,Maayo! Mosunod na ta!,"happy, warm, cheerful tone",happy
 transition/LetsGo,Dali na!,"happy, warm, cheerful tone",happy
 transition/LetsPlayAgain,Magdula ta pag-usab!,"happy, warm, cheerful tone",happy
 transition/LevelComplete,Human na ang level!,"happy, warm, cheerful tone",happy
-transition/NewGame,Bag-ong dula!,"happy, warm, cheerful tone",happy
+transition/NewRound,Bag-ong round!,"happy, warm, cheerful tone",happy
 transition/NextActivity,Sunod nga kalihokan!,"happy, warm, cheerful tone",happy
 transition/NextOne,Sunod!,"happy, warm, cheerful tone",happy
 transition/TimeForTheNextOne,Oras na para sa sunod!,"happy, warm, cheerful tone",happy
