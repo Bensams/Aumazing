@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/gestures.dart';
@@ -130,8 +132,102 @@ void main() {
       expect(pair.left.isMounted, isTrue,
           reason: 'the card jumped off the board instead of animating out');
       expect(pair.left.hasDisappeared, isFalse);
-      expect(pair.left.scale.x, lessThan(0.9),
+      expect(pair.left.matchScale, lessThan(0.9),
           reason: 'the card is not scaling down as it leaves');
+    });
+
+    test('the match animation never writes to position or scale', () async {
+      final game = await loadGame();
+      final pair = pairOnBoard(game, 0);
+      final home = pair.left.position.clone();
+      final componentScales = <double>{};
+
+      pair.left.onSelected(pair.left.index);
+      pair.right.onSelected(pair.right.index);
+
+      for (var i = 0; i < 40; i++) {
+        advance(game, 1 / 60);
+        if (!pair.left.isMounted) break;
+        expect(pair.left.position.x, closeTo(home.x, 0.001));
+        expect(pair.left.position.y, closeTo(home.y, 0.001));
+        componentScales.add(pair.left.scale.x);
+      }
+      // The whole animation lives in the render transform, so the component's
+      // own scale never moves — anything else would drag the card off-centre.
+      expect(componentScales, hasLength(1),
+          reason: 'the match animation moved the component scale instead of '
+              'drawing the card smaller');
+      expect(pair.left.matchScale, lessThan(1.0),
+          reason: 'the card never shrank, so the check proved nothing');
+    });
+  });
+
+  group('the card recedes in place', () {
+    /// The centre of everything the card actually paints, in canvas pixels.
+    ///
+    /// Rendered through [Component.renderTree] rather than `render`, so the
+    /// component's own transform is included — that is precisely where a
+    /// top-left-anchored scale would show up.
+    Future<Offset> paintedCentre(MatchableShape shape, double side) async {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      shape.renderTree(canvas);
+      final image = await recorder
+          .endRecording()
+          .toImage(side.round(), side.round());
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+
+      var minX = image.width, minY = image.height, maxX = -1, maxY = -1;
+      for (var y = 0; y < image.height; y++) {
+        for (var x = 0; x < image.width; x++) {
+          final alpha = data!.getUint8((y * image.width + x) * 4 + 3);
+          if (alpha == 0) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      expect(maxX, greaterThanOrEqualTo(0), reason: 'the card painted nothing');
+      return Offset((minX + maxX) / 2, (minY + maxY) / 2);
+    }
+
+    test('it shrinks toward its own centre, not its top-left corner',
+        () async {
+      const side = 128.0;
+      final host = FlameGame()..onGameResize(Vector2(side, side));
+      // ignore: invalid_use_of_internal_member
+      host.mount();
+      final shape = MatchableShape(
+        shapeType: ShapeType.circle,
+        shapeColor: const Color(0xFF1E88E5),
+        index: 0,
+        onSelected: (_) {},
+        position: Vector2.zero(),
+        size: Vector2.all(side),
+      );
+      await host.add(shape);
+      await host.ready();
+
+      final before = await paintedCentre(shape, side);
+
+      shape.markMatched();
+      // Run to roughly the middle of the exit, where the card is visibly
+      // smaller but still on the board.
+      while (shape.isMounted && shape.matchScale > 0.75) {
+        host.update(1 / 60);
+      }
+      expect(shape.isMounted, isTrue);
+      expect(shape.matchScale, lessThan(1.0));
+
+      final during = await paintedCentre(shape, side);
+
+      // Anchored at top-left, a scaled-down card's centre would march toward
+      // (0, 0) by several pixels. Receding in place holds it still.
+      expect(during.dx, closeTo(before.dx, 2.0),
+          reason: 'the card slid horizontally as it shrank');
+      expect(during.dy, closeTo(before.dy, 2.0),
+          reason: 'the card slid vertically as it shrank');
     });
   });
 

@@ -70,6 +70,44 @@ class MatchableShape extends PositionComponent
   /// True once the card has finished its exit and left the board.
   bool get hasDisappeared => isMatched && !_vanishing && _exitProgress >= 1.0;
 
+  /// The settle-in pop that acknowledges the match, and how long it takes.
+  static const double _feedbackScale = 0.9;
+  static const Duration _feedbackPopDuration = Duration(milliseconds: 300);
+
+  /// How far the card has shrunk again by the time it is gone.
+  static const double _exitScaleFloor = 0.7;
+
+  /// Progress of the settle-in pop, 0 → 1 over [_feedbackPopDuration].
+  double get _popProgress {
+    final seconds = _feedbackPopDuration.inMilliseconds / 1000.0;
+    return Curves.easeInOut.transform(
+      (_vanishElapsed / seconds).clamp(0.0, 1.0),
+    );
+  }
+
+  /// How large the card draws itself once matched: the settle-in pop down to
+  /// [_feedbackScale], then further down to [_exitScaleFloor] as it leaves.
+  /// 1.0 for a card that has not been matched.
+  double get matchScale {
+    if (!isMatched) return 1.0;
+    return (1.0 - (1.0 - _feedbackScale) * _popProgress) *
+        (1.0 - (1.0 - _exitScaleFloor) * _exitProgress);
+  }
+
+  /// Where the card draws itself once matched, in local coordinates.
+  ///
+  /// The component is anchored top-left, so shrinking it through [scale] —
+  /// which is what both the old feedback pop and an obvious exit animation
+  /// would do — collapses it into its own top-left corner, and the shape
+  /// appears to slide up and away instead of receding. Contracting this rect
+  /// instead keeps the card's centre pinned. [render] builds its canvas
+  /// transform straight from this rect, so the two cannot drift apart.
+  Rect matchBounds() {
+    final w = size.x * matchScale;
+    final h = size.y * matchScale;
+    return Rect.fromLTWH((size.x - w) / 2, (size.y - h) / 2, w, h);
+  }
+
   // ── Drag state ─────────────────────────────────────────────────────
   /// The pointer is being tracked by the drag recognizer.
   bool _pointerDown = false;
@@ -237,11 +275,10 @@ class MatchableShape extends PositionComponent
     _isHint = false;
     _onDisappeared = onDisappeared;
 
-    // The existing correct-match feedback: a gentle settle-in pop.
-    add(ScaleEffect.by(
-      Vector2.all(0.9),
-      EffectController(duration: 0.3, curve: Curves.easeInOut),
-    ));
+    // From here the card's size is driven entirely by [matchScale], which
+    // contracts about the centre — see [updateTree] for why [scale] is held
+    // at 1 rather than simply reset here.
+    scale = Vector2.all(1.0);
 
     _vanishing = true;
     _vanishElapsed = 0.0;
@@ -259,10 +296,6 @@ class MatchableShape extends PositionComponent
 
     final raw = (exitElapsed / exitSeconds).clamp(0.0, 1.0);
     _exitProgress = Curves.easeOutCubic.transform(raw);
-
-    // Scale gently inward as the card fades. The feedback pop has finished by
-    // now, so writing `scale` here does not fight an effect.
-    scale = Vector2.all(0.9 * (1.0 - 0.3 * _exitProgress));
 
     if (raw >= 1.0) {
       _vanishing = false;
@@ -303,6 +336,18 @@ class MatchableShape extends PositionComponent
     });
   }
 
+  /// Effects are children, so they apply their changes after [update] has run.
+  /// A selection pop started on the very tap that completed the match is still
+  /// pending when [markMatched] fires, so it cannot be removed there — and it
+  /// scales about the top-left anchor, incrementally, every frame. Pinning
+  /// [scale] here, after the children have had their turn, stops the card
+  /// creeping up and left while it fades.
+  @override
+  void updateTree(double dt) {
+    super.updateTree(dt);
+    if (isMatched) scale = Vector2.all(1.0);
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -323,6 +368,16 @@ class MatchableShape extends PositionComponent
     // leftover: it stays lit through the feedback beat, then everything it
     // draws — card and shape alike — fades out with [_exitProgress].
     final fade = 1.0 - _exitProgress;
+
+    // Shrink toward the card's own centre rather than its top-left anchor
+    // (see [matchBounds]). Translating to the contracted rect's origin and
+    // scaling from there maps the full-size card exactly onto that rect.
+    if (isMatched) {
+      final bounds = matchBounds();
+      canvas.save();
+      canvas.translate(bounds.left, bounds.top);
+      canvas.scale(matchScale);
+    }
 
     // Card background
     final baseAlpha = isMatched ? 80 : (_isHint ? 80 : (isSelected ? 80 : 40));
@@ -371,5 +426,7 @@ class MatchableShape extends PositionComponent
     ShapePainter3D.drawByName(
       canvas, shapeName, size.x / 2, size.y / 2, size.x * 0.3, drawColor,
     );
+
+    if (isMatched) canvas.restore();
   }
 }
