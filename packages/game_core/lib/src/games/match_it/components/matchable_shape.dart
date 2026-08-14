@@ -45,6 +45,31 @@ class MatchableShape extends PositionComponent
   bool isMatched = false;
   bool _showError = false;
 
+  // ── Match disappearance ────────────────────────────────────────────
+  /// How long the correct-match feedback (the gentle scale pop) is held
+  /// before the card starts leaving the board.
+  static const Duration matchFeedbackDuration = Duration(milliseconds: 450);
+
+  /// How long the fade-and-scale exit itself takes.
+  static const Duration disappearDuration = Duration(milliseconds: 350);
+
+  /// Total time from [markMatched] to the card being off the board. The game
+  /// uses this to keep its round transitions behind the animation.
+  static const Duration matchExitDuration =
+      Duration(milliseconds: 450 + 350);
+
+  /// Running since [markMatched]; drives the hold-then-exit timeline.
+  bool _vanishing = false;
+  double _vanishElapsed = 0.0;
+
+  /// Exit progress, 0 (fully visible) → 1 (fully gone). Eased.
+  double _exitProgress = 0.0;
+
+  VoidCallback? _onDisappeared;
+
+  /// True once the card has finished its exit and left the board.
+  bool get hasDisappeared => isMatched && !_vanishing && _exitProgress >= 1.0;
+
   // ── Drag state ─────────────────────────────────────────────────────
   /// The pointer is being tracked by the drag recognizer.
   bool _pointerDown = false;
@@ -196,13 +221,57 @@ class MatchableShape extends PositionComponent
     scale = Vector2.all(1.0);
   }
 
-  void markMatched() {
+  /// Marks this card as matched and starts its exit.
+  ///
+  /// Interaction is refused from this moment on ([isMatched] gates every tap
+  /// and drag path), so a second tap or a drag landing on a card that is still
+  /// animating cannot register. The card holds the correct-match feedback for
+  /// [matchFeedbackDuration], then fades and scales away over
+  /// [disappearDuration] and removes itself from the board.
+  ///
+  /// [onDisappeared] fires once the card is off the board.
+  void markMatched({VoidCallback? onDisappeared}) {
+    if (isMatched) return; // a pair is only ever matched once
     isMatched = true;
     isSelected = false;
+    _isHint = false;
+    _onDisappeared = onDisappeared;
+
+    // The existing correct-match feedback: a gentle settle-in pop.
     add(ScaleEffect.by(
       Vector2.all(0.9),
       EffectController(duration: 0.3, curve: Curves.easeInOut),
     ));
+
+    _vanishing = true;
+    _vanishElapsed = 0.0;
+  }
+
+  /// Advances the hold-then-fade timeline. Separated from [update] so the
+  /// timing is readable on its own.
+  void _updateDisappearance(double dt) {
+    _vanishElapsed += dt;
+
+    final holdSeconds = matchFeedbackDuration.inMilliseconds / 1000.0;
+    final exitSeconds = disappearDuration.inMilliseconds / 1000.0;
+    final exitElapsed = _vanishElapsed - holdSeconds;
+    if (exitElapsed < 0) return; // still showing the correct feedback
+
+    final raw = (exitElapsed / exitSeconds).clamp(0.0, 1.0);
+    _exitProgress = Curves.easeOutCubic.transform(raw);
+
+    // Scale gently inward as the card fades. The feedback pop has finished by
+    // now, so writing `scale` here does not fight an effect.
+    scale = Vector2.all(0.9 * (1.0 - 0.3 * _exitProgress));
+
+    if (raw >= 1.0) {
+      _vanishing = false;
+      _exitProgress = 1.0;
+      final callback = _onDisappeared;
+      _onDisappeared = null;
+      removeFromParent();
+      callback?.call();
+    }
   }
 
   void showError() {
@@ -238,6 +307,9 @@ class MatchableShape extends PositionComponent
   void update(double dt) {
     super.update(dt);
     followFingertip(dt);
+    if (_vanishing) {
+      _updateDisappearance(dt);
+    }
     if (_isHint) {
       _hintTime += dt;
     }
@@ -247,8 +319,14 @@ class MatchableShape extends PositionComponent
   void render(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
+    // A matched card is on its way off the board, not a permanently dimmed
+    // leftover: it stays lit through the feedback beat, then everything it
+    // draws — card and shape alike — fades out with [_exitProgress].
+    final fade = 1.0 - _exitProgress;
+
     // Card background
-    final bgAlpha = isMatched ? 30 : (_isHint ? 80 : (isSelected ? 80 : 40));
+    final baseAlpha = isMatched ? 80 : (_isHint ? 80 : (isSelected ? 80 : 40));
+    final bgAlpha = (baseAlpha * fade).round().clamp(0, 255);
     Color? borderColor;
     if (_showError) borderColor = const Color(0xFFE88888);
     if (isSelected && !_showError) {
@@ -287,7 +365,8 @@ class MatchableShape extends PositionComponent
     );
 
     // 3D shape icon in center
-    final drawColor = isMatched ? shapeColor.withAlpha(80) : shapeColor;
+    final drawColor =
+        shapeColor.withAlpha((255 * fade).round().clamp(0, 255));
     final shapeName = shapeType.name; // enum name matches shape_painter_3d keys
     ShapePainter3D.drawByName(
       canvas, shapeName, size.x / 2, size.y / 2, size.x * 0.3, drawColor,
