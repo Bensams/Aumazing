@@ -16,6 +16,24 @@ abstract final class Contrast {
   /// Minimum contrast for normal-size body text (WCAG 2.2, 1.4.3 at AA).
   static const double textMinimum = 4.5;
 
+  /// Near-black and near-white, the two ends [legibleOn] picks between.
+  static const Color ink = Color(0xFF1A1A1F);
+  static const Color paper = Color(0xFFFAFAFA);
+
+  /// [ink] or [paper], whichever clears 3:1 against [surface].
+  ///
+  /// The threshold is 0.2 because [ink] clears 3:1 on anything with
+  /// luminance ≥ 0.1 and [paper] clears it on anything ≤ 0.3 — picking 0.2
+  /// sits inside both bands, so every possible surface is covered with room
+  /// to spare.
+  ///
+  /// For *chrome* — a tick on a swatch, a glyph on a chip — where each
+  /// element is judged on its own. Deliberately **not** used for game-object
+  /// outlines: see `GameObjectStyle.standingOutline` for why those must be
+  /// uniform instead.
+  static Color legibleOn(Color surface) =>
+      relativeLuminance(surface) > 0.2 ? ink : paper;
+
   /// Relative luminance per the WCAG definition.
   static double relativeLuminance(Color c) {
     double channel(double v) =>
