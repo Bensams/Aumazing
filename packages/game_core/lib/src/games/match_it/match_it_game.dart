@@ -6,6 +6,7 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 
 import 'components/matchable_shape.dart';
+import '../../automation/developer_automation.dart';
 import '../shared/answer_label.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
@@ -49,7 +50,11 @@ class MatchPairData {
 /// then one on the right. If they match, it advances the step.
 /// Tracks comprehensive gameplay analytics for ML analysis.
 class MatchItGame extends FlameGame
-    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with
+        TapCallbacks,
+        DragCallbacks,
+        EnhancedGameplayAnalyticsMixin,
+        DeveloperAutomationHooks {
   MatchItGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -856,5 +861,36 @@ class MatchItGame extends FlameGame
   void onRemove() {
     _cancelNoResponseTimer();
     super.onRemove();
+  }
+
+  // ── Developer auto-play ─────────────────────────────
+
+  /// The left card of the first pair still on the board, or null when the
+  /// round is finished (or has not been laid out yet).
+  MatchableShape? get _nextUnmatchedLeft {
+    for (final shape in _leftShapes) {
+      if (!shape.isMatched) return shape;
+    }
+    return null;
+  }
+
+  @override
+  bool get debugAwaitingInputImpl =>
+      _leftShapes.length == 3 &&
+      _rightShapes.length == 3 &&
+      _nextUnmatchedLeft != null;
+
+  /// Selects a left card and then its true partner on the right, through the
+  /// same two handlers a pair of taps drives. The partner is found by index:
+  /// the right card carrying pair index `i` holds the same shape and colour
+  /// as the left card at position `i`, however the column was shuffled.
+  @override
+  void debugPerformCorrectActionImpl() {
+    final left = _nextUnmatchedLeft;
+    if (left == null) return;
+    _onLeftSelected(left.index);
+    // A left tap alone never completes a match, so the pair only resolves on
+    // the second call — the same two-step interaction the child performs.
+    _onRightSelected(left.index);
   }
 }

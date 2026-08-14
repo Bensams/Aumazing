@@ -14,6 +14,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../../automation/developer_automation.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
@@ -23,7 +24,11 @@ import '../shared/game_layout.dart';
 /// a piece then a slot, or by dragging a piece onto a slot. Measures impulse
 /// control (early taps), waiting, and completion.
 class MyTurnYourTurnGame extends FlameGame
-    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with
+        TapCallbacks,
+        DragCallbacks,
+        EnhancedGameplayAnalyticsMixin,
+        DeveloperAutomationHooks {
   MyTurnYourTurnGame({
     required this.totalRounds,
     required this.onStepChanged,
@@ -612,4 +617,25 @@ class MyTurnYourTurnGame extends FlameGame
 
   // The turn label is not drawn on the canvas: the screen shows it in the
   // upper-left VoiceOverPromptBubble via onTurnChanged.
+
+  // ── Developer auto-play ─────────────────────────────
+
+  /// Ready only on the child's turn with a free slot and a piece to place.
+  /// Waiting through the buddy's turn is the skill this game measures, so
+  /// automation waits it out rather than tapping early — an early tap here
+  /// would be recorded as an impulse-control error.
+  @override
+  bool get debugAwaitingInputImpl =>
+      !_isBuddyTurn &&
+      _childPieces.isNotEmpty &&
+      _slots.any((s) => !s.isFilled && s.inputEnabled);
+
+  /// Taps the first free slot, which places the child's next piece through
+  /// the same handler a real tap uses.
+  @override
+  void debugPerformCorrectActionImpl() {
+    final index = _slots.indexWhere((s) => !s.isFilled && s.inputEnabled);
+    if (index < 0) return;
+    _onSlotTapped(index);
+  }
 }
