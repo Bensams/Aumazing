@@ -7,6 +7,7 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../dev/developer_automation_registry.dart';
 import '../../../providers/child_provider.dart';
 import '../session_recording.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
@@ -63,6 +64,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
   bool _showStarSparkle = false;
   String _voiceOverText = 'Wait for Buddy… 🐻';
   late final MyTurnYourTurnGame _game;
+
+  /// Developer auto-play/skip handle. Null in a normal build.
+  DeveloperGameSession? _devSession;
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
 
@@ -167,6 +171,8 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         // flow past this point pops routes, so run it exactly once.
         if (_completionHandled) return;
         _completionHandled = true;
+        // Stop any developer automation from acting on a finished game.
+        _devSession?.markComplete();
 
         setState(() => _gameComplete = true);
 
@@ -230,6 +236,12 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         }
       },
     );
+
+    _devSession = DeveloperAutomationRegistry.instance.registerGame(
+      gameId: 'my_turn_your_turn',
+      assessmentContext: widget.assessmentContext,
+      game: _game,
+    );
   }
 
   void _showRewardThenPop() {
@@ -280,6 +292,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
 
   @override
   void dispose() {
+    DeveloperAutomationRegistry.instance.unregister(_devSession);
     _voiceOverService.dispose();
     super.dispose();
   }
