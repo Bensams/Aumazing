@@ -182,9 +182,21 @@ enum VoiceOverCue {
   yourTurnInstruction,
 
   // ── Reward & Celebration ──────────────────────────────────────────
+  //
+  // The end of a session, not the end of a round. Every line here is safe to
+  // hear once, after the last question, and would be wrong in the middle.
   awesomeWorkToday,
   bigHighFive,
   fantastic,
+
+  /// "Game finished!" — the neutral statement of what just happened, paired
+  /// with [youFinishedIt], which celebrates the same moment.
+  ///
+  /// It sits here rather than in Transition because Transition is drawn at
+  /// random by [VoiceOverService.playTransition] between rounds, and a child
+  /// told the game is finished while it is still running is being given false
+  /// information by the one voice in the app they are meant to trust.
+  gameFinished,
   greatPlaying,
   hooray,
   superJob,
@@ -193,13 +205,18 @@ enum VoiceOverCue {
   youreAmazing,
 
   // ── Transition ────────────────────────────────────────────────────
-  gameFinished,
+  //
+  // Drawn at random between activities, so every line has to still be true
+  // whenever it happens to surface. That is the whole entry requirement.
   getReady,
   goodJobMovingOn,
   letsGo,
   letsPlayAgain,
   levelComplete,
-  newGame,
+
+  /// "New round!" — replaces the old `newGame`, which announced a new *game*
+  /// on a transition between two rounds of the same one.
+  newRound,
   nextActivity,
   nextOne,
   timeForTheNextOne,
@@ -462,6 +479,7 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.awesomeWorkToday: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.bigHighFive: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.fantastic: VoiceOverCategory.rewardAndCelebration,
+  VoiceOverCue.gameFinished: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.greatPlaying: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.hooray: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.superJob: VoiceOverCategory.rewardAndCelebration,
@@ -470,13 +488,12 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.youreAmazing: VoiceOverCategory.rewardAndCelebration,
 
   // Transition
-  VoiceOverCue.gameFinished: VoiceOverCategory.transition,
   VoiceOverCue.getReady: VoiceOverCategory.transition,
   VoiceOverCue.goodJobMovingOn: VoiceOverCategory.transition,
   VoiceOverCue.letsGo: VoiceOverCategory.transition,
   VoiceOverCue.letsPlayAgain: VoiceOverCategory.transition,
   VoiceOverCue.levelComplete: VoiceOverCategory.transition,
-  VoiceOverCue.newGame: VoiceOverCategory.transition,
+  VoiceOverCue.newRound: VoiceOverCategory.transition,
   VoiceOverCue.nextActivity: VoiceOverCategory.transition,
   VoiceOverCue.nextOne: VoiceOverCategory.transition,
   VoiceOverCue.timeForTheNextOne: VoiceOverCategory.transition,
@@ -733,6 +750,8 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.bigHighFive:
       'voice_over/reward_and_celebration/BigHighFive.wav',
   VoiceOverCue.fantastic: 'voice_over/reward_and_celebration/Fantastic.wav',
+  VoiceOverCue.gameFinished:
+      'voice_over/reward_and_celebration/GameFinished.wav',
   VoiceOverCue.greatPlaying:
       'voice_over/reward_and_celebration/GreatPlaying.wav',
   VoiceOverCue.hooray: 'voice_over/reward_and_celebration/Hooray.wav',
@@ -745,13 +764,12 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
       'voice_over/reward_and_celebration/YoureAmazing.wav',
 
   // Transition
-  VoiceOverCue.gameFinished: 'voice_over/transition/GameFinished.wav',
   VoiceOverCue.getReady: 'voice_over/transition/GetReady.wav',
   VoiceOverCue.goodJobMovingOn: 'voice_over/transition/GoodJobMovingOn.wav',
   VoiceOverCue.letsGo: 'voice_over/transition/LetsGo.wav',
   VoiceOverCue.letsPlayAgain: 'voice_over/transition/LetsPlayAgain.wav',
   VoiceOverCue.levelComplete: 'voice_over/transition/LevelComplete.wav',
-  VoiceOverCue.newGame: 'voice_over/transition/NewGame.wav',
+  VoiceOverCue.newRound: 'voice_over/transition/NewRound.wav',
   VoiceOverCue.nextActivity: 'voice_over/transition/NextActivity.wav',
   VoiceOverCue.nextOne: 'voice_over/transition/NextOne.wav',
   VoiceOverCue.timeForTheNextOne:
