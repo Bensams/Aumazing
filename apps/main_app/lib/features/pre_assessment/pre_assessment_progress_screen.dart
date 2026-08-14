@@ -7,6 +7,7 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/local_db_service.dart';
+import '../../dev/developer_automation_registry.dart';
 import '../../model/assessment_result.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
@@ -81,6 +82,11 @@ class _PreAssessmentProgressScreenState
 
   /// Guard flag to prevent multiple game launches from orphaned timers.
   bool _gameLaunched = false;
+
+  /// Developer auto-play handle for the transition screen. Null in a normal
+  /// build; lets automation start the pending game without waiting out the
+  /// countdown.
+  DeveloperFlowSession? _devFlow;
 
   @override
   void initState() {
@@ -169,6 +175,14 @@ class _PreAssessmentProgressScreenState
     _countdown = 7;
     _gameLaunched = false;
 
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
+    _devFlow = DeveloperAutomationRegistry.instance.registerFlow(
+      flowLabel: 'Pre-Assessment',
+      gameIndex: _currentGameIndex,
+      gameCount: _gameOrder.length,
+      launchNow: () => _launchGame(_gameOrder[_currentGameIndex]),
+    );
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -186,6 +200,7 @@ class _PreAssessmentProgressScreenState
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
     // Restore original audio/haptic settings before disposing
     _sensoryController.dispose();
     super.dispose();
@@ -616,6 +631,8 @@ class _PreAssessmentProgressScreenState
     _countdownTimer?.cancel();
     if (_gameLaunched) return;
     _gameLaunched = true;
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
+    _devFlow = null;
 
     Widget screen;
     switch (gameId) {

@@ -13,12 +13,14 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../../automation/developer_automation.dart';
 
 /// Do What I Say — instruction-following game with XGBoost-ready analytics.
 ///
 /// Displays shapes and a text instruction like "Tap the RED circle".
 /// The child taps the correct shape. Tracks comprehensive analytics for ML analysis.
-class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+class DoWhatISayGame extends FlameGame
+    with TapCallbacks, EnhancedGameplayAnalyticsMixin, DeveloperAutomationHooks {
   DoWhatISayGame({
     required this.totalRounds,
     required this.onStepChanged,
@@ -550,4 +552,19 @@ class DoWhatISayGame extends FlameGame with TapCallbacks, EnhancedGameplayAnalyt
     _cancelNoResponseTimer();
     super.onRemove();
   }
+
+  // ── Developer auto-play ─────────────────────────────
+
+  /// Ready once a target has been chosen and the shapes accept taps — which
+  /// is false while the instruction is still being read out.
+  @override
+  bool get debugAwaitingInputImpl =>
+      _targetIndex >= 0 &&
+      _targetIndex < _shapes.length &&
+      _shapes.every((s) => s.inputEnabled);
+
+  /// Taps the shape the instruction actually asked for, through the same
+  /// handler [InstructionShape] calls.
+  @override
+  void debugPerformCorrectActionImpl() => _onShapeTapped(_targetIndex);
 }

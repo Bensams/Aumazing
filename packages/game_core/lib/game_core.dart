@@ -4,6 +4,10 @@
 /// registry. Shared by both main_app and game_lab.
 library game_core;
 
+// Developer auto-play hooks (inert unless the host app opens them in a
+// debug build — see DeveloperAutomation).
+export 'src/automation/developer_automation.dart';
+
 // Configuration
 export 'src/config/adaptive_difficulty.dart';
 export 'src/config/difficulty_profile.dart';

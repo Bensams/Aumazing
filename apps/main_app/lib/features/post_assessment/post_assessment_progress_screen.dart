@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../dev/developer_automation_registry.dart';
 import '../../model/area_level.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
@@ -55,6 +56,11 @@ class _PostAssessmentProgressScreenState
 
   /// Guards the per-game completion handler against a duplicate callback.
   int? _completedGameIndex;
+
+  /// Developer auto-play handle for the transition screen. Null in a normal
+  /// build; lets automation start the pending game without waiting out the
+  /// countdown.
+  DeveloperFlowSession? _devFlow;
 
   // Same order as the pre-assessment so results are comparable per game.
   static const _gameOrder = [
@@ -117,6 +123,7 @@ class _PostAssessmentProgressScreenState
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
     super.dispose();
   }
 
@@ -124,6 +131,14 @@ class _PostAssessmentProgressScreenState
     _countdownTimer?.cancel();
     _countdown = 7;
     _gameLaunched = false;
+
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
+    _devFlow = DeveloperAutomationRegistry.instance.registerFlow(
+      flowLabel: 'Post-Assessment',
+      gameIndex: _currentGameIndex,
+      gameCount: _gameOrder.length,
+      launchNow: () => _launchGame(_gameOrder[_currentGameIndex]),
+    );
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -143,6 +158,8 @@ class _PostAssessmentProgressScreenState
     _countdownTimer?.cancel();
     if (_gameLaunched) return;
     _gameLaunched = true;
+    DeveloperAutomationRegistry.instance.unregister(_devFlow);
+    _devFlow = null;
 
     // Each game screen records its own session (with full analytics) in
     // 'post_assessment' context; onComplete only drives the flow.

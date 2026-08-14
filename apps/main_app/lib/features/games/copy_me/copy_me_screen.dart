@@ -7,6 +7,7 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../../dev/developer_automation_registry.dart';
 import '../../../providers/child_provider.dart';
 import '../../../features/pre_assessment/sensory/sensory.dart';
 import '../../../features/rewards/widgets/reward_overlay.dart';
@@ -66,6 +67,9 @@ class _CopyMeScreenState extends State<CopyMeScreen>
   late final CopyMeGame _game;
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
+
+  /// Developer auto-play/skip handle. Null in a normal build.
+  DeveloperGameSession? _devSession;
 
   @override
   void initState() {
@@ -161,6 +165,8 @@ class _CopyMeScreenState extends State<CopyMeScreen>
         // flow past this point pops routes, so run it exactly once.
         if (_completionHandled) return;
         _completionHandled = true;
+        // Stop any developer automation from acting on a finished game.
+        _devSession?.markComplete();
 
         setState(() {
           _gameComplete = true;
@@ -218,6 +224,12 @@ class _CopyMeScreenState extends State<CopyMeScreen>
     _game.onPhaseChanged = (isDemo) {
       if (mounted) setState(() => _isDemoPhase = isDemo);
     };
+
+    _devSession = DeveloperAutomationRegistry.instance.registerGame(
+      gameId: 'copy_me',
+      assessmentContext: widget.assessmentContext,
+      game: _game,
+    );
   }
 
   void _fadeOutCelebrationThenShowReward() {
@@ -300,6 +312,7 @@ class _CopyMeScreenState extends State<CopyMeScreen>
 
   @override
   void dispose() {
+    DeveloperAutomationRegistry.instance.unregister(_devSession);
     _celebrationFadeController.dispose();
     _voiceOverService.dispose();
     super.dispose();
