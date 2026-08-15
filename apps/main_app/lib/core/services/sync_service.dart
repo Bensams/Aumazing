@@ -625,8 +625,12 @@ class SyncService {
     try {
       // 1. Children — reuse the bootstrap upsert path (not marked pending)
       final remoteChildren = await _supabase.getChildren(userId);
+      // Children deleted locally still exist remotely until _propagateDeletes
+      // runs; re-inserting them here would resurrect a deleted profile.
+      final locallyDeletedChildren = await _localDb.getLocallyDeletedChildIds();
       for (final remote in remoteChildren) {
         if (remote['deleted_at'] != null) continue;
+        if (locallyDeletedChildren.contains(remote['id'])) continue;
         await _localDb.upsertChild(
           ChildProfile.fromSupabase(remote),
           ownerId: userId,
@@ -639,7 +643,7 @@ class SyncService {
         for (final r in remoteChildren)
           if (r['deleted_at'] == null) r['id'] as String,
         ...await _localDb.getChildIds(userId),
-      }.toList();
+      }.where((id) => !locallyDeletedChildren.contains(id)).toList();
 
       if (childIds.isNotEmpty) {
         pulled += await _hydrateTable(

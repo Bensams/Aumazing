@@ -1222,6 +1222,74 @@ class LocalDbService {
     await softDelete(LocalTables.children, id);
   }
 
+  /// Ids of children the parent deleted locally but whose deletion has not
+  /// reached the cloud yet.
+  ///
+  /// Cloud hydration must skip these: the remote row still exists until the
+  /// next successful sync, and re-inserting it would resurrect a profile the
+  /// parent already removed.
+  Future<Set<String>> getLocallyDeletedChildIds() async {
+    final db = await database;
+    final rows = await db.query(
+      LocalTables.children,
+      columns: ['id'],
+      where: 'deleted_at IS NOT NULL',
+    );
+    return {for (final r in rows) r['id'] as String};
+  }
+
+  /// Every local table holding rows that belong to a single child.
+  static const _childScopedTables = [
+    LocalTables.assessmentRuns,
+    LocalTables.gameSessions,
+    LocalTables.caregiverQuestionnaires,
+    LocalTables.assessmentResults,
+    LocalTables.moduleRecommendations,
+    LocalTables.assessmentComparisons,
+    LocalTables.sensoryConsent,
+    LocalTables.sensoryRoundMetrics,
+    LocalTables.sensoryPreferences,
+  ];
+
+  /// Removes the local gameplay, assessment and recommendation rows of a
+  /// deleted child.
+  ///
+  /// The child row itself is only soft-deleted, so the deletion can still be
+  /// propagated to Supabase; its dependent rows go for good locally, because
+  /// keeping a removed child's progress on the device serves nobody and the
+  /// remote copies are removed with the child. Rows that hang off a game
+  /// session (rounds, events) go with their sessions.
+  Future<void> purgeChildScopedData(String childId) async {
+    final db = await database;
+
+    final sessions = await db.query(
+      LocalTables.gameSessions,
+      columns: ['id'],
+      where: 'child_id = ?',
+      whereArgs: [childId],
+    );
+    final sessionIds = [for (final r in sessions) r['id'] as String];
+
+    for (var i = 0; i < sessionIds.length; i += _idChunkSize) {
+      final chunk = sessionIds.sublist(
+        i,
+        i + _idChunkSize > sessionIds.length ? sessionIds.length : i + _idChunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      for (final table in [LocalTables.gameRounds, LocalTables.sessionEvents]) {
+        await db.delete(
+          table,
+          where: 'session_id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+      }
+    }
+
+    for (final table in _childScopedTables) {
+      await db.delete(table, where: 'child_id = ?', whereArgs: [childId]);
+    }
+  }
+
   // ─── Game Sessions ────────────────────────────────────────────────────
 
   Future<void> insertGameSession(

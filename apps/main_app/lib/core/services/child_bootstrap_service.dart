@@ -72,10 +72,16 @@ class ChildBootstrapService {
     // Only an actually-unusable birth date (missing or in the future) sends the
     // parent back to setup. Ages outside 2–6 are accepted here to stay
     // consistent with the child-setup screen, which no longer enforces a range.
-    final child = children.first;
-    final validation = validateBirthDate(child.birthDate);
-    if (validation == ChildBirthDateValidation.missing ||
-        validation == ChildBirthDateValidation.futureDate) {
+    //
+    // With several children, one usable profile is enough to reach the
+    // dashboard — ChildProvider picks the active child, and a legacy record
+    // among newer ones must not block the whole account.
+    final hasUsableChild = children.any((child) {
+      final validation = validateBirthDate(child.birthDate);
+      return validation != ChildBirthDateValidation.missing &&
+          validation != ChildBirthDateValidation.futureDate;
+    });
+    if (!hasUsableChild) {
       return const BootstrapResult(
         destination: BootstrapDestination.childProfileSetup,
         errorMessage: missingChildProfileMessage,
@@ -87,8 +93,14 @@ class ChildBootstrapService {
 
   Future<void> _hydrateChildrenFromSupabase(String userId) async {
     final remoteChildren = await _supabaseService.getChildren(userId);
+    // A child the parent deleted locally is still present in the cloud until
+    // the deletion syncs. Neither those rows nor already-deleted remote rows
+    // may be written back, or hydration would undo the deletion.
+    final locallyDeleted = await _localDbService.getLocallyDeletedChildIds();
 
     for (final remote in remoteChildren) {
+      if (remote['deleted_at'] != null) continue;
+      if (locallyDeleted.contains(remote['id'])) continue;
       await _localDbService.upsertChild(
         ChildProfile.fromSupabase(remote),
         ownerId: userId,

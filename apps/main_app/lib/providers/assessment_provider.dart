@@ -1101,6 +1101,9 @@ class AssessmentProvider extends ChangeNotifier {
     _supportProfile = null;
     _preSnapshot = null;
     _postSnapshot = null;
+    // Path progress is per child and restored on load; dropping it here stops
+    // one child's completed steps showing under another after a switch.
+    _pathCompleted = {};
     notifyListeners();
   }
 }
