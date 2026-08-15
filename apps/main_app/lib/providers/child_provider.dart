@@ -3,14 +3,41 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 
+import '../core/repositories/child_repository.dart';
 import '../core/services/local_db_service.dart';
 import '../model/child_profile.dart';
 import '../core/services/auth_service.dart';
 
-/// Manages the current child profile and comfort settings.
+/// What the parent should see after a child profile was deleted.
+enum ChildDeletionOutcome {
+  /// Another child is still available and is now the active one.
+  switchedToAnotherChild,
+
+  /// The deleted child was not the active one; nothing else changed.
+  otherChildDeleted,
+
+  /// That was the last child — the parent has to set one up again.
+  noChildrenLeft,
+}
+
+/// Manages the parent's child profiles: which one is active, and the active
+/// child's comfort / appearance settings.
+///
+/// This is the single source of truth for child selection. Nothing else may
+/// assume "the first child in storage" is the active one.
 class ChildProvider extends ChangeNotifier {
   final LocalDbService _localDb;
   final AuthService _authService;
+
+  /// Built on first write, not at construction: the default repository pulls
+  /// in the sync stack, which a widget test creating a provider has no reason
+  /// to need.
+  final ChildRepository? _injectedRepository;
+  late final ChildRepository _childRepository = _injectedRepository ??
+      ChildRepository(localDb: _localDb, authService: _authService);
+
+  /// Every non-deleted child belonging to the current parent, oldest first.
+  List<ChildProfile> _children = const [];
 
   ChildProfile? _profile;
   bool _isLoading = false;
@@ -65,12 +92,22 @@ class ChildProvider extends ChangeNotifier {
   ChildProvider({
     LocalDbService? localDb,
     AuthService? authService,
+    ChildRepository? childRepository,
   })  : _localDb = localDb ?? LocalDbService(),
-        _authService = authService ?? AuthService();
+        _authService = authService ?? AuthService(),
+        _injectedRepository = childRepository;
 
   ChildProfile? get profile => _profile;
   bool get isLoading => _isLoading;
   bool get hasProfile => _profile != null;
+
+  /// All of the parent's children, oldest first. Empty until [loadProfile].
+  List<ChildProfile> get children => List.unmodifiable(_children);
+
+  /// Id of the child whose data the app is currently showing.
+  String? get activeChildId => _profile?.id;
+
+  bool isActive(String childId) => _profile?.id == childId;
 
   // Comfort settings shortcuts
   bool get musicEnabled => _profile?.musicEnabled ?? true;
@@ -290,7 +327,13 @@ class ChildProvider extends ChangeNotifier {
         'prompt_speed': 1.0,
       };
 
-  /// Loads the child profile from SQLite cache only.
+  /// Loads every child of the current parent from the SQLite cache, and keeps
+  /// (or picks) the active one.
+  ///
+  /// An already-selected child stays active across a reload. Otherwise the
+  /// oldest profile is used — a deliberate choice over "whatever storage
+  /// returned first", so adding a child never silently takes over the session.
+  /// Restoring the active child across app restarts is AUM-151.
   Future<void> loadProfile() async {
     _isLoading = true;
     notifyListeners();
@@ -302,24 +345,216 @@ class ChildProvider extends ChangeNotifier {
 
       final userId = _authService.effectiveUserId;
       if (userId == null) {
+        _children = const [];
         _profile = null;
         return;
       }
 
-      final children = await _localDb.getChildren(userId: userId);
-      _profile = children.isEmpty ? null : children.first;
-      await _loadThemeOverride();
-      await _loadCustomBackground();
-      await _loadObjectStyle();
-      await _loadWorldOverride();
-      await _loadLanguage();
-      await _loadVoicePack();
-      await _loadDifficultyOverride();
+      final previousId = _profile?.id;
+      _children = _sorted(await _localDb.getChildren(userId: userId));
+      _profile = _childById(previousId) ??
+          (_children.isEmpty ? null : _children.first);
+      await _loadActiveChildPreferences();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ── Child selection ───────────────────────────────────────────────────
+
+  /// Makes [childId] the active child for this session.
+  ///
+  /// Every per-child preference is re-read from that child's own keys, so
+  /// nothing from the previous child survives the switch. Callers must also
+  /// reload the child-scoped providers — see `switchActiveChild` in
+  /// `services/child_switch_service.dart`, which does both.
+  ///
+  /// Returns false when no such child belongs to this parent.
+  Future<bool> selectChild(String childId) async {
+    final target = _childById(childId);
+    if (target == null) return false;
+    if (_profile?.id == childId) return true;
+
+    _profile = target;
+    await _loadActiveChildPreferences();
+    notifyListeners();
+    return true;
+  }
+
+  // ── Add / edit / delete ───────────────────────────────────────────────
+
+  /// Creates another child for this parent without touching existing ones.
+  ///
+  /// The new child gets its own id and its own local (and, once synced,
+  /// cloud) record. It only becomes active when [makeActive] is set, or when
+  /// the parent had no child at all.
+  Future<ChildProfile> addChild({
+    required String displayName,
+    required DateTime birthDate,
+    required String avatar,
+    ChildSex? sex,
+    bool musicEnabled = true,
+    double musicVolume = 0.5,
+    String musicCategory = kDefaultBgmCategory,
+    double sfxVolume = 0.7,
+    bool vibrationEnabled = true,
+    double promptSpeed = 1.0,
+    bool sensoryPreferencesSet = false,
+    RewardPreference rewardPreference = RewardPreference.bubbles,
+    bool useRandomReward = false,
+    bool makeActive = false,
+  }) async {
+    final created = await _childRepository.createChild(
+      displayName: displayName,
+      birthDate: birthDate,
+      avatar: avatar,
+      sex: sex,
+      musicEnabled: musicEnabled,
+      musicVolume: musicVolume,
+      musicCategory: musicCategory,
+      sfxVolume: sfxVolume,
+      vibrationEnabled: vibrationEnabled,
+      promptSpeed: promptSpeed,
+      sensoryPreferencesSet: sensoryPreferencesSet,
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
+    );
+
+    _children = _sorted([..._children, created]);
+    if (makeActive || _profile == null) {
+      _profile = created;
+      await _loadActiveChildPreferences();
+    }
+    notifyListeners();
+    return created;
+  }
+
+  /// Edits one child's profile details. Other children are untouched.
+  ///
+  /// Returns the updated profile, or null when [childId] is unknown.
+  Future<ChildProfile?> editChild(
+    String childId, {
+    String? displayName,
+    DateTime? birthDate,
+    String? avatar,
+    ChildSex? sex,
+    RewardPreference? rewardPreference,
+    bool? useRandomReward,
+  }) async {
+    final existing = _childById(childId);
+    if (existing == null) return null;
+
+    final updated = await _childRepository.updateChild(
+      existing,
+      displayName: displayName,
+      birthDate: birthDate,
+      avatar: avatar,
+      sex: sex,
+      rewardPreference: rewardPreference,
+      useRandomReward: useRandomReward,
+    );
+
+    _replaceInList(updated);
+    if (_profile?.id == childId) _profile = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  /// Deletes one child along with its local per-child data, queuing the cloud
+  /// deletion for the next sync.
+  ///
+  /// When the active child is removed another available child takes over; the
+  /// caller is responsible for reloading child-scoped providers (or, on
+  /// [ChildDeletionOutcome.noChildrenLeft], sending the parent to setup).
+  Future<ChildDeletionOutcome> deleteChild(String childId) async {
+    final target = _childById(childId);
+    if (target == null) return ChildDeletionOutcome.otherChildDeleted;
+
+    final wasActive = _profile?.id == childId;
+
+    await _childRepository.deleteChild(childId);
+    await _purgeChildPreferences(childId);
+
+    _children = [
+      for (final child in _children)
+        if (child.id != childId) child,
+    ];
+
+    if (!wasActive) return ChildDeletionOutcome.otherChildDeleted;
+
+    _profile = _children.isEmpty ? null : _children.first;
+    await _loadActiveChildPreferences();
+    notifyListeners();
+
+    return _profile == null
+        ? ChildDeletionOutcome.noChildrenLeft
+        : ChildDeletionOutcome.switchedToAnotherChild;
+  }
+
+  // ── Internals ─────────────────────────────────────────────────────────
+
+  ChildProfile? _childById(String? id) {
+    if (id == null) return null;
+    for (final child in _children) {
+      if (child.id == id) return child;
+    }
+    return null;
+  }
+
+  /// Oldest first, so the list order — and the default active child — does
+  /// not depend on how storage happened to sort the rows. Children created in
+  /// the same instant fall back to their ids, so the order is still stable.
+  static List<ChildProfile> _sorted(List<ChildProfile> children) {
+    final sorted = [...children]
+      ..sort((a, b) {
+        final byCreation = a.createdAt.compareTo(b.createdAt);
+        return byCreation != 0 ? byCreation : a.id.compareTo(b.id);
+      });
+    return sorted;
+  }
+
+  void _replaceInList(ChildProfile updated) {
+    _children = [
+      for (final child in _children)
+        if (child.id == updated.id) updated else child,
+    ];
+  }
+
+  /// Re-reads every per-child preference for the active child. With no active
+  /// child each falls back to its default, so a switch can never leave the
+  /// previous child's theme, language or difficulty behind.
+  Future<void> _loadActiveChildPreferences() async {
+    await _loadThemeOverride();
+    await _loadCustomBackground();
+    await _loadObjectStyle();
+    await _loadWorldOverride();
+    await _loadLanguage();
+    await _loadVoicePack();
+    await _loadDifficultyOverride();
+  }
+
+  /// Removes every locally stored preference and cached progress key that
+  /// belongs to a deleted child.
+  ///
+  /// All per-child keys in the app end in `_<childId>` (theme, background,
+  /// object style, world, language, voice, difficulty, screen time, AI
+  /// prediction, assessment snapshots, path progress), so matching on the
+  /// suffix covers them without every feature having to register itself here.
+  Future<void> _purgeChildPreferences(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stale = [
+        for (final key in prefs.getKeys())
+          if (key.endsWith('_$childId')) key,
+      ];
+      for (final key in stale) {
+        await prefs.remove(key);
+      }
+    } catch (e) {
+      debugPrint('[ChildProvider] purge preferences failed: $e');
     }
   }
 
@@ -348,6 +583,7 @@ class ChildProvider extends ChangeNotifier {
     );
 
     await _localDb.upsertChild(_profile!);
+    _replaceInList(_profile!);
     notifyListeners();
   }
 
@@ -366,6 +602,7 @@ class ChildProvider extends ChangeNotifier {
     );
 
     await _localDb.upsertChild(_profile!);
+    _replaceInList(_profile!);
     notifyListeners();
   }
 
@@ -382,6 +619,7 @@ class ChildProvider extends ChangeNotifier {
     );
 
     await _localDb.upsertChild(_profile!, markPending: true);
+    _replaceInList(_profile!);
     notifyListeners();
   }
 
@@ -552,20 +790,28 @@ class ChildProvider extends ChangeNotifier {
   /// Setup writes these directly rather than going through [setLanguage] /
   /// [setVoicePack]: those persist against `_profile`, which is still null
   /// until the home screen loads the new child.
+  ///
+  /// The live in-memory language and voice only change when [childId] is the
+  /// active child — adding a second child from Manage Children must not
+  /// re-language the child currently playing.
   Future<void> applyInitialPreferences({
     required String childId,
     required GameLanguage language,
     required String voicePackId,
   }) async {
-    _language = language;
     final pack = voicePackById(voicePackId);
-    _voicePackId = pack != null && pack.languageSlug == language.slug
+    final resolvedPackId = pack != null && pack.languageSlug == language.slug
         ? pack.id
         : defaultVoicePackForLanguage(language.slug).id;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_languageKeyPrefix$childId', _language.slug);
-    await prefs.setString('$_voicePackKeyPrefix$childId', _voicePackId);
+    await prefs.setString('$_languageKeyPrefix$childId', language.slug);
+    await prefs.setString('$_voicePackKeyPrefix$childId', resolvedPackId);
+
+    if (_profile == null || _profile!.id == childId) {
+      _language = language;
+      _voicePackId = resolvedPackId;
+    }
     notifyListeners();
   }
 
@@ -597,8 +843,12 @@ class ChildProvider extends ChangeNotifier {
   }
 
   void clear() {
+    _children = const [];
     _profile = null;
     _themeOverride = null;
+    _customBackground = null;
+    _objectStyle = const GameObjectStyle();
+    GameObjectStyle.current = _objectStyle;
     _worldOverride = null;
     _difficultyOverride = null;
     _language = GameLanguage.english;

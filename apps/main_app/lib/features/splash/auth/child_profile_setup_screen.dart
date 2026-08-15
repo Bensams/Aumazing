@@ -6,22 +6,35 @@ import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/child_profile_policy.dart';
-import '../../../core/repositories/child_repository.dart';
+import '../../../model/child_profile.dart';
 import '../../../providers/child_provider.dart';
 import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
 import 'widgets/sound_preferences_step.dart';
 
+/// Collects a child's profile, sound preferences and reward settings.
+///
+/// Serves two flows with the same fields and validation:
+/// * onboarding — the parent's first child, ending on the dashboard;
+/// * "Add Child" from Manage Children ([isAdditionalChild]), which returns
+///   the new profile to the caller and leaves the active child alone.
 class ChildProfileSetupScreen extends StatefulWidget {
   const ChildProfileSetupScreen({
     super.key,
     this.initialErrorMessage,
-    ChildRepository? childRepository,
-  }) : _childRepository = childRepository;
+    this.isAdditionalChild = false,
+  });
+
+  /// Adds another child to an account that already has one: the screen can be
+  /// dismissed, and saving pops with the created [ChildProfile] instead of
+  /// replacing the navigation stack with the dashboard.
+  const ChildProfileSetupScreen.addAnother({super.key})
+      : initialErrorMessage = null,
+        isAdditionalChild = true;
 
   final String? initialErrorMessage;
-  final ChildRepository? _childRepository;
+  final bool isAdditionalChild;
 
   @override
   State<ChildProfileSetupScreen> createState() =>
@@ -94,6 +107,11 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     super.dispose();
   }
 
+  /// The last step saves and leaves — to the dashboard during onboarding, or
+  /// back to Manage Children when a sibling is being added.
+  String get _finalStepLabel =>
+      widget.isAdditionalChild ? 'Save Child Profile' : 'Continue to Dashboard';
+
   Future<void> _saveProfile() async {
     // Only validate form if we're still on step 0 (form is mounted)
     // On step 1, validation already happened in _goToNextStep()
@@ -119,8 +137,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final repository = widget._childRepository ?? childRepository;
-      final profile = await repository.createChild(
+      final childProvider = context.read<ChildProvider>();
+      final previousActiveChildId = childProvider.activeChildId;
+      // Adding a second child never takes over the session — the parent
+      // switches deliberately from Manage Children.
+      final profile = await childProvider.addChild(
+        makeActive: !widget.isAdditionalChild,
         displayName: _nameController.text.trim(),
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
@@ -140,24 +162,28 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
       // Language and voice live in local prefs keyed by child id, so they can
       // only be written once the child record exists.
-      if (mounted) {
-        await context.read<ChildProvider>().applyInitialPreferences(
-              childId: profile.id,
-              language: _sound.language,
-              voicePackId: _sound.voicePackId,
-            );
-      }
-      if (mounted) {
-        await context
-            .read<ChildProvider>()
-            .setShowTextPrompts(_sound.showTextPrompts);
-      }
+      await childProvider.applyInitialPreferences(
+        childId: profile.id,
+        language: _sound.language,
+        voicePackId: _sound.voicePackId,
+      );
+      await childProvider.setShowTextPrompts(_sound.showTextPrompts);
 
       // Save the daily screen-time limit chosen during setup (can be
       // changed later in Settings → Screen Time).
       await ScreenTimeService.instance.load(profile.id);
       await ScreenTimeService.instance
           .setLimitMinutes(_screenTimeLimitMinutes);
+      // The service holds one child at a time — hand it back to the child
+      // still playing, so an added sibling's limit is not applied to them.
+      if (widget.isAdditionalChild && previousActiveChildId != null) {
+        await ScreenTimeService.instance.load(previousActiveChildId);
+      }
+
+      if (widget.isAdditionalChild) {
+        if (mounted) Navigator.of(context).pop(profile);
+        return;
+      }
 
       if (mounted) {
         // Log audio state before navigation
@@ -242,11 +268,26 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    // PopScope prevents the system back gesture from exiting the app.
+    // During onboarding PopScope stops the system back gesture exiting the
+    // app; when adding a sibling the parent may back out to Manage Children.
     return PopScope(
-      canPop: false,
+      canPop: widget.isAdditionalChild,
       child: Scaffold(
         resizeToAvoidBottomInset: true,
+        extendBodyBehindAppBar: true,
+        appBar: widget.isAdditionalChild
+            ? AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                foregroundColor: AppColors.primaryPurple,
+                title: Text(
+                  'Add Child',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.primaryPurple,
+                  ),
+                ),
+              )
+            : null,
         body: GestureDetector(
           // Dismiss the keyboard when tapping empty space.
           onTap: () => _nameFocusNode.unfocus(),
@@ -370,7 +411,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                 _buildScreenTimeSelector(),
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
-                  label: 'Continue to Dashboard',
+                  label: _finalStepLabel,
                   onPressed: _isLoading ? null : _saveProfile,
                   isLoading: _isLoading,
                   autofocus: false,
@@ -521,7 +562,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           _buildScreenTimeSelector(),
           const SizedBox(height: AppSpacing.xl),
           AppPrimaryButton(
-            label: 'Continue to Dashboard',
+            label: _finalStepLabel,
             onPressed: _isLoading ? null : _saveProfile,
             isLoading: _isLoading,
             autofocus: false,
