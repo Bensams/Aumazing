@@ -97,6 +97,128 @@ void main() {
     expect(result.destination, BootstrapDestination.home);
     expect(result.errorMessage, isNull);
   });
+
+  test('bootstrap keeps a deleted child deleted during hydration', () async {
+    // The parent deleted this child locally; the cloud row survives until the
+    // deletion syncs, and hydration must not write it back.
+    final localDb = _FakeLocalDbService(locallyDeletedChildIds: {'child-1'});
+    final service = ChildBootstrapService(
+      authService: _FakeAuthService.loggedIn(),
+      connectivityService: _FakeConnectivityService(online: true),
+      supabaseService: _FakeSupabaseService(
+        children: [
+          {
+            'id': 'child-1',
+            'parent_user_id': 'user-1',
+            'display_name': 'Deleted Kid',
+            'birth_date': '2022-04-20',
+            'created_at': '2026-04-20T00:00:00Z',
+            'updated_at': '2026-04-20T00:00:00Z',
+          },
+          {
+            'id': 'child-2',
+            'parent_user_id': 'user-1',
+            'display_name': 'Sibling',
+            'birth_date': '2021-04-20',
+            'created_at': '2026-04-20T00:00:00Z',
+            'updated_at': '2026-04-20T00:00:00Z',
+          },
+        ],
+      ),
+      localDbService: localDb,
+    );
+
+    final result = await service.bootstrap();
+
+    expect(localDb.upsertedChildren.map((c) => c.id), ['child-2']);
+    expect(result.destination, BootstrapDestination.home);
+  });
+
+  test('bootstrap skips children already deleted in the cloud', () async {
+    final localDb = _FakeLocalDbService();
+    final service = ChildBootstrapService(
+      authService: _FakeAuthService.loggedIn(),
+      connectivityService: _FakeConnectivityService(online: true),
+      supabaseService: _FakeSupabaseService(
+        children: [
+          {
+            'id': 'child-1',
+            'parent_user_id': 'user-1',
+            'display_name': 'Removed',
+            'birth_date': '2022-04-20',
+            'created_at': '2026-04-20T00:00:00Z',
+            'updated_at': '2026-04-20T00:00:00Z',
+            'deleted_at': '2026-05-01T00:00:00Z',
+          },
+        ],
+      ),
+      localDbService: localDb,
+    );
+
+    final result = await service.bootstrap();
+
+    expect(localDb.upsertedChildren, isEmpty);
+    expect(result.destination, BootstrapDestination.childProfileSetup);
+  });
+
+  test('bootstrap reaches home for a child older than the former 2–6 range',
+      () async {
+    final today = DateTime.now();
+    final service = ChildBootstrapService(
+      authService: _FakeAuthService.loggedIn(),
+      connectivityService: _FakeConnectivityService(online: false),
+      supabaseService: _FakeSupabaseService(children: const []),
+      localDbService: _FakeLocalDbService(
+        initialChildren: [
+          ChildProfile(
+            id: 'child-1',
+            userId: 'user-1',
+            displayName: 'Older Sibling',
+            birthDate: DateTime(today.year - 11, today.month, today.day),
+            avatar: 'lion',
+            createdAt: DateTime(2026, 4, 20),
+            updatedAt: DateTime(2026, 4, 20),
+          ),
+        ],
+      ),
+    );
+
+    expect((await service.bootstrap()).destination, BootstrapDestination.home);
+  });
+
+  test('one usable profile among several is enough to reach home', () async {
+    // A legacy record with no birth date must not strand an account whose
+    // other children are fine.
+    final service = ChildBootstrapService(
+      authService: _FakeAuthService.loggedIn(),
+      connectivityService: _FakeConnectivityService(online: false),
+      supabaseService: _FakeSupabaseService(children: const []),
+      localDbService: _FakeLocalDbService(
+        initialChildren: [
+          ChildProfile.fromMap({
+            'id': 'legacy-child',
+            'user_id': 'user-1',
+            'name': 'Legacy Child',
+            'age': 5,
+            'avatar': 'lion',
+            'created_at': '2026-04-20T00:00:00.000',
+            'updated_at': '2026-04-20T00:00:00.000',
+          }),
+          ChildProfile(
+            id: 'child-2',
+            userId: 'user-1',
+            displayName: 'Mika',
+            birthDate: DateTime(2022, 4, 20),
+            avatar: 'lion',
+            createdAt: DateTime(2026, 4, 20),
+            updatedAt: DateTime(2026, 4, 20),
+          ),
+        ],
+      ),
+    );
+
+    expect((await service.bootstrap()).destination, BootstrapDestination.home);
+  });
 }
 
 class _FakeAuthService extends AuthService {
@@ -353,11 +475,18 @@ class _FakeSupabaseService implements SupabaseService {
 }
 
 class _FakeLocalDbService extends LocalDbService {
-  _FakeLocalDbService({List<ChildProfile>? initialChildren})
-    : _children = [...?initialChildren];
+  _FakeLocalDbService({
+    List<ChildProfile>? initialChildren,
+    this.locallyDeletedChildIds = const {},
+  }) : _children = [...?initialChildren];
 
   final List<ChildProfile> _children;
+  final Set<String> locallyDeletedChildIds;
   final List<ChildProfile> upsertedChildren = [];
+
+  @override
+  Future<Set<String>> getLocallyDeletedChildIds() async =>
+      locallyDeletedChildIds;
 
   @override
   Future<void> upsertChild(
