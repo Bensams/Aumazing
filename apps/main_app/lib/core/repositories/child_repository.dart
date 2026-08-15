@@ -168,8 +168,14 @@ class ChildRepository {
   }
 
   /// Soft delete a child (propagated to Supabase on sync)
+  ///
+  /// The child row stays behind as a tombstone until the deletion reaches
+  /// Supabase; the child's local progress rows are removed straight away.
+  /// Offline this simply queues — the tombstone also stops cloud hydration
+  /// from bringing the profile back before the deletion is propagated.
   Future<void> deleteChild(String id) async {
     await _localDb.deleteChild(id);
+    await _localDb.purgeChildScopedData(id);
     debugPrint('[ChildRepository] Child soft-deleted: $id');
 
     // Trigger background sync (anonymous users are authenticated in Supabase)
