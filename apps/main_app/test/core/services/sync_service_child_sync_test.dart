@@ -208,6 +208,42 @@ void main() {
     );
 
     test(
+      'hydrateFromCloud never resurrects a child deleted locally',
+      () async {
+        // Deleted on this device; the cloud row lives on until the deletion
+        // is propagated, so hydration is the moment it could come back.
+        await localDb.deleteChild('sync-child');
+        supabase.remoteChildren.add({
+          'id': 'sync-child',
+          'parent_user_id': 'parent-1',
+          'display_name': 'Mika',
+          'birth_date': '2022-04-20',
+          'created_at': '2026-04-20T12:00:00.000',
+          'updated_at': '2026-04-20T12:00:00.000',
+        });
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            'id': 'run-of-deleted-child',
+            'child_id': 'sync-child',
+            'type': 'pre',
+            'started_at': '2026-05-01T10:00:00.000',
+            'status': 'completed',
+            'created_at': '2026-05-01T10:00:00.000',
+            'updated_at': '2026-05-01T10:00:00.000',
+          },
+        ];
+
+        await service.hydrateFromCloud();
+
+        expect(await localDb.getChild('sync-child'), isNull);
+        expect(await localDb.getLocallyDeletedChildIds(), {'sync-child'});
+        // Nor is the deleted child's cloud progress pulled back down.
+        final db = await localDb.database;
+        expect(await db.query(LocalTables.assessmentRuns), isEmpty);
+      },
+    );
+
+    test(
       'hydrateFromCloud runs once per user unless forced',
       () async {
         supabase.remoteRows[RemoteTables.assessmentRuns] = [
@@ -356,9 +392,12 @@ class _FakeSupabaseService implements SupabaseService {
     upsertedChildren.add(Map<String, dynamic>.from(data));
   }
 
+  /// Children the cloud reports for the parent.
+  final List<Map<String, dynamic>> remoteChildren = [];
+
   @override
   Future<List<Map<String, dynamic>>> getChildren(String userId) async =>
-      const [];
+      [for (final c in remoteChildren) Map<String, dynamic>.from(c)];
 
   @override
   Future<void> upsertAssessmentRun(

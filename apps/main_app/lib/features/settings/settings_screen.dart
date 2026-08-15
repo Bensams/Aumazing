@@ -12,7 +12,9 @@ import '../../services/screen_time_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
+import 'manage_children_screen.dart';
 import 'widgets/background_picker.dart';
+import 'widgets/settings_scaffold.dart';
 import 'widgets/object_style_picker.dart';
 
 /// Full-screen Settings hub (the "main settings" page).
@@ -33,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
     final palette = context.watch<ChildProvider>().activePalette;
     final isGuest = authService.isGuestMode;
 
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Settings',
       icon: Icons.settings_rounded,
       palette: palette,
@@ -51,6 +53,13 @@ class SettingsScreen extends StatelessWidget {
           title: 'Audio',
           subtitle: 'Music, sound effects, vibration, prompt speed',
           onTap: () => _push(context, _AudioSettingsScreen(palette: palette)),
+        ),
+        _CategoryTile(
+          icon: Icons.family_restroom_rounded,
+          color: const Color(0xFF7E9BD4),
+          title: 'Manage Children',
+          subtitle: 'Add, switch, edit or remove a child profile',
+          onTap: () => _push(context, const ManageChildrenScreen()),
         ),
         _CategoryTile(
           icon: Icons.child_care_rounded,
@@ -112,14 +121,14 @@ class _VideoSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Video',
       icon: Icons.monitor_rounded,
       palette: palette,
       children: [
         Consumer<ChildProvider>(
           builder: (context, childProv, _) {
-            return _SettingsCard(
+            return SettingsCard(
               children: [
                 const _SectionLabel('Graphics Quality'),
                 const SizedBox(height: AppSpacing.sm),
@@ -142,7 +151,7 @@ class _VideoSettingsScreen extends StatelessWidget {
                   }).toList(),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                const _HintText(
+                const SettingsHintText(
                   'Lower quality = static background and fewer effects '
                   '(cooler device, calmer visuals).',
                 ),
@@ -157,7 +166,7 @@ class _VideoSettingsScreen extends StatelessWidget {
                     animationIntensity: val,
                   ),
                 ),
-                const _HintText(
+                const SettingsHintText(
                   'Reduce visual stimulation for children sensitive to '
                   'movement.',
                 ),
@@ -171,7 +180,7 @@ class _VideoSettingsScreen extends StatelessWidget {
                   value: childProv.showTextPrompts,
                   onChanged: (val) => childProv.setShowTextPrompts(val),
                 ),
-                const _HintText(
+                const SettingsHintText(
                   'Hide the written prompt during games for pre-readers or '
                   'children who find text busy. The spoken instruction still '
                   'plays either way.',
@@ -196,14 +205,14 @@ class _AudioSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Audio',
       icon: Icons.volume_up_rounded,
       palette: palette,
       children: [
         Consumer<ChildProvider>(
           builder: (context, childProv, _) {
-            return _SettingsCard(
+            return SettingsCard(
               children: [
                 _SettingToggle(
                   icon: Icons.music_note_rounded,
@@ -265,7 +274,7 @@ class _AudioSettingsScreen extends StatelessWidget {
                   },
                 ),
                 _PromptSpeedSlider(childProv: childProv),
-                const _HintText(
+                const SettingsHintText(
                   'How quickly voice prompts and instructions play. Release '
                   'the slider to hear the new pace.',
                 ),
@@ -291,7 +300,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Child Preferences',
       icon: Icons.child_care_rounded,
       palette: palette,
@@ -302,7 +311,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ── Avatar ────────────────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('Avatar'),
                     const SizedBox(height: AppSpacing.sm),
@@ -342,11 +351,11 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
 
                 // ── Background theme ──────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('Background Theme'),
                     const SizedBox(height: 2),
-                    const _HintText(
+                    const SettingsHintText(
                       'Some children are sensitive to colors. Pick a calmer '
                       'theme if the current one is overstimulating.',
                     ),
@@ -380,7 +389,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         ),
                       ),
                     if (childProv.hasCustomBackground)
-                      const _HintText(
+                      const SettingsHintText(
                         'A custom background is in use, so the theme above '
                         'only sets the button and card colours.',
                       ),
@@ -403,11 +412,11 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
 
                 // ── My Path scene ─────────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('My Path Scene'),
                     const SizedBox(height: 2),
-                    const _HintText(
+                    const SettingsHintText(
                       'Sets the world your child\'s learning path travels '
                       'through. The games themselves are unchanged. Pick one '
                       'your child likes — and keep it, since a path that '
@@ -434,11 +443,11 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
 
                 // ── Game difficulty ───────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('Game Difficulty'),
                     const SizedBox(height: 2),
-                    _HintText(
+                    SettingsHintText(
                       childProv.isDifficultyOverridden
                           ? 'Manually set — applies to all practice games.'
                           : 'Following the assessment (per skill area).',
@@ -484,7 +493,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
 
                 // ── Language ──────────────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     _SectionLabel(childProv.strings.languageLabel),
                     const SizedBox(height: AppSpacing.sm),
@@ -513,11 +522,11 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 // ── Voice ─────────────────────────────────────────────
                 // Shown for every language so a parent can always hear a
                 // sample, even where there is only one recorded voice.
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('Voice'),
                     const SizedBox(height: 2),
-                    const _HintText(
+                    const SettingsHintText(
                       'Who reads the prompts aloud. Tap the speaker to hear '
                       'a sample.',
                     ),
@@ -528,7 +537,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
 
                 // ── Reward celebration ────────────────────────────────
-                _SettingsCard(
+                SettingsCard(
                   children: [
                     const _SectionLabel('Reward Celebration'),
                     const SizedBox(height: AppSpacing.sm),
@@ -556,7 +565,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         useRandomReward: val,
                       ),
                     ),
-                    const _HintText('A different celebration every time!'),
+                    const SettingsHintText('A different celebration every time!'),
                   ],
                 ),
               ],
@@ -775,9 +784,9 @@ class _AppearanceTab extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: _SettingsCard(
+          child: SettingsCard(
             children: [
-              _HintText(hint),
+              SettingsHintText(hint),
               const SizedBox(height: AppSpacing.sm),
               child,
             ],
@@ -794,91 +803,6 @@ class _AppearanceTab extends StatelessWidget {
 
 /// Full-screen settings page: themed gradient, header with back button,
 /// scrollable centered content column.
-class _SettingsScaffold extends StatelessWidget {
-  const _SettingsScaffold({
-    required this.title,
-    required this.icon,
-    required this.palette,
-    required this.children,
-  });
-
-  final String title;
-  final IconData icon;
-  final GamePalette palette;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(gradient: palette.parentBackground),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-                child: Row(
-                  children: [
-                    Material(
-                      color: AppColors.white.withAlpha(220),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(Icons.arrow_back_rounded,
-                            color: palette.primary),
-                        tooltip: 'Back',
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withAlpha(235),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(icon, color: palette.primary),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Flexible(
-                      child: Text(
-                        title,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.headlineSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg, AppSpacing.sm, AppSpacing.lg,
-                      AppSpacing.xl),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 720),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: children,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// One category row on the main settings hub.
 class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
@@ -1087,27 +1011,6 @@ class _VoicePackPickerState extends State<_VoicePackPicker> {
 }
 
 /// White rounded content card wrapping one settings section.
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.white.withAlpha(240),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-}
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
 
@@ -1119,23 +1022,6 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: AppTextStyles.labelLarge.copyWith(
         color: AppColors.textSecondary,
-      ),
-    );
-  }
-}
-
-class _HintText extends StatelessWidget {
-  const _HintText(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.bodySmall.copyWith(
-        color: AppColors.textSecondary,
-        fontStyle: FontStyle.italic,
       ),
     );
   }
@@ -1712,7 +1598,7 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
     final recommended =
         age == null ? null : ScreenTimeService.recommendedMinutesForAge(age);
 
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Screen Time',
       icon: Icons.timer_rounded,
       palette: widget.palette,
@@ -1724,7 +1610,7 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
             final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
             final limit = screenTime.limitMinutes;
 
-            return _SettingsCard(
+            return SettingsCard(
               children: [
                 const _SectionLabel('Today'),
                 const SizedBox(height: AppSpacing.xs),
@@ -1918,7 +1804,7 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
         age != null && ParentPinService.recommendsCustomPin(age);
     final email = widget.authService.verifiedEmail;
 
-    return _SettingsScaffold(
+    return SettingsScaffold(
       title: 'Parent Lock',
       icon: Icons.lock_outline_rounded,
       palette: widget.palette,
@@ -1929,7 +1815,7 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
             final pinService = ParentPinService.instance;
             final usesPin = pinService.hasPin;
 
-            return _SettingsCard(
+            return SettingsCard(
               children: [
                 const _SectionLabel('Unlock Method'),
                 const SizedBox(height: AppSpacing.sm),
@@ -2028,7 +1914,7 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  _HintText(
+                  SettingsHintText(
                     'After ${ParentPinService.maxAttempts} wrong tries the '
                     'keypad pauses for '
                     '${ParentPinService.lockoutDuration.inSeconds} seconds, '
