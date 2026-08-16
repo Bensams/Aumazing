@@ -1,10 +1,19 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/services/local_db_service.dart';
 import '../model/gameplay_session.dart';
 import '../model/module_progress.dart';
-import '../services/local_db_service.dart';
 
 /// Tracks module progress, completed activities, and level progression.
+///
+/// Reads through the **core** [LocalDbService] (`aumazing_offline.db`) — the
+/// same database every session write goes to. There is a second, older
+/// `LocalDbService` under `services/` backed by a different file
+/// (`aumazing.db`); this provider used to read from that one, so the
+/// dashboard queried a database no session was ever written into and
+/// "Recent activity" stayed empty no matter how much the child played.
+/// Consolidating the two services is AUM-31; until then, the rule here is
+/// that reads and writes must name the same database.
 class ProgressProvider extends ChangeNotifier {
   final LocalDbService _localDb;
 
@@ -68,7 +77,7 @@ class ProgressProvider extends ChangeNotifier {
 
     try {
       final modules = await _localDb.getModuleProgress(childId);
-      final sessions = await _localDb.getSessionsForChild(childId);
+      final sessions = await _localDb.getGameSessions(childId: childId);
       // A newer load (or clear()) took over while the queries ran — these
       // rows belong to a child no longer on screen.
       if (childId == _loadedChildId) {
