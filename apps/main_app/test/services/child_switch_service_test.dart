@@ -8,7 +8,6 @@ import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
 import 'package:aumazing/services/child_switch_service.dart';
-import 'package:aumazing/services/local_db_service.dart' as legacy_db;
 import 'package:aumazing/services/screen_time_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,14 +21,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   ChildProfile child(String id, {required DateTime createdAt}) => ChildProfile(
-        id: id,
-        userId: 'user-1',
-        displayName: 'Child $id',
-        birthDate: DateTime(2020, 1, 1),
-        avatar: '🐻',
-        createdAt: createdAt,
-        updatedAt: createdAt,
-      );
+    id: id,
+    userId: 'user-1',
+    displayName: 'Child $id',
+    birthDate: DateTime(2020, 1, 1),
+    avatar: '🐻',
+    createdAt: createdAt,
+    updatedAt: createdAt,
+  );
 
   final childA = child('a', createdAt: DateTime(2026, 1, 1));
   final childB = child('b', createdAt: DateTime(2026, 2, 1));
@@ -118,15 +117,12 @@ void main() {
       progressProvider: progressProvider,
     );
 
-    expect(
-      [
-        ...assessmentProvider.preResults.map((r) => r.childId),
-        ...assessmentProvider.postResults.map((r) => r.childId),
-        ...progressProvider.modules.map((m) => m.childId),
-        ...progressProvider.recentSessions.map((s) => s.childId),
-      ],
-      everyElement('b'),
-    );
+    expect([
+      ...assessmentProvider.preResults.map((r) => r.childId),
+      ...assessmentProvider.postResults.map((r) => r.childId),
+      ...progressProvider.modules.map((m) => m.childId),
+      ...progressProvider.recentSessions.map((s) => s.childId),
+    ], everyElement('b'));
   });
 
   test('an unknown child id is refused', () async {
@@ -152,8 +148,7 @@ class _FakeCoreDb extends core_db.LocalDbService {
   Future<List<ChildProfile>> getChildren({
     String? userId,
     bool includeDeleted = false,
-  }) async =>
-      _children;
+  }) async => _children;
 
   @override
   Future<List<AssessmentResult>> getAssessmentResults({
@@ -163,18 +158,18 @@ class _FakeCoreDb extends core_db.LocalDbService {
   }) async =>
       type == 'pre'
           ? [
-              AssessmentResult(
-                id: 'result-$childId',
-                childId: childId,
-                type: 'pre',
-                gameId: 'match_it',
-                score: 5,
-                totalItems: 10,
-                errorCount: 1,
-                avgResponseTimeMs: 1200,
-                completedAt: DateTime(2026, 6, 1),
-              ),
-            ]
+            AssessmentResult(
+              id: 'result-$childId',
+              childId: childId,
+              type: 'pre',
+              gameId: 'match_it',
+              score: 5,
+              totalItems: 10,
+              errorCount: 1,
+              avgResponseTimeMs: 1200,
+              completedAt: DateTime(2026, 6, 1),
+            ),
+          ]
           : const [];
 }
 
@@ -183,43 +178,50 @@ class _FakeCoreDb extends core_db.LocalDbService {
 class _FakeAssessmentGateway implements AssessmentGateway {
   @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) => {
-        'module_id': 'communication',
-        'child_id': preResults.first.childId,
-      };
+    'module_id': 'communication',
+    'child_id': preResults.first.childId,
+  };
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError(invocation.memberName.toString());
 }
 
-/// Legacy cache stand-in behind [ProgressProvider].
-class _FakeLegacyDb extends legacy_db.LocalDbService {
+/// Cache stand-in behind [ProgressProvider].
+///
+/// Extends the *core* service: that is the database sessions are written
+/// to, and the one the provider reads.
+class _FakeLegacyDb extends core_db.LocalDbService {
   @override
   Future<List<ModuleProgress>> getModuleProgress(String childId) async => [
-        ModuleProgress(
-          id: 'module-$childId',
-          childId: childId,
-          moduleId: 'communication',
-          moduleName: 'Communication',
-          status: 'in_progress',
-          currentLevel: 1,
-          updatedAt: DateTime(2026, 6, 1),
-        ),
-      ];
+    ModuleProgress(
+      id: 'module-$childId',
+      childId: childId,
+      moduleId: 'communication',
+      moduleName: 'Communication',
+      status: 'in_progress',
+      currentLevel: 1,
+      updatedAt: DateTime(2026, 6, 1),
+    ),
+  ];
 
   @override
-  Future<List<GameplaySession>> getSessionsForChild(String childId) async => [
-        GameplaySession(
-          id: 'session-$childId',
-          childId: childId,
-          gameId: 'match_it',
-          context: 'practice',
-          score: 5,
-          totalItems: 10,
-          errorCount: 1,
-          totalResponseTimeMs: 12000,
-          startedAt: DateTime(2026, 6, 1),
-          endedAt: DateTime(2026, 6, 1, 0, 5),
-        ),
-      ];
+  Future<List<GameplaySession>> getGameSessions({
+    String? childId,
+    String? context,
+    bool includeDeleted = false,
+  }) async => [
+    GameplaySession(
+      id: 'session-$childId',
+      childId: childId!,
+      gameId: 'match_it',
+      context: 'practice',
+      score: 5,
+      totalItems: 10,
+      errorCount: 1,
+      totalResponseTimeMs: 12000,
+      startedAt: DateTime(2026, 6, 1),
+      endedAt: DateTime(2026, 6, 1, 0, 5),
+    ),
+  ];
 }
