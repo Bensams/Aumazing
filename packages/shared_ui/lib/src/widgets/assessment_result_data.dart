@@ -54,6 +54,7 @@ abstract final class AssessmentLabels {
   static const developmentalProfile = 'Developmental Profile';
   static const recommendedSettings = 'Recommended Settings';
   static const recommendedActivities = 'Recommended Activities';
+  static const progressSinceFirst = 'Progress Since the First Assessment';
   static const aiAnalysis = 'AI Analysis';
   static const onDeviceAi = 'On-Device AI';
   static const ruleBased = 'Rule-Based';
@@ -146,10 +147,83 @@ class ResultModule {
   const ResultModule({
     required this.name,
     required this.startingLevel,
+    this.reason,
   });
 
   final String name;
   final int startingLevel;
+
+  /// Why this activity was chosen, in a parent's words (AUM-161) — e.g.
+  /// "Builds Communication, the area with the most room to grow right now".
+  ///
+  /// Describes what the activity practises and why it comes next. It is
+  /// never a claim about the child themselves, and never diagnostic: the
+  /// assessment reports skills observed in a game, not a condition.
+  final String? reason;
+}
+
+/// How one developmental area moved between two assessment runs (AUM-161).
+class ResultProgressArea {
+  const ResultProgressArea({
+    required this.label,
+    required this.beforeLevelName,
+    required this.afterLevelName,
+    required this.beforeLevelInt,
+    required this.afterLevelInt,
+  });
+
+  /// Display name, e.g. "Communication".
+  final String label;
+
+  final String beforeLevelName;
+  final String afterLevelName;
+
+  /// Ordinals: 0 = Needs Support, 1 = Emerging, 2 = Strength.
+  final int beforeLevelInt;
+  final int afterLevelInt;
+
+  /// Positive = moved up, negative = moved down, 0 = held steady.
+  int get delta => afterLevelInt - beforeLevelInt;
+
+  bool get improved => delta > 0;
+  bool get steady => delta == 0;
+}
+
+/// A before-and-after comparison of two assessment runs (AUM-161).
+///
+/// Deliberately describes *what the child did in the activities* and how
+/// those skill areas moved — never a condition, a diagnosis, or a claim
+/// about the child themselves. Only runs the app considers comparable ever
+/// reach here; the app-side progress service owns that rule.
+class ResultProgress {
+  const ResultProgress({
+    required this.areas,
+    required this.beforeCompletedAt,
+    required this.afterCompletedAt,
+  });
+
+  final List<ResultProgressArea> areas;
+  final DateTime beforeCompletedAt;
+  final DateTime afterCompletedAt;
+
+  int get improvedCount => areas.where((a) => a.improved).length;
+  int get steadyCount => areas.where((a) => a.steady).length;
+
+  bool get hasAreas => areas.isNotEmpty;
+
+  /// One plain sentence a parent can read at a glance. Growth is stated
+  /// warmly; no growth is stated neutrally, never as a failure or concern.
+  String get headline {
+    if (areas.isEmpty) return 'No areas could be compared between these two.';
+    final improved = improvedCount;
+    final noun = areas.length == 1 ? 'area' : 'areas';
+    if (improved == 0) {
+      return 'Skills held steady across ${areas.length} $noun since the '
+          'first assessment.';
+    }
+    return 'Grew in $improved of ${areas.length} skill $noun since the '
+        'first assessment.';
+  }
 }
 
 /// A single row in the Recommended Settings card.
@@ -167,10 +241,7 @@ class ResultRecommendation {
 
 /// A single row in the Developmental Profile card.
 class ResultProfileRow {
-  const ResultProfileRow({
-    required this.area,
-    required this.level,
-  });
+  const ResultProfileRow({required this.area, required this.level});
 
   final String area;
   final String level;
@@ -242,11 +313,13 @@ class AssessmentResultViewModel {
     this.learningPath = const [],
     this.sensoryObservations = const [],
     this.learningPathUnavailable = false,
-  })  : correctCount = AssessmentScoring.correctCount(games),
-        errorCount = AssessmentScoring.errorCount(games),
-        totalItems = AssessmentScoring.totalItems(games),
-        overallAdjustedAccuracy =
-            AssessmentScoring.overallAdjustedAccuracy(games);
+    this.progress,
+  }) : correctCount = AssessmentScoring.correctCount(games),
+       errorCount = AssessmentScoring.errorCount(games),
+       totalItems = AssessmentScoring.totalItems(games),
+       overallAdjustedAccuracy = AssessmentScoring.overallAdjustedAccuracy(
+         games,
+       );
 
   /// 'pre' or 'post'.
   final String assessmentType;
@@ -270,6 +343,13 @@ class AssessmentResultViewModel {
 
   /// Developmental areas with their finalized levels.
   final List<ResultAreaLevel> areas;
+
+  /// Before-and-after comparison against an earlier comparable run, when one
+  /// exists (AUM-161). Null when this is the only run, or when the two runs
+  /// are not comparable.
+  final ResultProgress? progress;
+
+  bool get hasProgress => progress?.hasAreas ?? false;
 
   /// Recommended settings as finalized with the run.
   final List<ResultRecommendation> recommendations;
@@ -298,8 +378,7 @@ class AssessmentResultViewModel {
   final bool learningPathUnavailable;
 
   /// Overall performance as a whole percent.
-  int get overallPercent =>
-      AssessmentScoring.percent(overallAdjustedAccuracy);
+  int get overallPercent => AssessmentScoring.percent(overallAdjustedAccuracy);
 
   /// Confidence as a whole percent, or null when there is no confidence.
   int? get confidencePercent {
@@ -313,12 +392,12 @@ class AssessmentResultViewModel {
   /// Developmental Profile rows including the sensory observations, which
   /// render as free-form text rather than a level meter.
   List<ResultProfileRow> get profileRows => [
-        for (final area in areas)
-          ResultProfileRow(area: area.label, level: area.levelName),
-        if (sensoryObservations.isNotEmpty)
-          ResultProfileRow(
-            area: AssessmentLabels.sensory,
-            level: sensoryObservations.join(', '),
-          ),
-      ];
+    for (final area in areas)
+      ResultProfileRow(area: area.label, level: area.levelName),
+    if (sensoryObservations.isNotEmpty)
+      ResultProfileRow(
+        area: AssessmentLabels.sensory,
+        level: sensoryObservations.join(', '),
+      ),
+  ];
 }
