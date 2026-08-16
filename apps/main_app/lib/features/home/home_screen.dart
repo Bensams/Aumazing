@@ -46,6 +46,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final AuthService _authService;
   bool _isLeftPanelExpanded = true;
+
   /// Portrait only: whether the child summary card is showing its details.
   bool _isSummaryExpanded = false;
 
@@ -92,7 +93,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final audioService = context.read<AudioService>();
       final childProvider = context.read<ChildProvider>();
-      debugPrint('[HomeScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}, musicEnabled=${childProvider.musicEnabled}');
+      debugPrint(
+        '[HomeScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}, musicEnabled=${childProvider.musicEnabled}',
+      );
 
       if (!childProvider.musicEnabled) {
         // User has music disabled — stop any music that may have started
@@ -104,7 +107,9 @@ class _HomeScreenState extends State<HomeScreen> {
           debugPrint('[HomeScreen] Music disabled and not playing — OK');
         }
       } else if (!audioService.isMusicPlaying) {
-        debugPrint('[HomeScreen] Music enabled but not playing, trying to resume...');
+        debugPrint(
+          '[HomeScreen] Music enabled but not playing, trying to resume...',
+        );
         await audioService.resumeMusic();
 
         // Double-check if music is playing after resume attempt
@@ -118,8 +123,10 @@ class _HomeScreenState extends State<HomeScreen> {
         // profile exists yet. Now that it is loaded, move to the child's own
         // choice. This is the one place a track changes mid-run, and it
         // happens before the child reaches any game.
-        debugPrint('[HomeScreen] Switching music to '
-            '${childProvider.musicCategory}');
+        debugPrint(
+          '[HomeScreen] Switching music to '
+          '${childProvider.musicCategory}',
+        );
         await audioService.playCategoryMusic(childProvider.musicCategory);
       } else {
         debugPrint('[HomeScreen] Music already playing and enabled — OK');
@@ -146,15 +153,19 @@ class _HomeScreenState extends State<HomeScreen> {
     // lifecycle callbacks (pause/resume) and playMusic() respect them.
     if (childProvider.hasProfile) {
       final audioService = context.read<AudioService>();
-      audioService.updateConfig(AudioConfig(
-        musicEnabled: childProvider.musicEnabled,
-        musicVolume: childProvider.musicVolume,
-        sfxEnabled: true,
-        sfxVolume: childProvider.sfxVolume,
-      ));
-      debugPrint('[HomeScreen] Synced AudioConfig from profile: '
-          'musicEnabled=${childProvider.musicEnabled}, '
-          'musicVolume=${childProvider.musicVolume}');
+      audioService.updateConfig(
+        AudioConfig(
+          musicEnabled: childProvider.musicEnabled,
+          musicVolume: childProvider.musicVolume,
+          sfxEnabled: true,
+          sfxVolume: childProvider.sfxVolume,
+        ),
+      );
+      debugPrint(
+        '[HomeScreen] Synced AudioConfig from profile: '
+        'musicEnabled=${childProvider.musicEnabled}, '
+        'musicVolume=${childProvider.musicVolume}',
+      );
     }
 
     // Only an actually-unusable birth date (missing or in the future) sends the
@@ -162,9 +173,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // consistent with the child-setup screen and ChildBootstrapService, neither
     // of which enforces a range any more.
     final profile = childProvider.profile;
-    final validation = profile == null
-        ? ChildBirthDateValidation.missing
-        : validateBirthDate(profile.birthDate);
+    final validation =
+        profile == null
+            ? ChildBirthDateValidation.missing
+            : validateBirthDate(profile.birthDate);
     if (profile == null ||
         validation == ChildBirthDateValidation.missing ||
         validation == ChildBirthDateValidation.futureDate) {
@@ -217,7 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       const TourStep(
         title: 'Welcome',
-        body: 'A quick tour of the parent dashboard — tap Next to step '
+        body:
+            'A quick tour of the parent dashboard — tap Next to step '
             'through it, or Skip to explore on your own.',
         icon: Icons.waving_hand_rounded,
       ),
@@ -230,28 +243,32 @@ class _HomeScreenState extends State<HomeScreen> {
       TourStep(
         targetKey: _summaryCardKey,
         title: 'Your child',
-        body: "Tap this card to expand your child's quick stats and your "
+        body:
+            "Tap this card to expand your child's quick stats and your "
             'account details.',
         icon: Icons.person_rounded,
       ),
       TourStep(
         targetKey: _assessmentButtonKey,
         title: 'Assessment',
-        body: 'Start the pre-assessment here to find your child\'s starting '
+        body:
+            'Start the pre-assessment here to find your child\'s starting '
             'level and get a recommended module.',
         icon: Icons.assessment_rounded,
       ),
       TourStep(
         targetKey: _childModeKey,
         title: 'Child mode',
-        body: 'Tap here, then hand the device to your child — the games open '
+        body:
+            'Tap here, then hand the device to your child — the games open '
             'in a full-screen, child-safe lobby.',
         icon: Icons.child_care_rounded,
       ),
       TourStep(
         targetKey: _childModeKey,
         title: 'Coming back',
-        body: 'To return here, tap the lock button at the top of the child '
+        body:
+            'To return here, tap the lock button at the top of the child '
             'screen and enter your parent PIN.',
         icon: Icons.lock_rounded,
       ),
@@ -270,7 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
       TourStep(
         targetKey: _assessmentStatusKey,
         title: 'Recommended module',
-        body: 'The activity your child should work on next — tap it to open '
+        body:
+            'The activity your child should work on next — tap it to open '
             'that learning path straight away.',
         icon: Icons.recommend_rounded,
       ),
@@ -283,41 +301,47 @@ class _HomeScreenState extends State<HomeScreen> {
       TourStep(
         targetKey: _recentActivityKey,
         title: 'Recent activity',
-        body: 'The last few sessions your child played, with score and time '
+        body:
+            'The last few sessions your child played, with score and time '
             'spent.',
         icon: Icons.history_rounded,
       ),
       TourStep(
         targetKey: _settingsWideKey,
         title: 'Settings',
-        body: 'Set the parent PIN, screen-time limit, sounds and profile '
+        body:
+            'Set the parent PIN, screen-time limit, sounds and profile '
             'details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
         targetKey: _settingsPortraitKey,
         title: 'Settings',
-        body: 'Set the parent PIN, screen-time limit, sounds and profile '
+        body:
+            'Set the parent PIN, screen-time limit, sounds and profile '
             'details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
         targetKey: _signOutWideKey,
         title: 'Sign out',
-        body: 'Signs you out of your account — your child\'s progress stays '
+        body:
+            'Signs you out of your account — your child\'s progress stays '
             'saved.',
         icon: Icons.logout_rounded,
       ),
       TourStep(
         targetKey: _signOutPortraitKey,
         title: 'Sign out',
-        body: 'Signs you out of your account — your child\'s progress stays '
+        body:
+            'Signs you out of your account — your child\'s progress stays '
             'saved.',
         icon: Icons.logout_rounded,
       ),
       const TourStep(
         title: 'That\'s it',
-        body: 'You can replay this tour any time from the ? button at the '
+        body:
+            'You can replay this tour any time from the ? button at the '
             'top of the dashboard.',
         icon: Icons.help_outline_rounded,
       ),
@@ -341,9 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// assessment activities) and re-applies the parent orientation when it
   /// returns — HomeScreen's initState does not run again on pop.
   Future<void> _pushChildFacing(Widget page) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => page),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     if (mounted) lockParentAdaptive();
   }
 
@@ -418,10 +440,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           if (_isTourActive)
-            GuidedTourOverlay(
-              steps: _tourSteps(),
-              onFinish: _endTour,
-            ),
+            GuidedTourOverlay(steps: _tourSteps(), onFinish: _endTour),
         ],
       ),
     );
@@ -532,9 +551,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: () => setState(
-                  () => _isSummaryExpanded = !_isSummaryExpanded,
-                ),
+                onTap:
+                    () => setState(
+                      () => _isSummaryExpanded = !_isSummaryExpanded,
+                    ),
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.sm),
                   child: Row(
@@ -968,13 +988,15 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, assessProv, _) {
         final assessment = AppPrimaryButton(
           key: _assessmentButtonKey,
-          label: assessProv.hasPreAssessment
-              ? 'Assessment'
-              : 'Start Pre-Assessment',
+          label:
+              assessProv.hasPreAssessment
+                  ? 'Assessment'
+                  : 'Start Pre-Assessment',
           onPressed: _startPreAssessment,
-          icon: assessProv.hasPreAssessment
-              ? Icons.assessment_rounded
-              : Icons.play_circle_filled_rounded,
+          icon:
+              assessProv.hasPreAssessment
+                  ? Icons.assessment_rounded
+                  : Icons.play_circle_filled_rounded,
         );
         final childMode = _ActionCard(
           key: _childModeKey,
@@ -990,11 +1012,12 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Therapy Directory',
           subtitle: 'Centers near you',
           color: AppColors.peach,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const TherapyDirectoryScreen(),
-            ),
-          ),
+          onTap:
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const TherapyDirectoryScreen(),
+                ),
+              ),
         );
 
         // What each action needs to read in full, measured from its own
@@ -1003,9 +1026,10 @@ class _HomeScreenState extends State<HomeScreen> {
         // share of the width.
         final assessmentMin = AppPrimaryButton.minWidthFor(
           context,
-          label: assessProv.hasPreAssessment
-              ? 'Assessment'
-              : 'Start Pre-Assessment',
+          label:
+              assessProv.hasPreAssessment
+                  ? 'Assessment'
+                  : 'Start Pre-Assessment',
           icon: Icons.play_circle_filled_rounded,
         );
         final cardMin = _ActionCard.minWidthFor(
@@ -1096,25 +1120,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       'Aumazing Premium',
-                      style: AppTextStyles.titleMedium
-                          .copyWith(color: AppColors.textPrimary),
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     Text(
                       'Interactive therapy locator, skill trends, and '
                       'fresh AI recommendations — ₱149/month.',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.mutedForeground),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
                 label: 'Upgrade',
                 icon: Icons.star_rounded,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PremiumUpgradeScreen(authService: _authService),
-                  ),
-                ),
+                onPressed:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder:
+                            (_) =>
+                                PremiumUpgradeScreen(authService: _authService),
+                      ),
+                    ),
               ),
             ),
           ),
@@ -1124,7 +1152,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Compact "screen time today" monitor for the parent (FR: parents
-  /// monitor screen time from the dashboard). Hidden when no limit is set.
+  /// monitor screen time from the dashboard). Hidden when no limits are set.
   Widget _buildScreenTimeStatus() {
     final childId = context.watch<ChildProvider>().profile?.id;
     final screenTime = ScreenTimeService.instance;
@@ -1135,36 +1163,86 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: screenTime,
       builder: (context, _) {
         final limit = screenTime.limitMinutes;
-        if (limit == null) return const SizedBox.shrink();
-        final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
-        final fraction = (usedMin / limit).clamp(0.0, 1.0);
+        final sessionLimit = screenTime.sessionLimitMinutes;
+        if (limit == null && sessionLimit == null) {
+          return const SizedBox.shrink();
+        }
+        // Each budget reads "used of configured · remaining left", so the
+        // dashboard stays one glance wide while still distinguishing the
+        // three values the parent needs, and states the no-limit case
+        // outright instead of omitting the line (AUM-162). Seconds drive the
+        // bar so a part-minute of play is not rounded away.
+        final dailyRemaining = screenTime.remainingSeconds;
+        final sessionRemaining = screenTime.sessionRemainingSeconds;
+        final dailyLine =
+            limit == null
+                ? 'Today: ${ScreenTimeService.formatDuration(screenTime.usedTodaySeconds)} played · no daily limit'
+                : 'Today: ${ScreenTimeService.formatDuration(screenTime.usedTodaySeconds)}'
+                    ' of ${ScreenTimeService.formatDuration(limit * 60)}'
+                    ' · ${ScreenTimeService.formatDuration(dailyRemaining ?? 0)} left';
+        final sessionLine =
+            sessionLimit == null
+                ? 'Session: ${ScreenTimeService.formatDuration(screenTime.sessionUsedSeconds)} played · no session limit'
+                : 'Session: ${ScreenTimeService.formatDuration(screenTime.sessionUsedSeconds)}'
+                    ' of ${ScreenTimeService.formatDuration(sessionLimit * 60)}'
+                    ' · ${ScreenTimeService.formatDuration(sessionRemaining ?? 0)} left';
+        // The bar tracks the daily budget when there is one; with only a
+        // session limit set it tracks the current session instead.
+        final fraction =
+            limit != null
+                ? (screenTime.usedTodaySeconds / (limit * 60)).clamp(0.0, 1.0)
+                : (screenTime.sessionUsedSeconds / (sessionLimit! * 60)).clamp(
+                  0.0,
+                  1.0,
+                );
         return Padding(
           key: _screenTimeKey,
           padding: const EdgeInsets.only(top: AppSpacing.sm),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.timer_rounded,
-                  size: 16, color: AppColors.mutedForeground),
-              const SizedBox(width: 6),
-              Text(
-                'Screen time today: $usedMin / $limit min',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.mutedForeground),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.timer_rounded,
+                  size: 16,
+                  color: AppColors.mutedForeground,
+                ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 6),
               Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: fraction,
-                    minHeight: 6,
-                    backgroundColor: AppColors.lavenderLight,
-                    valueColor: AlwaysStoppedAnimation(
-                      fraction >= 1.0
-                          ? AppColors.statusWarningDark
-                          : AppColors.mint,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dailyLine,
+                      key: const Key('dashboard.screenTime.daily'),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
+                    Text(
+                      sessionLine,
+                      key: const Key('dashboard.screenTime.session'),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: fraction,
+                        minHeight: 6,
+                        backgroundColor: AppColors.lavenderLight,
+                        valueColor: AlwaysStoppedAnimation(
+                          fraction >= 1.0
+                              ? AppColors.statusWarningDark
+                              : AppColors.mint,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1176,9 +1254,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Assessment Status ───────────────────────────────────────────────
 
+  /// A quiet placeholder card shown while the newly selected child's data
+  /// loads, so the previous child's numbers are never on screen meanwhile.
+  Widget _buildLoadingCard(String message) {
+    return AppCard(
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAssessmentStatus() {
     return Consumer<AssessmentProvider>(
       builder: (context, assessProv, _) {
+        if (assessProv.isLoading) {
+          return _buildLoadingCard('Loading assessment results…');
+        }
         if (!assessProv.hasPreAssessment) {
           return AppCard(
             child: Row(
@@ -1341,9 +1447,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   label: 'Start Post-Assessment',
                   icon: Icons.play_arrow_rounded,
-                  onPressed: () => _pushChildFacing(
-                    const PostAssessmentProgressScreen(),
-                  ),
+                  onPressed:
+                      () => _pushChildFacing(
+                        const PostAssessmentProgressScreen(),
+                      ),
                 ),
               ],
             ],
@@ -1358,7 +1465,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProgressSection() {
     return Consumer<AssessmentProvider>(
       builder: (context, assessProv, _) {
-        if (assessProv.preResults.isEmpty) {
+        // While a switch is loading the new child's rows, showing the chart
+        // would render the previous child's scores under the new name.
+        if (assessProv.isLoading || assessProv.preResults.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -1477,30 +1586,38 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: AppCard(
               child: _CtaBand(
-                leading: const Icon(Icons.lock_rounded,
-                    color: AppColors.mutedForeground),
+                leading: const Icon(
+                  Icons.lock_rounded,
+                  color: AppColors.mutedForeground,
+                ),
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Advanced Trends',
-                        style: AppTextStyles.titleMedium
-                            .copyWith(color: AppColors.textPrimary)),
+                    Text(
+                      'Advanced Trends',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                     Text(
                       'See how skills improve across assessment cycles '
                       '— a Premium feature.',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.mutedForeground),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
                 label: 'Unlock',
                 icon: Icons.star_rounded,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PremiumUpgradeScreen(authService: _authService),
-                  ),
-                ),
+                onPressed:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder:
+                            (_) =>
+                                PremiumUpgradeScreen(authService: _authService),
+                      ),
+                    ),
               ),
             ),
           );
@@ -1508,21 +1625,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Consumer<AssessmentProvider>(
           builder: (context, assessProv, _) {
+            // Mid-switch the pre/post rows may still be the previous
+            // child's; say nothing until the new child's rows are in.
+            if (assessProv.isLoading) return const SizedBox.shrink();
             if (!assessProv.hasPostAssessment) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: AppCard(
                   child: Row(
                     children: [
-                      const Icon(Icons.insights_rounded,
-                          color: AppColors.primaryPurple),
+                      const Icon(
+                        Icons.insights_rounded,
+                        color: AppColors.primaryPurple,
+                      ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Complete a post-assessment to see pre → post '
                           'progress trends here.',
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: AppColors.textPrimary),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                     ],
@@ -1547,9 +1670,8 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             if (rows.isEmpty) return const SizedBox.shrink();
 
-            final avgDelta = rows
-                    .map((r) => r.$3 - r.$2)
-                    .reduce((a, b) => a + b) /
+            final avgDelta =
+                rows.map((r) => r.$3 - r.$2).reduce((a, b) => a + b) /
                 rows.length;
 
             return Padding(
@@ -1560,36 +1682,44 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        Text('Advanced Trends',
-                            style: AppTextStyles.titleMedium
-                                .copyWith(color: AppColors.textPrimary)),
+                        Text(
+                          'Advanced Trends',
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                         const Spacer(),
                         Icon(
                           avgDelta >= 0
                               ? Icons.trending_up_rounded
                               : Icons.trending_down_rounded,
                           size: 18,
-                          color: avgDelta >= 0
-                              ? AppColors.statusSuccessDark
-                              : AppColors.mutedForeground,
+                          color:
+                              avgDelta >= 0
+                                  ? AppColors.statusSuccessDark
+                                  : AppColors.mutedForeground,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${avgDelta >= 0 ? '+' : ''}'
                           '${avgDelta.toStringAsFixed(0)}% overall',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: avgDelta >= 0
-                                ? AppColors.statusSuccessDark
-                                : AppColors.mutedForeground,
+                            color:
+                                avgDelta >= 0
+                                    ? AppColors.statusSuccessDark
+                                    : AppColors.mutedForeground,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Text('Pre vs Post accuracy per activity',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.mutedForeground)),
+                    Text(
+                      'Pre vs Post accuracy per activity',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     for (final (label, pre, post) in rows)
                       Padding(
@@ -1598,10 +1728,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             SizedBox(
                               width: 96,
-                              child: Text(label,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.textPrimary),
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                label,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             Expanded(
                               child: ClipRRect(
@@ -1613,14 +1746,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       minHeight: 12,
                                       backgroundColor: AppColors.lavenderLight,
                                       valueColor: const AlwaysStoppedAnimation(
-                                          AppColors.lavender),
+                                        AppColors.lavender,
+                                      ),
                                     ),
                                     LinearProgressIndicator(
                                       value: post / 100,
                                       minHeight: 12,
                                       backgroundColor: Colors.transparent,
                                       valueColor: const AlwaysStoppedAnimation(
-                                          AppColors.primaryPurple),
+                                        AppColors.primaryPurple,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1631,9 +1766,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               '${(post - pre) >= 0 ? '+' : ''}'
                               '${(post - pre).toStringAsFixed(0)}%',
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: (post - pre) >= 0
-                                    ? AppColors.statusSuccessDark
-                                    : AppColors.mutedForeground,
+                                color:
+                                    (post - pre) >= 0
+                                        ? AppColors.statusSuccessDark
+                                        : AppColors.mutedForeground,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1655,7 +1791,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildRecentActivity() {
     return Consumer<ProgressProvider>(
       builder: (context, progressProv, _) {
+        if (progressProv.isLoading) {
+          return _buildLoadingCard('Loading recent activity…');
+        }
         final sessions = progressProv.recentSessions;
+        final childName = context.watch<ChildProvider>().profile?.displayName;
 
         if (sessions.isEmpty) {
           return AppCard(
@@ -1671,7 +1811,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'No activity yet',
+                      childName == null
+                          ? 'No activity yet'
+                          : 'No activity for $childName yet',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.textPrimary,
                       ),
@@ -1807,12 +1949,16 @@ class _CtaBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // What the label itself demands, before any layout preference.
-    final labelMin =
-        AppPrimaryButton.minWidthFor(context, label: label, icon: icon);
+    final labelMin = AppPrimaryButton.minWidthFor(
+      context,
+      label: label,
+      icon: icon,
+    );
     final textScale =
-        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling)
-                .scale(14) /
-            14;
+        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling).scale(
+          14,
+        ) /
+        14;
     final messageMin = _minMessageWidth * textScale;
 
     return LayoutBuilder(
@@ -1822,15 +1968,16 @@ class _CtaBand extends StatelessWidget {
         // readable width. The old `buttonWidth * 2.6` rule ignored what the
         // label needed and clipped "Upgrade" to "Upgr…".
         final stacked = constraints.maxWidth < messageMin + gap + labelMin;
-        final buttonWidth = stacked
-            ? null
-            : math.max(
-                labelMin,
-                math.min(
-                  _preferredButtonWidth,
-                  constraints.maxWidth - messageMin - gap,
-                ),
-              );
+        final buttonWidth =
+            stacked
+                ? null
+                : math.max(
+                  labelMin,
+                  math.min(
+                    _preferredButtonWidth,
+                    constraints.maxWidth - messageMin - gap,
+                  ),
+                );
         final button = AppPrimaryButton(
           label: label,
           icon: icon,
@@ -1849,11 +1996,7 @@ class _CtaBand extends StatelessWidget {
         if (stacked) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              message,
-              const SizedBox(height: gap),
-              button,
-            ],
+            children: [message, const SizedBox(height: gap), button],
           );
         }
 

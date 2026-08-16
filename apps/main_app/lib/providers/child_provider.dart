@@ -33,7 +33,8 @@ class ChildProvider extends ChangeNotifier {
   /// in the sync stack, which a widget test creating a provider has no reason
   /// to need.
   final ChildRepository? _injectedRepository;
-  late final ChildRepository _childRepository = _injectedRepository ??
+  late final ChildRepository _childRepository =
+      _injectedRepository ??
       ChildRepository(localDb: _localDb, authService: _authService);
 
   /// Every non-deleted child belonging to the current parent, oldest first.
@@ -72,8 +73,9 @@ class ChildProvider extends ChangeNotifier {
   /// Selected voice-over pack — which recorded voice speaks the cues for the
   /// active language. Persisted locally per child; defaults to the language's
   /// default pack.
-  String _voicePackId =
-      defaultVoicePackForLanguage(GameLanguage.english.slug).id;
+  String _voicePackId = defaultVoicePackForLanguage(
+    GameLanguage.english.slug,
+  ).id;
   static const _voicePackKeyPrefix = 'voice_pack_';
 
   /// Parent's manual difficulty override (1 Easy / 2 Medium / 3 Hard). When
@@ -93,9 +95,15 @@ class ChildProvider extends ChangeNotifier {
     LocalDbService? localDb,
     AuthService? authService,
     ChildRepository? childRepository,
-  })  : _localDb = localDb ?? LocalDbService(),
-        _authService = authService ?? AuthService(),
-        _injectedRepository = childRepository;
+  }) : _localDb = localDb ?? LocalDbService(),
+       _authService = authService ?? AuthService(),
+       _injectedRepository = childRepository;
+
+  /// Where the parent's active-child selection is saved (AUM-151). Keyed by
+  /// the parent's effective user id — a real account id or a `guest_<uuid>` —
+  /// so two accounts on the same device can never inherit each other's
+  /// selection.
+  static const _activeChildKeyPrefix = 'active_child_';
 
   ChildProfile? get profile => _profile;
   bool get isLoading => _isLoading;
@@ -120,7 +128,8 @@ class ChildProvider extends ChangeNotifier {
   bool get sensoryPreferencesSet => _profile?.sensoryPreferencesSet ?? false;
 
   // Reward preference shortcuts
-  RewardPreference get rewardPreference => _profile?.rewardPreference ?? RewardPreference.bubbles;
+  RewardPreference get rewardPreference =>
+      _profile?.rewardPreference ?? RewardPreference.bubbles;
   bool get useRandomReward => _profile?.useRandomReward ?? false;
 
   // ── Background theme ──────────────────────────────────────────────────
@@ -150,9 +159,7 @@ class ChildProvider extends ChangeNotifier {
   GamePalette get activePalette {
     final base = GamePalettes.of(activeTheme);
     final custom = _customBackground;
-    return custom == null
-        ? base
-        : base.withGameBackground(custom.toGradient());
+    return custom == null ? base : base.withGameBackground(custom.toGradient());
   }
 
   // ── My Path world ─────────────────────────────────────────────────────
@@ -186,7 +193,9 @@ class ChildProvider extends ChangeNotifier {
     if (id != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(
-          '$_difficultyOverrideKeyPrefix$id', _difficultyOverride!);
+        '$_difficultyOverrideKeyPrefix$id',
+        _difficultyOverride!,
+      );
     }
   }
 
@@ -311,8 +320,9 @@ class ChildProvider extends ChangeNotifier {
   /// profile is loaded (e.g. on the login / loading screens).
   static Future<bool> readUseStaticBackground() async {
     final prefs = await SharedPreferences.getInstance();
-    return GraphicsQuality.fromSlug(prefs.getString(_graphicsQualityKey))
-        .useStaticBackground;
+    return GraphicsQuality.fromSlug(
+      prefs.getString(_graphicsQualityKey),
+    ).useStaticBackground;
   }
 
   /// Returns the sensory settings as a map for use in scoring/assessment.
@@ -331,9 +341,10 @@ class ChildProvider extends ChangeNotifier {
   /// (or picks) the active one.
   ///
   /// An already-selected child stays active across a reload. Otherwise the
-  /// oldest profile is used — a deliberate choice over "whatever storage
-  /// returned first", so adding a child never silently takes over the session.
-  /// Restoring the active child across app restarts is AUM-151.
+  /// parent's saved selection for this account is restored (AUM-151); only
+  /// when neither matches one of this parent's children does the oldest
+  /// profile take over — a deliberate choice over "whatever storage returned
+  /// first", so adding a child never silently takes over the session.
   Future<void> loadProfile() async {
     _isLoading = true;
     notifyListeners();
@@ -352,8 +363,17 @@ class ChildProvider extends ChangeNotifier {
 
       final previousId = _profile?.id;
       _children = _sorted(await _localDb.getChildren(userId: userId));
-      _profile = _childById(previousId) ??
+      final savedId = await _readSavedActiveChildId(userId);
+      // In-session selection wins, then this parent's saved choice. A saved
+      // id that is stale (child deleted) or belongs to another parent simply
+      // fails the lookup and falls through to the oldest child.
+      _profile =
+          _childById(previousId) ??
+          _childById(savedId) ??
           (_children.isEmpty ? null : _children.first);
+      // Re-save, so a fallback (or a cleared selection) is what the next
+      // launch restores instead of retrying the stale id every time.
+      await _persistActiveChild(userId);
       await _loadActiveChildPreferences();
     } catch (e) {
       debugPrint('[ChildProvider] loadProfile error: $e');
@@ -380,6 +400,7 @@ class ChildProvider extends ChangeNotifier {
 
     _profile = target;
     await _loadActiveChildPreferences();
+    await _persistActiveChild(_authService.effectiveUserId);
     notifyListeners();
     return true;
   }
@@ -427,6 +448,7 @@ class ChildProvider extends ChangeNotifier {
     if (makeActive || _profile == null) {
       _profile = created;
       await _loadActiveChildPreferences();
+      await _persistActiveChild(_authService.effectiveUserId);
     }
     notifyListeners();
     return created;
@@ -487,6 +509,9 @@ class ChildProvider extends ChangeNotifier {
 
     _profile = _children.isEmpty ? null : _children.first;
     await _loadActiveChildPreferences();
+    // Save the replacement (or the cleared selection) so the next launch
+    // does not try to restore the deleted child.
+    await _persistActiveChild(_authService.effectiveUserId);
     notifyListeners();
 
     return _profile == null
@@ -495,6 +520,87 @@ class ChildProvider extends ChangeNotifier {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────
+
+  /// The saved active-child id for [userId], or null when nothing was saved.
+  ///
+  /// When the account has no saved selection of its own but the guest account
+  /// it was migrated from does (see [AuthService.previousGuestUserId]), the
+  /// guest's selection is used — the children themselves were migrated to the
+  /// new id, so the choice still refers to a child this parent owns. The
+  /// caller validates the id against the loaded children either way.
+  Future<String?> _readSavedActiveChildId(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('$_activeChildKeyPrefix$userId');
+      if (saved != null) return saved;
+
+      final previousGuestId = _authService.previousGuestUserId;
+      if (previousGuestId != null && previousGuestId != userId) {
+        final inherited = prefs.getString(
+          '$_activeChildKeyPrefix$previousGuestId',
+        );
+        if (inherited != null) return inherited;
+      }
+
+      // Guest → permanent conversion: the children were backfilled to the new
+      // account id, but the selection was saved under the guest id. Adopting
+      // it here is safe because the caller only accepts an id that resolves
+      // to one of *this* parent's loaded children — a guest selection that
+      // was never backfilled simply fails that lookup.
+      final storedGuestId = await _authService.getStoredGuestUserId();
+      if (storedGuestId != null && storedGuestId != userId) {
+        return prefs.getString('$_activeChildKeyPrefix$storedGuestId');
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ChildProvider] read saved active child failed: $e');
+      return null;
+    }
+  }
+
+  /// Saves the active child for [userId] — or removes the entry when no child
+  /// is active — so the next launch restores exactly this state.
+  Future<void> _persistActiveChild(String? userId) async {
+    if (userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = _profile?.id;
+      if (id == null) {
+        await prefs.remove('$_activeChildKeyPrefix$userId');
+      } else {
+        await prefs.setString('$_activeChildKeyPrefix$userId', id);
+      }
+    } catch (e) {
+      debugPrint('[ChildProvider] persist active child failed: $e');
+    }
+  }
+
+  /// Carries a saved active-child selection from one account id to another —
+  /// the guest → permanent conversion, where the children are backfilled to
+  /// the new account id and the stored guest session is cleared right after.
+  ///
+  /// Static because it runs at conversion time, from the bind flow, where no
+  /// ChildProvider for the new identity exists yet. An existing selection
+  /// under [toUserId] is never overwritten: that account already made its own
+  /// choice. The next [loadProfile] validates the carried id and falls back
+  /// if the child did not survive the backfill.
+  static Future<void> migrateSavedActiveChild({
+    required String fromUserId,
+    required String toUserId,
+  }) async {
+    if (fromUserId == toUserId) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('$_activeChildKeyPrefix$fromUserId');
+      if (saved == null) return;
+      if (prefs.getString('$_activeChildKeyPrefix$toUserId') == null) {
+        await prefs.setString('$_activeChildKeyPrefix$toUserId', saved);
+      }
+      await prefs.remove('$_activeChildKeyPrefix$fromUserId');
+    } catch (e) {
+      debugPrint('[ChildProvider] migrate saved active child failed: $e');
+    }
+  }
 
   ChildProfile? _childById(String? id) {
     if (id == null) return null;
@@ -684,8 +790,10 @@ class ChildProvider extends ChangeNotifier {
     } else {
       final prefs = await SharedPreferences.getInstance();
       _objectStyle =
-          GameObjectStyle.decode(prefs.getString('$_objectStyleKeyPrefix$id')) ??
-              const GameObjectStyle();
+          GameObjectStyle.decode(
+            prefs.getString('$_objectStyleKeyPrefix$id'),
+          ) ??
+          const GameObjectStyle();
     }
     GameObjectStyle.current = _objectStyle;
   }
@@ -698,7 +806,9 @@ class ChildProvider extends ChangeNotifier {
     if (id != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-          '$_customBackgroundKeyPrefix$id', background.encode());
+        '$_customBackgroundKeyPrefix$id',
+        background.encode(),
+      );
     }
   }
 
@@ -724,7 +834,8 @@ class ChildProvider extends ChangeNotifier {
     // decode() returns null for anything unparseable, so a corrupt value
     // degrades to the preset theme instead of failing startup.
     _customBackground = ChildBackground.decode(
-        prefs.getString('$_customBackgroundKeyPrefix$id'));
+      prefs.getString('$_customBackgroundKeyPrefix$id'),
+    );
   }
 
   /// Sets the "My Path" scene and persists it locally.
@@ -838,8 +949,9 @@ class ChildProvider extends ChangeNotifier {
   /// Loads the persisted graphics quality (defaults to High).
   Future<void> _loadGraphicsQuality() async {
     final prefs = await SharedPreferences.getInstance();
-    _graphicsQuality =
-        GraphicsQuality.fromSlug(prefs.getString(_graphicsQualityKey));
+    _graphicsQuality = GraphicsQuality.fromSlug(
+      prefs.getString(_graphicsQualityKey),
+    );
   }
 
   void clear() {

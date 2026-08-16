@@ -46,6 +46,16 @@ class AssessmentProvider extends ChangeNotifier {
   Map<String, dynamic>? _recommendation;
   bool _isLoading = false;
 
+  /// The child the dashboard data in this provider belongs to — set at the
+  /// *start* of every [loadAssessments], cleared by [clear]. Every write that
+  /// happens after an await re-checks it, so a slow load for a previous
+  /// child can never overwrite the newly selected child's data (AUM-160).
+  String? _loadedChildId;
+
+  /// Bumped by every [loadAssessments] and [clear]; only the latest load may
+  /// end the loading state.
+  int _loadGeneration = 0;
+
   /// The sessions collected for the *current* assessment run only.
   ///
   /// Only sessions whose run id, child id and gameplay context all match the
@@ -103,8 +113,8 @@ class AssessmentProvider extends ChangeNotifier {
   AssessmentProvider({
     AssessmentGateway? assessmentService,
     core_db.LocalDbService? localDb,
-  })  : _assessmentServiceOverride = assessmentService,
-        _localDbOverride = localDb;
+  }) : _assessmentServiceOverride = assessmentService,
+       _localDbOverride = localDb;
 
   /// The gameplay context sessions of an assessment run carry.
   static String expectedContextFor(String type) =>
@@ -120,19 +130,22 @@ class AssessmentProvider extends ChangeNotifier {
     required String runId,
     required String childId,
     required String expectedContext,
-  }) =>
-      [
-        for (final session in sessions)
-          if (session.assessmentRunId == runId &&
-              session.childId == childId &&
-              session.context == expectedContext)
-            session,
-      ];
+  }) => [
+    for (final session in sessions)
+      if (session.assessmentRunId == runId &&
+          session.childId == childId &&
+          session.context == expectedContext)
+        session,
+  ];
 
   List<AssessmentResult> get preResults => _preResults;
   List<AssessmentResult> get postResults => _postResults;
   Map<String, dynamic>? get recommendation => _recommendation;
   bool get isLoading => _isLoading;
+
+  /// The child the latest [loadAssessments] call was for, or null after
+  /// [clear]. Lets callers verify whose data they are looking at.
+  String? get loadedChildId => _loadedChildId;
   bool get hasPreAssessment => _preResults.isNotEmpty;
   bool get hasPostAssessment => _postResults.isNotEmpty;
   bool get hasRecommendation => _recommendation != null;
@@ -183,18 +196,15 @@ class AssessmentProvider extends ChangeNotifier {
   GameSessionMetrics? analyticsForGame(String gameId) =>
       _currentRunAnalytics[gameId];
 
-  String? get recommendedModuleId =>
-      _recommendation?['module_id'] as String?;
+  String? get recommendedModuleId => _recommendation?['module_id'] as String?;
   String? get recommendedModuleName =>
       _recommendation?['module_name'] as String?;
-  int get recommendedLevel =>
-      (_recommendation?['starting_level'] as int?) ?? 1;
+  int get recommendedLevel => (_recommendation?['starting_level'] as int?) ?? 1;
 
   /// Newest result per game — the local DB keeps every run's rows for
   /// history/sync, but the app should only ever score and display the
   /// latest run. A retake replaces results; it never stacks them.
-  static List<AssessmentResult> latestPerGame(
-      List<AssessmentResult> results) {
+  static List<AssessmentResult> latestPerGame(List<AssessmentResult> results) {
     final byGame = <String, AssessmentResult>{};
     for (final result in results) {
       final existing = byGame[result.gameId];
@@ -207,7 +217,27 @@ class AssessmentProvider extends ChangeNotifier {
   }
 
   /// Loads all assessment data for a child.
+  ///
+  /// Safe against child switches mid-load (AUM-160): the provider remembers
+  /// which child the *latest* call was for, and every write below re-checks
+  /// that after its awaits — a slower load for a previously selected child
+  /// finishes without applying anything.
   Future<void> loadAssessments(String childId) async {
+    final generation = ++_loadGeneration;
+    if (_loadedChildId != null && _loadedChildId != childId) {
+      // A different child without an explicit clear() in between — drop the
+      // previous child's in-memory state now, so the "in-memory result wins"
+      // restore guards below cannot carry it across children.
+      _preResults = [];
+      _postResults = [];
+      _recommendation = null;
+      _aiPrediction = null;
+      _supportProfile = null;
+      _preSnapshot = null;
+      _postSnapshot = null;
+      _pathCompleted = {};
+    }
+    _loadedChildId = childId;
     _isLoading = true;
     notifyListeners();
 
@@ -216,17 +246,26 @@ class AssessmentProvider extends ChangeNotifier {
       // restored even when the results query fails, so an unreadable local
       // DB degrades to "no new rows" rather than to a blank summary.
       try {
-        _preResults = latestPerGame(
-            await _localDb.getAssessmentResults(childId: childId, type: 'pre'));
-        _postResults = latestPerGame(await _localDb.getAssessmentResults(
-            childId: childId, type: 'post'));
-
-        if (_preResults.isNotEmpty) {
-          _recommendation = _assessmentService.recommendModule(_preResults);
+        final pre = latestPerGame(
+          await _localDb.getAssessmentResults(childId: childId, type: 'pre'),
+        );
+        final post = latestPerGame(
+          await _localDb.getAssessmentResults(childId: childId, type: 'post'),
+        );
+        if (childId == _loadedChildId) {
+          _preResults = pre;
+          _postResults = post;
+          _recommendation =
+              _preResults.isEmpty
+                  ? null
+                  : _assessmentService.recommendModule(_preResults);
         }
       } catch (e) {
         debugPrint('[AssessmentProvider] result query failed: $e');
       }
+      // A newer load (or clear()) took over while the queries ran — this
+      // result belongs to a child no longer on screen.
+      if (childId != _loadedChildId) return;
 
       // Restore the last AI prediction (area levels drive the learning path
       // and per-game difficulty; it only lives in memory otherwise).
@@ -243,7 +282,11 @@ class AssessmentProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AssessmentProvider] loadAssessments error: $e');
     } finally {
-      _isLoading = false;
+      // Only the latest load may end the loading state — an older one
+      // finishing here must not hide the spinner of the load in flight.
+      if (generation == _loadGeneration) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
@@ -265,7 +308,9 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-          _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
+        _aiPredictionKey(childId),
+        jsonEncode(prediction.toJson()),
+      );
       // Remember which model produced it (from which run's sessions, and
       // whether that run was the pre or the post assessment) so a rubric
       // fallback can be upgraded to a real prediction later — and so the
@@ -340,9 +385,11 @@ class AssessmentProvider extends ChangeNotifier {
         final raw = prefs.getString(_snapshotKey(childId, type));
         if (raw == null) return null;
         return AssessmentRunSnapshot.fromJson(
-            jsonDecode(raw) as Map<String, dynamic>);
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
       }
 
+      if (childId != _loadedChildId) return; // switched away mid-restore
       _preSnapshot ??= read('pre');
       _postSnapshot ??= read('post');
     } catch (e) {
@@ -370,9 +417,10 @@ class AssessmentProvider extends ChangeNotifier {
       if (runId == null) return;
       if (!await connectivityService.checkConnectivity()) return;
 
-      final sessions = (await _localDb.getGameSessions(childId: childId))
-          .where((s) => s.assessmentRunId == runId)
-          .toList();
+      final sessions =
+          (await _localDb.getGameSessions(
+            childId: childId,
+          )).where((s) => s.assessmentRunId == runId).toList();
       if (sessions.isEmpty) return;
 
       final onDevice = OnDeviceAiAssessmentService();
@@ -393,10 +441,16 @@ class AssessmentProvider extends ChangeNotifier {
         // Still unreachable — keep the rubric fallback and retry on the
         // next dashboard open.
         if (prediction == null) return;
+        // The parent may have switched children while the model ran — the
+        // upgraded prediction then belongs to a child no longer on screen,
+        // and applying it would relabel the *new* child's results.
+        if (childId != _loadedChildId) return;
 
         _aiPrediction = prediction;
         await prefs.setString(
-            _aiPredictionKey(childId), jsonEncode(prediction.toJson()));
+          _aiPredictionKey(childId),
+          jsonEncode(prediction.toJson()),
+        );
         await prefs.setString(_aiPredictionSourceKey(childId), modelSource);
         // Relabel only the run the stored prediction actually came from —
         // upgrading a post-assessment prediction must not rewrite the
@@ -404,16 +458,20 @@ class AssessmentProvider extends ChangeNotifier {
         final storedType =
             prefs.getString(_aiPredictionTypeKey(childId)) ?? 'pre';
         if (storedType == 'post') {
-          _postResults = _postResults
-              .map((r) => r.copyWithRubric(modelSource: modelSource))
-              .toList();
+          _postResults =
+              _postResults
+                  .map((r) => r.copyWithRubric(modelSource: modelSource))
+                  .toList();
         } else {
-          _preResults = _preResults
-              .map((r) => r.copyWithRubric(modelSource: modelSource))
-              .toList();
+          _preResults =
+              _preResults
+                  .map((r) => r.copyWithRubric(modelSource: modelSource))
+                  .toList();
         }
-        debugPrint('[AssessmentProvider] ⬆️ Upgraded rubric_based prediction '
-            'to $modelSource for child=$childId (run=$runId)');
+        debugPrint(
+          '[AssessmentProvider] ⬆️ Upgraded rubric_based prediction '
+          'to $modelSource for child=$childId (run=$runId)',
+        );
         notifyListeners();
       } finally {
         onDevice.dispose();
@@ -430,10 +488,14 @@ class AssessmentProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_aiPredictionKey(childId));
       if (raw == null) return;
+      if (childId != _loadedChildId) return; // switched away mid-restore
       _aiPrediction = AiAssessmentResponse.fromJson(
-          jsonDecode(raw) as Map<String, dynamic>);
-      debugPrint('[AssessmentProvider] Restored persisted AI prediction '
-          'for child=$childId');
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+      debugPrint(
+        '[AssessmentProvider] Restored persisted AI prediction '
+        'for child=$childId',
+      );
     } catch (e) {
       debugPrint('[AssessmentProvider] restoreAiPrediction failed: $e');
     }
@@ -460,7 +522,9 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-          _supportProfileKey(childId), jsonEncode(profile.toMap()));
+        _supportProfileKey(childId),
+        jsonEncode(profile.toMap()),
+      );
     } catch (e) {
       debugPrint('[AssessmentProvider] persistSupportProfile failed: $e');
     }
@@ -474,8 +538,10 @@ class AssessmentProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_supportProfileKey(childId));
       if (raw == null) return;
-      _supportProfile =
-          SupportProfile.fromMap(jsonDecode(raw) as Map<String, dynamic>);
+      if (childId != _loadedChildId) return; // switched away mid-restore
+      _supportProfile = SupportProfile.fromMap(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
     } catch (e) {
       debugPrint('[AssessmentProvider] restoreSupportProfile failed: $e');
     }
@@ -507,8 +573,10 @@ class AssessmentProvider extends ChangeNotifier {
     _currentRunChildId = childId;
     _currentRunType = type;
 
-    debugPrint('[AssessmentProvider] Assessment run started: '
-        '$runId (type: $type)');
+    debugPrint(
+      '[AssessmentProvider] Assessment run started: '
+      '$runId (type: $type)',
+    );
     notifyListeners();
     return runId;
   }
@@ -558,11 +626,14 @@ class AssessmentProvider extends ChangeNotifier {
     final isAssessment = _isAssessmentContext(context);
     final runId = isAssessment ? _currentAssessmentRunId : null;
 
-    final key = '${runId ?? 'none'}|$childId|$gameId|$context'
+    final key =
+        '${runId ?? 'none'}|$childId|$gameId|$context'
         '|${startedAt.microsecondsSinceEpoch}';
     if (_recordedSessionKeys.contains(key)) {
-      debugPrint('[AssessmentProvider] Duplicate completion for $gameId '
-          'ignored (session already recorded)');
+      debugPrint(
+        '[AssessmentProvider] Duplicate completion for $gameId '
+        'ignored (session already recorded)',
+      );
       for (final session in _currentSessions) {
         if (session.gameId == gameId && session.startedAt == startedAt) {
           return session;
@@ -630,7 +701,9 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
-          _pathProgressKey(childId), _pathCompleted.toList());
+        _pathProgressKey(childId),
+        _pathCompleted.toList(),
+      );
     } catch (e) {
       debugPrint('[AssessmentProvider] persist path progress failed: $e');
     }
@@ -639,9 +712,9 @@ class AssessmentProvider extends ChangeNotifier {
   Future<void> _restorePathProgress(String childId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (childId != _loadedChildId) return; // switched away mid-restore
       _pathCompleted =
-          (prefs.getStringList(_pathProgressKey(childId)) ?? const [])
-              .toSet();
+          (prefs.getStringList(_pathProgressKey(childId)) ?? const []).toSet();
     } catch (e) {
       debugPrint('[AssessmentProvider] restore path progress failed: $e');
     }
@@ -702,16 +775,17 @@ class AssessmentProvider extends ChangeNotifier {
       if (sessions.isEmpty) {
         _lastFinalizationError =
             'No gameplay sessions were recorded for this assessment.';
-        debugPrint('[AssessmentProvider] finalizePreAssessment: no sessions '
-            'for run $_currentAssessmentRunId');
+        debugPrint(
+          '[AssessmentProvider] finalizePreAssessment: no sessions '
+          'for run $_currentAssessmentRunId',
+        );
         return false;
       }
 
       // Group sessions by game and create assessment results
       final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
-        final gameSessions =
-            sessions.where((s) => s.gameId == gameId).toList();
+        final gameSessions = sessions.where((s) => s.gameId == gameId).toList();
         final result = await _assessmentService.createAssessmentResult(
           childId: childId,
           type: 'pre',
@@ -741,10 +815,8 @@ class AssessmentProvider extends ChangeNotifier {
         // Score all areas — from this run's sessions only.
         final playSkills = rubricScorer.scorePlaySkills(sessions);
         final communication = rubricScorer.scoreCommunication(sessions);
-        final socialInteraction =
-            rubricScorer.scoreSocialInteraction(sessions);
-        final behaviorAttention =
-            rubricScorer.scoreBehaviorAttention(sessions);
+        final socialInteraction = rubricScorer.scoreSocialInteraction(sessions);
+        final behaviorAttention = rubricScorer.scoreBehaviorAttention(sessions);
 
         // Get recommendation
         final recommendation = recommender.recommend(
@@ -777,27 +849,32 @@ class AssessmentProvider extends ChangeNotifier {
         );
 
         // Update assessment results with rubric labels (immutable — replace list)
-        _preResults = _preResults
-            .map((result) => result.copyWithRubric(
-                  playSkillsLabel: playSkills.displayName,
-                  communicationLabel: communication.displayName,
-                  socialInteractionLabel: socialInteraction.displayName,
-                  behaviorAttentionLabel: behaviorAttention.displayName,
-                  sensoryPreferenceLabel: sensoryLabel.displayName,
-                  recommendedModule: recommendation.moduleName,
-                  overallSummary: summary,
-                  modelSource: 'rubric_based',
-                  xgboostReady: true,
-                ))
-            .toList();
+        _preResults =
+            _preResults
+                .map(
+                  (result) => result.copyWithRubric(
+                    playSkillsLabel: playSkills.displayName,
+                    communicationLabel: communication.displayName,
+                    socialInteractionLabel: socialInteraction.displayName,
+                    behaviorAttentionLabel: behaviorAttention.displayName,
+                    sensoryPreferenceLabel: sensoryLabel.displayName,
+                    recommendedModule: recommendation.moduleName,
+                    overallSummary: summary,
+                    modelSource: 'rubric_based',
+                    xgboostReady: true,
+                  ),
+                )
+                .toList();
 
-        debugPrint('[AssessmentProvider] Rubric scoring complete: '
-            'playSkills=${playSkills.displayName}, '
-            'communication=${communication.displayName}, '
-            'socialInteraction=${socialInteraction.displayName}, '
-            'behaviorAttention=${behaviorAttention.displayName}, '
-            'sensory=${sensoryLabel.displayName}, '
-            'recommended=${recommendation.moduleName}');
+        debugPrint(
+          '[AssessmentProvider] Rubric scoring complete: '
+          'playSkills=${playSkills.displayName}, '
+          'communication=${communication.displayName}, '
+          'socialInteraction=${socialInteraction.displayName}, '
+          'behaviorAttention=${behaviorAttention.displayName}, '
+          'sensory=${sensoryLabel.displayName}, '
+          'recommended=${recommendation.moduleName}',
+        );
       } catch (e) {
         // Rubric scoring failure should not break the existing flow
         debugPrint('[AssessmentProvider] Rubric scoring failed: $e');
@@ -814,9 +891,11 @@ class AssessmentProvider extends ChangeNotifier {
         );
       }
 
-      debugPrint('[AssessmentProvider] Pre-assessment finalized. '
-          'Recommended: ${_recommendation?['module_name']} '
-          'Level ${_recommendation?['starting_level']}');
+      debugPrint(
+        '[AssessmentProvider] Pre-assessment finalized. '
+        'Recommended: ${_recommendation?['module_name']} '
+        'Level ${_recommendation?['starting_level']}',
+      );
       return true;
     } catch (e) {
       _lastFinalizationError = 'Could not save the assessment results.';
@@ -834,8 +913,7 @@ class AssessmentProvider extends ChangeNotifier {
   /// [lastFinalizationError] is set — when there is no active run, when the
   /// run collected no usable sessions, when a write failed, or when there is
   /// no pre-assessment to compare against.
-  Future<Map<String, dynamic>> finalizePostAssessment(
-      String childId) async {
+  Future<Map<String, dynamic>> finalizePostAssessment(String childId) async {
     _isLoading = true;
     _lastFinalizationError = null;
     notifyListeners();
@@ -849,15 +927,16 @@ class AssessmentProvider extends ChangeNotifier {
       if (sessions.isEmpty) {
         _lastFinalizationError =
             'No gameplay sessions were recorded for this assessment.';
-        debugPrint('[AssessmentProvider] finalizePostAssessment: no sessions '
-            'for run $_currentAssessmentRunId');
+        debugPrint(
+          '[AssessmentProvider] finalizePostAssessment: no sessions '
+          'for run $_currentAssessmentRunId',
+        );
         return {'has_data': false};
       }
 
       final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
-        final gameSessions =
-            sessions.where((s) => s.gameId == gameId).toList();
+        final gameSessions = sessions.where((s) => s.gameId == gameId).toList();
         final result = await _assessmentService.createAssessmentResult(
           childId: childId,
           type: 'post',
@@ -871,9 +950,7 @@ class AssessmentProvider extends ChangeNotifier {
       _postResults = latestPerGame(_postResults);
 
       // Mark the assessment run as completed
-      await _assessmentService.completeAssessmentRun(
-        _currentAssessmentRunId!,
-      );
+      await _assessmentService.completeAssessmentRun(_currentAssessmentRunId!);
 
       // Re-score the rubric from the post sessions so the AI fallback and
       // profile reflect the child's NEW performance, not the pre-assessment.
@@ -882,11 +959,10 @@ class AssessmentProvider extends ChangeNotifier {
         _rubricResult = RubricResult(
           playSkillsLabel: rubricScorer.scorePlaySkills(sessions),
           communicationLabel: rubricScorer.scoreCommunication(sessions),
-          socialInteractionLabel:
-              rubricScorer.scoreSocialInteraction(sessions),
-          behaviorAttentionLabel:
-              rubricScorer.scoreBehaviorAttention(sessions),
-          sensoryPreferenceLabel: _rubricResult?.sensoryPreferenceLabel ??
+          socialInteractionLabel: rubricScorer.scoreSocialInteraction(sessions),
+          behaviorAttentionLabel: rubricScorer.scoreBehaviorAttention(sessions),
+          sensoryPreferenceLabel:
+              _rubricResult?.sensoryPreferenceLabel ??
               SensoryPreferenceLabel.noSensorySupportNeeded,
           recommendedModule: _rubricResult?.recommendedModule ?? '',
           overallSummary: 'Post-assessment rubric scoring.',
@@ -936,11 +1012,15 @@ class AssessmentProvider extends ChangeNotifier {
   }) async {
     final type = assessmentType ?? _currentRunType ?? 'pre';
     final runSessionList = runSessions();
-    debugPrint('[AssessmentProvider] 🔮 predictWithAI called for '
-        'child=$childId with ${runSessionList.length} $type sessions');
+    debugPrint(
+      '[AssessmentProvider] 🔮 predictWithAI called for '
+      'child=$childId with ${runSessionList.length} $type sessions',
+    );
     if (runSessionList.isEmpty) {
-      debugPrint('[AssessmentProvider] ⚠️ No sessions for the active run — '
-          'skipping prediction');
+      debugPrint(
+        '[AssessmentProvider] ⚠️ No sessions for the active run — '
+        'skipping prediction',
+      );
       _currentSessions.clear();
       return null;
     }
@@ -970,15 +1050,21 @@ class AssessmentProvider extends ChangeNotifier {
       if (prediction == null && _rubricResult != null) {
         modelSource = 'rubric_based';
         prediction = _predictionFromRubric(_rubricResult!);
-        debugPrint('[AssessmentProvider] ⚠️ AI unavailable — synthesized '
-            'prediction from rubric labels');
+        debugPrint(
+          '[AssessmentProvider] ⚠️ AI unavailable — synthesized '
+          'prediction from rubric labels',
+        );
       }
       _aiPrediction = prediction;
       if (prediction != null) {
         // Persist so the learning path and per-game difficulty survive app
         // restarts (the prediction otherwise only lives in memory).
-        await _persistAiPrediction(childId, prediction, modelSource,
-            assessmentType: type);
+        await _persistAiPrediction(
+          childId,
+          prediction,
+          modelSource,
+          assessmentType: type,
+        );
         // New assessment → new path → the sequence restarts at step 1.
         await _resetPathProgress(childId);
 
@@ -986,25 +1072,31 @@ class AssessmentProvider extends ChangeNotifier {
         // distinguished from rubric-only results. Only the results of the
         // run the prediction came from are touched.
         if (type == 'post') {
-          _postResults = _postResults
-              .map((r) => r.copyWithRubric(modelSource: modelSource))
-              .toList();
+          _postResults =
+              _postResults
+                  .map((r) => r.copyWithRubric(modelSource: modelSource))
+                  .toList();
         } else {
-          _preResults = _preResults
-              .map((r) => r.copyWithRubric(modelSource: modelSource))
-              .toList();
+          _preResults =
+              _preResults
+                  .map((r) => r.copyWithRubric(modelSource: modelSource))
+                  .toList();
         }
 
-        debugPrint('[AssessmentProvider] ✅ AI prediction SUCCESS: '
-            '${prediction.profileDisplayName} '
-            '(${prediction.confidencePercent}), '
-            'support_level=${prediction.supportLevel}, '
-            'modules=${prediction.recommendedModules}, '
-            'moduleDetails=${prediction.moduleDetails}, '
-            'skillAreas=${prediction.skillAreas}');
+        debugPrint(
+          '[AssessmentProvider] ✅ AI prediction SUCCESS: '
+          '${prediction.profileDisplayName} '
+          '(${prediction.confidencePercent}), '
+          'support_level=${prediction.supportLevel}, '
+          'modules=${prediction.recommendedModules}, '
+          'moduleDetails=${prediction.moduleDetails}, '
+          'skillAreas=${prediction.skillAreas}',
+        );
       } else {
-        debugPrint('[AssessmentProvider] ⚠️ AI prediction returned null, '
-            'will use rule-based fallback');
+        debugPrint(
+          '[AssessmentProvider] ⚠️ AI prediction returned null, '
+          'will use rule-based fallback',
+        );
       }
       notifyListeners();
       return prediction;
@@ -1025,10 +1117,10 @@ class AssessmentProvider extends ChangeNotifier {
   /// available.
   AiAssessmentResponse _predictionFromRubric(RubricResult rubric) {
     int perf(PerformanceLabel label) => switch (label) {
-          PerformanceLabel.strength => 2,
-          PerformanceLabel.emerging => 1,
-          PerformanceLabel.needsSupport => 0,
-        };
+      PerformanceLabel.strength => 2,
+      PerformanceLabel.emerging => 1,
+      PerformanceLabel.needsSupport => 0,
+    };
     final attentionInt = switch (rubric.behaviorAttentionLabel) {
       AttentionLabel.sustainedAttention => 2,
       AttentionLabel.variableAttention => 1,
@@ -1036,11 +1128,11 @@ class AssessmentProvider extends ChangeNotifier {
     };
 
     AreaLevel area(int levelInt) => AreaLevel(
-          level: const ['needs_support', 'emerging', 'strength'][levelInt],
-          levelInt: levelInt,
-          levelName: const ['Needs Support', 'Emerging', 'Strength'][levelInt],
-          confidence: 0.5, // rubric-derived — moderate confidence
-        );
+      level: const ['needs_support', 'emerging', 'strength'][levelInt],
+      levelInt: levelInt,
+      levelName: const ['Needs Support', 'Emerging', 'Strength'][levelInt],
+      confidence: 0.5, // rubric-derived — moderate confidence
+    );
 
     final areaLevels = <String, AreaLevel>{
       'communication': area(perf(rubric.communicationLabel)),
@@ -1049,20 +1141,21 @@ class AssessmentProvider extends ChangeNotifier {
       'attention': area(attentionInt),
     };
 
-    final minLevel =
-        areaLevels.values.map((a) => a.levelInt).reduce(math.min);
+    final minLevel = areaLevels.values.map((a) => a.levelInt).reduce(math.min);
     final needsSupportCount =
         areaLevels.values.where((a) => a.levelInt == 0).length;
-    final moduleDetails =
-        LocalRecommendationRules.deriveModuleDetails(areaLevels);
+    final moduleDetails = LocalRecommendationRules.deriveModuleDetails(
+      areaLevels,
+    );
 
     return AiAssessmentResponse(
       predictedProfile: minLevel >= 2 ? 'balanced_profile' : 'mixed_support',
       confidence: 0.5,
       summary: LocalRecommendationRules.buildSummaryText(areaLevels),
-      supportLevel: needsSupportCount >= 2
-          ? 'high'
-          : (needsSupportCount == 1 || minLevel <= 1 ? 'moderate' : 'low'),
+      supportLevel:
+          needsSupportCount >= 2
+              ? 'high'
+              : (needsSupportCount == 1 || minLevel <= 1 ? 'moderate' : 'low'),
       recommendedModules: moduleDetails.map((m) => m.name).toList(),
       moduleDetails: moduleDetails,
       skillAreas: areaLevels.keys.toList(),
@@ -1078,8 +1171,10 @@ class AssessmentProvider extends ChangeNotifier {
   /// child in to AI-training data use (deny by default).
   Map<String, dynamic>? exportXGBoostRow(String childId) {
     if (!ResearchConsentService.instance.aiTrainingOptInSync(childId)) {
-      debugPrint('[AssessmentProvider] XGBoost export blocked: no '
-          'AI-training consent for child $childId');
+      debugPrint(
+        '[AssessmentProvider] XGBoost export blocked: no '
+        'AI-training consent for child $childId',
+      );
       return null;
     }
     final sessions = runSessions();
@@ -1104,6 +1199,11 @@ class AssessmentProvider extends ChangeNotifier {
     // Path progress is per child and restored on load; dropping it here stops
     // one child's completed steps showing under another after a switch.
     _pathCompleted = {};
+    // Invalidate any load still in flight: its child is no longer loaded,
+    // so its late writes are discarded rather than resurrected (AUM-160).
+    _loadedChildId = null;
+    _loadGeneration++;
+    _isLoading = false;
     notifyListeners();
   }
 }
