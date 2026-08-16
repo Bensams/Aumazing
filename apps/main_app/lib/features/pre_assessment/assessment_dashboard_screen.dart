@@ -5,6 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../services/assessment_progress_service.dart';
 import '../../services/scoring_service.dart';
 import 'assessment_result_view.dart';
 import 'pre_assessment_intro_screen.dart';
@@ -50,12 +51,23 @@ class AssessmentDashboardScreen extends StatelessWidget {
               sensorySettings: childProv.sensorySettingsMap,
             );
 
+        // Once a post-assessment exists, the parent's first question is
+        // whether anything moved — so the baseline summary carries a
+        // before/after card alongside it (AUM-161). Null whenever the two
+        // runs are not comparable, which shows the baseline on its own.
+        final progress = AssessmentProgressService.compare(
+          before: assessProv.preSnapshot,
+          after: assessProv.postSnapshot,
+        );
+
         return ParentAdaptiveOrientation(
           child: AssessmentResultView(
             results: results,
             profile: profile,
-            aiResponse: snapshot?.prediction ??
+            aiResponse:
+                snapshot?.prediction ??
                 (assessProv.hasPostAssessment ? null : assessProv.aiPrediction),
+            progress: progress,
             presentation: AssessmentResultPresentation.review,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),
