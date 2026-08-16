@@ -95,67 +95,65 @@ void main() {
       },
     );
 
+    test('resetStuckSyncing recovers records stranded mid-sync so they are '
+        'picked up again', () async {
+      final db = await localDb.database;
+      await db.insert(LocalTables.gameSessions, {
+        'id': 'stuck-session',
+        'sync_status': SyncStatus.syncing.value,
+        'local_created_at': '2026-04-20T12:00:00.000',
+      });
+
+      expect(
+        await localDb.getPendingRecords(LocalTables.gameSessions),
+        isEmpty,
+      );
+
+      final recovered = await localDb.resetStuckSyncing();
+
+      expect(recovered, 1);
+      final pending = await localDb.getPendingRecords(LocalTables.gameSessions);
+      expect(pending, hasLength(1));
+      expect(pending.single['id'], 'stuck-session');
+    });
+
+    test('falls back to per-record upserts when a batch fails, so one bad row '
+        'does not poison the batch', () async {
+      final db = await localDb.database;
+      await db.insert(LocalTables.gameSessions, {
+        'id': 'good-session',
+        'sync_status': SyncStatus.pending.value,
+        'local_created_at': '2026-04-20T12:00:00.000',
+      });
+      await db.insert(LocalTables.gameSessions, {
+        'id': 'bad-session',
+        'sync_status': SyncStatus.pending.value,
+        'local_created_at': '2026-04-20T12:01:00.000',
+      });
+      supabase.failIds.add('bad-session');
+
+      await service.startSync();
+
+      final rows = await db.query(LocalTables.gameSessions);
+      final byId = {for (final r in rows) r['id']: r};
+      expect(byId['good-session']!['sync_status'], SyncStatus.synced.value);
+      expect(byId['bad-session']!['sync_status'], SyncStatus.failed.value);
+      expect(byId['bad-session']!['sync_attempts'], 1);
+      expect(service.currentState.failedCount, 1);
+      expect(service.currentState.lastSuccessfulSync, isFalse);
+    });
+
+    // Was: "…and never overwrites existing local rows". Insert-only
+    // hydration is not a conflict rule: an edit made on another device could
+    // never arrive, so this device kept a stale copy forever and whichever
+    // device pushed last won regardless of which edit was newer. AUM-158
+    // replaces it with a stated rule — the later updated_at wins, ties go
+    // to local. See hydrate_conflict_rule_test.dart for the rule itself.
     test(
-      'resetStuckSyncing recovers records stranded mid-sync so they are '
-      'picked up again',
+      'hydrateFromCloud pulls remote-only rows and takes the newer version',
       () async {
         final db = await localDb.database;
-        await db.insert(LocalTables.gameSessions, {
-          'id': 'stuck-session',
-          'sync_status': SyncStatus.syncing.value,
-          'local_created_at': '2026-04-20T12:00:00.000',
-        });
-
-        expect(
-          await localDb.getPendingRecords(LocalTables.gameSessions),
-          isEmpty,
-        );
-
-        final recovered = await localDb.resetStuckSyncing();
-
-        expect(recovered, 1);
-        final pending =
-            await localDb.getPendingRecords(LocalTables.gameSessions);
-        expect(pending, hasLength(1));
-        expect(pending.single['id'], 'stuck-session');
-      },
-    );
-
-    test(
-      'falls back to per-record upserts when a batch fails, so one bad row '
-      'does not poison the batch',
-      () async {
-        final db = await localDb.database;
-        await db.insert(LocalTables.gameSessions, {
-          'id': 'good-session',
-          'sync_status': SyncStatus.pending.value,
-          'local_created_at': '2026-04-20T12:00:00.000',
-        });
-        await db.insert(LocalTables.gameSessions, {
-          'id': 'bad-session',
-          'sync_status': SyncStatus.pending.value,
-          'local_created_at': '2026-04-20T12:01:00.000',
-        });
-        supabase.failIds.add('bad-session');
-
-        await service.startSync();
-
-        final rows = await db.query(LocalTables.gameSessions);
-        final byId = {for (final r in rows) r['id']: r};
-        expect(byId['good-session']!['sync_status'], SyncStatus.synced.value);
-        expect(byId['bad-session']!['sync_status'], SyncStatus.failed.value);
-        expect(byId['bad-session']!['sync_attempts'], 1);
-        expect(service.currentState.failedCount, 1);
-        expect(service.currentState.lastSuccessfulSync, isFalse);
-      },
-    );
-
-    test(
-      'hydrateFromCloud pulls remote-only rows as synced and never '
-      'overwrites existing local rows',
-      () async {
-        final db = await localDb.database;
-        // Local run with unsynced edits — hydration must not touch it
+        // Local copy is older than the cloud's, so the cloud version wins.
         await db.insert(LocalTables.assessmentRuns, {
           'id': 'run-local',
           'child_id': 'sync-child',
@@ -194,77 +192,72 @@ void main() {
 
         final pulled = await service.hydrateFromCloud();
 
-        expect(pulled, 1);
+        expect(pulled, 2, reason: 'one updated, one inserted');
         final rows = await db.query(LocalTables.assessmentRuns);
         final byId = {for (final r in rows) r['id']: r};
         expect(byId, hasLength(2));
-        // Local row untouched (still pending, still in_progress)
-        expect(byId['run-local']!['status'], 'in_progress');
-        expect(byId['run-local']!['sync_status'], SyncStatus.pending.value);
+        // The cloud held a later version of this run (completed at 13:20
+        // against the local 13:00), so it replaces the stale local copy.
+        expect(byId['run-local']!['status'], 'completed');
+        expect(byId['run-local']!['sync_status'], SyncStatus.synced.value);
         // Remote row inserted as already-synced
         expect(byId['run-remote']!['status'], 'completed');
         expect(byId['run-remote']!['sync_status'], SyncStatus.synced.value);
       },
     );
 
-    test(
-      'hydrateFromCloud never resurrects a child deleted locally',
-      () async {
-        // Deleted on this device; the cloud row lives on until the deletion
-        // is propagated, so hydration is the moment it could come back.
-        await localDb.deleteChild('sync-child');
-        supabase.remoteChildren.add({
-          'id': 'sync-child',
-          'parent_user_id': 'parent-1',
-          'display_name': 'Mika',
-          'birth_date': '2022-04-20',
-          'created_at': '2026-04-20T12:00:00.000',
-          'updated_at': '2026-04-20T12:00:00.000',
-        });
-        supabase.remoteRows[RemoteTables.assessmentRuns] = [
-          {
-            'id': 'run-of-deleted-child',
-            'child_id': 'sync-child',
-            'type': 'pre',
-            'started_at': '2026-05-01T10:00:00.000',
-            'status': 'completed',
-            'created_at': '2026-05-01T10:00:00.000',
-            'updated_at': '2026-05-01T10:00:00.000',
-          },
-        ];
+    test('hydrateFromCloud never resurrects a child deleted locally', () async {
+      // Deleted on this device; the cloud row lives on until the deletion
+      // is propagated, so hydration is the moment it could come back.
+      await localDb.deleteChild('sync-child');
+      supabase.remoteChildren.add({
+        'id': 'sync-child',
+        'parent_user_id': 'parent-1',
+        'display_name': 'Mika',
+        'birth_date': '2022-04-20',
+        'created_at': '2026-04-20T12:00:00.000',
+        'updated_at': '2026-04-20T12:00:00.000',
+      });
+      supabase.remoteRows[RemoteTables.assessmentRuns] = [
+        {
+          'id': 'run-of-deleted-child',
+          'child_id': 'sync-child',
+          'type': 'pre',
+          'started_at': '2026-05-01T10:00:00.000',
+          'status': 'completed',
+          'created_at': '2026-05-01T10:00:00.000',
+          'updated_at': '2026-05-01T10:00:00.000',
+        },
+      ];
 
-        await service.hydrateFromCloud();
+      await service.hydrateFromCloud();
 
-        expect(await localDb.getChild('sync-child'), isNull);
-        expect(await localDb.getLocallyDeletedChildIds(), {'sync-child'});
-        // Nor is the deleted child's cloud progress pulled back down.
-        final db = await localDb.database;
-        expect(await db.query(LocalTables.assessmentRuns), isEmpty);
-      },
-    );
+      expect(await localDb.getChild('sync-child'), isNull);
+      expect(await localDb.getLocallyDeletedChildIds(), {'sync-child'});
+      // Nor is the deleted child's cloud progress pulled back down.
+      final db = await localDb.database;
+      expect(await db.query(LocalTables.assessmentRuns), isEmpty);
+    });
 
-    test(
-      'hydrateFromCloud runs once per user unless forced',
-      () async {
-        supabase.remoteRows[RemoteTables.assessmentRuns] = [
-          {
-            'id': 'run-once',
-            'child_id': 'sync-child',
-            'type': 'pre',
-            'started_at': '2026-04-20T13:00:00.000',
-            'status': 'completed',
-            'created_at': '2026-04-20T13:00:00.000',
-            'updated_at': '2026-04-20T13:00:00.000',
-          },
-        ];
+    test('hydrateFromCloud runs once per user unless forced', () async {
+      supabase.remoteRows[RemoteTables.assessmentRuns] = [
+        {
+          'id': 'run-once',
+          'child_id': 'sync-child',
+          'type': 'pre',
+          'started_at': '2026-04-20T13:00:00.000',
+          'status': 'completed',
+          'created_at': '2026-04-20T13:00:00.000',
+          'updated_at': '2026-04-20T13:00:00.000',
+        },
+      ];
 
-        expect(await service.hydrateFromCloud(), 1);
-        // Second call is a no-op (flag set)
-        expect(await service.hydrateFromCloud(), 0);
-        // Forced re-run fetches again, but existing rows still win
-        expect(await service.hydrateFromCloud(force: true), 0);
-      },
-    );
+      expect(await service.hydrateFromCloud(), 1);
+      // Second call is a no-op (flag set)
+      expect(await service.hydrateFromCloud(), 0);
+      // Forced re-run fetches again, but existing rows still win
+      expect(await service.hydrateFromCloud(force: true), 0);
+    });
   });
 }
 
@@ -362,9 +355,9 @@ class _FakeSupabaseService implements SupabaseService {
     String column,
     List<String> values,
   ) async => [
-        for (final r in remoteRows[remoteTable] ?? const [])
-          if (values.contains(r[column])) Map<String, dynamic>.from(r),
-      ];
+    for (final r in remoteRows[remoteTable] ?? const [])
+      if (values.contains(r[column])) Map<String, dynamic>.from(r),
+  ];
 
   @override
   Future<void> upsertBatch(
@@ -375,9 +368,7 @@ class _FakeSupabaseService implements SupabaseService {
       throw Exception('upsert rejected');
     }
     if (remoteTable == RemoteTables.children) {
-      upsertedChildren.addAll(
-        records.map((r) => Map<String, dynamic>.from(r)),
-      );
+      upsertedChildren.addAll(records.map((r) => Map<String, dynamic>.from(r)));
     }
   }
 
@@ -396,8 +387,9 @@ class _FakeSupabaseService implements SupabaseService {
   final List<Map<String, dynamic>> remoteChildren = [];
 
   @override
-  Future<List<Map<String, dynamic>>> getChildren(String userId) async =>
-      [for (final c in remoteChildren) Map<String, dynamic>.from(c)];
+  Future<List<Map<String, dynamic>>> getChildren(String userId) async => [
+    for (final c in remoteChildren) Map<String, dynamic>.from(c),
+  ];
 
   @override
   Future<void> upsertAssessmentRun(
