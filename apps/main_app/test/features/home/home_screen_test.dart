@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:aumazing/core/services/auth_service.dart';
+import 'package:aumazing/core/services/sync_service.dart';
 import 'package:aumazing/features/home/home_screen.dart' show HomeScreen;
 import 'package:aumazing/features/settings/bind_account_modal.dart';
 import 'package:aumazing/features/settings/settings_screen.dart';
@@ -27,6 +30,80 @@ final _profile = ChildProfile(
 );
 
 void main() {
+  group('refreshing when a sync lands', () {
+    /// Sessions synced down while the parent is already on the dashboard
+    /// used to stay invisible: progress is read once per child load, and
+    /// nothing re-queried it. The banner listened; the data did not.
+    testWidgets('a completed pass that brought rows down re-queries', (
+      tester,
+    ) async {
+      final controller = StreamController<SyncState>.broadcast();
+      addTearDown(controller.close);
+      final progress = _TestProgressProvider();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          progressProvider: progress,
+          syncStates: controller.stream,
+        ),
+      );
+      await tester.pump();
+      final loadsAfterOpen = progress.progressLoads.length;
+
+      controller.add(
+        SyncState(
+          status: SyncStatusEnum.completed,
+          syncedCount: 3,
+          timestamp: DateTime(2026, 6, 1),
+        ),
+      );
+      await tester.pump();
+
+      expect(progress.progressLoads.length, loadsAfterOpen + 1);
+      expect(progress.progressLoads.last, 'child-1');
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('a pass with nothing to bring down does not churn', (
+      tester,
+    ) async {
+      final controller = StreamController<SyncState>.broadcast();
+      addTearDown(controller.close);
+      final progress = _TestProgressProvider();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          progressProvider: progress,
+          syncStates: controller.stream,
+        ),
+      );
+      await tester.pump();
+      final loadsAfterOpen = progress.progressLoads.length;
+
+      // A clean pass, and a pass still in flight: neither has new rows.
+      controller.add(
+        SyncState(status: SyncStatusEnum.completed, syncedCount: 0),
+      );
+      controller.add(SyncState(status: SyncStatusEnum.syncing));
+      await tester.pump();
+
+      expect(progress.progressLoads.length, loadsAfterOpen);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
+
   testWidgets(
     'home screen defers provider loading until after the first frame',
     (tester) async {
@@ -54,37 +131,36 @@ void main() {
     },
   );
 
-  testWidgets(
-    'home screen lays out without overflow on a portrait phone',
-    (tester) async {
-      final authService = AuthService(supabaseAuth: _FakeSupabaseAuthClient());
-      final childProvider = _TestChildProvider(initialProfile: _profile);
+  testWidgets('home screen lays out without overflow on a portrait phone', (
+    tester,
+  ) async {
+    final authService = AuthService(supabaseAuth: _FakeSupabaseAuthClient());
+    final childProvider = _TestChildProvider(initialProfile: _profile);
 
-      // A phone in portrait — the parent orientation on mobile.
-      await tester.binding.setSurfaceSize(const Size(360, 800));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A phone in portrait — the parent orientation on mobile.
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(authService: authService, childProvider: childProvider),
-      );
-      await _settleUi(tester);
-      expect(tester.takeException(), isNull);
+    await tester.pumpWidget(
+      _buildTestApp(authService: authService, childProvider: childProvider),
+    );
+    await _settleUi(tester);
+    expect(tester.takeException(), isNull);
 
-      // The side panel is replaced by the collapsible summary card, which
-      // starts collapsed and reveals the quick stats when tapped.
-      expect(find.text("Test's Dashboard"), findsOneWidget);
-      expect(find.text('Sessions'), findsNothing);
+    // The side panel is replaced by the collapsible summary card, which
+    // starts collapsed and reveals the quick stats when tapped.
+    expect(find.text("Test's Dashboard"), findsOneWidget);
+    expect(find.text('Sessions'), findsNothing);
 
-      await tester.tap(find.text("Test's Dashboard"));
-      await _settleUi(tester);
+    await tester.tap(find.text("Test's Dashboard"));
+    await _settleUi(tester);
 
-      expect(find.text('Sessions'), findsOneWidget);
-      expect(find.text('Assessment'), findsWidgets);
-      expect(tester.takeException(), isNull);
+    expect(find.text('Sessions'), findsOneWidget);
+    expect(find.text('Assessment'), findsWidgets);
+    expect(tester.takeException(), isNull);
 
-      await tester.pump(const Duration(milliseconds: 700));
-    },
-  );
+    await tester.pump(const Duration(milliseconds: 700));
+  });
 
   testWidgets(
     'settings and bind account dialogs stay stable in compact layout',
@@ -118,7 +194,9 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(960, 540));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(_buildBindAccountTestApp(authService: authService));
+      await tester.pumpWidget(
+        _buildBindAccountTestApp(authService: authService),
+      );
       await _settleUi(tester);
 
       expect(find.text('Bind with Google'), findsOneWidget);
@@ -137,7 +215,9 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(960, 540));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(_buildBindAccountTestApp(authService: authService));
+      await tester.pumpWidget(
+        _buildBindAccountTestApp(authService: authService),
+      );
       await _settleUi(tester);
 
       await tester.tap(find.text('Bind with Email'));
@@ -184,71 +264,74 @@ void main() {
     },
   );
 
-  testWidgets(
-    'the help button replays the tour for a parent who has seen it',
-    (tester) async {
-      SharedPreferences.setMockInitialValues(
-        {'parent_dashboard_tour_seen_v1': true},
-      );
-      TourService.instance.resetCache();
+  testWidgets('the help button replays the tour for a parent who has seen it', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'parent_dashboard_tour_seen_v1': true,
+    });
+    TourService.instance.resetCache();
 
-      await tester.binding.setSurfaceSize(const Size(960, 540));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(960, 540));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(
-          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
-          childProvider: _TestChildProvider(initialProfile: _profile),
-        ),
-      );
-      await _settleUi(tester);
+    await tester.pumpWidget(
+      _buildTestApp(
+        authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        childProvider: _TestChildProvider(initialProfile: _profile),
+      ),
+    );
+    await _settleUi(tester);
 
-      expect(find.textContaining('A quick tour'), findsNothing);
+    expect(find.textContaining('A quick tour'), findsNothing);
 
-      await tester.tap(find.byTooltip('Dashboard guide'));
-      await _settleUi(tester);
-      expect(find.textContaining('A quick tour'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Dashboard guide'));
+    await _settleUi(tester);
+    expect(find.textContaining('A quick tour'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
-      await tester.pump(const Duration(milliseconds: 700));
-    },
-  );
+    await tester.pump(const Duration(milliseconds: 700));
+  });
 
-  testWidgets(
-    'the tour explains how to reach child mode and get back',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({});
-      TourService.instance.resetCache();
+  testWidgets('the tour explains how to reach child mode and get back', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    TourService.instance.resetCache();
 
-      await tester.binding.setSurfaceSize(const Size(960, 540));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(960, 540));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(
-        _buildTestApp(
-          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
-          childProvider: _TestChildProvider(initialProfile: _profile),
-        ),
-      );
-      await _settleUi(tester);
+    await tester.pumpWidget(
+      _buildTestApp(
+        authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        childProvider: _TestChildProvider(initialProfile: _profile),
+      ),
+    );
+    await _settleUi(tester);
 
-      // Walk forward until the child-mode pair of steps comes up.
-      var guard = 0;
-      while (find.textContaining('hand the device to your child').evaluate().isEmpty &&
-          guard++ < 10) {
-        await tester.tap(find.text('Next'));
-        await _settleUi(tester);
-      }
-      expect(find.textContaining('hand the device to your child'),
-          findsOneWidget);
-
+    // Walk forward until the child-mode pair of steps comes up.
+    var guard = 0;
+    while (find
+            .textContaining('hand the device to your child')
+            .evaluate()
+            .isEmpty &&
+        guard++ < 10) {
       await tester.tap(find.text('Next'));
       await _settleUi(tester);
-      expect(find.textContaining('parent PIN'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+    }
+    expect(
+      find.textContaining('hand the device to your child'),
+      findsOneWidget,
+    );
 
-      await tester.pump(const Duration(milliseconds: 700));
-    },
-  );
+    await tester.tap(find.text('Next'));
+    await _settleUi(tester);
+    expect(find.textContaining('parent PIN'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pump(const Duration(milliseconds: 700));
+  });
 }
 
 Future<void> _settleUi(WidgetTester tester) async {
@@ -281,6 +364,8 @@ Widget _buildBindAccountTestApp({required AuthService authService}) {
 Widget _buildTestApp({
   required AuthService authService,
   required ChildProvider childProvider,
+  ProgressProvider? progressProvider,
+  Stream<SyncState>? syncStates,
 }) {
   return MultiProvider(
     providers: [
@@ -288,13 +373,13 @@ Widget _buildTestApp({
       ChangeNotifierProvider<AssessmentProvider>(
         create: (_) => _TestAssessmentProvider(),
       ),
-      ChangeNotifierProvider<ProgressProvider>(
-        create: (_) => _TestProgressProvider(),
+      ChangeNotifierProvider<ProgressProvider>.value(
+        value: progressProvider ?? _TestProgressProvider(),
       ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: HomeScreen(authService: authService),
+      home: HomeScreen(authService: authService, syncStates: syncStates),
     ),
   );
 }
@@ -363,6 +448,9 @@ class _TestAssessmentProvider extends AssessmentProvider {
 class _TestProgressProvider extends ProgressProvider {
   final List<GameplaySession> _sessions = const [];
 
+  /// Children whose progress was (re-)queried, in order.
+  final List<String> progressLoads = [];
+
   @override
   int get completedModules => 0;
 
@@ -373,7 +461,9 @@ class _TestProgressProvider extends ProgressProvider {
   List<GameplaySession> get recentSessions => _sessions;
 
   @override
-  Future<void> loadProgress(String childId) async {}
+  Future<void> loadProgress(String childId) async {
+    progressLoads.add(childId);
+  }
 }
 
 class _FakeAudioService extends AudioService {
@@ -401,8 +491,10 @@ class _FakeAudioService extends AudioService {
   Future<void> playRandomMusic(List<String> trackNames) async {}
 
   @override
-  Future<void> playCategoryMusic(String? categoryKey,
-      {bool restart = false}) async {}
+  Future<void> playCategoryMusic(
+    String? categoryKey, {
+    bool restart = false,
+  }) async {}
 
   @override
   Future<void> playSfx(String sfxName, {double volumeScale = 1.0}) async {}
