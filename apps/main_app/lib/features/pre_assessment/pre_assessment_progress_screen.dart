@@ -18,6 +18,7 @@ import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../games/match_it/match_it_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
 import '../../widgets/mascot_host.dart';
+import '../../widgets/resume_assessment_dialog.dart';
 
 import 'sensory/sensory.dart';
 import 'waiting_for_parent_screen.dart';
@@ -65,6 +66,12 @@ class _PreAssessmentProgressScreenState
   /// Guards the per-game completion handler against a duplicate callback.
   int? _completedGameIndex;
 
+  /// Games this run already covered before it was interrupted (AUM-154).
+  ///
+  /// A resumed run skips them: they are recorded play, and replaying them
+  /// would ask the child to redo work the assessment already has.
+  Set<String> _alreadyPlayed = const {};
+
   /// Controls per-round sensory settings (music/haptic toggling).
   late final SensoryRoundController _sensoryController;
 
@@ -97,12 +104,16 @@ class _PreAssessmentProgressScreenState
     _initializeRun();
   }
 
-  /// Creates the assessment run, then persists the consent decision against
-  /// it, and only then lets the child start playing.
+  /// Resumes an interrupted run, or creates a new one and persists the
+  /// consent decision against it, before anything can be played.
   ///
   /// The countdown and the Play button used to start while the run was still
   /// being created, so an early first game could be recorded with no run id
   /// — and the consent row was written against a run that did not exist yet.
+  ///
+  /// The resume question is asked here, ahead of [AssessmentProvider
+  /// .startAssessmentRun]: that closes every open run as its first act, so by
+  /// the time it returns the run worth offering no longer exists (AUM-154).
   Future<void> _initializeRun() async {
     setState(() {
       _flowState = _FlowState.initializing;
@@ -113,8 +124,33 @@ class _PreAssessmentProgressScreenState
     final childId = _childId;
 
     try {
-      await assessProv.startAssessmentRun(childId: childId, type: 'pre');
-      await _saveSensoryConsent(assessProv.currentAssessmentRunId, childId);
+      final resumable = await assessProv.findResumableRun(
+        childId: childId,
+        type: 'pre',
+      );
+      if (!mounted) return;
+
+      var resume = false;
+      if (resumable != null) {
+        // The choice belongs to the supervising adult, not to the child.
+        resume =
+            await ResumeAssessmentDialog.show(context, run: resumable) ==
+            ResumeAssessmentChoice.resume;
+        if (!mounted) return;
+      }
+
+      if (resume) {
+        // The sensory consent row was written when this run was created —
+        // writing it again would record a second decision for one run.
+        assessProv.resumeAssessmentRun(resumable!);
+        _alreadyPlayed = resumable.sessions.map((s) => s.gameId).toSet();
+        _currentGameIndex = _firstUnplayedIndex();
+      } else {
+        _alreadyPlayed = const {};
+        _currentGameIndex = 0;
+        await assessProv.startAssessmentRun(childId: childId, type: 'pre');
+        await _saveSensoryConsent(assessProv.currentAssessmentRunId, childId);
+      }
     } catch (e) {
       debugPrint('[PreAssessment] run initialization failed: $e');
       if (!mounted) return;
@@ -127,7 +163,24 @@ class _PreAssessmentProgressScreenState
 
     if (!mounted) return;
     setState(() => _flowState = _FlowState.ready);
+    // A resumed run can already hold every activity — it was interrupted
+    // between the last game and being scored, so there is nothing left to
+    // play and it goes straight to finishing.
+    if (_currentGameIndex >= _gameOrder.length) {
+      _finishAssessment();
+      return;
+    }
     _startCountdown();
+  }
+
+  /// The first activity of the run that has no session yet.
+  int _firstUnplayedIndex() {
+    var index = 0;
+    while (index < _gameOrder.length &&
+        _alreadyPlayed.contains(_gameOrder[index])) {
+      index++;
+    }
+    return index;
   }
 
   /// Persist the parent's sensory consent decision against the run.
@@ -324,8 +377,14 @@ class _PreAssessmentProgressScreenState
   }
 
   void _advanceToNextGame() {
-    if (_currentGameIndex < _gameOrder.length - 1) {
-      setState(() => _currentGameIndex++);
+    // Activities the resumed run already covered are stepped over rather
+    // than replayed.
+    var next = _currentGameIndex + 1;
+    while (next < _gameOrder.length && _alreadyPlayed.contains(_gameOrder[next])) {
+      next++;
+    }
+    if (next < _gameOrder.length) {
+      setState(() => _currentGameIndex = next);
       _startCountdown(); // Restart countdown for the next game's transition screen
     } else {
       _finishAssessment();
@@ -565,13 +624,17 @@ class _PreAssessmentProgressScreenState
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(_gameOrder.length, (i) {
+                      // A resumed run's earlier activities read as done even
+                      // though they were played in another sitting.
+                      final done = i < _currentGameIndex ||
+                          _alreadyPlayed.contains(_gameOrder[i]);
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         width: 12,
                         height: 12,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: i < _currentGameIndex
+                          color: done
                               ? AppColors.mint
                               : i == _currentGameIndex
                                   ? AppColors.primaryPurple

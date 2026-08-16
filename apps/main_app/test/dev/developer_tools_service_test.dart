@@ -41,6 +41,9 @@ class _FakeGateway implements AssessmentGateway {
   Future<int> abandonOpenRuns(String childId) async => 0;
 
   @override
+  Future<OpenAssessmentRun?> openAssessmentRun(String childId) async => null;
+
+  @override
   Future<GameplaySession> recordSession({
     required String childId,
     required String gameId,
