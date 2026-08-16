@@ -5,6 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/utils/network_errors.dart';
+import '../../providers/child_provider.dart';
 
 /// Bind Account modal for guest users to link their progress
 class BindAccountModal extends StatefulWidget {
@@ -44,6 +45,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
+      // The identity the guest's children — and their saved active-child
+      // selection (AUM-151) — are currently keyed under.
+      final previousUserId = widget.authService.effectiveUserId;
+
       // Ensure we have a valid Supabase session before binding.
       // If user only has local guest mode (no Supabase session), sign in anonymously first.
       if (widget.authService.currentUser == null) {
@@ -63,6 +68,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
       // Backfill guest data and sync to Supabase
       final newUserId = widget.authService.currentUser?.id;
       if (newUserId != null) {
+        if (previousUserId != null) {
+          await ChildProvider.migrateSavedActiveChild(
+            fromUserId: previousUserId,
+            toUserId: newUserId,
+          );
+        }
         await syncService.onUserAuthenticated(newUserId);
       }
 
@@ -91,6 +102,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
+      // The identity the guest's children — and their saved active-child
+      // selection (AUM-151) — are currently keyed under.
+      final previousUserId = widget.authService.effectiveUserId;
+
       // Ensure we have a valid Supabase session before binding.
       // If user only has local guest mode (no Supabase session), sign in anonymously first.
       if (widget.authService.currentUser == null) {
@@ -106,6 +121,12 @@ class _BindAccountModalState extends State<BindAccountModal> {
       // Backfill guest data and sync to Supabase
       final newUserId = widget.authService.currentUser?.id;
       if (newUserId != null) {
+        if (previousUserId != null) {
+          await ChildProvider.migrateSavedActiveChild(
+            fromUserId: previousUserId,
+            toUserId: newUserId,
+          );
+        }
         await syncService.onUserAuthenticated(newUserId);
       }
 
@@ -303,7 +324,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
             color: AppColors.butterLight,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.link_rounded, color: AppColors.statusWarningDark),
+          child: const Icon(
+            Icons.link_rounded,
+            color: AppColors.statusWarningDark,
+          ),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -328,12 +352,18 @@ class _BindAccountModalState extends State<BindAccountModal> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.statusDangerDark, size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.statusDangerDark,
+            size: 18,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.statusDangerDark),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.statusDangerDark,
+              ),
             ),
           ),
         ],

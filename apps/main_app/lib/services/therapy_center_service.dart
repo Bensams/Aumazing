@@ -23,6 +23,13 @@ class TherapyCenterService {
 
   List<TherapyCenter>? _memoryCache;
 
+  /// Test seam: clears the in-memory cache so tests can seed the
+  /// SharedPreferences cache and force a fresh load through it.
+  @visibleForTesting
+  void debugResetMemoryCache() {
+    _memoryCache = null;
+  }
+
   /// Loads active centers: Supabase first, falling back to the last
   /// successful fetch when offline.
   Future<List<TherapyCenter>> getCenters({bool forceRefresh = false}) async {
