@@ -143,6 +143,30 @@ Future<GameplaySession?> _play(
   startedAt: startedAt ?? DateTime(2026, 8, 1, 9),
 );
 
+/// Plays every assessment activity, which is what a run now needs before it
+/// can be scored (AUM-154). Tests whose subject is snapshots or session
+/// contamination use this, so the completeness gate is not what they end up
+/// measuring.
+Future<void> _playFullRun(
+  AssessmentProvider provider, {
+  String childId = 'child-1',
+  String context = 'pre_assessment',
+  DateTime? startedAt,
+}) async {
+  final start = startedAt ?? DateTime(2026, 8, 1, 9);
+  final games = GameRegistry.assessmentGameIds;
+  for (var i = 0; i < games.length; i++) {
+    await _play(
+      provider,
+      gameId: games[i],
+      childId: childId,
+      context: context,
+      // Distinct start times so each game gets its own dedupe key.
+      startedAt: start.add(Duration(minutes: i)),
+    );
+  }
+}
+
 AiAssessmentResponse _prediction(int level) => AiAssessmentResponse(
   predictedProfile: 'mixed_support',
   confidence: 0.7,
@@ -189,13 +213,13 @@ void main() {
   group('session contamination', () {
     test('practice play is excluded from a post-assessment', () async {
       await provider.startAssessmentRun(childId: 'child-1', type: 'post');
-      await _play(provider, gameId: 'match_it', context: 'post_assessment');
+      await _playFullRun(provider, context: 'post_assessment');
       // The child wanders off and plays a practice game mid-run.
       await _play(
         provider,
         gameId: 'copy_me',
         context: 'practice',
-        startedAt: DateTime(2026, 8, 1, 10),
+        startedAt: DateTime(2026, 8, 1, 14),
       );
 
       final comparison = await provider.finalizePostAssessment('child-1');
@@ -205,8 +229,11 @@ void main() {
         (s) => s.context == 'practice',
       );
       expect(practice.assessmentRunId, isNull);
-      // …and never scored.
-      expect(gateway.created.map((r) => r.gameId), ['match_it']);
+      // …and never scored: only the run's own games produce results.
+      expect(
+        gateway.created.map((r) => r.gameId),
+        containsAll(GameRegistry.assessmentGameIds),
+      );
       expect(
         gateway.finalizedSessionBatches
             .expand((batch) => batch)
@@ -234,17 +261,24 @@ void main() {
         reason: 'the new run starts from clean state',
       );
 
-      await _play(
+      await _playFullRun(
         provider,
-        gameId: 'match_it',
         context: 'post_assessment',
         startedAt: DateTime(2026, 8, 2, 9),
       );
 
       await provider.finalizePostAssessment('child-1');
 
-      expect(gateway.created.map((r) => r.gameId), ['match_it']);
-      expect(gateway.created.single.assessmentRunId, 'run-2');
+      // Only the new run's games are scored — the abandoned run's session
+      // contributes nothing, and every result belongs to run-2.
+      expect(
+        gateway.created.map((r) => r.gameId),
+        containsAll(GameRegistry.assessmentGameIds),
+      );
+      expect(
+        gateway.created.map((r) => r.assessmentRunId),
+        everyElement('run-2'),
+      );
     });
 
     test('sessionsForRun keeps only the matching run, child and context', () {
@@ -428,13 +462,64 @@ void main() {
       expect(provider.lastFinalizationError, isNotNull);
     });
 
-    test('a partial run finalizes only the games that were played', () async {
+    // Was: "a partial run finalizes only the games that were played" — it
+    // pinned the behaviour AUM-154 exists to stop. One game out of four
+    // used to produce a full profile and a recommendation, with the three
+    // unplayed areas scored on no evidence at all.
+    test('a partial run is not scored', () async {
       await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
       await _play(provider, gameId: 'copy_me');
 
+      expect(await provider.finalizePreAssessment('child-1'), isFalse);
+      // Nothing was written and no recommendation was invented.
+      expect(gateway.created, isEmpty);
+      expect(gateway.completedRuns, isEmpty);
+      expect(provider.hasPreAssessment, isFalse);
+      expect(provider.recommendation, isNull);
+    });
+
+    test('a partial run explains what is left rather than failing', () async {
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+      await _play(provider, gameId: 'copy_me');
+      await provider.finalizePreAssessment('child-1');
+
+      final message = provider.lastFinalizationError!;
+      expect(message, contains('1 of 4'));
+      expect(message.toLowerCase(), isNot(contains('error')));
+    });
+
+    test('the run is scored once the last activity is played', () async {
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+      await _playFullRun(provider);
+
       expect(await provider.finalizePreAssessment('child-1'), isTrue);
-      expect(gateway.created.map((r) => r.gameId), ['copy_me']);
+      expect(
+        gateway.created.map((r) => r.gameId),
+        containsAll(GameRegistry.assessmentGameIds),
+      );
       expect(gateway.completedRuns, ['run-1']);
+    });
+
+    test('sessions from a partial run survive so it can be resumed', () async {
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+      await _play(provider, gameId: 'copy_me');
+      expect(await provider.finalizePreAssessment('child-1'), isFalse);
+
+      // The child comes back and finishes the remaining activities in the
+      // same run — the first game is not replayed.
+      for (final gameId in GameRegistry.assessmentGameIds.skip(1)) {
+        await _play(
+          provider,
+          gameId: gameId,
+          startedAt: DateTime(2026, 8, 1, 10),
+        );
+      }
+
+      expect(await provider.finalizePreAssessment('child-1'), isTrue);
+      expect(
+        gateway.created.map((r) => r.gameId),
+        containsAll(GameRegistry.assessmentGameIds),
+      );
     });
   });
 
@@ -442,7 +527,7 @@ void main() {
     test('a post run cannot rewrite the finalized pre snapshot', () async {
       // Pre-assessment.
       await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
-      await _play(provider, gameId: 'copy_me');
+      await _playFullRun(provider);
       expect(await provider.finalizePreAssessment('child-1'), isTrue);
       final preSnapshot = await provider.captureRunSnapshot(
         'child-1',
@@ -453,9 +538,8 @@ void main() {
 
       // Post-assessment, with a different prediction.
       await provider.startAssessmentRun(childId: 'child-1', type: 'post');
-      await _play(
+      await _playFullRun(
         provider,
-        gameId: 'copy_me',
         context: 'post_assessment',
         startedAt: DateTime(2026, 9, 1, 9),
       );
@@ -481,8 +565,14 @@ void main() {
         provider.preSnapshot!.prediction!.areaLevels['communication']!.levelInt,
         0,
       );
-      expect(provider.preSnapshot!.results.single.type, 'pre');
-      expect(provider.postSnapshot!.results.single.type, 'post');
+      expect(
+        provider.preSnapshot!.results.map((r) => r.type),
+        everyElement('pre'),
+      );
+      expect(
+        provider.postSnapshot!.results.map((r) => r.type),
+        everyElement('post'),
+      );
     });
 
     test('snapshots survive a reload', () async {
