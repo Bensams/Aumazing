@@ -12,6 +12,7 @@ import '../../services/screen_time_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
+import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
 import 'widgets/background_picker.dart';
 import 'widgets/settings_scaffold.dart';
@@ -101,6 +102,24 @@ class SettingsScreen extends StatelessWidget {
                 () => showDialog(
                   context: context,
                   builder: (_) => BindAccountModal(authService: authService),
+                ),
+          ),
+        // Last in the list, and only for a real account: a guest has no
+        // server-side account to delete, and offering it there would just
+        // be a confusing way to lose local progress (AUM-147).
+        if (!isGuest)
+          _CategoryTile(
+            icon: Icons.delete_forever_rounded,
+            color: AppColors.statusDangerDark,
+            title: 'Delete Account',
+            subtitle: 'Permanently remove this account and its data',
+            onTap:
+                () => _push(
+                  context,
+                  DeleteAccountScreen(
+                    palette: palette,
+                    authService: authService,
+                  ),
                 ),
           ),
       ],
