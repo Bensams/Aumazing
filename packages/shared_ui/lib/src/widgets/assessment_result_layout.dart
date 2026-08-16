@@ -6,6 +6,7 @@ import 'assessment/assessment_game_results_card.dart';
 import 'assessment/assessment_learning_path_card.dart';
 import 'assessment/assessment_overview_card.dart';
 import 'assessment/assessment_profile_card.dart';
+import 'assessment/assessment_progress_card.dart';
 import 'assessment/assessment_recommendations_card.dart';
 import 'assessment/assessment_result_actions.dart';
 import 'assessment/assessment_result_header.dart';
@@ -102,15 +103,17 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
       body: Stack(
         children: [
           DecoratedBox(
-            decoration: widget.background ??
+            decoration:
+                widget.background ??
                 const BoxDecoration(color: AppColors.background),
             child: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final columns = width >= _threeColumnBreakpoint
-                      ? 3
-                      : width >= _twoColumnBreakpoint
+                  final columns =
+                      width >= _threeColumnBreakpoint
+                          ? 3
+                          : width >= _twoColumnBreakpoint
                           ? 2
                           : 1;
                   final isWide = columns > 1;
@@ -176,12 +179,19 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
   // ── Sections ─────────────────────────────────────────────────────────
 
   /// Section order, identical in every orientation and column count:
-  /// overview → profile → game results → recommended settings →
+  /// overview → progress → profile → game results → recommended settings →
   /// recommended activities.
+  ///
+  /// Progress sits directly under the overview: when a parent has run a
+  /// second assessment, "did this help?" is the question they opened the
+  /// screen to answer.
   List<Widget> _sections() {
     final model = widget.model;
+    final progress = model.progress;
     return [
       AssessmentOverviewCard(model: model, dense: _dense),
+      if (progress != null && progress.hasAreas)
+        AssessmentProgressCard(progress: progress, dense: _dense),
       if (model.hasAreas || model.sensoryObservations.isNotEmpty)
         AssessmentProfileCard(model: model, dense: _dense),
       if (model.games.isNotEmpty)

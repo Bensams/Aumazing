@@ -24,6 +24,7 @@ class AssessmentResultView extends StatefulWidget {
     required this.presentation,
     this.aiResponse,
     this.assessmentType = 'pre',
+    this.progress,
     this.onContinue,
     this.onRetake,
     this.onBack,
@@ -40,6 +41,10 @@ class AssessmentResultView extends StatefulWidget {
   final AssessmentResultPresentation presentation;
   final AiAssessmentResponse? aiResponse;
   final String assessmentType;
+
+  /// Before-and-after comparison against an earlier comparable run, when the
+  /// caller has one (AUM-161). Null shows the run on its own, unchanged.
+  final ResultProgress? progress;
 
   final VoidCallback? onContinue;
   final VoidCallback? onRetake;
@@ -73,6 +78,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       aiResponse: widget.aiResponse,
       activeGameIds: _activeGameIds,
       assessmentType: widget.assessmentType,
+      progress: widget.progress,
     );
 
     return AssessmentResultLayout(
