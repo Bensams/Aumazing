@@ -3,6 +3,7 @@ import 'package:game_core/game_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../model/ai_assessment_response.dart';
+import '../model/area_level.dart';
 import '../model/assessment_result.dart';
 import '../model/support_profile.dart';
 import 'learning_path_service.dart';
@@ -50,6 +51,10 @@ abstract final class AssessmentResultMapper {
                 ResultModule(
                   name: step.game.name,
                   startingLevel: step.difficulty,
+                  reason: activityReason(
+                    areaKey: step.areaKey,
+                    areaLevels: aiResponse.areaLevels,
+                  ),
                 ),
             ];
 
@@ -172,6 +177,41 @@ abstract final class AssessmentResultMapper {
         return 1;
       default:
         return 0;
+    }
+  }
+
+  // ── Why an activity was recommended ──────────────────────────────────
+
+  /// A parent-friendly reason for putting an activity on the path (AUM-161).
+  ///
+  /// The learning path already knows which area each activity targets
+  /// ([LearningPathEntry.areaKey]); this turns that into a sentence a parent
+  /// can act on. The wording deliberately describes the *activity* and the
+  /// *skill area* — "builds Communication, the area with the most room to
+  /// grow" — never the child, and never a condition. An assessment run says
+  /// what happened in four games; it is not a diagnosis, so nothing here may
+  /// read like one.
+  ///
+  /// Returns null when the area is unknown, so the row simply shows no
+  /// reason rather than an invented one.
+  static String? activityReason({
+    required String areaKey,
+    required Map<String, AreaLevel> areaLevels,
+  }) {
+    final title = areaTitles[areaKey];
+    if (title == null) return null;
+
+    final level = areaLevels[areaKey]?.levelInt;
+    switch (level) {
+      case 0:
+        return 'Practises $title, the area with the most room to grow '
+            'right now.';
+      case 1:
+        return 'Keeps building $title, which is coming along.';
+      case 2:
+        return 'Plays to a strength in $title to keep it going.';
+      default:
+        return 'Practises $title.';
     }
   }
 

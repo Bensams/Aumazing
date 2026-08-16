@@ -146,10 +146,19 @@ class ResultModule {
   const ResultModule({
     required this.name,
     required this.startingLevel,
+    this.reason,
   });
 
   final String name;
   final int startingLevel;
+
+  /// Why this activity was chosen, in a parent's words (AUM-161) — e.g.
+  /// "Builds Communication, the area with the most room to grow right now".
+  ///
+  /// Describes what the activity practises and why it comes next. It is
+  /// never a claim about the child themselves, and never diagnostic: the
+  /// assessment reports skills observed in a game, not a condition.
+  final String? reason;
 }
 
 /// A single row in the Recommended Settings card.
