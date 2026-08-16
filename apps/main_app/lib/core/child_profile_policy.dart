@@ -1,9 +1,16 @@
-enum ChildBirthDateValidation { valid, missing, futureDate, tooYoung, tooOld }
+/// Outcome of checking a child's birth date.
+///
+/// There is deliberately no age-range outcome. AUMazing serves autistic
+/// children without an age limit, so a birth date is rejected only when it
+/// is absent or impossible — never for the age it implies. Age is still
+/// *used* (it drives the recommended screen-time and difficulty defaults),
+/// but it never decides who may use the app.
+enum ChildBirthDateValidation { valid, missing, futureDate }
 
 /// Calculates age in whole years from date-only values.
 ///
 /// Future birth dates can produce negative ages. Call
-/// [validateBirthDate] when you need eligibility checks.
+/// [validateBirthDate] when you need to check a date is usable.
 /// Leap-day birthdays are treated as having their birthday on February 28 in
 /// non-leap years.
 int calculateAgeYears(DateTime birthDate, {DateTime? today}) {
@@ -49,16 +56,7 @@ ChildBirthDateValidation validateBirthDate(
     return ChildBirthDateValidation.futureDate;
   }
 
-  final age = calculateAgeYears(dateOnlyBirth, today: dateOnlyNow);
-
-  if (age < 2) {
-    return ChildBirthDateValidation.tooYoung;
-  }
-
-  if (age > 6) {
-    return ChildBirthDateValidation.tooOld;
-  }
-
+  // No age range is applied: any real, non-future birth date is valid.
   return ChildBirthDateValidation.valid;
 }
 

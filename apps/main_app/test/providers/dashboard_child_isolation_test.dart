@@ -11,7 +11,6 @@ import 'package:aumazing/providers/progress_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
 import 'package:aumazing/services/child_switch_service.dart';
 import 'package:aumazing/services/entitlement_service.dart';
-import 'package:aumazing/services/local_db_service.dart' as legacy_db;
 import 'package:aumazing/services/screen_time_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -365,7 +364,11 @@ class _GatedAssessmentDb extends core_db.LocalDbService {
 }
 
 /// Legacy cache stand-in behind [ProgressProvider], gated the same way.
-class _GatedProgressDb extends legacy_db.LocalDbService {
+// Extends the *core* service because ProgressProvider reads through it —
+// the same database sessions are written to. Extending the legacy service
+// here would let the provider drift back to the wrong database without a
+// test noticing.
+class _GatedProgressDb extends core_db.LocalDbService {
   final Map<String, Completer<void>> _gates = {};
 
   Completer<void> _gate(String childId) =>
@@ -393,8 +396,12 @@ class _GatedProgressDb extends legacy_db.LocalDbService {
   }
 
   @override
-  Future<List<GameplaySession>> getSessionsForChild(String childId) async {
-    await _gate(childId).future;
+  Future<List<GameplaySession>> getGameSessions({
+    String? childId,
+    String? context,
+    bool includeDeleted = false,
+  }) async {
+    await _gate(childId!).future;
     return [_session(childId, id: 'session-$childId')];
   }
 }
