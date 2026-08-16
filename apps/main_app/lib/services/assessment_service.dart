@@ -9,6 +9,33 @@ import '../core/services/local_db_service.dart' as core_db;
 import '../core/services/auth_service.dart';
 import '../core/services/sync_service.dart' as core_sync;
 
+/// A run a child left open, with the play it already contains (AUM-154).
+///
+/// Carries the sessions read back from the database rather than a run id
+/// alone: a resume after the app was closed has nothing in memory, so the
+/// only place the earlier games still exist is storage.
+class OpenAssessmentRun {
+  const OpenAssessmentRun({
+    required this.id,
+    required this.childId,
+    required this.type,
+    required this.startedAt,
+    required this.sessions,
+  });
+
+  final String id;
+  final String childId;
+
+  /// 'pre' or 'post' — a run is only resumable into the same kind of
+  /// assessment it was started as.
+  final String type;
+  final DateTime startedAt;
+
+  /// Every session stored against this run, unfiltered. The provider decides
+  /// which of them really belong to it.
+  final List<GameplaySession> sessions;
+}
+
 /// The assessment operations [AssessmentProvider] depends on.
 ///
 /// Declared as an interface so the provider's run lifecycle can be exercised
@@ -25,6 +52,13 @@ abstract interface class AssessmentGateway {
   /// Marks every still-open run for [childId] as incomplete, returning how
   /// many were closed (AUM-154).
   Future<int> abandonOpenRuns(String childId);
+
+  /// The run [childId] still has open, with its stored sessions, or null
+  /// when there is none (AUM-154).
+  ///
+  /// Read *before* a new run is started: [startAssessmentRun] closes open
+  /// runs and the caller would be asking about a run it had just ended.
+  Future<OpenAssessmentRun?> openAssessmentRun(String childId);
 
   Future<GameplaySession> recordSession({
     required String childId,
@@ -191,6 +225,46 @@ class AssessmentService implements AssessmentGateway {
       _syncService.syncNow();
     }
     return closed;
+  }
+
+  /// The child's still-open run and the play already recorded against it.
+  ///
+  /// [abandonOpenRuns] keeps at most one run open per child, so the newest
+  /// in-progress row is the only candidate; it is read with its sessions
+  /// because a child resuming after the app was closed has nothing left in
+  /// memory to resume from.
+  @override
+  Future<OpenAssessmentRun?> openAssessmentRun(String childId) async {
+    final db = await _localDb.database;
+    final rows = await db.query(
+      'assessment_runs_local',
+      where: 'child_id = ? AND status = ?',
+      whereArgs: [childId, 'in_progress'],
+      orderBy: 'started_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+
+    final row = rows.first;
+    final runId = row['id'] as String;
+    final startedAt = DateTime.tryParse((row['started_at'] as String?) ?? '');
+    // A run with no readable start date cannot be aged, and the staleness
+    // rule is what stops an ancient run being offered — treat it as
+    // unresumable rather than guessing at its age.
+    if (startedAt == null) return null;
+
+    final sessions =
+        (await _localDb.getGameSessions(
+          childId: childId,
+        )).where((s) => s.assessmentRunId == runId).toList();
+
+    return OpenAssessmentRun(
+      id: runId,
+      childId: childId,
+      type: (row['type'] as String?) ?? 'pre',
+      startedAt: startedAt,
+      sessions: sessions,
+    );
   }
 
   // ── Record a gameplay session ─────────────────────────────────────────
