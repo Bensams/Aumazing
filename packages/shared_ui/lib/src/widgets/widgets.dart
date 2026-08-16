@@ -6,6 +6,7 @@ export 'assessment/assessment_game_results_card.dart';
 export 'assessment/assessment_learning_path_card.dart';
 export 'assessment/assessment_overview_card.dart';
 export 'assessment/assessment_profile_card.dart';
+export 'assessment/assessment_progress_card.dart';
 export 'assessment/assessment_recommendations_card.dart';
 export 'assessment/assessment_result_actions.dart';
 export 'assessment/assessment_result_header.dart';

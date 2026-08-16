@@ -24,6 +24,7 @@ abstract final class AssessmentResultMapper {
     AiAssessmentResponse? aiResponse,
     Set<String>? activeGameIds,
     String assessmentType = 'pre',
+    ResultProgress? progress,
   }) {
     final games = [
       for (final result in results)
@@ -84,6 +85,7 @@ abstract final class AssessmentResultMapper {
       learningPath: path,
       sensoryObservations: profile.sensoryNotes,
       learningPathUnavailable: filteredOut,
+      progress: progress,
     );
   }
 
