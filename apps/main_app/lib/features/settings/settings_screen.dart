@@ -66,29 +66,30 @@ class SettingsScreen extends StatelessWidget {
           color: AppColors.primaryPurple,
           title: 'Child Preferences',
           subtitle: 'Avatar, theme, game difficulty, language, rewards',
-          onTap: () =>
-              _push(context, _ChildPreferencesScreen(palette: palette)),
+          onTap:
+              () => _push(context, _ChildPreferencesScreen(palette: palette)),
         ),
         _CategoryTile(
           icon: Icons.timer_rounded,
           color: const Color(0xFFDD9B4A),
           title: 'Screen Time',
-          subtitle: 'Daily play limit, age-based recommendation',
-          onTap: () =>
-              _push(context, _ScreenTimeSettingsScreen(palette: palette)),
+          subtitle: 'Daily and per-session play limits',
+          onTap:
+              () => _push(context, _ScreenTimeSettingsScreen(palette: palette)),
         ),
         _CategoryTile(
           icon: Icons.lock_outline_rounded,
           color: const Color(0xFF8A7BC8),
           title: 'Parent Lock',
           subtitle: 'How the app checks a grown-up is present',
-          onTap: () => _push(
-            context,
-            _ParentLockSettingsScreen(
-              palette: palette,
-              authService: authService,
-            ),
-          ),
+          onTap:
+              () => _push(
+                context,
+                _ParentLockSettingsScreen(
+                  palette: palette,
+                  authService: authService,
+                ),
+              ),
         ),
         if (isGuest)
           _CategoryTile(
@@ -96,10 +97,11 @@ class SettingsScreen extends StatelessWidget {
             color: AppColors.statusWarningDark,
             title: 'Bind Account',
             subtitle: 'Save your progress permanently',
-            onTap: () => showDialog(
-              context: context,
-              builder: (_) => BindAccountModal(authService: authService),
-            ),
+            onTap:
+                () => showDialog(
+                  context: context,
+                  builder: (_) => BindAccountModal(authService: authService),
+                ),
           ),
       ],
     );
@@ -134,21 +136,23 @@ class _VideoSettingsScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
                   spacing: 8,
-                  children: GraphicsQuality.values.map((q) {
-                    final selected = childProv.graphicsQuality == q;
-                    return ChoiceChip(
-                      label: Text(q.label),
-                      selected: selected,
-                      selectedColor: AppColors.primaryPurple,
-                      labelStyle: AppTextStyles.bodySmall.copyWith(
-                        color: selected
-                            ? AppColors.white
-                            : AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      onSelected: (_) => childProv.setGraphicsQuality(q),
-                    );
-                  }).toList(),
+                  children:
+                      GraphicsQuality.values.map((q) {
+                        final selected = childProv.graphicsQuality == q;
+                        return ChoiceChip(
+                          label: Text(q.label),
+                          selected: selected,
+                          selectedColor: AppColors.primaryPurple,
+                          labelStyle: AppTextStyles.bodySmall.copyWith(
+                            color:
+                                selected
+                                    ? AppColors.white
+                                    : AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) => childProv.setGraphicsQuality(q),
+                        );
+                      }).toList(),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 const SettingsHintText(
@@ -162,9 +166,10 @@ class _VideoSettingsScreen extends StatelessWidget {
                 _SettingSlider(
                   label: 'Intensity',
                   value: childProv.animationIntensity,
-                  onChanged: (val) => childProv.updateComfortSettings(
-                    animationIntensity: val,
-                  ),
+                  onChanged:
+                      (val) => childProv.updateComfortSettings(
+                        animationIntensity: val,
+                      ),
                 ),
                 const SettingsHintText(
                   'Reduce visual stimulation for children sensitive to '
@@ -318,33 +323,38 @@ class _ChildPreferencesScreen extends StatelessWidget {
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: _avatars.map((emoji) {
-                        final selected =
-                            childProv.profile?.avatarEmoji == emoji;
-                        return GestureDetector(
-                          onTap: () =>
-                              childProv.updateProfile(avatar: emoji),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? AppColors.lavenderLight
-                                  : AppColors.inputFill,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selected
-                                    ? AppColors.primaryPurple
-                                    : Colors.transparent,
-                                width: 2.5,
+                      children:
+                          _avatars.map((emoji) {
+                            final selected =
+                                childProv.profile?.avatarEmoji == emoji;
+                            return GestureDetector(
+                              onTap:
+                                  () => childProv.updateProfile(avatar: emoji),
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color:
+                                      selected
+                                          ? AppColors.lavenderLight
+                                          : AppColors.inputFill,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color:
+                                        selected
+                                            ? AppColors.primaryPurple
+                                            : Colors.transparent,
+                                    width: 2.5,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(fontSize: 28),
+                                ),
                               ),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(emoji,
-                                style: const TextStyle(fontSize: 28)),
-                          ),
-                        );
-                      }).toList(),
+                            );
+                          }).toList(),
                     ),
                   ],
                 ),
@@ -366,7 +376,8 @@ class _ChildPreferencesScreen extends StatelessWidget {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 4),
+                                horizontal: 4,
+                              ),
                               child: _ThemeOption(
                                 theme: theme,
                                 childProv: childProv,
@@ -380,8 +391,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         child: TextButton.icon(
                           onPressed: () => childProv.clearThemeOverride(),
-                          icon: const Icon(Icons.restart_alt_rounded,
-                              size: 16),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
                           label: const Text('Auto from gender'),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.textSecondary,
@@ -400,12 +410,15 @@ class _ChildPreferencesScreen extends StatelessWidget {
                     // sit inline in a list of one-line settings.
                     _CustomiseTile(
                       childProv: childProv,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              _AppearanceSettingsScreen(palette: palette),
-                        ),
-                      ),
+                      onTap:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder:
+                                  (_) => _AppearanceSettingsScreen(
+                                    palette: palette,
+                                  ),
+                            ),
+                          ),
                     ),
                   ],
                 ),
@@ -428,8 +441,9 @@ class _ChildPreferencesScreen extends StatelessWidget {
                         for (final world in WorldTheme.values)
                           Expanded(
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               child: _WorldOption(
                                 world: world,
                                 childProv: childProv,
@@ -455,33 +469,35 @@ class _ChildPreferencesScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: 8,
-                      children: const [(1, 'Easy'), (2, 'Medium'), (3, 'Hard')]
-                          .map((tier) {
-                        final selected =
-                            childProv.difficultyOverride == tier.$1;
-                        return ChoiceChip(
-                          label: Text(tier.$2),
-                          selected: selected,
-                          selectedColor: AppColors.primaryPurple,
-                          labelStyle: AppTextStyles.bodySmall.copyWith(
-                            color: selected
-                                ? AppColors.white
-                                : AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          onSelected: (_) =>
-                              childProv.setDifficultyOverride(tier.$1),
-                        );
-                      }).toList(),
+                      children:
+                          const [(1, 'Easy'), (2, 'Medium'), (3, 'Hard')].map((
+                            tier,
+                          ) {
+                            final selected =
+                                childProv.difficultyOverride == tier.$1;
+                            return ChoiceChip(
+                              label: Text(tier.$2),
+                              selected: selected,
+                              selectedColor: AppColors.primaryPurple,
+                              labelStyle: AppTextStyles.bodySmall.copyWith(
+                                color:
+                                    selected
+                                        ? AppColors.white
+                                        : AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              onSelected:
+                                  (_) =>
+                                      childProv.setDifficultyOverride(tier.$1),
+                            );
+                          }).toList(),
                     ),
                     if (childProv.isDifficultyOverridden)
                       Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton.icon(
-                          onPressed: () =>
-                              childProv.clearDifficultyOverride(),
-                          icon: const Icon(Icons.restart_alt_rounded,
-                              size: 16),
+                          onPressed: () => childProv.clearDifficultyOverride(),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
                           label: const Text('Auto from assessment'),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.textSecondary,
@@ -499,21 +515,23 @@ class _ChildPreferencesScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: 8,
-                      children: GameLanguage.values.map((lang) {
-                        final selected = childProv.language == lang;
-                        return ChoiceChip(
-                          label: Text(lang.label),
-                          selected: selected,
-                          selectedColor: AppColors.primaryPurple,
-                          labelStyle: AppTextStyles.bodySmall.copyWith(
-                            color: selected
-                                ? AppColors.white
-                                : AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          onSelected: (_) => childProv.setLanguage(lang),
-                        );
-                      }).toList(),
+                      children:
+                          GameLanguage.values.map((lang) {
+                            final selected = childProv.language == lang;
+                            return ChoiceChip(
+                              label: Text(lang.label),
+                              selected: selected,
+                              selectedColor: AppColors.primaryPurple,
+                              labelStyle: AppTextStyles.bodySmall.copyWith(
+                                color:
+                                    selected
+                                        ? AppColors.white
+                                        : AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              onSelected: (_) => childProv.setLanguage(lang),
+                            );
+                          }).toList(),
                     ),
                   ],
                 ),
@@ -561,11 +579,14 @@ class _ChildPreferencesScreen extends StatelessWidget {
                       icon: Icons.shuffle_rounded,
                       label: 'Use Random Rewards',
                       value: childProv.useRandomReward,
-                      onChanged: (val) => childProv.updateRewardPreferences(
-                        useRandomReward: val,
-                      ),
+                      onChanged:
+                          (val) => childProv.updateRewardPreferences(
+                            useRandomReward: val,
+                          ),
                     ),
-                    const SettingsHintText('A different celebration every time!'),
+                    const SettingsHintText(
+                      'A different celebration every time!',
+                    ),
                   ],
                 ),
               ],
@@ -597,14 +618,16 @@ class _CustomiseTile extends StatelessWidget {
     final background = childProv.customBackground;
     final style = childProv.objectStyle;
 
-    final backgroundText = background == null
-        ? 'Theme background'
-        : background.kind == ChildBackgroundKind.solid
+    final backgroundText =
+        background == null
+            ? 'Theme background'
+            : background.kind == ChildBackgroundKind.solid
             ? 'Custom colour'
             : 'Custom blend';
-    final outlineText = style.hasOutline
-        ? '${style.outline.label.toLowerCase()} outline'
-        : 'no outline';
+    final outlineText =
+        style.hasOutline
+            ? '${style.outline.label.toLowerCase()} outline'
+            : 'no outline';
     final summary = '$backgroundText · $outlineText';
 
     return Semantics(
@@ -615,13 +638,17 @@ class _CustomiseTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          constraints:
-              const BoxConstraints(minHeight: kMinInteractiveDimension),
+          constraints: const BoxConstraints(
+            minHeight: kMinInteractiveDimension,
+          ),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: Row(
             children: [
-              Icon(Icons.tune_rounded,
-                  size: 20, color: AppColors.primaryPurple),
+              Icon(
+                Icons.tune_rounded,
+                size: 20,
+                color: AppColors.primaryPurple,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -630,19 +657,23 @@ class _CustomiseTile extends StatelessWidget {
                   children: [
                     Text(
                       'Customise background and objects',
-                      style: AppTextStyles.labelLarge
-                          .copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     Text(
                       summary,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.mutedForeground),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.mutedForeground),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.mutedForeground,
+              ),
             ],
           ),
         ),
@@ -675,8 +706,12 @@ class _AppearanceSettingsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
-                      AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
                   child: Row(
                     children: [
                       Material(
@@ -684,8 +719,10 @@ class _AppearanceSettingsScreen extends StatelessWidget {
                         shape: const CircleBorder(),
                         child: IconButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(Icons.arrow_back_rounded,
-                              color: palette.primary),
+                          icon: Icon(
+                            Icons.arrow_back_rounded,
+                            color: palette.primary,
+                          ),
                           tooltip: 'Back',
                         ),
                       ),
@@ -697,8 +734,10 @@ class _AppearanceSettingsScreen extends StatelessWidget {
                           color: AppColors.white.withAlpha(235),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.palette_rounded,
-                            color: palette.primary),
+                        child: Icon(
+                          Icons.palette_rounded,
+                          color: palette.primary,
+                        ),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Flexible(
@@ -715,8 +754,9 @@ class _AppearanceSettingsScreen extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
                   child: Container(
                     decoration: BoxDecoration(
                       color: AppColors.white.withAlpha(200),
@@ -729,35 +769,42 @@ class _AppearanceSettingsScreen extends StatelessWidget {
                       // Full-width targets rather than text-width ones.
                       indicatorSize: TabBarIndicatorSize.tab,
                       tabs: const [
-                        Tab(text: 'Background', height: kMinInteractiveDimension),
                         Tab(
-                            text: 'Game objects',
-                            height: kMinInteractiveDimension),
+                          text: 'Background',
+                          height: kMinInteractiveDimension,
+                        ),
+                        Tab(
+                          text: 'Game objects',
+                          height: kMinInteractiveDimension,
+                        ),
                       ],
                     ),
                   ),
                 ),
                 Expanded(
                   child: Consumer<ChildProvider>(
-                    builder: (context, childProv, _) => TabBarView(
-                      children: [
-                        _AppearanceTab(
-                          hint: 'Pick your own colour for your child\'s game '
-                              'screens, or blend two. This replaces the theme '
-                              'background and is used for every game, so the '
-                              'screens stay predictable.',
-                          child: BackgroundPicker(childProv: childProv),
+                    builder:
+                        (context, childProv, _) => TabBarView(
+                          children: [
+                            _AppearanceTab(
+                              hint:
+                                  'Pick your own colour for your child\'s game '
+                                  'screens, or blend two. This replaces the theme '
+                                  'background and is used for every game, so the '
+                                  'screens stay predictable.',
+                              child: BackgroundPicker(childProv: childProv),
+                            ),
+                            _AppearanceTab(
+                              hint:
+                                  'Sets the card behind each shape, picture and '
+                                  'item, and the outline around it. A plain card '
+                                  'colour with an outline makes objects easier to '
+                                  'tell apart — helpful if your child struggles to '
+                                  'pick out a shape.',
+                              child: ObjectStylePicker(childProv: childProv),
+                            ),
+                          ],
                         ),
-                        _AppearanceTab(
-                          hint: 'Sets the card behind each shape, picture and '
-                              'item, and the outline around it. A plain card '
-                              'colour with an outline makes objects easier to '
-                              'tell apart — helpful if your child struggles to '
-                              'pick out a shape.',
-                          child: ObjectStylePicker(childProv: childProv),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -780,7 +827,11 @@ class _AppearanceTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -1020,8 +1071,62 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: AppTextStyles.labelLarge.copyWith(
-        color: AppColors.textSecondary,
+      style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+    );
+  }
+}
+
+/// One "label — value" line in the screen-time status block (AUM-162).
+///
+/// Label and value each take their natural width and wrap independently, so
+/// a long value ("No session limit") and a large accessibility text scale
+/// both reflow instead of overflowing.
+class _ScreenTimeStatRow extends StatelessWidget {
+  const _ScreenTimeStatRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.valueKey,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Key valueKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 18, color: AppColors.primaryPurple),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              key: valueKey,
+              textAlign: TextAlign.end,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1155,8 +1260,8 @@ class _PromptSpeedSliderState extends State<_PromptSpeedSlider> {
     return _SettingSlider(
       label: 'Prompt Speed',
       value: widget.childProv.promptSpeed,
-      onChanged: (val) =>
-          widget.childProv.updateComfortSettings(promptSpeed: val),
+      onChanged:
+          (val) => widget.childProv.updateComfortSettings(promptSpeed: val),
       onChangeEnd: (_) => _playSample(),
     );
   }
@@ -1190,9 +1295,10 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
     if (!mounted) return;
     // restart: true so the parent hears the new style straight away rather
     // than only on the next session.
-    await context
-        .read<AudioService>()
-        .playCategoryMusic(category.key, restart: true);
+    await context.read<AudioService>().playCategoryMusic(
+      category.key,
+      restart: true,
+    );
     if (!mounted) return;
     setState(() => _previewPath = context.read<AudioService>().currentTrack);
   }
@@ -1231,10 +1337,12 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
             selected: category.key == selectedKey,
             expanded: _expandedKey == category.key,
             onTap: () => _selectCategory(category),
-            onToggleExpand: () => setState(
-              () => _expandedKey =
-                  _expandedKey == category.key ? null : category.key,
-            ),
+            onToggleExpand:
+                () => setState(
+                  () =>
+                      _expandedKey =
+                          _expandedKey == category.key ? null : category.key,
+                ),
           ),
           if (_expandedKey == category.key)
             Padding(
@@ -1289,20 +1397,19 @@ class _MusicTrackRow extends StatelessWidget {
               Icon(
                 playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
                 size: 18,
-                color: playing
-                    ? AppColors.primaryPurple
-                    : AppColors.textSecondary,
+                color:
+                    playing ? AppColors.primaryPurple : AppColors.textSecondary,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   title,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: playing
-                        ? AppColors.primaryPurple
-                        : AppColors.textPrimary,
-                    fontWeight:
-                        playing ? FontWeight.w700 : FontWeight.w500,
+                    color:
+                        playing
+                            ? AppColors.primaryPurple
+                            : AppColors.textPrimary,
+                    fontWeight: playing ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ),
@@ -1352,9 +1459,8 @@ class _MusicCategoryOption extends StatelessWidget {
             color: selected ? AppColors.lavenderLight : AppColors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected
-                  ? AppColors.primaryPurple
-                  : AppColors.lavenderLight,
+              color:
+                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
               width: selected ? 2 : 1,
             ),
           ),
@@ -1395,9 +1501,10 @@ class _MusicCategoryOption extends StatelessWidget {
                 onPressed: onToggleExpand,
                 visualDensity: VisualDensity.compact,
                 iconSize: 20,
-                tooltip: expanded
-                    ? 'Hide ${category.label} tracks'
-                    : 'Hear ${category.label} tracks',
+                tooltip:
+                    expanded
+                        ? 'Hide ${category.label} tracks'
+                        : 'Hear ${category.label} tracks',
                 icon: Icon(
                   expanded
                       ? Icons.expand_less_rounded
@@ -1487,9 +1594,11 @@ class _WorldOption extends StatelessWidget {
     final style = WorldStyles.of(world);
     final selected = childProv.activeWorld == world;
     return GestureDetector(
-      onTap: () => world == WorldTheme.classic
-          ? childProv.clearWorldOverride()
-          : childProv.setWorldOverride(world),
+      onTap:
+          () =>
+              world == WorldTheme.classic
+                  ? childProv.clearWorldOverride()
+                  : childProv.setWorldOverride(world),
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -1537,9 +1646,10 @@ class _WorldOption extends StatelessWidget {
             Text(
               world.label,
               style: AppTextStyles.labelSmall.copyWith(
-                color: selected
-                    ? AppColors.primaryPurple
-                    : AppColors.textSecondary,
+                color:
+                    selected
+                        ? AppColors.primaryPurple
+                        : AppColors.textSecondary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
@@ -1554,12 +1664,18 @@ class _WorldOption extends StatelessWidget {
 // Screen Time
 // ─────────────────────────────────────────────────────────────────────────
 
-/// Parent controls for the daily screen-time limit (FR: set daily limits;
-/// gameplay pauses when exceeded).
+/// Parent controls for the daily and per-session screen-time limits (FR:
+/// set daily limits; gameplay pauses when exceeded; AUM-162 adds a session
+/// limit so the child takes breaks within the day).
 ///
-/// The recommendation follows AAP/WHO guidance (≤1 hour/day of quality
-/// content for ages 2–5, less is better at age 2) adjusted conservatively
-/// for ASD learners — see [ScreenTimeService.recommendedMinutesForAge].
+/// The two limits are configured independently per child and the stricter
+/// remaining one gates play. "No session limit" leaves the daily limit
+/// fully in force.
+///
+/// The daily recommendation follows AAP/WHO guidance (≤1 hour/day of
+/// quality content for ages 2–5, less is better at age 2) adjusted
+/// conservatively for ASD learners — see
+/// [ScreenTimeService.recommendedMinutesForAge].
 class _ScreenTimeSettingsScreen extends StatefulWidget {
   const _ScreenTimeSettingsScreen({required this.palette});
 
@@ -1572,6 +1688,10 @@ class _ScreenTimeSettingsScreen extends StatefulWidget {
 
 class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
   static const _options = [15, 20, 30, 45, 60, 90];
+
+  // Shorter steps than the daily options: a session is one sitting, and the
+  // app's own games run 3–7 minutes, so these map to roughly 1–4 games.
+  static const _sessionOptions = [5, 10, 15, 20, 30];
 
   @override
   void initState() {
@@ -1607,32 +1727,79 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
           listenable: ScreenTimeService.instance,
           builder: (context, _) {
             final screenTime = ScreenTimeService.instance;
-            final usedMin = (screenTime.usedTodaySeconds / 60).ceil();
             final limit = screenTime.limitMinutes;
+            final sessionLimit = screenTime.sessionLimitMinutes;
+            final dailyRemaining = screenTime.remainingSeconds;
+            final sessionRemaining = screenTime.sessionRemainingSeconds;
 
             return SettingsCard(
               children: [
-                const _SectionLabel('Today'),
-                const SizedBox(height: AppSpacing.xs),
+                // Used, configured and remaining are shown separately for
+                // both budgets, and the no-limit cases are stated outright
+                // rather than left blank, so a parent never has to work out
+                // which limit is actually in force (AUM-162).
                 Row(
                   children: [
-                    const Icon(Icons.hourglass_bottom_rounded,
-                        size: 18, color: AppColors.primaryPurple),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        limit == null
-                            ? '$usedMin min played today (no limit set)'
-                            : '$usedMin of $limit min played today',
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: AppColors.textPrimary),
-                      ),
-                    ),
+                    const Expanded(child: _SectionLabel('Today')),
                     TextButton(
                       onPressed: () => screenTime.resetToday(),
                       child: const Text('Reset'),
                     ),
                   ],
+                ),
+                _ScreenTimeStatRow(
+                  icon: Icons.hourglass_bottom_rounded,
+                  label: 'Played today',
+                  valueKey: const Key('screenTime.dailyUsed'),
+                  value: ScreenTimeService.formatDuration(
+                    screenTime.usedTodaySeconds,
+                  ),
+                ),
+                _ScreenTimeStatRow(
+                  icon: Icons.tune_rounded,
+                  label: 'Daily limit',
+                  valueKey: const Key('screenTime.dailyLimit'),
+                  value:
+                      limit == null
+                          ? 'No daily limit'
+                          : ScreenTimeService.formatDuration(limit * 60),
+                ),
+                _ScreenTimeStatRow(
+                  icon: Icons.hourglass_top_rounded,
+                  label: 'Remaining today',
+                  valueKey: const Key('screenTime.dailyRemaining'),
+                  value:
+                      dailyRemaining == null
+                          ? 'No daily limit'
+                          : ScreenTimeService.formatDuration(dailyRemaining),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                const _SectionLabel('This session'),
+                _ScreenTimeStatRow(
+                  icon: Icons.timelapse_rounded,
+                  label: 'Played this session',
+                  valueKey: const Key('screenTime.sessionUsed'),
+                  value: ScreenTimeService.formatDuration(
+                    screenTime.sessionUsedSeconds,
+                  ),
+                ),
+                _ScreenTimeStatRow(
+                  icon: Icons.tune_rounded,
+                  label: 'Session limit',
+                  valueKey: const Key('screenTime.sessionLimit'),
+                  value:
+                      sessionLimit == null
+                          ? 'No session limit'
+                          : ScreenTimeService.formatDuration(sessionLimit * 60),
+                ),
+                _ScreenTimeStatRow(
+                  icon: Icons.hourglass_top_rounded,
+                  label: 'Remaining this session',
+                  valueKey: const Key('screenTime.sessionRemaining'),
+                  value:
+                      sessionRemaining == null
+                          ? 'No session limit'
+                          : ScreenTimeService.formatDuration(sessionRemaining),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 const _SectionLabel('Daily Limit'),
@@ -1646,26 +1813,29 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                       selected: limit == null,
                       selectedColor: AppColors.primaryPurple,
                       labelStyle: AppTextStyles.bodySmall.copyWith(
-                        color: limit == null
-                            ? AppColors.white
-                            : AppColors.textPrimary,
+                        color:
+                            limit == null
+                                ? AppColors.white
+                                : AppColors.textPrimary,
                       ),
                       onSelected: (_) => screenTime.setLimitMinutes(null),
                     ),
                     for (final minutes in _options)
                       ChoiceChip(
-                        label: Text(minutes == recommended
-                            ? '$minutes min ★'
-                            : '$minutes min'),
+                        label: Text(
+                          minutes == recommended
+                              ? '$minutes min ★'
+                              : '$minutes min',
+                        ),
                         selected: limit == minutes,
                         selectedColor: AppColors.primaryPurple,
                         labelStyle: AppTextStyles.bodySmall.copyWith(
-                          color: limit == minutes
-                              ? AppColors.white
-                              : AppColors.textPrimary,
+                          color:
+                              limit == minutes
+                                  ? AppColors.white
+                                  : AppColors.textPrimary,
                         ),
-                        onSelected: (_) =>
-                            screenTime.setLimitMinutes(minutes),
+                        onSelected: (_) => screenTime.setLimitMinutes(minutes),
                       ),
                   ],
                 ),
@@ -1674,8 +1844,11 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.star_rounded,
-                          size: 16, color: Color(0xFFDD9B4A)),
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 16,
+                        color: Color(0xFFDD9B4A),
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1684,21 +1857,69 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                           'hour of quality screen time for ages 2–5), set '
                           'conservatively for children with ASD. Short, '
                           'purposeful sessions work best.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.mutedForeground),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ],
+                const SizedBox(height: AppSpacing.md),
+                const _SectionLabel('Session Limit'),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Longest single sitting in child mode. A session runs '
+                  'from entering child mode until you exit, and continues '
+                  'across games. Works alongside the daily limit — '
+                  'whichever runs out first pauses play.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('No session limit'),
+                      selected: sessionLimit == null,
+                      selectedColor: AppColors.primaryPurple,
+                      labelStyle: AppTextStyles.bodySmall.copyWith(
+                        color:
+                            sessionLimit == null
+                                ? AppColors.white
+                                : AppColors.textPrimary,
+                      ),
+                      onSelected:
+                          (_) => screenTime.setSessionLimitMinutes(null),
+                    ),
+                    for (final minutes in _sessionOptions)
+                      ChoiceChip(
+                        label: Text('$minutes min'),
+                        selected: sessionLimit == minutes,
+                        selectedColor: AppColors.primaryPurple,
+                        labelStyle: AppTextStyles.bodySmall.copyWith(
+                          color:
+                              sessionLimit == minutes
+                                  ? AppColors.white
+                                  : AppColors.textPrimary,
+                        ),
+                        onSelected:
+                            (_) => screenTime.setSessionLimitMinutes(minutes),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'When the limit is reached, the screen fades to a plain '
-                  'rest screen with no messages or buttons for your child. '
-                  'Only the parent lock in the top-right corner unlocks it '
-                  '(add 15 minutes or exit child mode).',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.mutedForeground),
+                  'When either limit is reached, the screen fades to a '
+                  'plain rest screen with no messages or buttons for your '
+                  'child. Only the parent lock in the top-right corner '
+                  'unlocks it (add 15 minutes or exit child mode).',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             );
@@ -1766,32 +1987,37 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
   Future<void> _switchToWordCode() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Remove your PIN?',
-          style:
-              AppTextStyles.titleLarge.copyWith(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'The lock will go back to showing a code on screen for you to type '
-          'back. A child who can read those words will be able to get past '
-          'it.',
-          style: AppTextStyles.bodyMedium
-              .copyWith(color: AppColors.mutedForeground),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep PIN'),
+      builder:
+          (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              'Remove your PIN?',
+              style: AppTextStyles.titleLarge.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+            content: Text(
+              'The lock will go back to showing a code on screen for you to type '
+              'back. A child who can read those words will be able to get past '
+              'it.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep PIN'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Remove'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true) return;
     await ParentPinService.instance.clearPin();
@@ -1822,7 +2048,8 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                 _LockModeOption(
                   icon: Icons.abc_rounded,
                   title: 'Word Code',
-                  subtitle: 'We show four numbers as words — type them back. '
+                  subtitle:
+                      'We show four numbers as words — type them back. '
                       'Nothing to remember.',
                   selected: !usesPin,
                   onTap: usesPin ? _switchToWordCode : null,
@@ -1831,15 +2058,15 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                 _LockModeOption(
                   icon: Icons.pin_rounded,
                   title: 'My Own PIN',
-                  subtitle: email == null
-                      ? 'Needs a confirmed email address on your account.'
-                      : 'Four digits only you know. Nothing on screen gives '
-                          'it away.',
+                  subtitle:
+                      email == null
+                          ? 'Needs a confirmed email address on your account.'
+                          : 'Four digits only you know. Nothing on screen gives '
+                              'it away.',
                   selected: usesPin,
                   recommended: recommendsPin && !usesPin && email != null,
-                  onTap: email == null
-                      ? null
-                      : () => _setPin(isChange: usesPin),
+                  onTap:
+                      email == null ? null : () => _setPin(isChange: usesPin),
                 ),
 
                 if (recommendsPin && !usesPin) ...[
@@ -1847,8 +2074,11 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.star_rounded,
-                          size: 16, color: Color(0xFFDD9B4A)),
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 16,
+                        color: Color(0xFFDD9B4A),
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1857,8 +2087,9 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                           'recommend setting your own PIN. You know your '
                           'child best — the word code is still fine if '
                           'reading is not yet a strength.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.mutedForeground),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                     ],
@@ -1870,8 +2101,11 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded,
-                          size: 16, color: AppColors.mutedForeground),
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: AppColors.mutedForeground,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1884,8 +2118,9 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                                   'your own PIN. A one-time code sent to '
                                   'that address is the only way back in if '
                                   'you forget it.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.mutedForeground),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                     ],
@@ -1903,8 +2138,9 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
                           'Forgot it? Tap "Forgot PIN?" on the unlock screen '
                           'and we email a one-time code to $email. We never '
                           'send the PIN itself — you pick a new one.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.mutedForeground),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                       TextButton(
@@ -1971,9 +2207,10 @@ class _LockModeOption extends StatelessWidget {
             Icon(
               icon,
               size: 22,
-              color: disabled
-                  ? AppColors.mutedForeground
-                  : AppColors.primaryPurple,
+              color:
+                  disabled
+                      ? AppColors.mutedForeground
+                      : AppColors.primaryPurple,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
@@ -1985,15 +2222,19 @@ class _LockModeOption extends StatelessWidget {
                       Text(
                         title,
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: disabled
-                              ? AppColors.mutedForeground
-                              : AppColors.textPrimary,
+                          color:
+                              disabled
+                                  ? AppColors.mutedForeground
+                                  : AppColors.textPrimary,
                         ),
                       ),
                       if (recommended) ...[
                         const SizedBox(width: 6),
-                        const Icon(Icons.star_rounded,
-                            size: 14, color: Color(0xFFDD9B4A)),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: Color(0xFFDD9B4A),
+                        ),
                         const SizedBox(width: 2),
                         Text(
                           'Recommended',
@@ -2008,15 +2249,19 @@ class _LockModeOption extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.mutedForeground),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
             ),
             if (selected)
-              const Icon(Icons.check_circle_rounded,
-                  size: 20, color: AppColors.primaryPurple),
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 20,
+                color: AppColors.primaryPurple,
+              ),
           ],
         ),
       ),

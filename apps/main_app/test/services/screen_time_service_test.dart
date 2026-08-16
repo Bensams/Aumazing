@@ -36,6 +36,10 @@ void main() {
       await service.setLimitMinutes(1); // 60 seconds
       expect(service.remainingSeconds, 60);
 
+      // Child play only counts inside an owned child-mode session: the
+      // production guard in addUsage rejects usage from parent screens.
+      await service.startSession();
+
       await service.addUsage(45);
       expect(service.remainingSeconds, 15);
       expect(service.isExhausted, isFalse);
@@ -49,6 +53,7 @@ void main() {
       final service = ScreenTimeService.instance;
       await service.load('child-b');
       await service.setLimitMinutes(1);
+      await service.startSession();
       await service.addUsage(60);
       expect(service.isExhausted, isTrue);
 
@@ -57,11 +62,11 @@ void main() {
       expect(service.remainingSeconds, 15 * 60);
     });
 
-    test('usage persists across a reload and resetToday clears it',
-        () async {
+    test('usage persists across a reload and resetToday clears it', () async {
       final service = ScreenTimeService.instance;
       await service.load('child-c');
       await service.setLimitMinutes(30);
+      await service.startSession();
       await service.addUsage(120);
 
       await service.load('child-c'); // simulate re-entering child mode
@@ -76,11 +81,77 @@ void main() {
       final service = ScreenTimeService.instance;
       await service.load('child-d');
       await service.setLimitMinutes(30);
+      await service.startSession();
       await service.addUsage(300);
+      expect(service.usedTodaySeconds, 300);
 
       await service.load('child-e');
       expect(service.usedTodaySeconds, 0);
       expect(service.limitEnabled, isFalse);
+    });
+  });
+
+  // The counters must move only for genuine child play: time spent on parent
+  // screens (settings, the dashboard, the lock screen) is not the child's.
+  group('parent-mode exclusion (AUM-162)', () {
+    test('usage before startSession moves neither counter', () async {
+      final service = ScreenTimeService.instance;
+      await service.load('child-a');
+      await service.setLimitMinutes(10);
+      await service.setSessionLimitMinutes(5);
+
+      await service.addUsage(120);
+
+      expect(service.usedTodaySeconds, 0);
+      expect(service.sessionUsedSeconds, 0);
+    });
+
+    test('usage after endSession moves neither counter', () async {
+      final service = ScreenTimeService.instance;
+      await service.load('child-a');
+      await service.setLimitMinutes(10);
+      await service.startSession();
+      await service.addUsage(60);
+      await service.endSession();
+
+      await service.addUsage(120);
+
+      expect(service.usedTodaySeconds, 60);
+      expect(service.sessionUsedSeconds, 0);
+    });
+
+    test('usage under a different loaded child is rejected', () async {
+      final service = ScreenTimeService.instance;
+      await service.load('child-a');
+      await service.setLimitMinutes(10);
+      await service.startSession();
+      await service.addUsage(60);
+
+      // A switch to another child loads them and drops the old session; a
+      // late tick from Child A's lobby must not land on Child B.
+      await service.load('child-b');
+      await service.addUsage(120);
+
+      expect(service.usedTodaySeconds, 0);
+      expect(service.sessionUsedSeconds, 0);
+
+      // Child A's own total is untouched by the rejected tick.
+      await service.load('child-a');
+      expect(service.usedTodaySeconds, 60);
+    });
+
+    test('usage after sign-out (no loaded child) is rejected', () async {
+      final service = ScreenTimeService.instance;
+      await service.load('child-a');
+      await service.setLimitMinutes(10);
+      await service.startSession();
+      await service.addUsage(60);
+      await service.endSession();
+
+      await service.addUsage(300);
+
+      await service.load('child-a');
+      expect(service.usedTodaySeconds, 60);
     });
   });
 }
