@@ -565,6 +565,16 @@ class AssessmentProvider extends ChangeNotifier {
     _resetRunState();
     notifyListeners();
 
+    // Close anything this child left open first, so an abandoned run stops
+    // claiming to be in progress and at most one run is ever open (AUM-154).
+    // A failure here must not block the new assessment — the stale status is
+    // a bookkeeping problem, not a reason to refuse the child a fresh start.
+    try {
+      await _assessmentService.abandonOpenRuns(childId);
+    } catch (e) {
+      debugPrint('[AssessmentProvider] could not close open runs: $e');
+    }
+
     final runId = await _assessmentService.startAssessmentRun(
       childId: childId,
       type: type,

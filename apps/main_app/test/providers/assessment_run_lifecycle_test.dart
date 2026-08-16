@@ -39,6 +39,22 @@ class _FakeGateway implements AssessmentGateway {
     completedRuns.add(runId);
   }
 
+  /// Children whose open runs were closed, in order.
+  final List<String> abandonedFor = [];
+
+  /// How many open runs the next [abandonOpenRuns] call should report.
+  int openRunsToClose = 0;
+  bool failAbandon = false;
+
+  @override
+  Future<int> abandonOpenRuns(String childId) async {
+    if (failAbandon) throw StateError('no database');
+    abandonedFor.add(childId);
+    final closed = openRunsToClose;
+    openRunsToClose = 0;
+    return closed;
+  }
+
   @override
   Future<GameplaySession> recordSession({
     required String childId,
@@ -208,6 +224,50 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     gateway = _FakeGateway();
     provider = AssessmentProvider(assessmentService: gateway);
+  });
+
+  group('closing runs the child walked away from (AUM-154)', () {
+    test('starting a run closes anything left open first', () async {
+      gateway.openRunsToClose = 1;
+
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+
+      expect(gateway.abandonedFor, ['child-1']);
+    });
+
+    test('an abandoned run is closed before the new one is created', () async {
+      // A run is started and walked away from after one game…
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+      await _play(provider, gameId: 'copy_me');
+
+      // …and the parent later starts again.
+      gateway.openRunsToClose = 1;
+      await provider.startAssessmentRun(childId: 'child-1', type: 'pre');
+
+      expect(gateway.abandonedFor, ['child-1', 'child-1']);
+      // The new run is clean — the abandoned session did not follow it.
+      expect(provider.currentSessions, isEmpty);
+    });
+
+    test('only the run owner\'s open runs are closed', () async {
+      await provider.startAssessmentRun(childId: 'child-2', type: 'pre');
+
+      expect(gateway.abandonedFor, ['child-2']);
+    });
+
+    test('a bookkeeping failure never blocks the child starting', () async {
+      gateway.failAbandon = true;
+
+      // The stale status is a records problem; refusing the assessment
+      // over it would punish the child for it.
+      final runId = await provider.startAssessmentRun(
+        childId: 'child-1',
+        type: 'pre',
+      );
+
+      expect(runId, 'run-1');
+      expect(provider.currentAssessmentRunId, 'run-1');
+    });
   });
 
   group('session contamination', () {
