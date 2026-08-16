@@ -39,6 +39,10 @@ dependencies:
   video_player: ^2.9.3
   connectivity_plus: ^6.1.3
   geolocator: ^13.0.2
+  # Embedded therapy-center map (AUM-164): OpenStreetMap raster tiles via
+  # flutter_map — no provider API key required.
+  flutter_map: ^8.0.0
+  latlong2: ^0.9.1
   url_launcher: ^6.3.1
   webview_flutter: ^4.10.0
   flutter_dotenv: ^5.2.1
@@ -53,6 +57,10 @@ dev_dependencies:
     sdk: flutter
   # Virtual clock for timer-driven widget logic (e.g. the mascot's pose revert).
   fake_async: ^1.3.1
+  # Platform-interface fakes for the therapy-map tests (no GPS fix and no
+  # live tile fetches in widget tests).
+  geolocator_platform_interface: ^4.2.0
+  url_launcher_platform_interface: ^2.3.0
   sqflite_common_ffi: ^2.3.4+4
   flutter_launcher_icons: ^0.14.1
   # The "flutter_lints" package below contains a set of recommended lints to

@@ -7,8 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// id, [FakeAuthService.boundAccount]) and a guest parent (a local
 /// `guest_<uuid>` id, [FakeAuthService.guest]).
 class FakeAuthService extends AuthService {
-  FakeAuthService({required this.userId, required this.loggedIn})
-      : super(supabaseAuth: NoopSupabaseAuthClient());
+  FakeAuthService({
+    required this.userId,
+    required this.loggedIn,
+    this.migratedFromGuestId,
+    this.storedGuestId,
+  }) : super(supabaseAuth: NoopSupabaseAuthClient());
 
   factory FakeAuthService.boundAccount([String userId = 'user-1']) =>
       FakeAuthService(userId: userId, loggedIn: true);
@@ -18,6 +22,20 @@ class FakeAuthService extends AuthService {
 
   final String? userId;
   final bool loggedIn;
+
+  /// Simulates a guest-session restore that failed and minted a new user id
+  /// (see [AuthService.previousGuestUserId]).
+  final String? migratedFromGuestId;
+
+  /// Simulates the persisted guest user id a converted account grew out of
+  /// (see [AuthService.getStoredGuestUserId]).
+  final String? storedGuestId;
+
+  @override
+  String? get previousGuestUserId => migratedFromGuestId;
+
+  @override
+  Future<String?> getStoredGuestUserId() async => storedGuestId;
 
   @override
   bool get isLoggedIn => loggedIn;
