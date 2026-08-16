@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -10,6 +11,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../core/child_profile_policy.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/child_bootstrap_service.dart';
+import '../../core/services/sync_service.dart';
 import '../../core/widgets/sync_status_banner.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
@@ -35,9 +37,14 @@ import '../splash/auth/login_screen.dart';
 /// Shows child summary, assessment status, progress, and action buttons
 /// for starting pre-assessment or entering child mode.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.authService});
+  const HomeScreen({super.key, this.authService, this.syncStates});
 
   final AuthService? authService;
+
+  /// Sync-state feed the dashboard refreshes on. Defaults to the live
+  /// [syncService]; injectable so a test can land a synced pass without a
+  /// database or a network.
+  final Stream<SyncState>? syncStates;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -70,11 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
   final _screenTimeKey = GlobalKey();
   final _recentActivityKey = GlobalKey();
 
+  /// Re-queries the dashboard when a sync pass lands rows.
+  ///
+  /// Progress is read once per child load, so a sync that finished while the
+  /// parent was already looking at the dashboard left the new rows invisible
+  /// until they switched child or came back to the screen. The banner was
+  /// the only thing listening; now the data listens too.
+  StreamSubscription<SyncState>? _syncSubscription;
+
   @override
   void initState() {
     super.initState();
     _authService = widget.authService ?? AuthService();
     lockParentAdaptive();
+    _listenForSyncedRows();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         await _loadData();
@@ -83,6 +99,27 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     });
+  }
+
+  void _listenForSyncedRows() {
+    _syncSubscription = (widget.syncStates ?? syncService.onSyncStateChanged)
+        .listen((state) {
+          // Only a completed pass that actually brought something down is worth
+          // a re-query — a clean pass with nothing to do would just churn the
+          // dashboard, and 'syncing' has no rows yet.
+          if (state.status != SyncStatusEnum.completed) return;
+          if (state.syncedCount <= 0) return;
+          _reloadChildScopedData();
+        });
+  }
+
+  /// Re-reads the selected child's dashboard data, if one is still selected.
+  void _reloadChildScopedData() {
+    if (!mounted) return;
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId == null) return;
+    context.read<AssessmentProvider>().loadAssessments(childId);
+    context.read<ProgressProvider>().loadProgress(childId);
   }
 
   Future<void> _verifyMusicPlaying() async {
@@ -139,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _syncSubscription?.cancel();
     unlockParentOrientation();
     super.dispose();
   }
