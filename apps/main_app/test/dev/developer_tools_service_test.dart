@@ -38,6 +38,9 @@ class _FakeGateway implements AssessmentGateway {
       completedRuns.add(runId);
 
   @override
+  Future<int> abandonOpenRuns(String childId) async => 0;
+
+  @override
   Future<GameplaySession> recordSession({
     required String childId,
     required String gameId,
@@ -91,8 +94,10 @@ class _FakeGateway implements AssessmentGateway {
   }) async {
     if (failCreateResult) throw StateError('write failed');
     final totalItems = sessions.fold<int>(0, (sum, s) => sum + s.totalItems);
-    final totalTime =
-        sessions.fold<int>(0, (sum, s) => sum + s.totalResponseTimeMs);
+    final totalTime = sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.totalResponseTimeMs,
+    );
     final result = AssessmentResult(
       id: 'result-${created.length + 1}',
       childId: childId,
@@ -112,11 +117,11 @@ class _FakeGateway implements AssessmentGateway {
 
   @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) => {
-        'module_id': 'module_foundation',
-        'module_name': 'Foundation Skills',
-        'starting_level': 2,
-        'confidence': 0.6,
-      };
+    'module_id': 'module_foundation',
+    'module_name': 'Foundation Skills',
+    'starting_level': 2,
+    'confidence': 0.6,
+  };
 
   /// The canonical comparison, scored exactly like the real service.
   @override
@@ -136,7 +141,7 @@ class _FakeGateway implements AssessmentGateway {
       'post_accuracy': post,
       'response_time_improvement':
           AssessmentService.weightedAvgResponseTimeMs(preResults) -
-              AssessmentService.weightedAvgResponseTimeMs(postResults),
+          AssessmentService.weightedAvgResponseTimeMs(postResults),
     };
   }
 }
@@ -164,7 +169,9 @@ void main() {
   group('pre-assessment simulation', () {
     test('creates four correctly scoped sessions', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       final pre = sessionsWith('pre_assessment');
       expect(pre.map((s) => s.gameId), DeveloperToolsService.assessmentGameIds);
@@ -175,51 +182,69 @@ void main() {
         hasLength(4),
         reason: 'distinct start times, so dedupe cannot collapse them',
       );
-      expect(pre.every((s) => s.totalItems > 0 && s.totalResponseTimeMs > 0),
-          isTrue);
+      expect(
+        pre.every((s) => s.totalItems > 0 && s.totalResponseTimeMs > 0),
+        isTrue,
+      );
       // The telemetry the rubric and the model read is really carried.
       expect(pre.every((s) => s.avgResponseTime > 0), isTrue);
-      expect(gateway.written.where((s) => s.context != 'pre_assessment'),
-          isEmpty);
+      expect(
+        gateway.written.where((s) => s.context != 'pre_assessment'),
+        isEmpty,
+      );
     });
 
-    test('runs the whole finalize → predict → profile → snapshot pipeline',
-        () async {
-      final result = await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+    test(
+      'runs the whole finalize → predict → profile → snapshot pipeline',
+      () async {
+        final result = await service.completePreAssessment(
+          provider: provider,
+          childId: 'child-1',
+        );
 
-      // Finalization really happened: one result per game, run completed.
-      expect(gateway.created.map((r) => r.gameId).toSet(),
-          DeveloperToolsService.assessmentGameIds.toSet());
-      expect(gateway.created.every((r) => r.type == 'pre'), isTrue);
-      expect(gateway.completedRuns, ['run-1']);
+        // Finalization really happened: one result per game, run completed.
+        expect(
+          gateway.created.map((r) => r.gameId).toSet(),
+          DeveloperToolsService.assessmentGameIds.toSet(),
+        );
+        expect(gateway.created.every((r) => r.type == 'pre'), isTrue);
+        expect(gateway.completedRuns, ['run-1']);
 
-      expect(provider.hasPreAssessment, isTrue);
-      expect(provider.recommendation, isNotNull);
-      expect(provider.supportProfile, isNotNull);
-      expect(provider.rubricResult, isNotNull,
-          reason: 'scored by the real rubric, not by invented labels');
+        expect(provider.hasPreAssessment, isTrue);
+        expect(provider.recommendation, isNotNull);
+        expect(provider.supportProfile, isNotNull);
+        expect(
+          provider.rubricResult,
+          isNotNull,
+          reason: 'scored by the real rubric, not by invented labels',
+        );
 
-      // The AI step ran and fell back legitimately (no model assets and no
-      // reachable API in a test), producing usable area levels.
-      expect(result.aiResponse, isNotNull);
-      expect(result.aiResponse!.areaLevels, isNotEmpty);
-      expect(provider.aiPrediction, isNotNull);
+        // The AI step ran and fell back legitimately (no model assets and no
+        // reachable API in a test), producing usable area levels.
+        expect(result.aiResponse, isNotNull);
+        expect(result.aiResponse!.areaLevels, isNotEmpty);
+        expect(provider.aiPrediction, isNotNull);
 
-      // The run is frozen, and the returned values are the snapshot's.
-      expect(provider.preSnapshot, isNotNull);
-      expect(provider.preSnapshot!.assessmentRunId, 'run-1');
-      expect(result.results, hasLength(4));
-      expect(result.profile, provider.supportProfile);
-    });
+        // The run is frozen, and the returned values are the snapshot's.
+        expect(provider.preSnapshot, isNotNull);
+        expect(provider.preSnapshot!.assessmentRunId, 'run-1');
+        expect(result.results, hasLength(4));
+        expect(result.profile, provider.supportProfile);
+      },
+    );
 
     test('produces a learning path the child can actually play', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       expect(DeveloperToolsService.learningPath(provider), isNotEmpty);
-      expect(provider.pathCompletedGameIds, isEmpty,
-          reason: 'a new prediction restarts the path at step 1');
+      expect(
+        provider.pathCompletedGameIds,
+        isEmpty,
+        reason: 'a new prediction restarts the path at step 1',
+      );
     });
 
     test('refuses to create data for a missing child', () async {
@@ -266,19 +291,28 @@ void main() {
         service.completePostAssessment(provider: provider, childId: 'child-1'),
         throwsA(isA<DeveloperToolsException>()),
       );
-      expect(gateway.startedRuns, isEmpty,
-          reason: 'no run is created without a baseline to compare against');
+      expect(
+        gateway.startedRuns,
+        isEmpty,
+        reason: 'no run is created without a baseline to compare against',
+      );
     });
 
     test('creates four correctly scoped post sessions', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
       await service.completePostAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       final post = sessionsWith('post_assessment');
       expect(
-          post.map((s) => s.gameId), DeveloperToolsService.assessmentGameIds);
+        post.map((s) => s.gameId),
+        DeveloperToolsService.assessmentGameIds,
+      );
       expect(post.every((s) => s.assessmentRunId == 'run-2'), isTrue);
       expect(post.map((s) => s.startedAt).toSet(), hasLength(4));
       expect(gateway.created.where((r) => r.type == 'post'), hasLength(4));
@@ -286,27 +320,37 @@ void main() {
 
     test('the comparison has real data and shows improvement', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
       final result = await service.completePostAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       expect(result.improvement['has_data'], isTrue);
-      expect(result.improvement['accuracy_improvement'], greaterThan(0),
-          reason: 'the synthetic post run is deliberately the better one');
+      expect(
+        result.improvement['accuracy_improvement'],
+        greaterThan(0),
+        reason: 'the synthetic post run is deliberately the better one',
+      );
       expect(result.improvement['response_time_improvement'], greaterThan(0));
       expect(result.postAreaLevels, isNotEmpty);
     });
 
     test('the frozen pre-assessment snapshot survives intact', () async {
       final pre = await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
-      final preLevels =
-          Map.of(provider.preSnapshot!.prediction!.areaLevels);
+        provider: provider,
+        childId: 'child-1',
+      );
+      final preLevels = Map.of(provider.preSnapshot!.prediction!.areaLevels);
       final preResultIds =
           provider.preSnapshot!.results.map((r) => r.id).toList();
 
       final post = await service.completePostAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       expect(provider.preSnapshot!.assessmentRunId, 'run-1');
       expect(provider.preSnapshot!.prediction!.areaLevels, preLevels);
@@ -320,7 +364,9 @@ void main() {
 
     test('a failed post finalization never reports success', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
       gateway.failCreateResult = true;
 
       await expectLater(
@@ -335,11 +381,15 @@ void main() {
   group('learning-path modules', () {
     test('completes only the next incomplete module', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
       final path = DeveloperToolsService.learningPath(provider);
 
       final done = await service.completeNextModule(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       expect(done.gameId, path.first.game.id);
       expect(provider.pathCompletedGameIds, {path.first.game.id});
@@ -351,32 +401,43 @@ void main() {
       expect(practice.single.gameId, path.first.game.id);
     });
 
-    test('repeated presses walk the path without duplicating progress',
-        () async {
-      await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
-      final path = DeveloperToolsService.learningPath(provider);
+    test(
+      'repeated presses walk the path without duplicating progress',
+      () async {
+        await service.completePreAssessment(
+          provider: provider,
+          childId: 'child-1',
+        );
+        final path = DeveloperToolsService.learningPath(provider);
 
-      for (var i = 0; i < path.length; i++) {
-        final done = await service.completeNextModule(
-            provider: provider, childId: 'child-1');
-        expect(done.gameId, path[i].game.id);
-      }
+        for (var i = 0; i < path.length; i++) {
+          final done = await service.completeNextModule(
+            provider: provider,
+            childId: 'child-1',
+          );
+          expect(done.gameId, path[i].game.id);
+        }
 
-      expect(provider.pathCompletedGameIds,
-          path.map((e) => e.game.id).toSet());
-      expect(sessionsWith('practice'), hasLength(path.length),
-          reason: 'one session per module, never a repeat');
-      expect(DeveloperToolsService.nextIncompleteModule(provider), isNull);
+        expect(
+          provider.pathCompletedGameIds,
+          path.map((e) => e.game.id).toSet(),
+        );
+        expect(
+          sessionsWith('practice'),
+          hasLength(path.length),
+          reason: 'one session per module, never a repeat',
+        );
+        expect(DeveloperToolsService.nextIncompleteModule(provider), isNull);
 
-      // The path is finished — pressing again is refused rather than
-      // silently re-completing the last module.
-      await expectLater(
-        service.completeNextModule(provider: provider, childId: 'child-1'),
-        throwsA(isA<DeveloperToolsException>()),
-      );
-      expect(sessionsWith('practice'), hasLength(path.length));
-    });
+        // The path is finished — pressing again is refused rather than
+        // silently re-completing the last module.
+        await expectLater(
+          service.completeNextModule(provider: provider, childId: 'child-1'),
+          throwsA(isA<DeveloperToolsException>()),
+        );
+        expect(sessionsWith('practice'), hasLength(path.length));
+      },
+    );
 
     test('is unavailable before there is a path', () async {
       await expectLater(
@@ -388,15 +449,20 @@ void main() {
 
     test('practice play never contaminates an assessment run', () async {
       await service.completePreAssessment(
-          provider: provider, childId: 'child-1');
-      await service.completeNextModule(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
+      await service.completeNextModule(provider: provider, childId: 'child-1');
       await service.completePostAssessment(
-          provider: provider, childId: 'child-1');
+        provider: provider,
+        childId: 'child-1',
+      );
 
       final scored = gateway.created.where((r) => r.type == 'post');
-      expect(scored.map((r) => r.gameId).toSet(),
-          DeveloperToolsService.assessmentGameIds.toSet());
+      expect(
+        scored.map((r) => r.gameId).toSet(),
+        DeveloperToolsService.assessmentGameIds.toSet(),
+      );
       expect(
         sessionsWith('practice').every((s) => s.assessmentRunId == null),
         isTrue,

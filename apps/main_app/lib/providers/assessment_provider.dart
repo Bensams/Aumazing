@@ -19,6 +19,7 @@ import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
 import '../services/research_consent_service.dart';
 import '../services/support_profile_builder.dart';
+import '../services/assessment_completeness.dart';
 import '../services/assessment_service.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
@@ -564,6 +565,16 @@ class AssessmentProvider extends ChangeNotifier {
     _resetRunState();
     notifyListeners();
 
+    // Close anything this child left open first, so an abandoned run stops
+    // claiming to be in progress and at most one run is ever open (AUM-154).
+    // A failure here must not block the new assessment — the stale status is
+    // a bookkeeping problem, not a reason to refuse the child a fresh start.
+    try {
+      await _assessmentService.abandonOpenRuns(childId);
+    } catch (e) {
+      debugPrint('[AssessmentProvider] could not close open runs: $e');
+    }
+
     final runId = await _assessmentService.startAssessmentRun(
       childId: childId,
       type: type,
@@ -781,6 +792,22 @@ class AssessmentProvider extends ChangeNotifier {
         );
         return false;
       }
+      // A run that never reached every activity cannot be scored: the areas
+      // it skipped have no evidence behind them, so a profile built from it
+      // would read as fact while resting on nothing (AUM-154). The partial
+      // run and its sessions are kept, so the child resumes rather than
+      // starts over.
+      if (!AssessmentCompleteness.isComplete(sessions)) {
+        _lastFinalizationError = AssessmentCompleteness.incompleteMessage(
+          sessions,
+        );
+        debugPrint(
+          '[AssessmentProvider] finalizePreAssessment: incomplete run '
+          '$_currentAssessmentRunId, missing '
+          '${AssessmentCompleteness.missingGames(sessions)}',
+        );
+        return false;
+      }
 
       // Group sessions by game and create assessment results
       final gameIds = sessions.map((s) => s.gameId).toSet();
@@ -930,6 +957,20 @@ class AssessmentProvider extends ChangeNotifier {
         debugPrint(
           '[AssessmentProvider] finalizePostAssessment: no sessions '
           'for run $_currentAssessmentRunId',
+        );
+        return {'has_data': false};
+      }
+      // Same rule as the pre-assessment: a run that skipped activities has
+      // no evidence for those areas, and a comparison drawn against it
+      // would invent progress the child never demonstrated (AUM-154).
+      if (!AssessmentCompleteness.isComplete(sessions)) {
+        _lastFinalizationError = AssessmentCompleteness.incompleteMessage(
+          sessions,
+        );
+        debugPrint(
+          '[AssessmentProvider] finalizePostAssessment: incomplete run '
+          '$_currentAssessmentRunId, missing '
+          '${AssessmentCompleteness.missingGames(sessions)}',
         );
         return {'has_data': false};
       }

@@ -22,6 +22,10 @@ abstract interface class AssessmentGateway {
 
   Future<void> completeAssessmentRun(String runId);
 
+  /// Marks every still-open run for [childId] as incomplete, returning how
+  /// many were closed (AUM-154).
+  Future<int> abandonOpenRuns(String childId);
+
   Future<GameplaySession> recordSession({
     required String childId,
     required String gameId,
@@ -69,16 +73,15 @@ class AssessmentService implements AssessmentGateway {
     core_db.LocalDbService? localDb,
     AuthService? authService,
     core_sync.SyncService? syncService,
-  })  : _localDb = localDb ?? core_db.localDbService,
-        _authService = authService ?? AuthService(),
-        _syncService = syncService ?? core_sync.syncService;
+  }) : _localDb = localDb ?? core_db.localDbService,
+       _authService = authService ?? AuthService(),
+       _syncService = syncService ?? core_sync.syncService;
 
   String get _effectiveUserId {
     return _authService.currentUser?.id ??
         _authService.currentGuestId ??
         'guest';
   }
-
 
   // ── Mini-game IDs ─────────────────────────────────────────────────────
 
@@ -109,20 +112,17 @@ class AssessmentService implements AssessmentGateway {
     final now = DateTime.now();
     final db = await _localDb.database;
 
-    await db.insert(
-      'assessment_runs_local',
-      {
-        'id': id,
-        'child_id': childId,
-        'type': type,
-        'started_at': now.toIso8601String(),
-        'status': 'in_progress',
-        'sync_status': 'pending',
-        'updated_at': now.toIso8601String(),
-        'local_created_at': now.toIso8601String(),
-        'owner_id': _effectiveUserId,
-      },
-    );
+    await db.insert('assessment_runs_local', {
+      'id': id,
+      'child_id': childId,
+      'type': type,
+      'started_at': now.toIso8601String(),
+      'status': 'in_progress',
+      'sync_status': 'pending',
+      'updated_at': now.toIso8601String(),
+      'local_created_at': now.toIso8601String(),
+      'owner_id': _effectiveUserId,
+    });
 
     debugPrint('[Assessment] Assessment run started: $id (type: $type)');
 
@@ -154,6 +154,43 @@ class AssessmentService implements AssessmentGateway {
 
     // Trigger background sync
     _syncService.syncNow();
+  }
+
+  /// Closes any run this child left open, marking it `incomplete`.
+  ///
+  /// A run that was walked away from used to sit at `in_progress` forever,
+  /// so the stored history could not distinguish "still going" from
+  /// "abandoned three weeks ago" — and every later query had to guess
+  /// (AUM-154). Closing them when the next run starts keeps at most one
+  /// genuinely open run per child, which is the invariant the resume path
+  /// depends on.
+  ///
+  /// The sessions of an abandoned run are deliberately left in place: they
+  /// are real play, and the run is kept as evidence of what happened rather
+  /// than erased.
+  @override
+  Future<int> abandonOpenRuns(String childId) async {
+    final db = await _localDb.database;
+    final now = DateTime.now();
+
+    final closed = await db.update(
+      'assessment_runs_local',
+      {
+        'status': 'incomplete',
+        'sync_status': 'pending',
+        'updated_at': now.toIso8601String(),
+      },
+      where: 'child_id = ? AND status = ?',
+      whereArgs: [childId, 'in_progress'],
+    );
+
+    if (closed > 0) {
+      debugPrint(
+        '[Assessment] Marked $closed abandoned run(s) incomplete for $childId',
+      );
+      _syncService.syncNow();
+    }
+    return closed;
   }
 
   // ── Record a gameplay session ─────────────────────────────────────────
@@ -226,9 +263,11 @@ class AssessmentService implements AssessmentGateway {
       }
     }
 
-    debugPrint('[Assessment] Session recorded: ${session.gameId} '
-        '→ score ${session.score}/${session.totalItems} '
-        '(sync_status=pending)');
+    debugPrint(
+      '[Assessment] Session recorded: ${session.gameId} '
+      '→ score ${session.score}/${session.totalItems} '
+      '(sync_status=pending)',
+    );
 
     // Trigger background sync (anonymous users are authenticated in Supabase)
     _syncService.syncNow();
@@ -253,10 +292,14 @@ class AssessmentService implements AssessmentGateway {
     final totalScore = sessions.fold<int>(0, (sum, s) => sum + s.score);
     final totalItems = sessions.fold<int>(0, (sum, s) => sum + s.totalItems);
     final totalErrors = sessions.fold<int>(0, (sum, s) => sum + s.errorCount);
-    final totalRandomTouches =
-        sessions.fold<int>(0, (sum, s) => sum + s.randomTouchCount);
-    final totalTime =
-        sessions.fold<int>(0, (sum, s) => sum + s.totalResponseTimeMs);
+    final totalRandomTouches = sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.randomTouchCount,
+    );
+    final totalTime = sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.totalResponseTimeMs,
+    );
     final avgTime = totalItems > 0 ? (totalTime / totalItems).round() : 0;
 
     final result = AssessmentResult(
@@ -273,8 +316,10 @@ class AssessmentService implements AssessmentGateway {
       completedAt: DateTime.now(),
       rawMetrics: {
         'session_count': sessions.length,
-        'total_duration_ms':
-            sessions.fold<int>(0, (s, g) => s + g.duration.inMilliseconds),
+        'total_duration_ms': sessions.fold<int>(
+          0,
+          (s, g) => s + g.duration.inMilliseconds,
+        ),
       },
     );
 
@@ -285,8 +330,10 @@ class AssessmentService implements AssessmentGateway {
       markPending: true,
     );
 
-    debugPrint('[Assessment] Assessment result created: ${result.gameId} '
-        '(sync_status=pending)');
+    debugPrint(
+      '[Assessment] Assessment result created: ${result.gameId} '
+      '(sync_status=pending)',
+    );
 
     // Trigger background sync (anonymous users are authenticated in Supabase)
     _syncService.syncNow();
@@ -301,17 +348,17 @@ class AssessmentService implements AssessmentGateway {
   /// [AssessmentScoring] — see its doc comment for why per-game accuracy is
   /// the *adjusted* accuracy and why the overall figure is item-weighted.
   static List<ResultGameScore> gameScores(List<AssessmentResult> results) => [
-        for (final result in results)
-          ResultGameScore(
-            gameId: result.gameId,
-            name: result.gameId,
-            emoji: '',
-            accuracy: result.adjustedAccuracy,
-            correctCount: result.score,
-            errorCount: result.errorCount,
-            totalItems: result.totalItems,
-          ),
-      ];
+    for (final result in results)
+      ResultGameScore(
+        gameId: result.gameId,
+        name: result.gameId,
+        emoji: '',
+        accuracy: result.adjustedAccuracy,
+        correctCount: result.score,
+        errorCount: result.errorCount,
+        totalItems: result.totalItems,
+      ),
+  ];
 
   /// Item-weighted overall adjusted accuracy for a set of results.
   ///
@@ -362,7 +409,7 @@ class AssessmentService implements AssessmentGateway {
     final avgAccuracy = overallAccuracy(preResults);
     final avgErrors =
         preResults.map((r) => r.errorCount).reduce((a, b) => a + b) /
-            preResults.length;
+        preResults.length;
     final avgResponseTime = weightedAvgResponseTimeMs(preResults);
 
     // Simple rule-based classification:
