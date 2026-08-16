@@ -592,6 +592,121 @@ class AssessmentProvider extends ChangeNotifier {
     return runId;
   }
 
+  /// How long an interrupted run stays resumable (AUM-154).
+  ///
+  /// A week-old run still describes roughly the same child; play from a month
+  /// ago does not, and mixing it with today's would score two different
+  /// children as one. Runs past the window are closed rather than offered.
+  static const resumeWindow = Duration(days: 7);
+
+  /// The dedupe key a session is remembered by within its run.
+  ///
+  /// Shared by recording and resuming so a game the child already finished
+  /// cannot be written twice after the run is picked up again.
+  static String _sessionKey({
+    required String? runId,
+    required String childId,
+    required String gameId,
+    required String context,
+    required DateTime startedAt,
+  }) =>
+      '${runId ?? 'none'}|$childId|$gameId|$context'
+      '|${startedAt.microsecondsSinceEpoch}';
+
+  /// The run [childId] can pick up again for [type], or null when there is
+  /// nothing to resume (AUM-154).
+  ///
+  /// Must be called *before* [startAssessmentRun]: that closes every open run
+  /// as its first act, so asking afterwards would only ever find the run it
+  /// had just ended. A failure here returns null — the offer is a
+  /// convenience, and losing it must not stop the child starting.
+  Future<OpenAssessmentRun?> findResumableRun({
+    required String childId,
+    required String type,
+    DateTime? now,
+  }) async {
+    try {
+      final open = await _assessmentService.openAssessmentRun(childId);
+      if (open == null) return null;
+
+      // A pre-assessment is not a post-assessment half-finished: the two
+      // score different questions. The mismatched run is left alone —
+      // [startAssessmentRun] closes it when the new run begins.
+      if (open.type != type) return null;
+
+      if ((now ?? DateTime.now()).difference(open.startedAt) > resumeWindow) {
+        // Too old to describe the child sitting down today. Close it here so
+        // stale open runs cannot pile up unanswered.
+        await _assessmentService.abandonOpenRuns(childId);
+        return null;
+      }
+
+      final sessions = sessionsForRun(
+        open.sessions,
+        runId: open.id,
+        childId: childId,
+        expectedContext: expectedContextFor(type),
+      );
+      // A run that recorded nothing has nothing to resume — starting fresh
+      // is the same assessment without asking the parent a question.
+      if (sessions.isEmpty) return null;
+
+      return OpenAssessmentRun(
+        id: open.id,
+        childId: childId,
+        type: type,
+        startedAt: open.startedAt,
+        sessions: sessions,
+      );
+    } catch (e) {
+      debugPrint('[AssessmentProvider] could not look for a resumable run: $e');
+      return null;
+    }
+  }
+
+  /// Picks [run] back up as the active run, with the games it already
+  /// covered (AUM-154).
+  ///
+  /// Deliberately not routed through [startAssessmentRun]: that mints a new
+  /// run and closes this one, which is precisely what resuming must not do.
+  /// The rehydrated sessions carry their dedupe keys with them, so a game
+  /// played before the interruption is never recorded a second time.
+  ///
+  /// Per-round telemetry is not restored: it only feeds the sensory
+  /// comparison, which reports its own reliability when rounds are missing.
+  void resumeAssessmentRun(OpenAssessmentRun run) {
+    _resetRunState();
+
+    _currentAssessmentRunId = run.id;
+    _currentRunChildId = run.childId;
+    _currentRunType = run.type;
+
+    final sessions = sessionsForRun(
+      run.sessions,
+      runId: run.id,
+      childId: run.childId,
+      expectedContext: expectedContextFor(run.type),
+    );
+    _currentSessions.addAll(sessions);
+    for (final session in sessions) {
+      _recordedSessionKeys.add(
+        _sessionKey(
+          runId: run.id,
+          childId: session.childId,
+          gameId: session.gameId,
+          context: session.context,
+          startedAt: session.startedAt,
+        ),
+      );
+    }
+
+    debugPrint(
+      '[AssessmentProvider] Resumed assessment run: ${run.id} '
+      '(type: ${run.type}, ${sessions.length} session(s) already played)',
+    );
+    notifyListeners();
+  }
+
   /// Forgets everything scoped to a single assessment run.
   void _resetRunState() {
     _currentSessions.clear();
@@ -637,9 +752,13 @@ class AssessmentProvider extends ChangeNotifier {
     final isAssessment = _isAssessmentContext(context);
     final runId = isAssessment ? _currentAssessmentRunId : null;
 
-    final key =
-        '${runId ?? 'none'}|$childId|$gameId|$context'
-        '|${startedAt.microsecondsSinceEpoch}';
+    final key = _sessionKey(
+      runId: runId,
+      childId: childId,
+      gameId: gameId,
+      context: context,
+      startedAt: startedAt,
+    );
     if (_recordedSessionKeys.contains(key)) {
       debugPrint(
         '[AssessmentProvider] Duplicate completion for $gameId '
