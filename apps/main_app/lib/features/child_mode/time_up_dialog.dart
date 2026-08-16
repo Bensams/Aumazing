@@ -20,6 +20,11 @@ class TimeUpDialog {
   /// True while the lock screen is on top (usage counting pauses).
   static bool get isShowing => _showing;
 
+  /// Test-only: clears a showing flag left set by a test that tore the
+  /// widget tree down with the lock screen still up.
+  @visibleForTesting
+  static void debugReset() => _showing = false;
+
   /// Pushes the lock screen above whatever is on screen (lobby or a game).
   /// If the parent chooses to exit, pops all the way back to the dashboard.
   static Future<void> show(BuildContext context) async {
@@ -33,8 +38,9 @@ class TimeUpDialog {
           fullscreenDialog: true,
           transitionDuration: const Duration(milliseconds: 600),
           pageBuilder: (_, __, ___) => const _ScreenTimeLockScreen(),
-          transitionsBuilder: (_, animation, __, child) =>
-              FadeTransition(opacity: animation, child: child),
+          transitionsBuilder:
+              (_, animation, __, child) =>
+                  FadeTransition(opacity: animation, child: child),
         ),
       );
       if (!context.mounted) return;
@@ -60,49 +66,57 @@ class _ScreenTimeLockScreen extends StatelessWidget {
 
     final choice = await showDialog<_LockResult>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Screen time is up',
-          style: AppTextStyles.titleLarge
-              .copyWith(color: AppColors.textPrimary),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // A sleepy mascot says "we're winding down" before the child has
-            // parsed the sentence — this dialog is the one moment play stops,
-            // so the character softens it rather than the text carrying it all.
-            const Mascot(
-              height: 120,
-              pose: MascotPose.sleepy,
-              greetOnAppear: false,
-              semanticLabel: 'BPS the mascot is sleepy',
+      builder:
+          (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Today\'s play limit has been reached.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.mutedForeground),
+            title: Text(
+              'Screen time is up',
+              style: AppTextStyles.titleLarge.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_LockResult.extended),
-            child: const Text('Add 15 minutes'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // A sleepy mascot says "we're winding down" before the child has
+                // parsed the sentence — this dialog is the one moment play stops,
+                // so the character softens it rather than the text carrying it all.
+                const Mascot(
+                  height: 120,
+                  pose: MascotPose.sleepy,
+                  greetOnAppear: false,
+                  semanticLabel: 'BPS the mascot is sleepy',
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  // The rest screen is identical either way; only this
+                  // parent-facing line says which limit ran out (AUM-162).
+                  ScreenTimeService.instance.isDailyExhausted
+                      ? 'Today\'s play limit has been reached.'
+                      : 'This play session has reached its limit.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    () => Navigator.of(dialogContext).pop(_LockResult.extended),
+                child: const Text('Add 15 minutes'),
+              ),
+              TextButton(
+                onPressed:
+                    () => Navigator.of(dialogContext).pop(_LockResult.exit),
+                child: const Text('Exit Child Mode'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_LockResult.exit),
-            child: const Text('Exit Child Mode'),
-          ),
-        ],
-      ),
     );
     if (choice == null || !context.mounted) return;
 

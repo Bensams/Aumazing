@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,13 +14,16 @@ import '../../services/entitlement_service.dart';
 import '../../services/therapy_center_service.dart';
 import '../premium/premium_upgrade_screen.dart';
 import 'location_disclosure_dialog.dart';
+import 'therapy_map_view.dart';
 
 /// Therapy Center Directory + Interactive Locator (Use Cases 11, 15, 16).
 ///
 /// Freemium gate (FR-09 vs FR-12/13): Free parents see the directory at
 /// the city level only — center name and city. Premium unlocks the full
 /// details (address, services, contact), "Find near me" GPS ranking, and
-/// the Directions hand-off. "Find near me" requests a just-in-time GPS
+/// the Directions hand-off. The embedded map (AUM-164) renders for every
+/// tier: its markers carry only the center name the Free list already
+/// shows, so Free gets the locator map without leaking gated details. "Find near me" requests a just-in-time GPS
 /// fix, ranks the list with the Haversine formula, and shows distances;
 /// the position lives only in this screen's state and is discarded with
 /// it (privacy FR — never persisted).
@@ -36,6 +40,30 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
   bool _loading = true;
   bool _locating = false;
   String? _locationMessage;
+
+  /// Stable ID of the center highlighted on the map and in the list —
+  /// selection always travels by ID, never by list position, because the
+  /// list reorders when a GPS fix ranks it.
+  String? _selectedCenterId;
+
+  /// Parent's last GPS fix, for the map's "you are here" dot. Held in this
+  /// screen's state only and discarded with it — never persisted (same
+  /// privacy lifetime as the ranked distances).
+  double? _userLatitude;
+  double? _userLongitude;
+
+  /// One key per center card so a marker tap can scroll its card into view.
+  final Map<String, GlobalKey> _cardKeys = {};
+
+  /// Drives the deterministic marker→card reveal for cards the lazy
+  /// [ListView] hasn't built yet.
+  final ScrollController _listController = ScrollController();
+
+  @override
+  void dispose() {
+    _listController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -67,8 +95,11 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
 
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        setState(() =>
-            _locationMessage = 'Turn on Location to rank centers by distance.');
+        setState(
+          () =>
+              _locationMessage =
+                  'Turn on Location to rank centers by distance.',
+        );
         return;
       }
       var permission = await Geolocator.checkPermission();
@@ -77,8 +108,11 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
         if (!mounted) return;
         final agreed = await LocationDisclosureDialog.show(context);
         if (!agreed) {
-          setState(() => _locationMessage =
-              'No problem — the directory is shown without distances.');
+          setState(
+            () =>
+                _locationMessage =
+                    'No problem — the directory is shown without distances.',
+          );
           return;
         }
       }
@@ -86,23 +120,32 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.deniedForever) {
-        setState(() => _locationMessage =
-            'Location is blocked for Aumazing. Enable it in your phone\'s '
-            'app settings to rank centers by distance.');
+        setState(
+          () =>
+              _locationMessage =
+                  'Location is blocked for Aumazing. Enable it in your phone\'s '
+                  'app settings to rank centers by distance.',
+        );
         return;
       }
       if (permission == LocationPermission.denied) {
-        setState(() => _locationMessage =
-            'Location permission is needed to rank centers by distance.');
+        setState(
+          () =>
+              _locationMessage =
+                  'Location permission is needed to rank centers by distance.',
+        );
         return;
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
       );
       if (!mounted) return;
       setState(() {
+        _userLatitude = position.latitude;
+        _userLongitude = position.longitude;
         _ranked = TherapyCenterService.rankByDistance(
           _centers,
           latitude: position.latitude,
@@ -112,7 +155,8 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-            () => _locationMessage = 'Could not get your location right now.');
+          () => _locationMessage = 'Could not get your location right now.',
+        );
       }
     } finally {
       if (mounted) setState(() => _locating = false);
@@ -124,21 +168,73 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
   Future<void> _openDirections(TherapyCenter center) async {
     final label = Uri.encodeComponent(center.name);
     final geoUri = Uri.parse(
-        'geo:${center.latitude},${center.longitude}?q=${center.latitude},'
-        '${center.longitude}($label)');
+      'geo:${center.latitude},${center.longitude}?q=${center.latitude},'
+      '${center.longitude}($label)',
+    );
     if (await canLaunchUrl(geoUri)) {
       await launchUrl(geoUri);
       return;
     }
     final webUri = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination='
-        '${center.latitude},${center.longitude}');
+      'https://www.google.com/maps/dir/?api=1&destination='
+      '${center.latitude},${center.longitude}',
+    );
     await launchUrl(webUri, mode: LaunchMode.externalApplication);
   }
 
   void _openUpgrade() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()));
+  }
+
+  /// Card tap → the map focuses this center's marker (via
+  /// [TherapyMapView.selectedCenterId]).
+  void _selectFromCard(String id) {
+    setState(() => _selectedCenterId = id);
+  }
+
+  /// Marker tap → select by stable ID and bring the matching card into
+  /// view, showing its tier-appropriate details in place.
+  void _selectFromMarker(String id) {
+    setState(() => _selectedCenterId = id);
+    unawaited(_scrollCardIntoView(id));
+  }
+
+  /// Deterministically reveals [id]'s card even when the lazy [ListView]
+  /// hasn't built it yet — an unbuilt card's [GlobalKey] has no context,
+  /// so [Scrollable.ensureVisible] alone can't reach it. Walks the list a
+  /// viewport at a time from the top until the card exists, then aligns
+  /// it; the walk is bounded by the list's scroll extent.
+  Future<void> _scrollCardIntoView(String id) async {
+    if (_cardKeys[id]?.currentContext == null && _listController.hasClients) {
+      _listController.jumpTo(0);
+      await WidgetsBinding.instance.endOfFrame;
+      while (mounted &&
+          _listController.hasClients &&
+          _cardKeys[id]?.currentContext == null &&
+          _listController.position.pixels <
+              _listController.position.maxScrollExtent) {
+        final position = _listController.position;
+        _listController.jumpTo(
+          math.min(
+            position.pixels + position.viewportDimension,
+            position.maxScrollExtent,
+          ),
+        );
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    }
+    if (!mounted) return;
+    final cardContext = _cardKeys[id]?.currentContext;
+    if (cardContext == null || !cardContext.mounted) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    await Scrollable.ensureVisible(
+      cardContext,
+      alignment: 0.2,
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 250),
     );
   }
 
@@ -161,9 +257,10 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
                 children: [
                   _buildHeader(palette, isPremium),
                   Expanded(
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _centers.isEmpty
+                    child:
+                        _loading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _centers.isEmpty
                             ? _buildEmpty()
                             : _buildList(isPremium),
                   ),
@@ -185,24 +282,33 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
   static const double _minHeaderWidth = 260;
 
   Widget _buildHeader(GamePalette palette, bool isPremium) {
-    final label = isPremium
-        ? (_ranked == null ? 'Find near me' : 'Update location')
-        : 'Unlock locator';
+    final label =
+        isPremium
+            ? (_ranked == null ? 'Find near me' : 'Update location')
+            : 'Unlock locator';
     final icon = isPremium ? Icons.my_location_rounded : Icons.star_rounded;
 
     // What the label really needs at the current text scale. A fixed 180
     // clipped "Unlock locator" to "Unlock lo…".
-    final labelMin =
-        AppPrimaryButton.minWidthFor(context, label: label, icon: icon);
+    final labelMin = AppPrimaryButton.minWidthFor(
+      context,
+      label: label,
+      icon: icon,
+    );
     final textScale =
-        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling)
-                .scale(14) /
-            14;
+        (MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling).scale(
+          14,
+        ) /
+        14;
     final headerMin = _minHeaderWidth * textScale;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           // On a portrait phone the title and the button were each squeezed to
@@ -213,30 +319,32 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
           // own row and runs full width.
           final stacked =
               constraints.maxWidth < headerMin + AppSpacing.md + labelMin;
-          final buttonWidth = stacked
-              ? null
-              : math.max(
-                  labelMin,
-                  math.min(
-                    _preferredActionWidth,
-                    constraints.maxWidth - headerMin - AppSpacing.md,
-                  ),
-                );
+          final buttonWidth =
+              stacked
+                  ? null
+                  : math.max(
+                    labelMin,
+                    math.min(
+                      _preferredActionWidth,
+                      constraints.maxWidth - headerMin - AppSpacing.md,
+                    ),
+                  );
 
-          final button = isPremium
-              ? AppPrimaryButton(
-                  label: label,
-                  icon: icon,
-                  width: buttonWidth,
-                  isLoading: _locating,
-                  onPressed: _locating ? null : _findNearMe,
-                )
-              : AppPrimaryButton(
-                  label: label,
-                  icon: icon,
-                  width: buttonWidth,
-                  onPressed: _openUpgrade,
-                );
+          final button =
+              isPremium
+                  ? AppPrimaryButton(
+                    label: label,
+                    icon: icon,
+                    width: buttonWidth,
+                    isLoading: _locating,
+                    onPressed: _locating ? null : _findNearMe,
+                  )
+                  : AppPrimaryButton(
+                    label: label,
+                    icon: icon,
+                    width: buttonWidth,
+                    onPressed: _openUpgrade,
+                  );
 
           final titleRow = Row(
             children: [
@@ -266,8 +374,9 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
                           ? 'SPED and therapy centers in Davao City'
                           : 'City-level directory — Premium unlocks details '
                               'and distance',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.mutedForeground),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -304,8 +413,9 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
         'No therapy centers available yet.\nConnect to the internet once to '
         'load the directory.',
         textAlign: TextAlign.center,
-        style:
-            AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.mutedForeground,
+        ),
       ),
     );
   }
@@ -316,6 +426,28 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
     final ranked = isPremium ? _ranked : null;
     final itemCount = ranked?.length ?? _centers.length;
 
+    final listView = ListView.separated(
+      controller: _listController,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      itemCount: itemCount,
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      itemBuilder: (_, i) {
+        final center = ranked?[i].center ?? _centers[i];
+        final distanceKm = ranked?[i].distanceKm;
+        return KeyedSubtree(
+          key: _cardKeys.putIfAbsent(center.id, () => GlobalKey()),
+          child: _CenterCard(
+            center: center,
+            distanceKm: distanceKm,
+            locked: !isPremium,
+            selected: center.id == _selectedCenterId,
+            onTap: () => _selectFromCard(center.id),
+            onDirections: () => _openDirections(center),
+          ),
+        );
+      },
+    );
+
     return Column(
       children: [
         if (_locationMessage != null)
@@ -323,23 +455,59 @@ class _TherapyDirectoryScreenState extends State<TherapyDirectoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: Text(
               _locationMessage!,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.statusWarningDark),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.statusWarningDark,
+              ),
             ),
           ),
+        // The embedded interactive map (AUM-164) renders for every tier:
+        // its markers expose only the center name the Free list already
+        // shows, so the gated Premium details (address, services,
+        // distance, directions, "Find near me") stay locked without
+        // hiding the map itself.
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            itemCount: itemCount,
-            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-            itemBuilder: (_, i) {
-              final center = ranked?[i].center ?? _centers[i];
-              final distanceKm = ranked?[i].distanceKm;
-              return _CenterCard(
-                center: center,
-                distanceKm: distanceKm,
-                locked: !isPremium,
-                onDirections: () => _openDirections(center),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final map = Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.xs,
+                  AppSpacing.lg,
+                  0,
+                ),
+                child: TherapyMapView(
+                  centers: _centers,
+                  selectedCenterId: _selectedCenterId,
+                  onMarkerTap: _selectFromMarker,
+                  // The user dot comes from the Premium "Find
+                  // near me" fix; Free never shows it.
+                  userLatitude: isPremium ? _userLatitude : null,
+                  userLongitude: isPremium ? _userLongitude : null,
+                ),
+              );
+              if (constraints.maxWidth > constraints.maxHeight) {
+                // Landscape: map and list side by side, so neither
+                // squeezes the other under the shorter height.
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        child: map,
+                      ),
+                    ),
+                    Expanded(child: listView),
+                  ],
+                );
+              }
+              final mapHeight =
+                  (constraints.maxHeight * 0.35).clamp(160.0, 320.0).toDouble();
+              return Column(
+                children: [
+                  SizedBox(height: mapHeight, child: map),
+                  Expanded(child: listView),
+                ],
               );
             },
           ),
@@ -355,6 +523,8 @@ class _CenterCard extends StatelessWidget {
     required this.onDirections,
     this.distanceKm,
     this.locked = false,
+    this.selected = false,
+    this.onTap,
   });
 
   final TherapyCenter center;
@@ -366,9 +536,17 @@ class _CenterCard extends StatelessWidget {
 
   final VoidCallback onDirections;
 
+  /// Highlighted because this center is selected on the embedded map.
+  final bool selected;
+
+  /// Selects this center and focuses its map marker (all tiers — the
+  /// selection highlight reveals nothing gated).
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final card = AppCard(
+      color: selected ? AppColors.lavenderLight : null,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -379,8 +557,10 @@ class _CenterCard extends StatelessWidget {
               color: AppColors.lavenderLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.local_hospital_rounded,
-                color: AppColors.primaryPurple),
+            child: const Icon(
+              Icons.local_hospital_rounded,
+              color: AppColors.primaryPurple,
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -392,14 +572,17 @@ class _CenterCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         center.name,
-                        style: AppTextStyles.titleMedium
-                            .copyWith(color: AppColors.textPrimary),
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     if (distanceKm != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.mint.withValues(alpha: 0.35),
                           borderRadius: BorderRadius.circular(8),
@@ -417,8 +600,9 @@ class _CenterCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   locked ? center.city : center.address,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.mutedForeground),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 if (!locked &&
                     center.description != null &&
@@ -426,8 +610,9 @@ class _CenterCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     center.description!,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.mutedForeground),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
                 if (!locked && center.services.isNotEmpty) ...[
@@ -439,16 +624,20 @@ class _CenterCard extends StatelessWidget {
                       for (final service in center.services)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                AppColors.lavenderLight.withValues(alpha: 0.6),
+                            color: AppColors.lavenderLight.withValues(
+                              alpha: 0.6,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             service,
-                            style: AppTextStyles.labelSmall
-                                .copyWith(color: AppColors.textPrimary),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
                     ],
@@ -469,6 +658,16 @@ class _CenterCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: card,
       ),
     );
   }
