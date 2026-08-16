@@ -107,7 +107,8 @@ class LocalDbService {
   /// their owner is a local id like `guest_<uuid>`, which Supabase's
   /// `parent_user_id` (a real uuid) rejects with 22P02. They stay local
   /// until sign-in backfills the real user id (see [backfillGuestData]).
-  static const _syncableChildWhere = "display_name IS NOT NULL "
+  static const _syncableChildWhere =
+      "display_name IS NOT NULL "
       "AND user_id IS NOT NULL "
       "AND user_id NOT LIKE 'guest_%' "
       "AND (owner_id IS NULL OR owner_id NOT LIKE 'guest_%')";
@@ -582,7 +583,9 @@ class LocalDbService {
       await db.execute(
         'ALTER TABLE ${LocalTables.children} ADD COLUMN sensory_preferences_set INTEGER NOT NULL DEFAULT 0',
       );
-      debugPrint('[LocalDbService] Added extended sensory settings columns to children table');
+      debugPrint(
+        '[LocalDbService] Added extended sensory settings columns to children table',
+      );
     }
 
     if (oldVersion < 6) {
@@ -593,7 +596,9 @@ class LocalDbService {
       await db.execute(
         'ALTER TABLE ${LocalTables.children} ADD COLUMN use_random_reward INTEGER NOT NULL DEFAULT 0',
       );
-      debugPrint('[LocalDbService] Added reward preference columns to children table');
+      debugPrint(
+        '[LocalDbService] Added reward preference columns to children table',
+      );
     }
 
     if (oldVersion < 7) {
@@ -735,63 +740,139 @@ class LocalDbService {
         CREATE INDEX IF NOT EXISTS idx_game_rounds_sync
         ON ${LocalTables.gameRounds}(sync_status)
       ''');
-      debugPrint('[LocalDbService] Recreated game_rounds_local with new schema (v8)');
+      debugPrint(
+        '[LocalDbService] Recreated game_rounds_local with new schema (v8)',
+      );
     }
 
     if (oldVersion < 9) {
       // Migration from v8 to v9: Add analytics + sensory columns to game_sessions_local
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN hint_count INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_count INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN idle_time_seconds REAL NOT NULL DEFAULT 0.0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_response_time REAL NOT NULL DEFAULT 0.0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_valid_response_time REAL NOT NULL DEFAULT 0.0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN off_task_action_count INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN improvement_score REAL NOT NULL DEFAULT 0.0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN consistency_score REAL NOT NULL DEFAULT 0.0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN bg_music_enabled INTEGER NOT NULL DEFAULT 1');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN haptic_feedback_enabled INTEGER NOT NULL DEFAULT 1');
-      debugPrint('[LocalDbService] Added analytics + sensory columns to game_sessions_local (v9)');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN hint_count INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_count INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN idle_time_seconds REAL NOT NULL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_response_time REAL NOT NULL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN avg_valid_response_time REAL NOT NULL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN off_task_action_count INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN improvement_score REAL NOT NULL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN consistency_score REAL NOT NULL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN bg_music_enabled INTEGER NOT NULL DEFAULT 1',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN haptic_feedback_enabled INTEGER NOT NULL DEFAULT 1',
+      );
+      debugPrint(
+        '[LocalDbService] Added analytics + sensory columns to game_sessions_local (v9)',
+      );
     }
 
     if (oldVersion < 10) {
       // Migration from v9 to v10: Add sensory columns to game_rounds_local
-      await db.execute('ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN music_enabled INTEGER NOT NULL DEFAULT 1');
-      await db.execute('ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN haptic_enabled INTEGER NOT NULL DEFAULT 1');
-      debugPrint('[LocalDbService] Added sensory columns to game_rounds_local (v10)');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN music_enabled INTEGER NOT NULL DEFAULT 1',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameRounds} ADD COLUMN haptic_enabled INTEGER NOT NULL DEFAULT 1',
+      );
+      debugPrint(
+        '[LocalDbService] Added sensory columns to game_rounds_local (v10)',
+      );
     }
 
     if (oldVersion < 11) {
       // Migration from v10 to v11: Add rubric scoring columns to assessment_results_local
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN play_skills_label TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN communication_label TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN social_interaction_label TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN behavior_attention_label TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN sensory_preference_label TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN recommended_module TEXT');
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN overall_summary TEXT');
-      await db.execute("ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN model_source TEXT DEFAULT 'rubric_based'");
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN xgboost_ready INTEGER DEFAULT 1');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN play_skills_label TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN communication_label TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN social_interaction_label TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN behavior_attention_label TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN sensory_preference_label TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN recommended_module TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN overall_summary TEXT',
+      );
+      await db.execute(
+        "ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN model_source TEXT DEFAULT 'rubric_based'",
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN xgboost_ready INTEGER DEFAULT 1',
+      );
 
       // Add missing telemetry columns to game_sessions_local
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN task_completion_rate REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_dependency_score REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN turn_taking_success_rate REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN interruption_count INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN waiting_tolerance_seconds REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_touch REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_valid_action REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_completion REAL');
-      await db.execute('ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN sensory_condition TEXT');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN task_completion_rate REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN prompt_dependency_score REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN turn_taking_success_rate REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN interruption_count INTEGER DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN waiting_tolerance_seconds REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_touch REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_first_valid_action REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN time_to_completion REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${LocalTables.gameSessions} ADD COLUMN sensory_condition TEXT',
+      );
 
-      debugPrint('[LocalDbService] Added rubric scoring + telemetry columns (v11)');
+      debugPrint(
+        '[LocalDbService] Added rubric scoring + telemetry columns (v11)',
+      );
     }
 
     if (oldVersion < 12) {
       // Migration from v11 to v12: Add missing completed_at column to assessment_results_local
-      await db.execute('ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN completed_at TEXT');
-      debugPrint('[LocalDbService] Added completed_at column to assessment_results_local (v12)');
+      await db.execute(
+        'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN completed_at TEXT',
+      );
+      debugPrint(
+        '[LocalDbService] Added completed_at column to assessment_results_local (v12)',
+      );
     }
 
     if (oldVersion < 13) {
@@ -799,7 +880,9 @@ class LocalDbService {
       await db.execute(
         'ALTER TABLE ${LocalTables.assessmentResults} ADD COLUMN random_touch_count INTEGER NOT NULL DEFAULT 0',
       );
-      debugPrint('[LocalDbService] Added random_touch_count column to assessment_results_local (v13)');
+      debugPrint(
+        '[LocalDbService] Added random_touch_count column to assessment_results_local (v13)',
+      );
     }
 
     if (oldVersion < 14) {
@@ -827,7 +910,9 @@ class LocalDbService {
           // Table missing or column already present — safe to skip.
         }
       }
-      debugPrint('[LocalDbService] Added sync_error column to syncable tables (v14)');
+      debugPrint(
+        '[LocalDbService] Added sync_error column to syncable tables (v14)',
+      );
     }
 
     if (oldVersion < 15) {
@@ -843,7 +928,9 @@ class LocalDbService {
           // Table missing or column already present — safe to skip.
         }
       }
-      debugPrint('[LocalDbService] Added sync_attempts column to syncable tables (v15)');
+      debugPrint(
+        '[LocalDbService] Added sync_attempts column to syncable tables (v15)',
+      );
     }
 
     if (oldVersion < 16) {
@@ -858,7 +945,9 @@ class LocalDbService {
       } catch (_) {
         // Column already present — safe to skip.
       }
-      debugPrint('[LocalDbService] Added music_category column to children (v16)');
+      debugPrint(
+        '[LocalDbService] Added music_category column to children (v16)',
+      );
     }
   }
 
@@ -902,11 +991,32 @@ class LocalDbService {
     return [for (final r in rows) r['id'] as String];
   }
 
-  /// Insert cloud rows that don't exist locally, marked as already synced.
+  /// Merges cloud rows into the local table, newest version wins (AUM-158).
   ///
-  /// Existing local rows always win — hydration must never clobber pending
-  /// local edits or resurrect locally deleted records. Returns how many
-  /// rows were actually inserted.
+  /// The conflict rule, in one line: **the row with the later `updated_at`
+  /// is kept, and a tie goes to the local copy.**
+  ///
+  /// Hydration used to be insert-only — any row that already existed locally
+  /// was skipped. That is safe but not a conflict rule: an edit made on
+  /// another device could never arrive, so a second device silently kept a
+  /// stale copy forever and whichever device pushed last overwrote the
+  /// cloud regardless of which edit was actually newer.
+  ///
+  /// Why a tie goes to local: equal timestamps mean neither side is newer,
+  /// and the local row may be carrying an unsynced edit that is about to
+  /// push. Keeping it loses nothing, while overwriting could.
+  ///
+  /// A local row is only replaced when the remote is *strictly* newer, so:
+  /// * a locally deleted record is not resurrected by an older remote row
+  ///   (the delete bumped `updated_at`);
+  /// * a pending local edit survives unless the cloud genuinely holds a
+  ///   later one, in which case the local edit is the stale version and
+  ///   losing it is the point of the rule.
+  ///
+  /// A row whose timestamp is missing or unparseable on either side is left
+  /// alone — without a comparable timestamp there is no basis to overwrite.
+  ///
+  /// Returns how many rows were written (inserted or updated).
   Future<int> hydrateRecords(
     String table,
     List<Map<String, dynamic>> rows,
@@ -914,7 +1024,7 @@ class LocalDbService {
     if (rows.isEmpty) return 0;
     final db = await database;
     final now = DateTime.now().toIso8601String();
-    var inserted = 0;
+    var written = 0;
 
     for (var i = 0; i < rows.length; i += _idChunkSize) {
       final chunk = rows.sublist(
@@ -925,25 +1035,52 @@ class LocalDbService {
       final placeholders = List.filled(ids.length, '?').join(',');
       final existing = await db.query(
         table,
-        columns: ['id'],
+        columns: ['id', 'updated_at'],
         where: 'id IN ($placeholders)',
         whereArgs: ids,
       );
-      final existingIds = {for (final r in existing) r['id'] as String};
+      final localUpdatedAt = {
+        for (final r in existing) r['id'] as String: r['updated_at'] as String?,
+      };
 
       final batch = db.batch();
       for (final row in chunk) {
-        if (existingIds.contains(row['id'])) continue;
-        batch.insert(table, {
-          ...row,
-          'sync_status': SyncStatus.synced.value,
-          'last_synced_at': now,
-        });
-        inserted++;
+        final id = row['id'] as String;
+        if (!localUpdatedAt.containsKey(id)) {
+          batch.insert(table, {
+            ...row,
+            'sync_status': SyncStatus.synced.value,
+            'last_synced_at': now,
+          });
+          written++;
+          continue;
+        }
+        if (!_remoteIsNewer(localUpdatedAt[id], row['updated_at'])) continue;
+        batch.update(
+          table,
+          {
+            ...row,
+            'sync_status': SyncStatus.synced.value,
+            'last_synced_at': now,
+          },
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        written++;
       }
       await batch.commit(noResult: true);
     }
-    return inserted;
+    return written;
+  }
+
+  /// True when [remote] is strictly later than [local]. Unparseable or
+  /// missing timestamps on either side mean "no", so the local row stands.
+  static bool _remoteIsNewer(String? local, Object? remote) {
+    if (local == null || remote is! String) return false;
+    final localAt = DateTime.tryParse(local);
+    final remoteAt = DateTime.tryParse(remote);
+    if (localAt == null || remoteAt == null) return false;
+    return remoteAt.isAfter(localAt);
   }
 
   /// Recover records stranded in 'syncing' by a crash or kill mid-sync.
@@ -1070,11 +1207,7 @@ class LocalDbService {
           ${error != null ? ', sync_error = ?' : ''}
       WHERE id = ?
       ''',
-      [
-        SyncStatus.failed.value,
-        if (error != null) error,
-        id,
-      ],
+      [SyncStatus.failed.value, if (error != null) error, id],
     );
   }
 
@@ -1122,12 +1255,14 @@ class LocalDbService {
         'updated_at': DateTime.now().toIso8601String(),
         'sync_status': SyncStatus.pending.value,
       },
-      where: hasUserId
-          ? 'owner_id = ? OR user_id = ? OR owner_id LIKE ? OR user_id LIKE ?'
-          : 'owner_id = ? OR owner_id LIKE ?',
-      whereArgs: hasUserId
-          ? [oldOwnerId, oldOwnerId, '$oldOwnerId%', '$oldOwnerId%']
-          : [oldOwnerId, '$oldOwnerId%'],
+      where:
+          hasUserId
+              ? 'owner_id = ? OR user_id = ? OR owner_id LIKE ? OR user_id LIKE ?'
+              : 'owner_id = ? OR owner_id LIKE ?',
+      whereArgs:
+          hasUserId
+              ? [oldOwnerId, oldOwnerId, '$oldOwnerId%', '$oldOwnerId%']
+              : [oldOwnerId, '$oldOwnerId%'],
     );
     debugPrint(
       '[LocalDbService] Updated owner_id in $table: $oldOwnerId -> $newOwnerId',
@@ -1273,7 +1408,9 @@ class LocalDbService {
     for (var i = 0; i < sessionIds.length; i += _idChunkSize) {
       final chunk = sessionIds.sublist(
         i,
-        i + _idChunkSize > sessionIds.length ? sessionIds.length : i + _idChunkSize,
+        i + _idChunkSize > sessionIds.length
+            ? sessionIds.length
+            : i + _idChunkSize,
       );
       final placeholders = List.filled(chunk.length, '?').join(',');
       for (final table in [LocalTables.gameRounds, LocalTables.sessionEvents]) {
@@ -1309,7 +1446,9 @@ class LocalDbService {
         markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
-    debugPrint('[LocalDbService] insertGameSession map keys: ${map.keys.toList()}');
+    debugPrint(
+      '[LocalDbService] insertGameSession map keys: ${map.keys.toList()}',
+    );
     debugPrint('[LocalDbService] insertGameSession map: $map');
     try {
       await db.insert(
@@ -1317,7 +1456,9 @@ class LocalDbService {
         map,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('[LocalDbService] insertGameSession SUCCESS for id=${session.id}');
+      debugPrint(
+        '[LocalDbService] insertGameSession SUCCESS for id=${session.id}',
+      );
     } catch (e, st) {
       debugPrint('[LocalDbService] insertGameSession FAILED: $e');
       debugPrint('[LocalDbService] insertGameSession stacktrace: $st');
@@ -1383,38 +1524,33 @@ class LocalDbService {
     final now = DateTime.now();
     final id = _uuid.v4();
 
-    await db.insert(
-      LocalTables.gameRounds,
-      {
-        'id': id,
-        'session_id': sessionId,
-        'round_no': round.roundNumber,
-        'stimulus_type': round.gameSpecificData['stimulusType'] as String?,
-        'valid_action_type':
-            round.gameSpecificData['validActionType'] as String?,
-        'correct': round.isSuccessful ? 1 : 0,
-        'response_time': round.timeToFirstTouch,
-        'valid_response_time': round.timeToFirstValidAction,
-        'time_to_first_hint': round.hintCount > 0 ? round.timeToCompletion : null,
-        'retry_count': round.retryCount,
-        'hint_count': round.hintCount,
-        'prompt_count': round.promptCount,
-        'random_touch_count': round.randomTouchCount,
-        'strong_prompt_triggered': round.promptCount >= 3 ? 1 : 0,
-        'guided_assist_triggered': round.hintCount >= 2 ? 1 : 0,
-        'completed': round.isSuccessful ? 1 : 0,
-        'music_enabled': round.musicEnabled ? 1 : 0,
-        'haptic_enabled': round.hapticEnabled ? 1 : 0,
-        'created_at': now.toUtc().toIso8601String(),
-        // sync columns
-        'owner_id': ownerId,
-        'sync_status':
-            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
-        'local_created_at': now.toUtc().toIso8601String(),
-        'updated_at': now.toUtc().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert(LocalTables.gameRounds, {
+      'id': id,
+      'session_id': sessionId,
+      'round_no': round.roundNumber,
+      'stimulus_type': round.gameSpecificData['stimulusType'] as String?,
+      'valid_action_type': round.gameSpecificData['validActionType'] as String?,
+      'correct': round.isSuccessful ? 1 : 0,
+      'response_time': round.timeToFirstTouch,
+      'valid_response_time': round.timeToFirstValidAction,
+      'time_to_first_hint': round.hintCount > 0 ? round.timeToCompletion : null,
+      'retry_count': round.retryCount,
+      'hint_count': round.hintCount,
+      'prompt_count': round.promptCount,
+      'random_touch_count': round.randomTouchCount,
+      'strong_prompt_triggered': round.promptCount >= 3 ? 1 : 0,
+      'guided_assist_triggered': round.hintCount >= 2 ? 1 : 0,
+      'completed': round.isSuccessful ? 1 : 0,
+      'music_enabled': round.musicEnabled ? 1 : 0,
+      'haptic_enabled': round.hapticEnabled ? 1 : 0,
+      'created_at': now.toUtc().toIso8601String(),
+      // sync columns
+      'owner_id': ownerId,
+      'sync_status':
+          markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+      'local_created_at': now.toUtc().toIso8601String(),
+      'updated_at': now.toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ─── Assessment Results ───────────────────────────────────────────────
@@ -1434,7 +1570,9 @@ class LocalDbService {
         markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
     map['owner_id'] = ownerId;
 
-    debugPrint('[LocalDbService] insertAssessmentResult map keys: ${map.keys.toList()}');
+    debugPrint(
+      '[LocalDbService] insertAssessmentResult map keys: ${map.keys.toList()}',
+    );
     debugPrint('[LocalDbService] insertAssessmentResult map: $map');
     try {
       await db.insert(
@@ -1442,7 +1580,9 @@ class LocalDbService {
         map,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      debugPrint('[LocalDbService] insertAssessmentResult SUCCESS for id=${result.id}');
+      debugPrint(
+        '[LocalDbService] insertAssessmentResult SUCCESS for id=${result.id}',
+      );
     } catch (e, st) {
       debugPrint('[LocalDbService] insertAssessmentResult FAILED: $e');
       debugPrint('[LocalDbService] insertAssessmentResult stacktrace: $st');
@@ -1524,27 +1664,21 @@ class LocalDbService {
     final now = DateTime.now();
     final id = _uuid.v4();
 
-    await db.insert(
-      LocalTables.sensoryConsent,
-      {
-        'id': id,
-        'child_id': childId,
-        'assessment_run_id': assessmentRunId,
-        'consent_given': consentGiven ? 1 : 0,
-        'created_at': now.toIso8601String(),
-        'sync_status': SyncStatus.pending.value,
-        'updated_at': now.toIso8601String(),
-        'local_created_at': now.toIso8601String(),
-        'owner_id': ownerId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert(LocalTables.sensoryConsent, {
+      'id': id,
+      'child_id': childId,
+      'assessment_run_id': assessmentRunId,
+      'consent_given': consentGiven ? 1 : 0,
+      'created_at': now.toIso8601String(),
+      'sync_status': SyncStatus.pending.value,
+      'updated_at': now.toIso8601String(),
+      'local_created_at': now.toIso8601String(),
+      'owner_id': ownerId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Get the latest sensory consent record for a child.
-  Future<Map<String, dynamic>?> getLatestSensoryConsent(
-    String childId,
-  ) async {
+  Future<Map<String, dynamic>?> getLatestSensoryConsent(String childId) async {
     final db = await database;
     final rows = await db.query(
       LocalTables.sensoryConsent,
@@ -1585,17 +1719,14 @@ class LocalDbService {
             'correct_count': metricsMap['correct_count'] ?? 0,
             'wrong_count': metricsMap['wrong_count'] ?? 0,
             'accuracy': metricsMap['accuracy'] ?? 0.0,
-            'total_response_time_ms':
-                metricsMap['total_response_time_ms'] ?? 0,
-            'avg_response_time_ms':
-                metricsMap['avg_response_time_ms'] ?? 0.0,
+            'total_response_time_ms': metricsMap['total_response_time_ms'] ?? 0,
+            'avg_response_time_ms': metricsMap['avg_response_time_ms'] ?? 0.0,
             'tap_count': metricsMap['tap_count'] ?? 0,
             'idle_time_seconds': metricsMap['idle_time_seconds'] ?? 0.0,
             'random_touch_count': metricsMap['random_touch_count'] ?? 0,
             'time_to_first_touch_ms':
                 metricsMap['time_to_first_touch_ms'] ?? 0.0,
-            'time_to_completion_ms':
-                metricsMap['time_to_completion_ms'] ?? 0.0,
+            'time_to_completion_ms': metricsMap['time_to_completion_ms'] ?? 0.0,
             'hint_count': metricsMap['hint_count'] ?? 0,
             'prompt_count': metricsMap['prompt_count'] ?? 0,
             'retry_count': metricsMap['retry_count'] ?? 0,
@@ -1650,33 +1781,30 @@ class LocalDbService {
     final configScores = preferenceMap['config_scores'];
     final attentionSummary = preferenceMap['attention_summary'];
 
-    await db.insert(
-      LocalTables.sensoryPreferences,
-      {
-        'id': id,
-        'child_id': childId,
-        'assessment_run_id': assessmentRunId,
-        'recommended_music_enabled':
-            preferenceMap['recommended_music_enabled'] ?? 0,
-        'recommended_haptic_enabled':
-            preferenceMap['recommended_haptic_enabled'] ?? 0,
-        'best_config': preferenceMap['best_config'] ?? '',
-        'confidence': preferenceMap['confidence'] ?? '',
-        'config_scores':
-            configScores is String ? configScores : jsonEncode(configScores),
-        'attention_summary': attentionSummary is String
-            ? attentionSummary
-            : (attentionSummary != null
-                ? jsonEncode(attentionSummary)
-                : null),
-        'analyzed_at': preferenceMap['analyzed_at'] ?? now.toIso8601String(),
-        'sync_status': SyncStatus.pending.value,
-        'updated_at': now.toIso8601String(),
-        'local_created_at': now.toIso8601String(),
-        'owner_id': ownerId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert(LocalTables.sensoryPreferences, {
+      'id': id,
+      'child_id': childId,
+      'assessment_run_id': assessmentRunId,
+      'recommended_music_enabled':
+          preferenceMap['recommended_music_enabled'] ?? 0,
+      'recommended_haptic_enabled':
+          preferenceMap['recommended_haptic_enabled'] ?? 0,
+      'best_config': preferenceMap['best_config'] ?? '',
+      'confidence': preferenceMap['confidence'] ?? '',
+      'config_scores':
+          configScores is String ? configScores : jsonEncode(configScores),
+      'attention_summary':
+          attentionSummary is String
+              ? attentionSummary
+              : (attentionSummary != null
+                  ? jsonEncode(attentionSummary)
+                  : null),
+      'analyzed_at': preferenceMap['analyzed_at'] ?? now.toIso8601String(),
+      'sync_status': SyncStatus.pending.value,
+      'updated_at': now.toIso8601String(),
+      'local_created_at': now.toIso8601String(),
+      'owner_id': ownerId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Get the latest sensory preference result for a child.
@@ -1699,8 +1827,7 @@ class LocalDbService {
       row['config_scores'] = jsonDecode(row['config_scores'] as String);
     }
     if (row['attention_summary'] is String) {
-      row['attention_summary'] =
-          jsonDecode(row['attention_summary'] as String);
+      row['attention_summary'] = jsonDecode(row['attention_summary'] as String);
     }
     return row;
   }
@@ -1866,10 +1993,7 @@ class LocalDbService {
   /// new one. This is used when the stored guest refresh token fails to restore
   /// and a brand-new anonymous account is created. Without this migration the
   /// child profiles keyed to the old user ID would be orphaned.
-  Future<void> migrateGuestUserId(
-    String oldUserId,
-    String newUserId,
-  ) async {
+  Future<void> migrateGuestUserId(String oldUserId, String newUserId) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
 
