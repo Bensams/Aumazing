@@ -55,6 +55,13 @@ class _FakeGateway implements AssessmentGateway {
     return closed;
   }
 
+  /// The run the child has left open, if the test set one up.
+  OpenAssessmentRun? openRun;
+
+  @override
+  Future<OpenAssessmentRun?> openAssessmentRun(String childId) async =>
+      openRun?.childId == childId ? openRun : null;
+
   @override
   Future<GameplaySession> recordSession({
     required String childId,
