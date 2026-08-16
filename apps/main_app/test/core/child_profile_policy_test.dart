@@ -65,27 +65,41 @@ void main() {
     expect(result, ChildBirthDateValidation.futureDate);
   });
 
-  test('validateBirthDate rejects children younger than two', () {
+  // AUMazing serves autistic children with no age limit. A birth date is
+  // rejected only when it is absent or impossible — never for the age it
+  // implies, at either end.
+  test('validateBirthDate accepts a child under two', () {
     final today = DateTime(2026, 4, 20);
     final result = validateBirthDate(DateTime(2025, 4, 21), today: today);
 
-    expect(result, ChildBirthDateValidation.tooYoung);
+    expect(result, ChildBirthDateValidation.valid);
   });
 
-  test('validateBirthDate rejects children older than six', () {
+  test('validateBirthDate accepts a child older than six', () {
     final today = DateTime(2026, 4, 20);
     final result = validateBirthDate(DateTime(2018, 4, 19), today: today);
 
-    expect(result, ChildBirthDateValidation.tooOld);
+    expect(result, ChildBirthDateValidation.valid);
   });
 
-  test('validateBirthDate accepts children between two and six inclusive', () {
+  test('validateBirthDate accepts a much older child', () {
+    final today = DateTime(2026, 4, 20);
+    final result = validateBirthDate(DateTime(2005, 1, 1), today: today);
+
+    expect(result, ChildBirthDateValidation.valid);
+  });
+
+  test('validateBirthDate accepts a child inside the former range', () {
     final today = DateTime(2026, 4, 20);
 
     expect(
       validateBirthDate(DateTime(2020, 4, 20), today: today),
       ChildBirthDateValidation.valid,
     );
+  });
+
+  test('a birth date is still required', () {
+    expect(validateBirthDate(null), ChildBirthDateValidation.missing);
   });
 
   test('child profile derives age from birth date', () {
