@@ -57,41 +57,62 @@ class _ModuleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reason = module.reason;
     return Semantics(
       label: 'Activity $index: ${module.name}, '
-          'level ${module.startingLevel}',
+          'level ${module.startingLevel}'
+          '${reason == null ? '' : '. $reason'}',
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 22,
-              child: Text(
-                '$index',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.mutedForeground,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: Text(
+                    '$index',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    module.name,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Level ${module.startingLevel}',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+            // Why this activity comes next, in a parent's words (AUM-161).
+            // Indented under the name so the list still scans as a sequence.
+            if (reason != null) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 22, right: 10),
+                child: Text(
+                  reason,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Text(
-                module.name,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Level ${module.startingLevel}',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.textSecondary,
-                letterSpacing: 0.2,
-              ),
-            ),
+            ],
           ],
         ),
       ),
