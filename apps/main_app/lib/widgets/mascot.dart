@@ -11,12 +11,25 @@ import '../providers/child_provider.dart';
 /// Which character is on screen.
 enum MascotCharacter {
   bps,
+  lexianne,
   reiz;
+
+  /// Resolves a [ChildCharacter.id] from the profile. Unknown ids fall back
+  /// rather than throw — a profile written by a build that shipped a character
+  /// this build does not have must still render something.
+  static MascotCharacter fromId(String? id) => MascotCharacter.values
+      .firstWhere((c) => c.name == id, orElse: () => MascotCharacter.bps);
 
   Future<CharacterSprites> load() => switch (this) {
         MascotCharacter.bps => CharacterSprites.bps(),
+        MascotCharacter.lexianne => CharacterSprites.lexianne(),
         MascotCharacter.reiz => CharacterSprites.reiz(),
       };
+
+  /// This character wearing [costumeId] (a [Costume.id]), falling back to
+  /// their own clothes when that costume has no sheets generated yet.
+  Future<CharacterSprites> loadCostumed(String? costumeId) =>
+      CharacterSprites.costumed(name, costumeId ?? 'none');
 }
 
 /// The pose the mascot *rests* on between gestures. Each maps to a
@@ -87,6 +100,7 @@ class Mascot extends StatefulWidget {
   const Mascot({
     super.key,
     this.character = MascotCharacter.bps,
+    this.costumeId,
     this.height = 140,
     this.pose = MascotPose.idle,
     this.gesture = MascotGesture.wave,
@@ -101,6 +115,11 @@ class Mascot extends StatefulWidget {
   });
 
   final MascotCharacter character;
+
+  /// The costume the child has equipped, as a [Costume.id]. Null or
+  /// 'none' shows the character's own clothes. A costume without sheets
+  /// falls back to the same thing (STAR-F2).
+  final String? costumeId;
 
   /// Display height in logical pixels. Keep consistent across appearances —
   /// predictable size reads as calm.
@@ -233,7 +252,7 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
       vsync: this,
       duration: MascotGesture.oops.duration,
     );
-    widget.character.load().then((s) {
+    widget.character.loadCostumed(widget.costumeId).then((s) {
       if (!mounted) return;
       setState(() => _sprites = s);
       _begin();

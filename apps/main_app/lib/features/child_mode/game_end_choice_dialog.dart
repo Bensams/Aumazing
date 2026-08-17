@@ -6,6 +6,8 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../providers/stars_provider.dart';
+import '../stars/widgets/star_earned_overlay.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
@@ -38,9 +40,24 @@ class GameEndChoiceDialog {
     BuildContext context, {
     required String currentGameId,
   }) async {
+    // Stars are awarded here rather than inside each game screen: this is the
+    // one place all ten of them converge, and it runs AFTER the reward overlay
+    // has finished, which is where STAR-B2 requires the star moment to sit —
+    // never stacked on top of the celebration.
+    //
+    // Note that nothing about how the game *went* reaches this call. That is
+    // what makes "the payout cannot depend on performance" (STAR-B1)
+    // structural rather than a promise someone has to remember to keep.
+    await _awardStars(context, currentGameId);
+    if (!context.mounted) return;
+
     // Screen-time enforcement happens here — at the natural boundary after
     // a game finishes (never mid-game). Out of time → gentle break screen
     // instead of offering the next game.
+    //
+    // Deliberately AFTER the award: a child whose time ran out on this game
+    // still earned this game's stars. Withholding them because the session
+    // ended would turn the timer into a punishment.
     if (ScreenTimeService.instance.isExhausted) {
       await TimeUpDialog.show(context);
       return;
@@ -106,6 +123,34 @@ class GameEndChoiceDialog {
       }
     }
     Navigator.of(context).pop(); // Back to the lobby
+  }
+
+  /// Grants the fixed payout for the play that just finished and, if anything
+  /// was granted, shows the short star moment.
+  ///
+  /// The play key is built from the child, the game and the wall-clock minute
+  /// rather than a session row id: the practice path does not create an
+  /// assessment session, so there is no id to use. A minute is coarse enough
+  /// that a double-tapped finish or a rebuild lands on the same key and cannot
+  /// pay twice, and fine enough that genuinely replaying the game — which
+  /// takes minutes — earns again.
+  static Future<void> _awardStars(
+    BuildContext context,
+    String currentGameId,
+  ) async {
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId == null) return;
+
+    final stars = context.read<StarsProvider>();
+    await stars.bind(childId);
+
+    final minute = DateTime.now().toIso8601String().substring(0, 16);
+    final granted = await stars.awardForPlay(
+      playKey: '$childId:$currentGameId:$minute',
+    );
+    if (granted <= 0 || !context.mounted) return;
+
+    await StarEarnedOverlay.show(context, granted: granted);
   }
 }
 

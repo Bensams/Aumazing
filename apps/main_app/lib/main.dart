@@ -16,6 +16,7 @@ import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
+import 'providers/stars_provider.dart';
 import 'services/entitlement_service.dart';
 import 'services/parent_pin_service.dart';
 import 'services/rubric/rubric_threshold_service.dart';
@@ -148,6 +149,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => ChildProvider()),
         ChangeNotifierProvider(create: (_) => AssessmentProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
+        ChangeNotifierProvider(create: (_) => StarsProvider()),
       ],
       child: Provider<AudioService>.value(
         value: _audioService,

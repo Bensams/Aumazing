@@ -5,6 +5,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../core/repositories/child_repository.dart';
 import '../core/services/local_db_service.dart';
+import '../features/stars/star_catalogue.dart';
 import '../model/child_profile.dart';
 import '../core/services/auth_service.dart';
 
@@ -47,6 +48,21 @@ class ChildProvider extends ChangeNotifier {
   /// derived from the child's sex. Persisted locally (no DB migration).
   GameTheme? _themeOverride;
   static const _themeOverrideKeyPrefix = 'theme_override_';
+
+  /// Whether the child can reach the Star Shop at all (STAR-G2).
+  ///
+  /// Stars keep accruing while it is off, so turning it off costs the child
+  /// nothing — a parent switching it back on later finds everything that was
+  /// earned in the meantime still there.
+  bool _shopEnabled = true;
+  static const _shopEnabledKeyPrefix = 'star_shop_enabled_';
+
+  /// Whether a purchase needs the parent to approve it (STAR-C6).
+  ///
+  /// Off by default: buying freely is most of what makes the stars feel like
+  /// the child's own. A parent who would rather be asked can turn it on.
+  bool _requirePurchaseApproval = false;
+  static const _purchaseApprovalKeyPrefix = 'star_purchase_approval_';
 
   /// Parent's custom game-screen background. When null the child's game
   /// screens use the [activeTheme] preset gradients. Persisted locally per
@@ -426,6 +442,7 @@ class ChildProvider extends ChangeNotifier {
     bool sensoryPreferencesSet = false,
     RewardPreference rewardPreference = RewardPreference.bubbles,
     bool useRandomReward = false,
+    String characterId = 'bps',
     bool makeActive = false,
   }) async {
     final created = await _childRepository.createChild(
@@ -442,6 +459,7 @@ class ChildProvider extends ChangeNotifier {
       sensoryPreferencesSet: sensoryPreferencesSet,
       rewardPreference: rewardPreference,
       useRandomReward: useRandomReward,
+      characterId: characterId,
     );
 
     _children = _sorted([..._children, created]);
@@ -634,6 +652,7 @@ class ChildProvider extends ChangeNotifier {
   /// previous child's theme, language or difficulty behind.
   Future<void> _loadActiveChildPreferences() async {
     await _loadThemeOverride();
+    await _loadStarShopPrefs();
     await _loadCustomBackground();
     await _loadObjectStyle();
     await _loadWorldOverride();
@@ -729,6 +748,34 @@ class ChildProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Changes which character keeps this child company (STAR-A2).
+  ///
+  /// Stars, unlocks and the equipped costume all survive: the character is who
+  /// wears the costume, not what owns it. A parent who realises after a week
+  /// that their child prefers a different companion must not have to weigh
+  /// that against losing everything the child earned.
+  Future<void> setCharacter(ChildCharacter character) async {
+    if (_profile == null) return;
+    _profile = _profile!.copyWith(characterId: character.id);
+    await _localDb.upsertChild(_profile!, markPending: true);
+    _replaceInList(_profile!);
+    notifyListeners();
+  }
+
+  /// Wears [costume], or [Costume.none] to go back to the character's own
+  /// clothes (STAR-D1).
+  ///
+  /// Deliberately does not re-check ownership: the shop is the only caller and
+  /// it offers only what the child owns. Checking again here would create a
+  /// second source of truth for "owned", and the two would eventually disagree.
+  Future<void> setEquippedCostume(Costume costume) async {
+    if (_profile == null) return;
+    _profile = _profile!.copyWith(equippedCostume: costume.id);
+    await _localDb.upsertChild(_profile!, markPending: true);
+    _replaceInList(_profile!);
+    notifyListeners();
+  }
+
   /// Sets a manual background-theme override and persists it locally.
   Future<void> setThemeOverride(GameTheme theme) async {
     _themeOverride = theme;
@@ -752,6 +799,44 @@ class ChildProvider extends ChangeNotifier {
   }
 
   /// Loads any persisted theme override for the current child.
+  // ── Star Shop parent controls ─────────────────────────────────────────
+
+  bool get shopEnabled => _shopEnabled;
+  bool get requirePurchaseApproval => _requirePurchaseApproval;
+
+  Future<void> setShopEnabled(bool enabled) async {
+    _shopEnabled = enabled;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('$_shopEnabledKeyPrefix$id', enabled);
+    }
+  }
+
+  Future<void> setRequirePurchaseApproval(bool required) async {
+    _requirePurchaseApproval = required;
+    notifyListeners();
+    final id = _profile?.id;
+    if (id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('$_purchaseApprovalKeyPrefix$id', required);
+    }
+  }
+
+  Future<void> _loadStarShopPrefs() async {
+    final id = _profile?.id;
+    if (id == null) {
+      _shopEnabled = true;
+      _requirePurchaseApproval = false;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    _shopEnabled = prefs.getBool('$_shopEnabledKeyPrefix$id') ?? true;
+    _requirePurchaseApproval =
+        prefs.getBool('$_purchaseApprovalKeyPrefix$id') ?? false;
+  }
+
   Future<void> _loadThemeOverride() async {
     final id = _profile?.id;
     if (id == null) {
