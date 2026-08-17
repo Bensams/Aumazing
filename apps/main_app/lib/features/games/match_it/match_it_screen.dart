@@ -200,7 +200,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
 
     // Record the session in the assessment provider
     final childProvider = context.read<ChildProvider>();
-    final childId = childProvider.profile?.id ?? 'unknown';
+    final childId = childProvider.profile?.id;
 
     // Attribute each round to the sensory condition that was active for it
     // before the session (and its rounds) are written.
