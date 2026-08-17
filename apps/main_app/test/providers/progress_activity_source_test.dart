@@ -89,6 +89,53 @@ void main() {
     expect(db.sessionQueries, ['child-a', 'child-b']);
     expect(provider.recentSessions.single.id, 'b-1');
   });
+
+  // ── Live hand-off from play (no reload, no network) ──────────────────
+  //
+  // A finished game is handed to the provider as it is recorded, so the
+  // dashboard underneath child mode is already current when the parent
+  // returns. Nothing here queries anything: the row is in the local
+  // database before this point, and the push to Supabase is fire-and-forget.
+
+  test('a session recorded during play shows without another query', () async {
+    final db = _RecordingDb({'child-a': []});
+    final provider = ProgressProvider(localDb: db);
+    await provider.loadProgress('child-a');
+
+    provider.addSession(session('child-a', id: 'just-played'));
+
+    expect(provider.recentSessions.single.id, 'just-played');
+    // Still the one load — the dashboard did not have to go back to storage,
+    // let alone to the network, to show the play.
+    expect(db.sessionQueries, ['child-a']);
+  });
+
+  test('a re-read after play does not list the same session twice', () async {
+    final played = session('child-a', id: 'played-1');
+    final db = _RecordingDb({
+      'child-a': [played],
+    });
+    final provider = ProgressProvider(localDb: db);
+
+    // The dashboard re-queries on the way back from child mode and the
+    // recorder hands the same session over — in either order, one entry.
+    await provider.loadProgress('child-a');
+    provider.addSession(played);
+
+    expect(provider.recentSessions, hasLength(1));
+  });
+
+  test('a duplicate completion callback adds nothing', () async {
+    final db = _RecordingDb({'child-a': []});
+    final provider = ProgressProvider(localDb: db);
+    await provider.loadProgress('child-a');
+
+    final played = session('child-a', id: 'played-1');
+    provider.addSession(played);
+    provider.addSession(played);
+
+    expect(provider.recentSessions, hasLength(1));
+  });
 }
 
 /// Core-service stand-in that records which child's sessions were asked for.
