@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
+import '../../providers/progress_provider.dart';
 
 /// Persists a finished game before the flow moves on.
 ///
@@ -13,6 +14,12 @@ import '../../providers/assessment_provider.dart';
 /// scored fewer games than the child actually played. Recording is awaited
 /// here instead, and a failure is offered to the parent as a retry rather
 /// than swallowed.
+///
+/// The persisted session is also handed straight to [ProgressProvider], so
+/// the parent dashboard's "Recent activity" reflects the play the moment
+/// child mode is popped. This is a purely local hand-off: the write already
+/// landed in the offline database, and the background push to Supabase is
+/// fire-and-forget. Nothing on the dashboard waits for the network.
 abstract final class GameSessionRecording {
   /// Records the session, retrying on failure until it succeeds or the user
   /// chooses to continue without it.
@@ -36,10 +43,13 @@ abstract final class GameSessionRecording {
     bool applySessionSensoryDefaults = true,
   }) async {
     final provider = context.read<AssessmentProvider>();
+    // Read before the first await: a retry dialog can rebuild the tree, and
+    // the game screen may be gone by the time the write succeeds.
+    final progress = context.read<ProgressProvider>();
 
     while (true) {
       try {
-        await provider.recordGameSession(
+        final session = await provider.recordGameSession(
           childId: childId,
           gameId: gameId,
           context: assessmentContext,
@@ -53,6 +63,9 @@ abstract final class GameSessionRecording {
           hapticFeedbackEnabled: hapticFeedbackEnabled,
           applySessionSensoryDefaults: applySessionSensoryDefaults,
         );
+        // Null means a duplicate completion callback for a game already
+        // recorded — the row exists, so there is nothing new to show.
+        if (session != null) progress.addSession(session);
         return true;
       } catch (e) {
         debugPrint('[GameSessionRecording] $gameId failed to save: $e');
