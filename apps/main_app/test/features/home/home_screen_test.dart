@@ -104,6 +104,44 @@ void main() {
     });
   });
 
+  /// The child plays while the dashboard sits underneath, and HomeScreen's
+  /// initState does not run again on pop — so without this the parent came
+  /// back to "No activity yet" however much was played. The re-read is a
+  /// local database query; no sync and no network are involved.
+  testWidgets('returning from a child-facing route re-reads progress', (
+    tester,
+  ) async {
+    final progress = _TestProgressProvider();
+
+    await tester.binding.setSurfaceSize(const Size(960, 540));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        childProvider: _TestChildProvider(initialProfile: _profile),
+        progressProvider: progress,
+      ),
+    );
+    await tester.pump();
+    final loadsAfterOpen = progress.progressLoads.length;
+
+    await tester.ensureVisible(find.text('Enter Child Mode'));
+    await tester.tap(find.text('Enter Child Mode'));
+    await _settleUi(tester);
+    // Still the load from opening the dashboard — the re-read belongs on the
+    // way back, not on the way in.
+    expect(progress.progressLoads.length, loadsAfterOpen);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await _settleUi(tester);
+
+    expect(progress.progressLoads.length, loadsAfterOpen + 1);
+    expect(progress.progressLoads.last, 'child-1');
+
+    await tester.pump(const Duration(milliseconds: 700));
+  });
+
   testWidgets(
     'home screen defers provider loading until after the first frame',
     (tester) async {

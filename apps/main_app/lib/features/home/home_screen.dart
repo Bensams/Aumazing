@@ -402,9 +402,17 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Pushes a route that may lock landscape (child mode, the games, the
   /// assessment activities) and re-applies the parent orientation when it
   /// returns — HomeScreen's initState does not run again on pop.
+  ///
+  /// The dashboard's data is re-read on the way back for the same reason:
+  /// the child played while this screen sat underneath, and nothing else
+  /// re-queries it. The re-read is a local database query, so it works with
+  /// no network — the play was already stored offline before the child ever
+  /// left the game.
   Future<void> _pushChildFacing(Widget page) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-    if (mounted) lockParentAdaptive();
+    if (!mounted) return;
+    lockParentAdaptive();
+    _reloadChildScopedData();
   }
 
   void _startPreAssessment() {
