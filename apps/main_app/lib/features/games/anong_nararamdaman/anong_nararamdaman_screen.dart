@@ -207,7 +207,7 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
     }
 
     final childProvider = context.read<ChildProvider>();
-    final childId = childProvider.profile?.id ?? 'unknown';
+    final childId = childProvider.profile?.id;
 
     // The write must land before the flow advances, so a completed game is
     // never celebrated over a session that was silently lost.
