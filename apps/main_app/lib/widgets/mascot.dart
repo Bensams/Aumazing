@@ -20,16 +20,32 @@ enum MascotCharacter {
   static MascotCharacter fromId(String? id) => MascotCharacter.values
       .firstWhere((c) => c.name == id, orElse: () => MascotCharacter.bps);
 
-  Future<CharacterSprites> load() => switch (this) {
-        MascotCharacter.bps => CharacterSprites.bps(),
-        MascotCharacter.lexianne => CharacterSprites.lexianne(),
-        MascotCharacter.reiz => CharacterSprites.reiz(),
-      };
+  Future<CharacterSprites> load() => loadCostumed(null);
 
-  /// This character wearing [costumeId] (a [Costume.id]), falling back to
-  /// their own clothes when that costume has no sheets generated yet.
-  Future<CharacterSprites> loadCostumed(String? costumeId) =>
-      CharacterSprites.costumed(name, costumeId ?? 'none');
+  /// This character wearing [costumeId] (a [Costume.id]).
+  ///
+  /// Degrades in two steps, because sprite sheets and the shop ship on
+  /// different schedules and a child must never be left with no character
+  /// at all:
+  ///
+  ///  1. costume sheets missing -> this character's own clothes;
+  ///  2. this CHARACTER's sheets missing -> [MascotCharacter.bps].
+  ///
+  /// Step 2 is not hypothetical. Lexianne is offered in the picker but her
+  /// 21 default sheets are still being generated (AUM-280); without this she
+  /// would throw on load and every child whose parent picked her would get a
+  /// blank space where the mascot should be. Remove this fallback only once
+  /// every MascotCharacter has a full sheet set.
+  Future<CharacterSprites> loadCostumed(String? costumeId) async {
+    try {
+      return await CharacterSprites.costumed(name, costumeId ?? 'none');
+    } catch (_) {
+      if (this == MascotCharacter.bps) rethrow;
+      debugPrint('[Mascot] no sheets for $name; falling back to bps');
+      return CharacterSprites.costumed(
+          MascotCharacter.bps.name, costumeId ?? 'none');
+    }
+  }
 }
 
 /// The pose the mascot *rests* on between gestures. Each maps to a
