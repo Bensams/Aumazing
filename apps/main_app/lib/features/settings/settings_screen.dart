@@ -14,6 +14,7 @@ import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
+import 'star_settings_screen.dart';
 import 'widgets/background_picker.dart';
 import 'widgets/settings_scaffold.dart';
 import 'widgets/object_style_picker.dart';
@@ -61,6 +62,13 @@ class SettingsScreen extends StatelessWidget {
           title: 'Manage Children',
           subtitle: 'Add, switch, edit or remove a child profile',
           onTap: () => _push(context, const ManageChildrenScreen()),
+        ),
+        _CategoryTile(
+          icon: Icons.star_rounded,
+          color: AppColors.primaryPurple,
+          title: 'Stars & Costumes',
+          subtitle: 'Character, how stars are earned, shop controls, history',
+          onTap: () => _push(context, StarSettingsScreen(palette: palette)),
         ),
         _CategoryTile(
           icon: Icons.child_care_rounded,
