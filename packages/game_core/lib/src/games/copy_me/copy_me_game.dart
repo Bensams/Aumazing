@@ -92,8 +92,12 @@ class CopyMeGame extends FlameGame
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
-  /// Voice-over for demo/watch phase ("Watch me first" / "My turn")
-  final VoidCallback? onPlayMyTurnVo;
+  /// Voice-over for demo/watch phase ("Watch me first" / "My turn").
+  ///
+  /// Returns a future that completes when the line has finished if the caller
+  /// can tell — the demo waits for it rather than for a fixed number of
+  /// milliseconds. See [_playDemoSequence].
+  final FutureOr<void> Function()? onPlayMyTurnVo;
   /// Voice-over for child input phase ("Your turn" / "Now you try")
   final VoidCallback? onPlayYourTurnVo;
   /// SFX callback for each sequence highlight during demo phase.
@@ -235,14 +239,25 @@ class CopyMeGame extends FlameGame
 
     _demonstrating = true;
     onPhaseChanged?.call(true);
-    // Play "my turn" / "watch me" voice-over for demo phase
-    onPlayMyTurnVo?.call();
     _playDemoSequence();
   }
 
   Future<void> _playDemoSequence() async {
-    // Wait for "Watch me first" / "My turn" VO to finish before starting demo
-    await Future.delayed(const Duration(milliseconds: 2000));
+    // "Watch me first" has to finish before the demo starts, or the child is
+    // being told to watch while the thing to watch is already happening.
+    //
+    // How long that takes is not a number this game can know: the recording
+    // differs per voice pack and per language (1.5 s in one, 1.8 s in
+    // another), and the parent's prompt-speed setting stretches all of them.
+    // So the line reports its own end, and this waits for that. A caller that
+    // cannot report it falls back to a beat sized for the longest recording.
+    final spoken = onPlayMyTurnVo?.call();
+    if (spoken is Future) {
+      await spoken;
+    } else {
+      await Future.delayed(const Duration(milliseconds: 2000));
+    }
+    if (!isMounted) return;
 
     // Record stimulus when sequence demonstration starts
     analyticsShowStimulus();
