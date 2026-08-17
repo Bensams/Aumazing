@@ -27,9 +27,12 @@ abstract final class GameSessionRecording {
   /// Returns true when the session is safely persisted. A false return means
   /// the flow may continue, but nothing was stored — callers in an
   /// assessment must not present the run as successfully completed.
+  ///
+  /// [childId] is the loaded child's id, or null when no profile is loaded.
+  /// A null id is refused rather than substituted: see below.
   static Future<bool> record(
     BuildContext context, {
-    required String childId,
+    required String? childId,
     required String gameId,
     required String assessmentContext,
     required int score,
@@ -42,6 +45,21 @@ abstract final class GameSessionRecording {
     bool hapticFeedbackEnabled = true,
     bool applySessionSensoryDefaults = true,
   }) async {
+    // Without a loaded profile there is no child this play belongs to. The
+    // screens used to fall back to the literal id 'unknown', which wrote a
+    // row that matched no child: invisible to the dashboard, unscorable by
+    // finalization, and missed by every child-scoped delete. The play was
+    // lost while the game celebrated as if it had been saved. Refuse the
+    // write and say so instead — retrying cannot conjure a profile, so this
+    // is told once rather than offered as a retry.
+    if (childId == null || childId.isEmpty) {
+      debugPrint(
+        '[GameSessionRecording] $gameId not saved: no child profile loaded',
+      );
+      await _warnNotSaved(context);
+      return false;
+    }
+
     final provider = context.read<AssessmentProvider>();
     // Read before the first await: a retry dialog can rebuild the tree, and
     // the game screen may be gone by the time the write succeeds.
@@ -75,6 +93,28 @@ abstract final class GameSessionRecording {
         if (!context.mounted) return false;
       }
     }
+  }
+
+  /// Tells the parent the game was not kept, with no retry to offer.
+  static Future<void> _warnNotSaved(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Could not save this game'),
+            content: const Text(
+              'No child profile was open, so the results of this game were '
+              'not saved. Choose a child profile before playing.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
   }
 
   static Future<bool> _askToRetry(BuildContext context) async {
