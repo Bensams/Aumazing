@@ -111,9 +111,16 @@ class ProgressProvider extends ChangeNotifier {
 
   /// Adds a completed session to the recent list.
   ///
+  /// Called as each game finishes so the dashboard is already current when
+  /// the parent returns from child mode, rather than waiting for the next
+  /// [loadProgress]. The session is added from memory — it is stored in the
+  /// local database first, and no read here ever touches the network.
+  ///
   /// Ignored when the session belongs to a child other than the one this
   /// provider is loaded for — a completion callback that lands after a
   /// switch must not put the previous child's session on the new dashboard.
+  /// Also ignored when the id is already listed, so a [loadProgress] racing
+  /// this hand-off cannot show one play twice.
   void addSession(GameplaySession session) {
     if (_loadedChildId != null && session.childId != _loadedChildId) {
       debugPrint(
@@ -122,6 +129,7 @@ class ProgressProvider extends ChangeNotifier {
       );
       return;
     }
+    if (_recentSessions.any((s) => s.id == session.id)) return;
     _recentSessions.insert(0, session);
     notifyListeners();
   }
