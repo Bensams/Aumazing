@@ -21,6 +21,10 @@ dev_dependencies:
 flutter:
   assets:
     - assets/characters/
+    # Costume artwork for the Star Shop, resized and palettised from the
+    # full-resolution sources by scripts/bundle_costume_art.py. The sources in
+    # packages/assets/ are NOT bundled — that folder has no pubspec.
+    - assets/costumes/
     - assets/game_logos/
     # Routine picture cards for Ano'ng Susunod?. Transparent PNGs, trimmed and
     # re-padded to a square so every card composes identically.
