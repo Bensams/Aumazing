@@ -952,6 +952,35 @@ const _kPoolSize = 3;
 /// fire that overwhelms the audio system.
 const _kDebounceInterval = Duration(milliseconds: 300);
 
+/// Longest a caller waiting on a clip will wait for the platform to say it
+/// finished.
+///
+/// Completion is an event, and an event can be missed — a player released
+/// under memory pressure, an app resumed from the background. Anything gating
+/// game flow on a clip ending has to come back even then: the cost of waiting
+/// too long is a child sitting in front of a game that has stopped, which is
+/// worse than a line being talked over. Comfortably longer than the longest
+/// recording in the library (~2 s) even at the slowest prompt speed.
+const _kClipCompletionBackstop = Duration(seconds: 6);
+
+/// How long an interrupted clip takes to fade out before it is stopped.
+///
+/// Cutting a waveform mid-cycle steps the signal straight to zero, and that
+/// discontinuity is the click a child hears whenever one line takes the floor
+/// from another. Ramping the amplitude down first removes the edge.
+///
+/// 150 ms is short enough that the incoming line is not audibly late — it
+/// starts immediately on its own player, so the two briefly cross-fade — and
+/// long enough to be inaudible as a fade rather than a clip.
+const _kFadeOutDuration = Duration(milliseconds: 150);
+
+/// Volume steps in a fade-out.
+///
+/// 15 steps puts one every 10 ms, which is below the ~20 ms the ear resolves
+/// as separate events, so the ramp is heard as smooth rather than as a
+/// staircase. More steps buy nothing and cost a platform call each.
+const _kFadeOutSteps = 15;
+
 /// Service for playing voice-over audio cues.
 ///
 /// Uses a pool of [AudioPlayer] instances to avoid the Android MediaPlayer
@@ -1104,6 +1133,36 @@ class VoiceOverService {
   /// Flag to cancel an in-progress [playSequence] call.
   bool _sequenceCancelled = false;
 
+  /// Completes when the phrase [playSequence] is speaking has finished, or
+  /// null when no phrase is in flight.
+  ///
+  /// A phrase is spread across the pool — one word per player — so "is any
+  /// player playing?" goes false in the gap between two words and true again a
+  /// moment later. Anything waiting for the current line to finish has to wait
+  /// for the *phrase*: waiting per clip returned between "purple" and "circle"
+  /// and let the next line start on top of the second word.
+  Completer<void>? _phrase;
+
+  /// Publishes a phrase as in flight and returns what ends it.
+  ///
+  /// Visible for testing because holding a phrase open is otherwise only
+  /// possible with a platform that actually plays audio, which a unit test does
+  /// not have. [playSequence] goes through here too, so a test that holds one
+  /// open is holding the same thing a real phrase does.
+  @visibleForTesting
+  Completer<void> beginPhrase() => _phrase = Completer<void>();
+
+  /// Release whatever is waiting on the phrase in flight.
+  ///
+  /// Called wherever a sequence is cancelled. Its remaining words will never be
+  /// spoken, and a waiter left on the completer would otherwise sit out the
+  /// full backstop timeout waiting for a phrase that has already stopped.
+  void _abandonPhrase() {
+    final phrase = _phrase;
+    _phrase = null;
+    if (phrase != null && !phrase.isCompleted) phrase.complete();
+  }
+
   VoiceOverService({
     String languageCode = 'en',
     bool enabled = true,
@@ -1209,6 +1268,87 @@ class VoiceOverService {
 
   // ── Playback ────────────────────────────────────────────────────────
 
+  /// Fade generation per player, bumped every time a fade is started or a
+  /// player is claimed for a new clip.
+  ///
+  /// A fade is a loop of awaits, so the player under it can be stopped,
+  /// reclaimed and speaking a different line before the loop's next step. The
+  /// generation is what that loop checks to notice it is no longer the current
+  /// owner and stop touching the player — without it, a fade would ramp the
+  /// *next* line down to silence and stop it mid-word.
+  final Map<AudioPlayer, int> _fadeGeneration = {};
+
+  /// The volume a clip should play at right now.
+  double get _effectiveVolume => _enabled ? _volume : 0.0;
+
+  /// Invalidate any fade in flight on [player] and hand it back at full volume.
+  ///
+  /// Called wherever a player is claimed, so a clip never inherits a volume
+  /// part-way down someone else's ramp.
+  Future<void> _claimPlayer(AudioPlayer player) async {
+    _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
+    await player.setVolume(_effectiveVolume);
+  }
+
+  /// The volume levels of a fade starting from [from], in order.
+  ///
+  /// Linear in amplitude, which over 150 ms is indistinguishable from any
+  /// fancier curve and is one multiplication. The ramp stops one step short of
+  /// zero because the stop that follows it is what reaches silence.
+  @visibleForTesting
+  static List<double> fadeRamp(double from) => [
+        for (var remaining = _kFadeOutSteps - 1; remaining > 0; remaining--)
+          from * remaining / _kFadeOutSteps,
+      ];
+
+  /// Ramp [player] down over [_kFadeOutDuration], then stop it.
+  ///
+  /// Deliberately not awaited by callers: the incoming line starts on another
+  /// player straight away, and the outgoing one gets these 150 ms to itself in
+  /// the background. Awaiting it would make every interruption late by exactly
+  /// the fade.
+  ///
+  /// A player that is not actually speaking is stopped outright — there is no
+  /// waveform to click, and a player still preparing must be stopped *now* or
+  /// it surfaces later underneath the new line.
+  Future<void> _fadeOutAndStop(AudioPlayer player) async {
+    if (player.state != PlayerState.playing) {
+      await player.stop();
+      return;
+    }
+
+    _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
+    final generation = _fadeGeneration[player];
+    final step = _kFadeOutDuration ~/ _kFadeOutSteps;
+    final from = _effectiveVolume;
+
+    try {
+      for (final level in fadeRamp(from)) {
+        await Future<void>.delayed(step);
+        // Reclaimed mid-ramp: this player belongs to another line now, and
+        // touching its volume or stopping it would cut that line off.
+        if (_fadeGeneration[player] != generation) return;
+        await player.setVolume(level);
+      }
+      if (_fadeGeneration[player] != generation) return;
+      await player.stop();
+    } catch (e) {
+      // A player that cannot be faded must still be silenced.
+      debugPrint('[VoiceOverService] ⚠ Fade-out failed, stopping outright: $e');
+      try {
+        await player.stop();
+      } catch (_) {}
+    } finally {
+      // Leave it ready for reuse rather than silent. Skipped when another line
+      // has claimed it, because that line has already set its own volume.
+      if (_fadeGeneration[player] == generation) {
+        try {
+          await player.setVolume(_effectiveVolume);
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Find an available player from the pool.
   ///
   /// Prefers a player that is stopped or completed. If all players are
@@ -1270,10 +1410,12 @@ class VoiceOverService {
     final ticket = _takeFloor();
 
     try {
-      // Stop all currently playing players (fire-and-forget).
+      // Fade out whatever is speaking (fire-and-forget). The outgoing line
+      // ramps down over the next 150 ms while this one starts on its own
+      // player, so the handover is a brief cross-fade instead of a click.
       for (final player in _players) {
         if (player.state == PlayerState.playing) {
-          player.stop(); // intentionally not awaited
+          _fadeOutAndStop(player); // intentionally not awaited
         }
       }
 
@@ -1281,7 +1423,7 @@ class VoiceOverService {
       final player = _getAvailablePlayer();
 
       player.setReleaseMode(ReleaseMode.stop);
-      await player.setVolume(_volume);
+      await _claimPlayer(player);
       await _applySpeed(player);
       // Someone else claimed the floor while the platform was busy; drop this
       // cue rather than adding a second voice.
@@ -1388,7 +1530,13 @@ class VoiceOverService {
       await subscription.cancel();
       rethrow;
     }
-    await completer.future;
+    // Backstopped: a caller awaiting this is usually gating what happens next.
+    await completer.future.timeout(
+      _kClipCompletionBackstop,
+      onTimeout: () => debugPrint(
+          '[VoiceOverService] ⏱ No completion reported for $assetPath'),
+    );
+    await subscription.cancel();
   }
 
   /// Loads [cue] onto [player] and leaves it prepared, ready for `resume()`.
@@ -1400,7 +1548,7 @@ class VoiceOverService {
     for (var i = 0; i < candidates.length; i++) {
       try {
         player.setReleaseMode(ReleaseMode.stop);
-        await player.setVolume(_volume);
+        await _claimPlayer(player);
         await _applySpeed(player);
         await player.setSource(AssetSource(candidates[i]));
         return true;
@@ -1425,7 +1573,13 @@ class VoiceOverService {
     });
     try {
       await player.resume();
-      await completer.future;
+      // Backstopped: a word whose completion is never reported would otherwise
+      // hold the whole phrase — and everything waiting on it — open forever.
+      await completer.future.timeout(
+        _kClipCompletionBackstop,
+        onTimeout: () =>
+            debugPrint('[VoiceOverService] ⏱ No completion reported for word'),
+      );
     } finally {
       await subscription.cancel();
     }
@@ -1460,42 +1614,51 @@ class VoiceOverService {
     _sequenceCancelled = false;
     if (cues.isEmpty) return;
 
-    // One player per word, cycling through the pool.
-    AudioPlayer playerFor(int i) => _players[i % _players.length];
-    final ready = List<bool>.filled(cues.length, false);
+    // Published before the first word so anything fired in the same breath as
+    // this phrase waits for all of it, not for whichever word it caught.
+    final phrase = beginPhrase();
+    try {
+      // One player per word, cycling through the pool.
+      AudioPlayer playerFor(int i) => _players[i % _players.length];
+      final ready = List<bool>.filled(cues.length, false);
 
-    final preload = min(cues.length, _players.length);
-    await Future.wait([
-      for (var i = 0; i < preload; i++)
-        _prepare(playerFor(i), cues[i]).then((ok) => ready[i] = ok),
-    ]);
+      final preload = min(cues.length, _players.length);
+      await Future.wait([
+        for (var i = 0; i < preload; i++)
+          _prepare(playerFor(i), cues[i]).then((ok) => ready[i] = ok),
+      ]);
 
-    for (var i = 0; i < cues.length; i++) {
-      if (_sequenceCancelled || !_holdsFloor(ticket)) break;
-      final player = playerFor(i);
+      for (var i = 0; i < cues.length; i++) {
+        if (_sequenceCancelled || !_holdsFloor(ticket)) break;
+        final player = playerFor(i);
 
-      if (ready[i]) {
-        _activePlayerIndex = i % _players.length;
-        try {
-          await _playPrepared(player);
-        } catch (e) {
-          debugPrint(
-              '[VoiceOverService] ✖ Error playing "${cues[i].name}": $e');
+        if (ready[i]) {
+          _activePlayerIndex = i % _players.length;
+          try {
+            await _playPrepared(player);
+          } catch (e) {
+            debugPrint(
+                '[VoiceOverService] ✖ Error playing "${cues[i].name}": $e');
+          }
+        }
+
+        if (_sequenceCancelled) break;
+
+        // This player is free again; load the word that will reuse it. Only
+        // reached for sequences longer than the pool.
+        final next = i + _players.length;
+        if (next < cues.length) {
+          ready[next] = await _prepare(playerFor(next), cues[next]);
+        }
+
+        if (i != cues.length - 1) {
+          await Future.delayed(gap);
         }
       }
-
-      if (_sequenceCancelled) break;
-
-      // This player is free again; load the word that will reuse it. Only
-      // reached for sequences longer than the pool.
-      final next = i + _players.length;
-      if (next < cues.length) {
-        ready[next] = await _prepare(playerFor(next), cues[next]);
-      }
-
-      if (i != cues.length - 1) {
-        await Future.delayed(gap);
-      }
+    } finally {
+      // A newer phrase may have replaced this one; only clear our own.
+      if (identical(_phrase, phrase)) _phrase = null;
+      if (!phrase.isCompleted) phrase.complete();
     }
   }
 
@@ -1603,6 +1766,19 @@ class VoiceOverService {
   Future<void> _awaitCurrentSpeech({
     Duration timeout = const Duration(seconds: 4),
   }) async {
+    // A phrase in flight comes first. Its words are on different players, so
+    // the per-player wait below would return in the silence between two of
+    // them — which is precisely where a second voice used to come in. The
+    // backstop scales with the pool because a phrase is that many words long.
+    final phrase = _phrase;
+    if (phrase != null) {
+      try {
+        await phrase.future.timeout(timeout * _kPoolSize);
+      } on TimeoutException {
+        debugPrint('[VoiceOverService] ⏱ Gave up waiting for current phrase');
+      }
+      return;
+    }
     for (final player in _players) {
       if (player.state == PlayerState.playing) {
         try {
@@ -1627,6 +1803,7 @@ class VoiceOverService {
   /// mean stopping the current clip does not stop the phrase it belongs to.
   int _takeFloor() {
     _sequenceCancelled = true;
+    _abandonPhrase();
     _myTicket = ++_floorTicket;
 
     // Tag this claim's layer. Anything that is not immediate feedback ends the
@@ -1643,11 +1820,13 @@ class VoiceOverService {
     for (final other in _live) {
       if (identical(other, this)) continue;
       other._sequenceCancelled = true;
+      other._abandonPhrase();
       other.yieldedCount++;
       for (final player in other._players) {
         // Unconditionally, not only when `playing`: a player still preparing
-        // is precisely the one that would otherwise surface later.
-        player.stop(); // intentionally not awaited
+        // is precisely the one that would otherwise surface later. A player
+        // that is not speaking takes the immediate stop inside here.
+        other._fadeOutAndStop(player); // intentionally not awaited
       }
     }
     return _myTicket;
@@ -1658,9 +1837,16 @@ class VoiceOverService {
 
   /// Stop the currently playing voice-over cue, if any.
   /// Also cancels any in-progress [playSequence] call.
+  ///
+  /// Immediate, not faded: callers use this to clear the way before something
+  /// else speaks, or when the service is going away, and neither can afford to
+  /// wait out a ramp. Any fade in flight is invalidated so it cannot come back
+  /// and touch a player that has since been reused.
   Future<void> stop() async {
     _sequenceCancelled = true;
+    _abandonPhrase();
     for (final player in _players) {
+      _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
       await player.stop();
     }
   }
@@ -1671,9 +1857,14 @@ class VoiceOverService {
   Future<void> dispose() async {
     _live.remove(this);
     _sequenceCancelled = true;
+    _abandonPhrase();
     for (final player in _players) {
+      // Invalidate first: a fade still looping would otherwise reach for a
+      // player that no longer exists.
+      _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
       await player.dispose();
     }
+    _fadeGeneration.clear();
     _players.clear();
   }
 
