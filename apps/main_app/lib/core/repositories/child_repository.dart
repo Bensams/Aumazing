@@ -56,6 +56,7 @@ class ChildRepository {
     bool sensoryPreferencesSet = false,
     RewardPreference rewardPreference = RewardPreference.bubbles,
     bool useRandomReward = false,
+    String characterId = 'bps',
   }) async {
     final now = DateTime.now();
     final userId = _effectiveUserId;
@@ -76,6 +77,7 @@ class ChildRepository {
       sensoryPreferencesSet: sensoryPreferencesSet,
       rewardPreference: rewardPreference,
       useRandomReward: useRandomReward,
+      characterId: characterId,
       createdAt: now,
       updatedAt: now,
     );

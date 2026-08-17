@@ -480,6 +480,7 @@ class _FakeChildRepository extends ChildRepository {
     bool sensoryPreferencesSet = false,
     RewardPreference rewardPreference = RewardPreference.bubbles,
     bool useRandomReward = false,
+    String characterId = 'bps',
   }) async {
     final now = DateTime.now().add(Duration(seconds: _sequence++));
     final created = ChildProfile(

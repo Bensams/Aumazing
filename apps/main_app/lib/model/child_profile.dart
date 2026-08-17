@@ -1,6 +1,7 @@
 import 'package:shared_audio/shared_audio.dart';
 
 import '../core/child_profile_policy.dart';
+import '../features/stars/star_catalogue.dart';
 
 /// Reward preference options for celebration effects.
 /// Values: balloons, fireworks, bubbles, candy, random
@@ -102,8 +103,31 @@ class ChildProfile {
   final bool sensoryPreferencesSet;
   final RewardPreference rewardPreference;
   final bool useRandomReward;
+
+  /// Which character guides this child, as a [ChildCharacter.id].
+  ///
+  /// Chosen deliberately by the parent during setup and changeable afterwards.
+  /// **Never derived from [sex]** — that field is assessment data, and inferring
+  /// a companion from it is the exact bias this feature removes (STAR-A3).
+  final String characterId;
+
+  /// The costume currently worn, as a [Costume.id]. `'none'` is the
+  /// character's own clothes and is always available.
+  final String equippedCostume;
+
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// The chosen character, resolved. Unknown ids fall back rather than throw:
+  /// a profile written by a build that shipped a character this build does not
+  /// have must still open.
+  ChildCharacter get character => ChildCharacter.fromId(characterId);
+
+  /// The costume currently worn, resolved. Same fallback reasoning.
+  Costume get costume => Costume.fromId(equippedCostume);
+
+  /// Artwork of this child's character wearing their costume.
+  String get characterArtAsset => costume.assetFor(character);
 
   const ChildProfile({
     required this.id,
@@ -123,6 +147,8 @@ class ChildProfile {
     this.sensoryPreferencesSet = false,
     this.rewardPreference = RewardPreference.bubbles,
     this.useRandomReward = false,
+    this.characterId = 'bps',
+    this.equippedCostume = 'none',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -178,6 +204,8 @@ class ChildProfile {
     bool? sensoryPreferencesSet,
     RewardPreference? rewardPreference,
     bool? useRandomReward,
+    String? characterId,
+    String? equippedCostume,
   }) {
     return ChildProfile(
       id: id,
@@ -202,6 +230,8 @@ class ChildProfile {
       sensoryPreferencesSet: sensoryPreferencesSet ?? this.sensoryPreferencesSet,
       rewardPreference: rewardPreference ?? this.rewardPreference,
       useRandomReward: useRandomReward ?? this.useRandomReward,
+      characterId: characterId ?? this.characterId,
+      equippedCostume: equippedCostume ?? this.equippedCostume,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
@@ -224,6 +254,8 @@ class ChildProfile {
     'sensory_preferences_set': sensoryPreferencesSet ? 1 : 0,
     'reward_preference': rewardPreference.value,
     'use_random_reward': useRandomReward ? 1 : 0,
+    'character_id': characterId,
+    'equipped_costume': equippedCostume,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -265,6 +297,8 @@ class ChildProfile {
       sensoryPreferencesSet: (map['sensory_preferences_set'] ?? 0) == 1,
       rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
       useRandomReward: (map['use_random_reward'] ?? 0) == 1,
+      characterId: (map['character_id'] as String?) ?? 'bps',
+      equippedCostume: (map['equipped_costume'] as String?) ?? 'none',
       createdAt: DateTime.parse(
         (map['created_at'] ?? map['local_created_at']) as String,
       ),
@@ -297,6 +331,8 @@ class ChildProfile {
     sensoryPreferencesSet: map['sensory_preferences_set'] as bool? ?? false,
     rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
     useRandomReward: map['use_random_reward'] as bool? ?? false,
+    characterId: (map['character_id'] as String?) ?? 'bps',
+    equippedCostume: (map['equipped_costume'] as String?) ?? 'none',
     createdAt: DateTime.parse(map['created_at'] as String),
     updatedAt: DateTime.parse(map['updated_at'] as String),
   );
@@ -318,6 +354,8 @@ class ChildProfile {
     'sensory_preferences_set': sensoryPreferencesSet,
     'reward_preference': rewardPreference.value,
     'use_random_reward': useRandomReward,
+    'character_id': characterId,
+    'equipped_costume': equippedCostume,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
