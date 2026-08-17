@@ -150,7 +150,7 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
     // never celebrated over a session that was silently lost.
     await GameSessionRecording.record(
       context,
-      childId: child.profile?.id ?? 'unknown',
+      childId: child.profile?.id,
       gameId: 'tulong_kaibigan',
       assessmentContext: widget.assessmentContext,
       score: score,
