@@ -126,7 +126,10 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
       // Game-specific voice-overs
-      onPlayMyTurnVo: () => _voiceOverService.play(VoiceOverCue.watchMeFirst),
+      // Awaited by the game: the demo starts when this line ends, whatever
+      // pack, language or prompt speed decides how long that is.
+      onPlayMyTurnVo: () => _voiceOverService.play(VoiceOverCue.watchMeFirst,
+          awaitCompletion: true),
       onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.nowYouTry),
       // Sequence highlight shimmer SFX
       onPlaySequenceHighlightSfx: (position) => audioService.playSequenceShimmerSfx(position),
