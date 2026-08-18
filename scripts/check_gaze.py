@@ -51,14 +51,62 @@ def gaze(pose: np.ndarray) -> tuple[float, float]:
     sclera = alpha & (mx > 185) & ((mx - mn) < 28)
     iris = alpha & (mn < 150) & (mx < 190)
 
-    # Two largest whites in the top 60% of the cell: the two eyes.
+    # The two eyes, found as a PAIR rather than as the two largest whites.
+    #
+    # Taking the two largest was wrong the moment a character wore white.
+    # Lexianne's dress bodice is one unsaturated blob of 4320px inside the
+    # top 60% of her cell; her actual eye whites are 237px and 230px. So the
+    # old rule picked her dress and one eye, and then measured the "gaze"
+    # between a collar and an eyeball — which is what made her the only
+    # character to fail this check, on artwork that is fine. BPS and Reiz
+    # only ever passed because neither wears anything white above the waist.
+    #
+    # Eyes are not merely big: they come in twos, side by side, at the same
+    # height, at roughly the same size. A garment has no partner. Scoring
+    # pairs on exactly that is what tells them apart, and it does not care
+    # where on the face a given character wears their eyes.
     upper = np.zeros_like(sclera)
     upper[:int(pose.shape[0] * 0.6)] = True
     lbl, n = ndimage.label(sclera & upper)
     if n < 2:
         raise SystemExit("could not find two eye whites")
     sizes = ndimage.sum(sclera & upper, lbl, range(1, n + 1))
-    eyes = [int(i) + 1 for i in np.argsort(sizes)[-2:]]
+
+    # Only the biggest handful can plausibly be an eye; this keeps the pair
+    # search small and drops the hundreds of stray highlight specks.
+    candidates = [int(i) + 1 for i in np.argsort(sizes)[-8:]]
+    boxes = {}
+    for label in candidates:
+        ys, xs = np.where(lbl == label)
+        boxes[label] = (xs.min(), xs.max(), ys.min(), ys.max(), sizes[label - 1])
+
+    best, best_score = None, -1.0
+    for i, a in enumerate(candidates):
+        for b in candidates[i + 1:]:
+            ax0, ax1, ay0, ay1, asz = boxes[a]
+            bx0, bx1, by0, by1, bsz = boxes[b]
+
+            # Side by side: their horizontal spans must not overlap.
+            if not (ax1 < bx0 or bx1 < ax0):
+                continue
+            # At the same height: vertical spans must overlap most of the way.
+            overlap = min(ay1, by1) - max(ay0, by0)
+            height = max(min(ay1 - ay0, by1 - by0), 1)
+            if overlap < height * 0.5:
+                continue
+            # Roughly the same size. A dress next to an eye fails here even
+            # when it somehow clears the two geometric tests.
+            ratio = min(asz, bsz) / max(asz, bsz)
+            if ratio < 0.4:
+                continue
+            # Among the survivors, prefer the largest, most symmetric pair.
+            score = (asz + bsz) * ratio
+            if score > best_score:
+                best, best_score = (a, b), score
+
+    if best is None:
+        raise SystemExit("could not find a pair of eye whites")
+    eyes = list(best)
 
     offsets = []
     for label in eyes:
