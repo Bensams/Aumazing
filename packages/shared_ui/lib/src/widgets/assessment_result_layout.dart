@@ -40,6 +40,7 @@ class AssessmentResultLayout extends StatefulWidget {
     this.onBack,
     this.backLabel = AssessmentLabels.backToDashboard,
     this.showCelebration = true,
+    this.onApplyRecommendations,
     this.celebrationDuration = const Duration(milliseconds: 3000),
     this.background,
   });
@@ -64,6 +65,11 @@ class AssessmentResultLayout extends StatefulWidget {
   /// Whether to show the celebration overlay on mount. Ignored in review
   /// mode — reopening the summary never replays the celebration.
   final bool showCelebration;
+
+  /// Writes the run's Recommended Settings to the child's settings. Null
+  /// leaves the card read-only, which is what a host with no child to write
+  /// to — the game lab, a preview — should pass.
+  final Future<bool> Function()? onApplyRecommendations;
 
   final Duration celebrationDuration;
 
@@ -200,6 +206,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
         AssessmentRecommendationsCard(
           recommendations: model.recommendations,
           dense: _dense,
+          onApply: widget.onApplyRecommendations,
         ),
       if (model.hasLearningPath || model.learningPathUnavailable)
         AssessmentLearningPathCard(
