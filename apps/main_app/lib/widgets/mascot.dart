@@ -24,28 +24,25 @@ enum MascotCharacter {
 
   /// This character wearing [costumeId] (a [Costume.id]).
   ///
-  /// Degrades in two steps, because sprite sheets and the shop ship on
-  /// different schedules and a child must never be left with no character
-  /// at all:
+  /// Degrades one step, and only one: a costume with no sheets yet falls back
+  /// to this character's own clothes. That fallback is permanent — the shop
+  /// and the sheets ship on different schedules and six costumes still have
+  /// no animation — and it is handled inside [CharacterSprites.costumed].
   ///
-  ///  1. costume sheets missing -> this character's own clothes;
-  ///  2. this CHARACTER's sheets missing -> [MascotCharacter.bps].
+  /// There used to be a second step, substituting BPS when the *character*
+  /// had no sheets. That existed for exactly one reason: Lexianne was offered
+  /// in the picker before her 21 sheets were cut (AUM-280), and without it a
+  /// child whose parent picked her got a blank space. Her sheets have landed,
+  /// so every [MascotCharacter] now has a full set and the branch is dead.
   ///
-  /// Step 2 is not hypothetical. Lexianne is offered in the picker but her
-  /// 21 default sheets are still being generated (AUM-280); without this she
-  /// would throw on load and every child whose parent picked her would get a
-  /// blank space where the mascot should be. Remove this fallback only once
-  /// every MascotCharacter has a full sheet set.
-  Future<CharacterSprites> loadCostumed(String? costumeId) async {
-    try {
-      return await CharacterSprites.costumed(name, costumeId ?? 'none');
-    } catch (_) {
-      if (this == MascotCharacter.bps) rethrow;
-      debugPrint('[Mascot] no sheets for $name; falling back to bps');
-      return CharacterSprites.costumed(
-          MascotCharacter.bps.name, costumeId ?? 'none');
-    }
-  }
+  /// It is deleted rather than left harmless, because it was never harmless:
+  /// while it was live, picking Lexianne silently played the whole app as BPS,
+  /// which is a wrong character rather than a missing one — the failure a
+  /// parent cannot see and cannot report. If a sheet ever goes missing again,
+  /// this now throws, `character_sprites_test.dart` loads all three characters
+  /// and would catch it before a child ever did.
+  Future<CharacterSprites> loadCostumed(String? costumeId) =>
+      CharacterSprites.costumed(name, costumeId ?? 'none');
 }
 
 /// The pose the mascot *rests* on between gestures. Each maps to a
