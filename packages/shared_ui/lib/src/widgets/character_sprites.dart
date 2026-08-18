@@ -159,26 +159,6 @@ class CharacterSprites {
   /// Lexianne.
   static Future<CharacterSprites> lexianne() => _load('lexianne');
 
-  /// [character] wearing [costume], falling back to the character's own
-  /// clothes when that costume has no sheets yet.
-  ///
-  /// The fallback is the whole point. Costume sheets are generated one costume
-  /// at a time and each is 21 clips, so at any moment most costumes a child
-  /// can BUY have no animation — the shop sells 9 and only some are animated.
-  /// A child who equips an un-animated costume must still get a moving
-  /// character rather than a broken frame; they simply see their base outfit
-  /// in-game and the costume everywhere else, until its sheets land.
-  static Future<CharacterSprites> costumed(
-    String character,
-    String costume,
-  ) async {
-    if (costume.isEmpty || costume == 'none') return _load(character);
-    try {
-      return await _load('${character}_$costume');
-    } catch (_) {
-      return _load(character);
-    }
-  }
 
   /// Loads every sheet in [layout] for [name]. Sheets are generated offline by
   /// `scripts/generate_sprites.py`; see that script for the grid contract.
