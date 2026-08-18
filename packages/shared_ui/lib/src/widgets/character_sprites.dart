@@ -156,8 +156,8 @@ class CharacterSprites {
   /// Reiz.
   static Future<CharacterSprites> reiz() => _load('reiz');
 
-  // Upcoming characters register here once their sheets land:
-  // static Future<CharacterSprites> lexianne() => _load('lexianne');
+  /// Lexianne.
+  static Future<CharacterSprites> lexianne() => _load('lexianne');
 
   /// Loads every sheet in [layout] for [name]. Sheets are generated offline by
   /// `scripts/generate_sprites.py`; see that script for the grid contract.
