@@ -11,6 +11,7 @@ import '../../../providers/child_provider.dart';
 import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
+import '../../settings/widgets/background_picker.dart';
 import 'widgets/sound_preferences_step.dart';
 import '../../stars/star_catalogue.dart';
 import '../../stars/widgets/character_picker.dart';
@@ -63,6 +64,11 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
   /// Language, voice, music and prompt choices made on step 1.
   SoundPreferences _sound = SoundPreferences.initial();
+
+  /// Game-screen background chosen here, or null to keep the preset theme.
+  /// Held until the child row exists — see
+  /// [ChildProvider.applyInitialBackground].
+  ChildBackground? _background;
 
   // Reward preference state
   RewardPreference _selectedRewardPreference = RewardPreference.bubbles;
@@ -179,6 +185,16 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         voicePackId: _sound.voicePackId,
       );
       await childProvider.setShowTextPrompts(_sound.showTextPrompts);
+
+      // The background is keyed by child id in local prefs, so — like
+      // language and voice — it can only be written once the row exists.
+      final background = _background;
+      if (background != null) {
+        await childProvider.applyInitialBackground(
+          childId: profile.id,
+          background: background,
+        );
+      }
 
       // Save the daily screen-time limit chosen during setup (can be
       // changed later in Settings → Screen Time).
@@ -465,6 +481,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               _buildAvatarPicker(),
           const SizedBox(height: AppSpacing.lg),
           _buildCharacterPicker(),
+              const SizedBox(height: AppSpacing.lg),
+              _buildBackgroundSelector(),
               const SizedBox(height: AppSpacing.xl),
               AppPrimaryButton(
                 label: 'Continue',
@@ -532,6 +550,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           _buildAvatarPicker(),
           const SizedBox(height: AppSpacing.lg),
           _buildCharacterPicker(),
+          const SizedBox(height: AppSpacing.lg),
+          _buildBackgroundSelector(),
           const SizedBox(height: AppSpacing.xl),
           AppPrimaryButton(
             label: 'Continue',
@@ -1008,6 +1028,47 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           onSelected: (c) => setState(() => _selectedCharacter = c),
         ),
       ],
+    );
+  }
+
+  /// Game-screen background, offered here rather than only in Settings.
+  ///
+  /// Collapsed by default and explicitly optional: every child gets a
+  /// readable preset from their theme, and setup should not stall on a
+  /// colour decision. It is here at all because the parents who need it —
+  /// a child who loses the yellow shapes against a pale screen — need it
+  /// from the first game, not after discovering Settings.
+  Widget _buildBackgroundSelector() {
+    return Theme(
+      // The divider lines an ExpansionTile draws read as a form boundary
+      // in a column that has none.
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(top: AppSpacing.sm),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        title: const SectionTitle(title: 'Game screen background'),
+        subtitle: Text(
+          _background == null
+              ? 'Optional — a colour is already chosen for you'
+              : 'Your own colour is set',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        children: [
+          Text(
+            'Sets the colour behind the shapes, pictures and items in every '
+            'game. You can change it later in Settings.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          BackgroundPicker.draft(
+            value: _background,
+            onChanged: (background) => setState(() => _background = background),
+          ),
+        ],
+      ),
     );
   }
 

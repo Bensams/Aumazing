@@ -1011,6 +1011,31 @@ class ChildProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Stores the game background a parent chose during initial profile setup,
+  /// keyed against the child row that has just been created.
+  ///
+  /// Same reason as [applyInitialPreferences]: [setCustomBackground] persists
+  /// against `_profile`, which is still null while setup is running, so a
+  /// background chosen there would be held in memory and never written.
+  ///
+  /// The live in-memory background only changes when [childId] is the active
+  /// child, so adding a sibling cannot repaint the screens of the child
+  /// currently playing.
+  Future<void> applyInitialBackground({
+    required String childId,
+    required ChildBackground background,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '$_customBackgroundKeyPrefix$childId',
+      background.encode(),
+    );
+    if (_profile == null || _profile!.id == childId) {
+      _customBackground = background;
+    }
+    notifyListeners();
+  }
+
   /// Loads the persisted language for the current child (defaults to English).
   Future<void> _loadLanguage() async {
     final id = _profile?.id;

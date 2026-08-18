@@ -7,6 +7,7 @@ import '../model/area_level.dart';
 import '../model/assessment_result.dart';
 import '../model/support_profile.dart';
 import 'learning_path_service.dart';
+import 'recommended_settings_applier.dart';
 
 /// Builds the one canonical [AssessmentResultViewModel] that both the
 /// immediate completion screen and the parent's later Assessment Summary
@@ -220,6 +221,10 @@ abstract final class AssessmentResultMapper {
   // ── Recommended settings ─────────────────────────────────────────────
 
   /// The finalized recommended settings, in a fixed order with fixed labels.
+  ///
+  /// `appliesToSetting` comes from [RecommendedSettingsApplier] rather than
+  /// being restated here, so a row can never offer to be applied by a button
+  /// that would not write it.
   static List<ResultRecommendation> buildRecommendations(
     SupportProfile profile,
   ) {
@@ -228,33 +233,50 @@ abstract final class AssessmentResultMapper {
         icon: Icons.speed_rounded,
         label: AssessmentLabels.difficulty,
         value: _titleCase(profile.recommendedDifficulty),
+        appliesToSetting:
+            RecommendedSettingsApplier.isAppliable(AssessmentLabels.difficulty),
       ),
       ResultRecommendation(
         icon: Icons.record_voice_over_rounded,
         label: AssessmentLabels.promptStyle,
         value: _titleCase(profile.recommendedPromptStyle),
+        appliesToSetting: RecommendedSettingsApplier.isAppliable(
+          AssessmentLabels.promptStyle,
+        ),
       ),
       ResultRecommendation(
         icon: Icons.timer_rounded,
         label: AssessmentLabels.sessionLength,
         value: '${profile.recommendedSessionMinutes} min',
+        appliesToSetting: RecommendedSettingsApplier.isAppliable(
+          AssessmentLabels.sessionLength,
+        ),
       ),
       ResultRecommendation(
         icon: Icons.repeat_rounded,
         label: AssessmentLabels.promptRepetition,
         value: '${profile.promptRepetition}x',
+        appliesToSetting: RecommendedSettingsApplier.isAppliable(
+          AssessmentLabels.promptRepetition,
+        ),
       ),
       if (profile.lowStimulationMode)
-        const ResultRecommendation(
+        ResultRecommendation(
           icon: Icons.visibility_off_rounded,
           label: AssessmentLabels.lowStimulationMode,
           value: 'On',
+          appliesToSetting: RecommendedSettingsApplier.isAppliable(
+            AssessmentLabels.lowStimulationMode,
+          ),
         ),
       if (profile.turnTakingPractice)
-        const ResultRecommendation(
+        ResultRecommendation(
           icon: Icons.people_rounded,
           label: AssessmentLabels.turnTakingPractice,
           value: 'Extra practice',
+          appliesToSetting: RecommendedSettingsApplier.isAppliable(
+            AssessmentLabels.turnTakingPractice,
+          ),
         ),
     ];
   }

@@ -40,7 +40,7 @@ class GameObjectStyle {
   const GameObjectStyle({
     this.cardColour,
     this.outline = ObjectOutline.solid,
-    this.outlineWidth = 3,
+    this.outlineWidth = minWidth,
   });
 
   /// The globally active style. Set from the child's saved preferences when a
@@ -55,6 +55,10 @@ class GameObjectStyle {
   final ObjectOutline outline;
 
   /// Stroke width in logical pixels. Clamped to [minWidth]–[maxWidth] on use.
+  ///
+  /// Defaults to [minWidth]: a hairline is enough to separate a card from the
+  /// background, and it is the least ink added to a screen a child is meant
+  /// to read shapes off. A parent who needs the edge to shout can widen it.
   final double outlineWidth;
 
   static const double minWidth = 1;

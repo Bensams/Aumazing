@@ -17,17 +17,63 @@ import '../../../providers/child_provider.dart';
 /// colours on the chosen background, because "seven of ten shapes are clearly
 /// visible" means much less to a parent than seeing the gold star vanish.
 class BackgroundPicker extends StatefulWidget {
-  const BackgroundPicker({super.key, required this.childProv});
+  /// Settings: the choice is written to the child's saved preferences the
+  /// moment it is applied.
+  const BackgroundPicker({super.key, required ChildProvider this.childProv})
+      : value = null,
+        onChanged = null,
+        objectStyle = null;
 
-  final ChildProvider childProv;
+  /// Child setup: there is no child record to write to yet, so the applied
+  /// value is held by the caller and saved once the profile exists.
+  ///
+  /// [onChanged] is called with the chosen background, or null when the
+  /// parent removes it and the preset theme should apply again.
+  const BackgroundPicker.draft({
+    super.key,
+    required this.value,
+    required ValueChanged<ChildBackground?> this.onChanged,
+    this.objectStyle,
+  }) : childProv = null;
+
+  final ChildProvider? childProv;
+
+  /// Draft mode only: the background already applied, or null for none.
+  final ChildBackground? value;
+
+  /// Draft mode only: called when the parent applies or removes a background.
+  final ValueChanged<ChildBackground?>? onChanged;
+
+  /// Draft mode only: the object style the preview should draw with.
+  final GameObjectStyle? objectStyle;
 
   @override
   State<BackgroundPicker> createState() => _BackgroundPickerState();
 }
 
 class _BackgroundPickerState extends State<BackgroundPicker> {
-  late ChildBackground _draft = widget.childProv.customBackground ??
-      const ChildBackground.solid(Color(0xFFFAF9F6));
+  late ChildBackground _draft =
+      _applied ?? const ChildBackground.solid(Color(0xFFFAF9F6));
+
+  /// The background currently in force — from the provider in Settings, from
+  /// the caller during setup. Null means the preset theme still applies.
+  ChildBackground? get _applied =>
+      widget.childProv?.customBackground ?? widget.value;
+
+  GameObjectStyle get _objectStyle =>
+      widget.childProv?.objectStyle ??
+      widget.objectStyle ??
+      const GameObjectStyle();
+
+  void _apply() {
+    widget.childProv?.setCustomBackground(_draft);
+    widget.onChanged?.call(_draft);
+  }
+
+  void _remove() {
+    widget.childProv?.clearCustomBackground();
+    widget.onChanged?.call(null);
+  }
 
   /// Which gradient stop the wheel is editing (0 = start, 1 = end). Ignored
   /// for a solid background.
@@ -54,7 +100,7 @@ class _BackgroundPickerState extends State<BackgroundPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final applied = widget.childProv.customBackground;
+    final applied = _applied;
     final unchanged = applied == _draft;
 
     return Column(
@@ -126,7 +172,7 @@ class _BackgroundPickerState extends State<BackgroundPicker> {
 
         GamePreview(
           background: _draft,
-          objectStyle: widget.childProv.objectStyle,
+          objectStyle: _objectStyle,
         ),
         const SizedBox(height: AppSpacing.sm),
         _ContrastNote(background: _draft),
@@ -136,9 +182,7 @@ class _BackgroundPickerState extends State<BackgroundPicker> {
           children: [
             Expanded(
               child: FilledButton.icon(
-                onPressed: unchanged
-                    ? null
-                    : () => widget.childProv.setCustomBackground(_draft),
+                onPressed: unchanged ? null : _apply,
                 icon: const Icon(Icons.check_rounded, size: 18),
                 label: Text(unchanged ? 'Applied' : 'Use this background'),
                 style: FilledButton.styleFrom(
@@ -149,7 +193,7 @@ class _BackgroundPickerState extends State<BackgroundPicker> {
             if (applied != null) ...[
               const SizedBox(width: AppSpacing.sm),
               TextButton(
-                onPressed: () => widget.childProv.clearCustomBackground(),
+                onPressed: _remove,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                   minimumSize: const Size(
