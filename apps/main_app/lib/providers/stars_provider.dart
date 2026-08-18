@@ -75,9 +75,12 @@ class StarsProvider extends ChangeNotifier {
   /// paid or the daily cap is reached — so the caller can show the right
   /// message instead of an empty animation.
   ///
-  /// [playKey] must be stable for one play-through and different for the next.
-  /// It is what makes a double-tapped "finish", a rebuild, or a retried write
-  /// unable to pay twice (STAR-E2).
+  /// [playKey] identifies what is being paid for, and paying for it twice is
+  /// refused. Games build it with [starPlayKey] — child, game, calendar day —
+  /// so a game pays once per day and a replay earns nothing (AUM-284); that
+  /// also makes a double-tapped "finish", a rebuild or a retried write unable
+  /// to pay twice (STAR-E2). The assessment path keys on its run id instead,
+  /// because a run is a single thing that happens once.
   Future<int> awardForPlay({
     required String playKey,
     StarReason reason = StarReason.gamePlayed,
