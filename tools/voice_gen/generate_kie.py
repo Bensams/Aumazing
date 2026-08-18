@@ -119,6 +119,11 @@ def write_reference(out_root, backend, langs):
     them back to the actual voice id, its character, and the age profile that
     was sent, so the output is still readable months later without diffing
     voices.py against a git history.
+
+    The profile recorded here is the exact per-(tier, key) string sent to the
+    API, not the tier summary: the adult man and woman are deliberately worded
+    very differently, and a reference that flattened them to one tier blurb
+    would misreport what produced the audio.
     """
     sel = VOX.resolve(backend)
     root = os.path.join(out_root, backend)
@@ -132,7 +137,11 @@ def write_reference(out_root, backend, langs):
         entry = {'folder': '%s_%s' % (tier, key), 'tier': tier, 'key': key,
                  'voice_id': voice, 'character': label}
         if backend == 'gemini':
-            entry['audio_profile'] = VOX.GEMINI_TIER_PROFILE[tier]
+            entry['audio_profile'] = VOX.GEMINI_PROFILE.get(
+                (tier, key), VOX.GEMINI_TIER_PROFILE[tier])
+            pinned = VOX.GEMINI_STYLE_PIN.get((tier, key))
+            if pinned:
+                entry['style_pinned'] = pinned
         elif pitch:
             entry['pitch_semitones'] = pitch
         data['voices'].append(entry)
@@ -154,12 +163,16 @@ def write_reference(out_root, backend, langs):
         lines.append('| `%s` | %s | **%s** | %s |'
                      % (v['folder'], v['tier'], v['voice_id'], v['character']))
     if backend == 'gemini':
-        lines += ['', '## Age profile sent per tier', '',
-                  'On Gemini the age comes from `audio_profile`; `voice_id` only',
-                  'selects the timbre.', '',
-                  '| tier | audio_profile |', '|---|---|']
-        for tier in VOX.TIERS:
-            lines.append('| %s | %s |' % (tier, VOX.GEMINI_TIER_PROFILE[tier]))
+        lines += ['', '## Profile sent per voice', '',
+                  'On Gemini the age and gender come from `audio_profile`;',
+                  '`voice_id` only selects the timbre. A pinned style overrides',
+                  "the line's own emotion for that voice.", '',
+                  '| folder | audio_profile | style |', '|---|---|---|']
+        for v in data['voices']:
+            lines.append('| `%s` | %s | %s |'
+                         % (v['folder'], v['audio_profile'],
+                            '`%s` (pinned)' % v['style_pinned']
+                            if v.get('style_pinned') else 'from line emotion'))
     lines.append('')
     with open(os.path.join(root, 'VOICES.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
