@@ -103,12 +103,17 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
     }
 
     await stars.bind(widget.results.first.childId);
-    final granted = await stars.awardForPlay(
+    final award = await stars.awardForPlay(
       playKey: 'assessment:$runId',
       reason: StarReason.assessmentCompleted,
     );
-    if (granted <= 0 || !mounted) return;
-    await StarEarnedOverlay.show(context, granted: granted);
+    // Deliberately still silent when an assessment does not pay. An
+    // assessment run is keyed on its own id and happens once, so the only way
+    // here is a re-shown results screen or the daily cap — neither is a moment
+    // to interrupt with a message about stars. The game-end flow, where a
+    // child is choosing what to play next, is where that belongs (AUM-286).
+    if (!award.didEarn || !mounted) return;
+    await StarEarnedOverlay.show(context, granted: award.granted);
   }
 
   Future<void> _loadActiveGameIds() async {
