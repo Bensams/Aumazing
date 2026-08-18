@@ -46,7 +46,7 @@ GEMINI_MODEL = 'google/gemini-3-1-flash-tts'
 GEMINI_VOICES = {
     'adult': {
         'woman': ('Sulafat', 'warm'),
-        'man':   ('Charon', 'informative'),
+        'man':   ('Enceladus', 'breathy'),
     },
     'young': {
         'girl': ('Autonoe', 'bright'),
@@ -65,10 +65,37 @@ GEMINI_VOICES = {
 # 125 Hz asked for a "deep, low-pitched voice". The first roster said "gently"
 # for the men and landed every male slot inside the female range (188 / 239 /
 # 291 Hz), which is why they read as girls. Naming the pitch explicitly is
-# what fixes it. Measured results for the current wording:
+# what fixes it. Measured results for that wording:
 #
 #   man 125 Hz | teen boy 166 Hz | boy 214 Hz
 #   woman 218 Hz | teen girl 213 Hz | girl 276 Hz
+#
+# The adult man was later retuned: the deep-and-calm wording that held Charon
+# in range also made him slow and frightening to children. Warmth words alone
+# undo the anchor -- the same profile on Charon jumped to 374 Hz -- so the
+# anchor stays and the friendliness rides behind it, while the voice itself
+# was changed to one that sits at a normal male pitch unaided. Sweep on the
+# current profile, one line, no post-processing:
+#
+#   Rasalgethi 109 | Algieba 115 | Sadaltager 119 | Achird 158 | Schedar 160
+#   Zubenelgenubi 185 | Algenib 205 | Enceladus 205 | Gacrux 209
+#   Puck 259 | Fenrir 272
+#
+# Enceladus is the chosen voice on delivery, not pitch, and the cost is
+# recorded here rather than discovered again. Measured over the full 624-clip
+# run, not a preview:
+#
+#   en  median 212 Hz, 46% of clips above the woman
+#   tl  median 190 Hz, 32% above
+#   ceb median 198 Hz, 36% above
+#
+# That is a 20 Hz gap to the 218 Hz woman where Charon had 130 Hz, so the two
+# adult narrators are hard to tell apart and 38% of the man's library reads
+# female. A five-clip-per-language preview showed 180/199/156 Hz and did not
+# reveal this -- audition the adult man at 40+ clips per language or not at
+# all. Rasalgethi (109 Hz) and Algieba (115 Hz) are the fallbacks with real
+# headroom, and Algieba is the one that stayed male under this same friendly
+# wording. Re-measure after any wording change; values move ~10 Hz per run.
 #
 # The child boy is described as about ten rather than seven on purpose. Real
 # seven-year-olds have the same pitch regardless of gender, so a truthful
@@ -78,7 +105,8 @@ GEMINI_PROFILE = {
     ('adult', 'woman'): 'A warm, patient adult woman in her thirties, '
                         'speaking to a young child',
     ('adult', 'man'):   'An adult man with a very deep, low, resonant male '
-                        'chest voice, like a father speaking calmly to his '
+                        'chest voice, who is cheerful and friendly with a '
+                        'smile in his voice, playing happily with his small '
                         'child',
     ('young', 'girl'):  'A friendly teenage girl about fifteen, warm and clear',
     ('young', 'boy'):   'A friendly teenage boy about fifteen, whose voice has '
