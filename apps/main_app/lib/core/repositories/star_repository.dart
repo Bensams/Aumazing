@@ -190,16 +190,28 @@ class StarRepository {
     return true;
   }
 
-  /// The shop's view of every costume for this child, cheapest first.
+  /// The shop's view of the costumes on offer to this child, cheapest first.
   ///
-  /// Returns an offer for ALL costumes including unaffordable ones — the shop
-  /// shows everything, always, because a child needs to see what they are
-  /// working towards (STAR-C1).
+  /// Returns an offer for every costume in stock including the unaffordable
+  /// ones — the shop shows everything it sells, always, because a child needs
+  /// to see what they are working towards (STAR-C1). "Not yet" is a progress
+  /// bar here, never a padlock.
+  ///
+  /// [Costume.inStock] is narrower than [Costume.purchasable]: a costume with
+  /// no sprite sheets is not sold, because buying it would not change the
+  /// mascot in-game. Anything the child already owns is added back whatever
+  /// its stock state — a costume that leaves the shop must not vanish from the
+  /// wardrobe of a child who bought it (STAR-D4).
   Future<List<CostumeOffer>> offersFor(String childId) async {
     final balance = await balanceFor(childId);
     final owned = await unlockedFor(childId);
+    final shown = {
+      ...Costume.inStock,
+      ...Costume.purchasable.where((c) => owned.contains(c.id)),
+    }.toList()
+      ..sort((a, b) => a.priceStars.compareTo(b.priceStars));
     return [
-      for (final costume in Costume.purchasable)
+      for (final costume in shown)
         CostumeOffer(
           costume: costume,
           owned: owned.contains(costume.id),

@@ -103,6 +103,40 @@ void main() {
           hasLength(ChildCharacter.values.length * Costume.purchasable.length));
     });
 
+    test('the sprite-sheet flag matches the sheets on disk', () {
+      // The one thing that can silently put an un-animated costume back in
+      // the shop is `hasSpriteSheets` drifting from reality. A costume is
+      // animated only when every character has a full set of sheets for it;
+      // a partial set would give one child an animated costume and another
+      // the base character for the same purchase.
+      final root = Directory.current.path.endsWith('main_app')
+          ? Directory('${Directory.current.path}/../..')
+          : Directory.current;
+      final sheets = Directory('${root.path}/packages/shared_ui/assets/characters');
+      expect(sheets.existsSync(), isTrue, reason: 'sheet folder not found');
+
+      final names = sheets
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)
+          .toSet();
+
+      for (final costume in Costume.purchasable) {
+        final drawable = ChildCharacter.values.every(
+          (c) => names.any((n) => n.startsWith('${c.id}_${costume.id}_')),
+        );
+        expect(
+          costume.hasSpriteSheets,
+          drawable,
+          reason: drawable
+              ? '${costume.id} has sheets for every character — set '
+                  'hasSpriteSheets: true so the shop can sell it'
+              : '${costume.id} is flagged animated but is missing sheets, so '
+                  'buying it would not change the mascot in-game',
+        );
+      }
+    });
+
     test('every catalogue asset actually exists on disk', () {
       // `packages/assets/` has no pubspec, so nothing in it ships with the
       // app — an asset path pointing there resolves in the editor and fails
@@ -279,10 +313,49 @@ void main() {
       expect(await repo.balanceFor('c1'), balance - Costume.teddy.priceStars);
     });
 
-    test('offers cover every costume, affordable or not', () async {
+    test('offers cover every costume in stock, affordable or not', () async {
       final offers = await repo.offersFor('c1');
-      expect(offers, hasLength(Costume.purchasable.length));
+      expect(offers, hasLength(Costume.inStock.length));
       expect(offers.every((o) => !o.owned), isTrue);
+      // Unaffordable ones are still offered — the shop shows what a child is
+      // working towards, it does not hide it until they can pay.
+      expect(offers.any((o) => !o.affordable), isTrue);
+    });
+
+    test('a costume with no sprite sheets is not sold', () async {
+      final offers = await repo.offersFor('c1');
+      final sold = offers.map((o) => o.costume).toSet();
+      for (final costume in Costume.purchasable) {
+        expect(
+          sold.contains(costume),
+          costume.hasSpriteSheets,
+          reason: '${costume.id} is ${costume.hasSpriteSheets ? "animated but "
+              "not sold" : "sold but has no sprite sheets"}',
+        );
+      }
+    });
+
+    test('a costume already owned stays in the wardrobe if it leaves the shop',
+        () async {
+      // STAR-D4. Withdrawing a costume from sale must never withdraw it from
+      // a child who bought it. Rabbit has no sheets, so it is out of stock —
+      // but a child who owns one still sees it and can still wear it.
+      expect(Costume.rabbit.hasSpriteSheets, isFalse);
+      expect(Costume.inStock, isNot(contains(Costume.rabbit)));
+
+      final games = (Costume.rabbit.priceStars / kStarsPerGame).ceil();
+      for (var i = 0; i < games; i++) {
+        await repo.awardForSession(childId: 'c2', gameSessionId: 'r$i');
+      }
+      expect(
+        await repo.purchase(childId: 'c2', costume: Costume.rabbit),
+        isTrue,
+      );
+
+      final offers = await repo.offersFor('c2');
+      final rabbit = offers.where((o) => o.costume == Costume.rabbit).toList();
+      expect(rabbit, hasLength(1), reason: 'an owned costume vanished');
+      expect(rabbit.single.owned, isTrue);
     });
   });
 }

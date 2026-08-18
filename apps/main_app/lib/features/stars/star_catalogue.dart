@@ -70,18 +70,23 @@ enum ChildCharacter {
 /// [none] is not a purchasable item — it is the character's own clothes, always
 /// owned and always equippable, so a child can always undo a change of mind.
 enum Costume {
-  none('none', 'No costume', 0),
-  teddy('teddy', 'Teddy', 9),
-  panda('panda', 'Panda', 9),
+  none('none', 'No costume', 0, hasSpriteSheets: true),
+  teddy('teddy', 'Teddy', 9, hasSpriteSheets: true),
+  panda('panda', 'Panda', 9, hasSpriteSheets: true),
   rabbit('rabbit', 'Rabbit', 12),
-  pig('pig', 'Pig', 12),
+  pig('pig', 'Pig', 12, hasSpriteSheets: true),
   frog('frog', 'Frog', 15),
   fox('fox', 'Fox', 15),
   koala('koala', 'Koala', 18),
   octopus('octopus', 'Octopus', 21),
   unicorn('unicorn', 'Unicorn', 21);
 
-  const Costume(this.id, this.displayName, this.priceStars);
+  const Costume(
+    this.id,
+    this.displayName,
+    this.priceStars, {
+    this.hasSpriteSheets = false,
+  });
 
   /// Stable key stored in `child_unlocks` and on the profile. Never rename.
   final String id;
@@ -93,6 +98,22 @@ enum Costume {
   /// prices can move is a shop that can pressure a child.
   final int priceStars;
 
+  /// Whether this costume has its 21 sprite sheets cut for every character.
+  ///
+  /// The still art in `assets/costumes/` exists for all nine; the *animated*
+  /// sheets in `assets/characters/` do not, because each costume is ~63 files
+  /// and thousands of generation credits. Without them the mascot silently
+  /// falls back to the character's own clothes in-game
+  /// (`CharacterSprites.costumed`), so a child spends stars and then sees no
+  /// change where it matters most — during play.
+  ///
+  /// That is why this gates [inStock] rather than merely being recorded:
+  /// selling a costume that does not appear on the mascot breaks the promise
+  /// the shop makes. Flip a costume to `true` in the same change that lands
+  /// its sheets (STAR-F3 / AUM-275), and `star_rules_test.dart` will hold the
+  /// declaration and the files on disk together.
+  final bool hasSpriteSheets;
+
   static Costume fromId(String? id) => Costume.values.firstWhere(
         (c) => c.id == id,
         orElse: () => Costume.none,
@@ -100,9 +121,22 @@ enum Costume {
 
   /// Everything except [none], in the order the shop shows them: cheapest
   /// first, so the nearest goal is the one a child sees at the top.
+  ///
+  /// This is the *catalogue* — every costume that has a price and artwork,
+  /// including ones the shop is not selling yet. Prices and asset paths are
+  /// asserted against this. What a child can actually buy is [inStock].
   static List<Costume> get purchasable =>
       Costume.values.where((c) => c != Costume.none).toList()
         ..sort((a, b) => a.priceStars.compareTo(b.priceStars));
+
+  /// What the shop actually offers today: the costumes whose sprite sheets
+  /// exist, so buying one changes the mascot during play.
+  ///
+  /// A costume already owned is shown regardless of this list — see
+  /// `StarRepository.offersFor`. Nothing a child has bought is ever taken
+  /// away (STAR-D4), including by a later decision to stop selling it.
+  static List<Costume> get inStock =>
+      purchasable.where((c) => c.hasSpriteSheets).toList();
 
   /// Artwork of [character] wearing this costume.
   ///
