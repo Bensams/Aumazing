@@ -9,6 +9,7 @@ import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
+import 'package:aumazing/providers/stars_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
 import 'package:aumazing/services/tour_service.dart';
 import 'package:flutter/material.dart';
@@ -408,6 +409,9 @@ Widget _buildTestApp({
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>.value(value: childProvider),
+      ChangeNotifierProvider<StarsProvider>(
+        create: (_) => _NoStarsProvider(),
+      ),
       ChangeNotifierProvider<AssessmentProvider>(
         create: (_) => _TestAssessmentProvider(),
       ),
@@ -646,4 +650,18 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   @override
   Future<void> signOut({SignOutScope scope = SignOutScope.global}) async {}
+}
+
+/// The child lobby reads this for the "got today's star" badge (AUM-285).
+/// Nothing here exercises the badge, so it reports nothing earned and never
+/// touches a database.
+class _NoStarsProvider extends StarsProvider {
+  @override
+  bool hasEarnedStarToday(String gameId) => false;
+
+  @override
+  Future<void> bind(String? childId) async {}
+
+  @override
+  Future<void> refresh() async {}
 }

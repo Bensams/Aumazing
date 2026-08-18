@@ -74,6 +74,32 @@ class StarRepository {
     return (rows.first['total'] as num?)?.toInt() ?? 0;
   }
 
+  /// The play keys that have already paid this child today (AUM-285).
+  ///
+  /// Returned as opaque strings and compared by membership: the caller asks
+  /// `contains(starPlayKey(...))` rather than parsing a game id back out, so
+  /// the key's format stays a private detail of the one function that builds
+  /// it. Parsing it here would put a second, silent definition of the format
+  /// in the codebase, and the two would drift.
+  ///
+  /// Positive deltas only, and the same local-midnight boundary
+  /// [earnedTodayFor] uses — a purchase must never look like a game that paid.
+  Future<Set<String>> paidKeysToday(String childId, {DateTime? now}) async {
+    final db = await _database;
+    final today = now ?? DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    final rows = await db.query(
+      LocalTables.starLedger,
+      columns: ['game_session_id'],
+      where: 'child_id = ? AND delta > 0 AND created_at >= ?',
+      whereArgs: [childId, start.toIso8601String()],
+    );
+    return rows
+        .map((r) => r['game_session_id'] as String?)
+        .whereType<String>()
+        .toSet();
+  }
+
   /// Costume ids this child owns. [Costume.none] is always implicitly owned
   /// and is not stored.
   Future<Set<String>> unlockedFor(String childId) async {
