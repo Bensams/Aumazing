@@ -1,3 +1,9 @@
+
+import 'package:provider/provider.dart';
+
+import '../../model/star_ledger_entry.dart';
+import '../../providers/stars_provider.dart';
+import '../stars/widgets/star_earned_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_ui/shared_ui.dart';
 
@@ -63,6 +69,46 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
   void initState() {
     super.initState();
     if (_activeGameIds == null) _loadActiveGameIds();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _awardStars());
+  }
+
+  /// Stars for finishing an assessment (STAR-B6).
+  ///
+  /// Awarded here, on the results screen, rather than as the last question is
+  /// answered: by this point the run is scored and stored, so nothing about
+  /// the payout can reach back and influence how the child responded. The
+  /// amount is the same fixed one every game pays — the assessment is not
+  /// worth more for being harder, and an abandoned run that never reaches
+  /// this screen simply earns nothing rather than being penalised.
+  ///
+  /// Keyed on the run id, so re-opening the results screen — which a parent
+  /// does — cannot pay again.
+  Future<void> _awardStars() async {
+    if (!mounted) return;
+    final runId = widget.results
+        .map((r) => r.assessmentRunId)
+        .firstWhere((id) => id != null, orElse: () => null);
+    if (runId == null) return;
+
+    // This view is embedded in several places, including the parent
+    // dashboard, and awarding stars is a side-benefit of showing results —
+    // never the reason. A host that has not provided StarsProvider must still
+    // render the results rather than throw, so the lookup is guarded.
+    final StarsProvider stars;
+    try {
+      stars = context.read<StarsProvider>();
+    } on ProviderNotFoundException {
+      debugPrint('[AssessmentResultView] no StarsProvider; skipping award');
+      return;
+    }
+
+    await stars.bind(widget.results.first.childId);
+    final granted = await stars.awardForPlay(
+      playKey: 'assessment:$runId',
+      reason: StarReason.assessmentCompleted,
+    );
+    if (granted <= 0 || !mounted) return;
+    await StarEarnedOverlay.show(context, granted: granted);
   }
 
   Future<void> _loadActiveGameIds() async {

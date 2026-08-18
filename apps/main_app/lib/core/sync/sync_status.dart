@@ -157,6 +157,12 @@ class LocalTables {
   static const String modulePathsCache = 'module_paths_cache';
   static const String modulePathItemsCache = 'module_path_items_cache';
   static const String syncQueue = 'sync_queue';
+
+  /// Append-only star movements. Balance is SUM(delta), never a column.
+  static const String starLedger = 'star_ledger_local';
+
+  /// Costumes a child owns. Monotonic — rows are added, never removed.
+  static const String childUnlocks = 'child_unlocks_local';
 }
 
 /// Constants for Supabase remote table names
@@ -176,6 +182,8 @@ class RemoteTables {
   static const String learningModules = 'learning_modules';
   static const String modulePaths = 'module_paths';
   static const String modulePathItems = 'module_path_items';
+  static const String starLedger = 'child_star_ledger';
+  static const String childUnlocks = 'child_unlocks';
 }
 
 /// Sync dependency order - ensures parent records sync before children

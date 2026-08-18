@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../model/child_profile.dart';
+import '../providers/child_provider.dart';
 import 'mascot.dart';
 
 /// Drives the mascot owned by a [MascotHost] above it in the tree.
@@ -167,7 +170,8 @@ class MascotHost extends StatefulWidget {
     super.key,
     required this.child,
     this.controller,
-    this.character = MascotCharacter.bps,
+    this.character,
+    this.costumeId,
     this.height = 92,
     this.alignment = Alignment.bottomLeft,
     this.padding = const EdgeInsets.all(12),
@@ -184,7 +188,14 @@ class MascotHost extends StatefulWidget {
   /// the host creates and disposes one for you.
   final MascotController? controller;
 
-  final MascotCharacter character;
+  /// Which character to show. Null — the usual case — follows the child's
+  /// own choice from their profile, so a game screen never has to know or
+  /// pass it. An explicit value is for the rare screen that must show a
+  /// specific character regardless (the buddy in Sabay Tayo).
+  final MascotCharacter? character;
+
+  /// The equipped costume, as a [Costume.id]. Null follows the profile too.
+  final String? costumeId;
   final double height;
 
   /// Where the mascot sits over [child].
@@ -226,6 +237,19 @@ class _MascotHostState extends State<MascotHost> {
 
   @override
   Widget build(BuildContext context) {
+    // Watched, not read: equipping a costume must change the mascot without
+    // needing the screen to be rebuilt from above.
+    //
+    // Guarded because the mascot is also mounted in places that have no
+    // ChildProvider above them — widget tests, and any preview that shows the
+    // character outside a signed-in session. Those get the default character
+    // and no costume rather than a crash; the mascot is decoration there.
+    ChildProfile? profile;
+    try {
+      profile = context.watch<ChildProvider>().profile;
+    } on ProviderNotFoundException {
+      profile = null;
+    }
     return _MascotScope(
       notifier: _controller,
       child: Stack(
@@ -246,7 +270,11 @@ class _MascotHostState extends State<MascotHost> {
                     builder: (context, _) => ValueListenableBuilder<Offset?>(
                       valueListenable: _controller.gaze,
                       builder: (context, gaze, _) => Mascot(
-                        character: widget.character,
+                        // Falls back to the child's own choice when the host
+                        // was not given one, which is nearly always.
+                        character: widget.character ??
+                            MascotCharacter.fromId(profile?.characterId),
+                        costumeId: widget.costumeId ?? profile?.equippedCostume,
                         height: widget.height,
                         pose: _controller.pose,
                         gesture: _controller.gesture,

@@ -12,6 +12,8 @@ import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
 import 'widgets/sound_preferences_step.dart';
+import '../../stars/star_catalogue.dart';
+import '../../stars/widgets/character_picker.dart';
 
 /// Collects a child's profile, sound preferences and reward settings.
 ///
@@ -49,6 +51,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
   ChildSex? _selectedSex;
+  /// Null until the parent chooses. Never defaulted, because a
+  /// preselected card is a recommendation whether or not it is labelled
+  /// as one (STAR-A1).
+  ChildCharacter? _selectedCharacter;
   bool _isLoading = false;
 
   // Setup step tracking
@@ -147,6 +153,11 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         birthDate: _selectedBirthDate!,
         avatar: _avatars[_selectedAvatarIndex].emoji,
         sex: _selectedSex,
+        // Skipping picks at random rather than defaulting: a fixed
+        // fallback would quietly make one character 'the normal one'.
+        characterId: (_selectedCharacter ??
+                (ChildCharacter.values..shuffle()).first)
+            .id,
         musicEnabled: _sound.musicEnabled,
         musicVolume: _sound.musicVolume,
         musicCategory: _sound.musicCategory,
@@ -452,6 +463,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             children: [
               const SizedBox(height: AppSpacing.sm),
               _buildAvatarPicker(),
+          const SizedBox(height: AppSpacing.lg),
+          _buildCharacterPicker(),
               const SizedBox(height: AppSpacing.xl),
               AppPrimaryButton(
                 label: 'Continue',
@@ -517,6 +530,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           _buildBirthDateSelector(),
           const SizedBox(height: AppSpacing.xl),
           _buildAvatarPicker(),
+          const SizedBox(height: AppSpacing.lg),
+          _buildCharacterPicker(),
           const SizedBox(height: AppSpacing.xl),
           AppPrimaryButton(
             label: 'Continue',
@@ -966,6 +981,34 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   void _selectSex(ChildSex sex) {
     _nameFocusNode.unfocus();
     setState(() => _selectedSex = sex);
+  }
+
+  /// `Who will play with <name>?` — the parent's choice of companion.
+  ///
+  /// Sits with the child's own details rather than in a later step: this is
+  /// part of who the child is in the app, not a preference to tune afterwards.
+  Widget _buildCharacterPicker() {
+    final name = _nameController.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(
+          title: name.isEmpty
+              ? 'Who will play along?'
+              : 'Who will play with $name?',
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Your child can change costumes later by earning stars.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CharacterPicker(
+          selected: _selectedCharacter,
+          onSelected: (c) => setState(() => _selectedCharacter = c),
+        ),
+      ],
+    );
   }
 
   Widget _buildAvatarPicker() {
