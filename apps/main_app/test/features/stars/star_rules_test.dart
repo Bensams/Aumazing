@@ -404,6 +404,55 @@ void main() {
       expect(total, kDailyStarCap);
     });
 
+    test('today\'s paid keys report exactly the games that paid', () async {
+      // What the lobby badge reads (AUM-285). Membership, not parsing: the
+      // caller rebuilds the key rather than picking a game id out of a string.
+      final day = DateTime(2026, 8, 18, 9);
+      final yesterday = DateTime(2026, 8, 17, 9);
+
+      String key(String gameId, DateTime at) =>
+          starPlayKey(childId: 'c1', gameId: gameId, now: at);
+
+      await repo.awardForSession(
+        childId: 'c1',
+        gameSessionId: key('match_it', yesterday),
+        now: yesterday,
+      );
+      await repo.awardForSession(
+        childId: 'c1',
+        gameSessionId: key('copy_me', day),
+        now: day,
+      );
+
+      final paid = await repo.paidKeysToday('c1', now: day);
+      expect(paid, contains(key('copy_me', day)));
+      // Played, but yesterday — today it has a star waiting again.
+      expect(paid, isNot(contains(key('match_it', day))));
+      // Never played at all.
+      expect(paid, isNot(contains(key('hintay', day))));
+    });
+
+    test('a purchase never looks like a game that paid', () async {
+      // Positive deltas only. A debit sharing the window must not put a
+      // costume id into the set the lobby tests against.
+      final day = DateTime(2026, 8, 18, 9);
+      for (final gameId in ['a', 'b', 'c']) {
+        await repo.awardForSession(
+          childId: 'c1',
+          gameSessionId: starPlayKey(childId: 'c1', gameId: gameId, now: day),
+          now: day,
+        );
+      }
+      expect(
+        await repo.purchase(childId: 'c1', costume: Costume.teddy, now: day),
+        isTrue,
+      );
+
+      final paid = await repo.paidKeysToday('c1', now: day);
+      expect(paid, hasLength(3));
+      expect(paid.any((k) => k.contains(Costume.teddy.id)), isFalse);
+    });
+
     test('offers cover every costume in stock, affordable or not', () async {
       final offers = await repo.offersFor('c1');
       expect(offers, hasLength(Costume.inStock.length));
