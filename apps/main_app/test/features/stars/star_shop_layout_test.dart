@@ -6,6 +6,7 @@ import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/stars_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_ui/shared_ui.dart';
@@ -120,6 +121,40 @@ void main() {
     expect(art.right, lessThanOrEqualTo(notYet.left));
     expect(notYet.bottom, lessThanOrEqualTo(_phoneLandscape.height));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the shop declares itself a child-facing landscape screen', (
+    tester,
+  ) async {
+    // It used to inherit the previous route's orientation, which happened to
+    // be landscape only because the child lobby is the sole way in. Declaring
+    // it removes the dependency on where the child came from.
+    final requested = <List<String>>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemChrome.setPreferredOrientations') {
+          requested.add((call.arguments as List).cast<String>());
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await _pumpShop(tester, _phonePortrait);
+
+    expect(requested, isNotEmpty, reason: 'the shop set no orientation');
+    expect(requested.last, [
+      'DeviceOrientation.landscapeLeft',
+      'DeviceOrientation.landscapeRight',
+    ]);
+    // And it must never be the thing that puts a parent phone in landscape:
+    // the parent policy on a phone stays portrait, untouched by this screen.
+    expect(parentOrientationsFor(390), [DeviceOrientation.portraitUp]);
+    expect(parentOrientationsFor(599.9), [DeviceOrientation.portraitUp]);
   });
 
   testWidgets('an unaffordable costume is offered, not hidden', (tester) async {
