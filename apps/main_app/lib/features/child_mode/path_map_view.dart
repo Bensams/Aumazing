@@ -38,6 +38,7 @@ class PathMapView extends StatelessWidget {
     super.key,
     required this.path,
     required this.completedGameIds,
+    this.starsEarnedTodayGameIds = const {},
     required this.difficultyOverride,
     required this.style,
     required this.currentStepKey,
@@ -47,6 +48,14 @@ class PathMapView extends StatelessWidget {
   final List<LearningPathEntry> path;
 
   final Set<String> completedGameIds;
+
+  /// Games that have already paid their star today (AUM-284/285).
+  ///
+  /// Separate from [completedGameIds], which means "finished as a path step"
+  /// and never resets. This one is about today only, and a game can easily be
+  /// in one and not the other: a step finished last week has long since paid,
+  /// and its star is waiting again.
+  final Set<String> starsEarnedTodayGameIds;
 
   /// Parent's manual difficulty override; wins over the path's own level.
   final int? difficultyOverride;
@@ -140,6 +149,9 @@ class PathMapView extends StatelessWidget {
                         entry: path[i].game,
                         stepNumber: i + 1,
                         state: _stateFor(i),
+                        starEarnedToday: starsEarnedTodayGameIds.contains(
+                          path[i].game.id,
+                        ),
                         difficulty:
                             (difficultyOverride ?? path[i].difficulty)
                                 .clamp(1, 3),
@@ -166,6 +178,39 @@ class PathMapView extends StatelessWidget {
     final difficulty =
         (difficultyOverride ?? path[index].difficulty).clamp(1, 3);
     return () => onLaunch(path[index].game.id, difficulty);
+  }
+}
+
+/// "Today's star is already got" on a path step (AUM-286).
+///
+/// The same star-and-tick as the lobby card's badge, sized for the smaller
+/// platform. Nothing else changes: the step keeps its colour and its tap,
+/// because the game is still playable and a child on the path should still
+/// be able to walk it. A dimmed step would read as a lock, and this map
+/// already has a real one of those.
+class _StarEarnedMarker extends StatelessWidget {
+  const _StarEarnedMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.white.withAlpha(235),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: const [
+          BoxShadow(color: Color(0x33000000), blurRadius: 4),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('⭐', style: TextStyle(fontSize: 11)),
+          SizedBox(width: 2),
+          Icon(Icons.check_rounded, size: 11, color: Color(0xFF6FAE97)),
+        ],
+      ),
+    );
   }
 }
 
@@ -241,6 +286,7 @@ class _PathStep extends StatelessWidget {
     required this.entry,
     required this.stepNumber,
     required this.state,
+    required this.starEarnedToday,
     required this.difficulty,
     required this.style,
     required this.onTap,
@@ -249,6 +295,14 @@ class _PathStep extends StatelessWidget {
   final GameEntry entry;
   final int stepNumber;
   final PathStepState state;
+
+  /// Whether this step's game has already paid its star today.
+  ///
+  /// Drawn on the platform rather than swapped into the state badge above it:
+  /// the badge carries step *state* (done / current / locked), which is a
+  /// different question from whether today's star is still there, and folding
+  /// two meanings into one symbol would make both unreadable.
+  final bool starEarnedToday;
   final int difficulty;
   final WorldStyle style;
   final VoidCallback? onTap;
@@ -270,15 +324,18 @@ class _PathStep extends StatelessWidget {
   bool get _isLocked => state == PathStepState.locked;
 
   String get _semanticLabel {
+    // Appended to the state's own wording rather than given a second node —
+    // the step is deliberately one TalkBack stop, exactly as the lobby card is.
+    final star = starEarnedToday ? ", got today's star" : '';
     switch (state) {
       case PathStepState.done:
-        return 'Step $stepNumber, ${entry.name}, finished';
+        return 'Step $stepNumber, ${entry.name}, finished$star';
       case PathStepState.current:
-        return 'Step $stepNumber, ${entry.name}, play this next';
+        return 'Step $stepNumber, ${entry.name}, play this next$star';
       case PathStepState.available:
-        return 'Step $stepNumber, ${entry.name}';
+        return 'Step $stepNumber, ${entry.name}$star';
       case PathStepState.locked:
-        return 'Step $stepNumber, ${entry.name}, locked';
+        return 'Step $stepNumber, ${entry.name}, locked$star';
     }
   }
 
@@ -289,7 +346,17 @@ class _PathStep extends StatelessWidget {
       children: [
         _buildBadge(),
         const SizedBox(height: 6),
-        _buildPlatform(),
+        // The star marker rides on the platform's corner. `Clip.none` so it
+        // can sit proud of the rock without the column growing — the map
+        // positions every step by a fixed height.
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _buildPlatform(),
+            if (starEarnedToday)
+              const Positioned(top: -6, right: -6, child: _StarEarnedMarker()),
+          ],
+        ),
         const SizedBox(height: 6),
         Text(
           entry.name,
