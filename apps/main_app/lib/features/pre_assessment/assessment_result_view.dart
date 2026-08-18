@@ -2,6 +2,7 @@
 import 'package:provider/provider.dart';
 
 import '../../model/star_ledger_entry.dart';
+import '../../providers/child_provider.dart';
 import '../../providers/stars_provider.dart';
 import '../stars/widgets/star_earned_overlay.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../services/active_games_service.dart';
 import '../../services/assessment_result_mapper.dart';
+import '../../services/recommended_settings_applier.dart';
 
 /// Renders a finalized assessment run with the shared result layout.
 ///
@@ -116,6 +118,29 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
     await StarEarnedOverlay.show(context, granted: award.granted);
   }
 
+  /// Writes this run's Recommended Settings to the child's settings.
+  ///
+  /// The profile handed to this view is the one finalized with the run being
+  /// shown, so applying an older summary applies what that run recommended —
+  /// never a freshly recomputed set the parent has not read.
+  Future<bool> _applyRecommendations() async {
+    final childId =
+        widget.results.isEmpty ? null : widget.results.first.childId;
+    if (childId == null) return false;
+    final ChildProvider childProv;
+    try {
+      childProv = context.read<ChildProvider>();
+    } on ProviderNotFoundException {
+      debugPrint('[AssessmentResultView] no ChildProvider; cannot apply');
+      return false;
+    }
+    return RecommendedSettingsApplier.apply(
+      profile: widget.profile,
+      childProv: childProv,
+      childId: childId,
+    );
+  }
+
   Future<void> _loadActiveGameIds() async {
     final ids = await ActiveGamesService.instance.activeGameIds;
     if (mounted) setState(() => _activeGameIds = ids);
@@ -140,6 +165,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       onBack: widget.onBack,
       backLabel: widget.backLabel,
       showCelebration: widget.showCelebration,
+      onApplyRecommendations: _applyRecommendations,
     );
   }
 }
