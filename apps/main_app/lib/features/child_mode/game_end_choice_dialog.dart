@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/stars_provider.dart';
+import '../stars/star_catalogue.dart';
 import '../stars/widgets/star_earned_overlay.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
@@ -128,12 +129,19 @@ class GameEndChoiceDialog {
   /// Grants the fixed payout for the play that just finished and, if anything
   /// was granted, shows the short star moment.
   ///
-  /// The play key is built from the child, the game and the wall-clock minute
+  /// The play key is built from the child, the game and the **calendar day**
   /// rather than a session row id: the practice path does not create an
-  /// assessment session, so there is no id to use. A minute is coarse enough
-  /// that a double-tapped finish or a rebuild lands on the same key and cannot
-  /// pay twice, and fine enough that genuinely replaying the game — which
-  /// takes minutes — earns again.
+  /// assessment session, so there is no id to use.
+  ///
+  /// The day is what makes each game pay once per day (AUM-284). A replay of
+  /// the same game lands on the same key, and `awardForSession` refuses a key
+  /// it has already paid — so a second run of a favourite earns nothing, and
+  /// tomorrow's run earns again. That also subsumes what the key was for
+  /// before: a double-tapped "finish" or a rebuild cannot pay twice either.
+  ///
+  /// Local date, deliberately: `earnedTodayFor` counts from local midnight, so
+  /// keying on anything else would let the two rules roll over at different
+  /// moments and leave an hour where a game pays but the cap disagrees.
   static Future<void> _awardStars(
     BuildContext context,
     String currentGameId,
@@ -144,9 +152,8 @@ class GameEndChoiceDialog {
     final stars = context.read<StarsProvider>();
     await stars.bind(childId);
 
-    final minute = DateTime.now().toIso8601String().substring(0, 16);
     final granted = await stars.awardForPlay(
-      playKey: '$childId:$currentGameId:$minute',
+      playKey: starPlayKey(childId: childId, gameId: currentGameId),
     );
     if (granted <= 0 || !context.mounted) return;
 

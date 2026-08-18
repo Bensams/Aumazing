@@ -38,6 +38,34 @@ const int kStarsPerGame = 3;
 /// `ScreenTimeService` rather than competing with it.
 const int kDailyStarCap = kStarsPerGame * 5;
 
+/// The idempotency key for one game's daily payout (STAR-B1, AUM-284).
+///
+/// A game pays a child once per calendar day. This key is what enforces it:
+/// `StarRepository.awardForSession` refuses a key it has already written, and
+/// that check reads the ledger rather than memory, so it holds across an app
+/// restart. Replaying the same game the same day produces the same key and
+/// earns nothing; the next day produces a new one and earns again.
+///
+/// The rule is a token-board rule, not an anti-cheat measure. A child who
+/// replays a favourite game is doing exactly what the app wants — they simply
+/// are not paid twice for it, which keeps the board predictable and stops the
+/// day's stars from being reachable by repeating one activity.
+///
+/// [now] is the local time on purpose. [kDailyStarCap] is counted from local
+/// midnight by `earnedTodayFor`, and two rules that roll over at different
+/// instants would leave an hour in which a game pays while the cap disagrees.
+String starPlayKey({
+  required String childId,
+  required String gameId,
+  DateTime? now,
+}) {
+  final day = now ?? DateTime.now();
+  final date = '${day.year.toString().padLeft(4, '0')}-'
+      '${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
+  return '$childId:$gameId:$date';
+}
+
 /// Which character guides the child through the app.
 ///
 /// The parent picks this during setup and can change it at any time. It is

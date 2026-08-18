@@ -67,6 +67,45 @@ void main() {
     });
   });
 
+  group('AUM-284 — a game pays once a day', () {
+    test('the key is the same all day and different tomorrow', () {
+      final morning = DateTime(2026, 8, 18, 7, 5);
+      final night = DateTime(2026, 8, 18, 23, 59);
+      final tomorrow = DateTime(2026, 8, 19, 0, 1);
+
+      String key(DateTime at) =>
+          starPlayKey(childId: 'c1', gameId: 'match_it', now: at);
+
+      expect(key(morning), key(night));
+      expect(key(tomorrow), isNot(key(morning)));
+    });
+
+    test('a different game, and a different child, get different keys', () {
+      final at = DateTime(2026, 8, 18, 9);
+      expect(
+        starPlayKey(childId: 'c1', gameId: 'match_it', now: at),
+        isNot(starPlayKey(childId: 'c1', gameId: 'copy_me', now: at)),
+      );
+      expect(
+        starPlayKey(childId: 'c1', gameId: 'match_it', now: at),
+        isNot(starPlayKey(childId: 'c2', gameId: 'match_it', now: at)),
+      );
+    });
+
+    test('single-digit months and days are padded, not truncated', () {
+      // '2026-1-5' and '2026-11-5' would be different strings anyway, but
+      // an unpadded '2026-1-15' and '2026-11-5' are not obviously distinct
+      // to a reader, and a key format is the kind of thing that gets parsed
+      // later. Pin the shape.
+      final key = starPlayKey(
+        childId: 'c1',
+        gameId: 'g',
+        now: DateTime(2026, 1, 5),
+      );
+      expect(key, 'c1:g:2026-01-05');
+    });
+  });
+
   group('STAR-C5 — prices are fixed and honest', () {
     test('every purchasable costume has a positive, constant price', () {
       for (final costume in Costume.purchasable) {
@@ -311,6 +350,58 @@ void main() {
       // Monotonic: buying again is a no-op, never a second charge.
       expect(await repo.purchase(childId: 'c1', costume: Costume.teddy), isFalse);
       expect(await repo.balanceFor('c1'), balance - Costume.teddy.priceStars);
+    });
+
+    test('replaying a game the same day earns nothing, tomorrow earns', () async {
+      // The rule a parent is shown: each game pays once a day (AUM-284).
+      final morning = DateTime(2026, 8, 18, 8);
+      final afternoon = DateTime(2026, 8, 18, 16);
+      final tomorrow = DateTime(2026, 8, 19, 8);
+
+      Future<int> finish(String gameId, DateTime at) => repo.awardForSession(
+            childId: 'c1',
+            gameSessionId: starPlayKey(
+              childId: 'c1',
+              gameId: gameId,
+              now: at,
+            ),
+            now: at,
+          );
+
+      expect(await finish('match_it', morning), kStarsPerGame);
+      // Same game, hours later, still the same day: nothing.
+      expect(await finish('match_it', afternoon), 0);
+      // A different game the same day pays normally.
+      expect(await finish('copy_me', afternoon), kStarsPerGame);
+      // Tomorrow the first game pays again.
+      expect(await finish('match_it', tomorrow), kStarsPerGame);
+
+      expect(await repo.balanceFor('c1'), kStarsPerGame * 3);
+    });
+
+    test('the daily cap is reached by breadth, not by repetition', () async {
+      // kDailyStarCap is five games' worth, and under this rule those must be
+      // five *different* games. Replaying one cannot reach the cap.
+      final day = DateTime(2026, 8, 18, 9);
+      for (var i = 0; i < 10; i++) {
+        await repo.awardForSession(
+          childId: 'c1',
+          gameSessionId: starPlayKey(childId: 'c1', gameId: 'match_it', now: day),
+          now: day,
+        );
+      }
+      expect(await repo.balanceFor('c1'), kStarsPerGame);
+      expect(await repo.earnedTodayFor('c1', now: day), kStarsPerGame);
+
+      var total = kStarsPerGame;
+      for (final gameId in ['copy_me', 'do_what_i_say', 'hintay', 'kumusta']) {
+        total += await repo.awardForSession(
+          childId: 'c1',
+          gameSessionId: starPlayKey(childId: 'c1', gameId: gameId, now: day),
+          now: day,
+        );
+      }
+      expect(total, kDailyStarCap);
     });
 
     test('offers cover every costume in stock, affordable or not', () async {
