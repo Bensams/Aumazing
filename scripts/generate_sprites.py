@@ -54,7 +54,13 @@ DEST = PROJECT_ROOT / "packages" / "shared_ui" / "assets" / "characters"
 # pubspec.yaml declares `assets/characters/`, and Flutter's directory entries
 # are not recursive, so nothing in here is bundled into the app.
 ARCHIVE = DEST / "Archive"
-CACHE = PROJECT_ROOT / ".sprite_cache"          # clips + frames, gitignored
+# Clips + frames. Overridable, because an in-repo cache is only gitignored —
+# not safe. A `git clean -fd` wiped the costume-art cache along with the
+# finished art, turning a free recompose into a paid regeneration; at 164
+# credits per clip a lost sprite cache is far more expensive than that was.
+# Point SPRITE_CACHE_DIR outside the working tree for long runs.
+CACHE = Path(os.environ.get("SPRITE_CACHE_DIR",
+                            PROJECT_ROOT / ".sprite_cache"))
 
 JOBS_API = "https://api.kie.ai"
 UPLOAD_API = "https://kieai.redpandaai.co"      # NOT api.kie.ai; the docs are wrong
@@ -346,6 +352,32 @@ CHARACTERS = {
         "cell_w": 430,
     },
 }
+
+
+# ── Costume variants ──────────────────────────────────────────────────
+# A costumed character is, to this pipeline, just another character bootstrapped
+# from standalone artwork — `from_image` keys out the white background exactly
+# as it does for Lexianne. Registered as `{character}_{costume}`, so sheets land
+# as e.g. `bps_panda_wave.png` alongside `bps_wave.png`.
+#
+# The cell width is INHERITED FROM THE BASE CHARACTER rather than widened for
+# the bulkier silhouette, and that is deliberate: CalmMascot renders at a fixed
+# height with BoxFit.contain, so a costume sheet with a different cell aspect
+# would make the mascot visibly change size the instant a child equips it —
+# the one thing a costume swap must never do. If a costume's arms or hood ears
+# come out clipped, fix that with rest-frame headroom, not by widening the cell.
+COSTUME_ART = (PROJECT_ROOT / "packages" / "assets" / "images" / "Character"
+               / "Character_Costume")
+
+_COSTUME_FILE = {"bps": "BPs", "lexianne": "Lexianne", "reiz": "Reiz"}
+
+for _base, _cell_w in (("bps", 406), ("lexianne", 430), ("reiz", 327)):
+    for _costume in ("Teddy", "Panda", "Pig"):
+        CHARACTERS[f"{_base}_{_costume.lower()}"] = {
+            "from_image": (COSTUME_ART / _costume
+                           / f"{_COSTUME_FILE[_base]}_chibi_{_costume}.png"),
+            "cell_w": _cell_w,
+        }
 
 
 class SheetTooTight(RuntimeError):
