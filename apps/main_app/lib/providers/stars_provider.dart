@@ -20,6 +20,7 @@ class StarsProvider extends ChangeNotifier {
   int _balance = 0;
   int _earnedToday = 0;
   Set<String> _unlocked = const {};
+  Set<String> _paidKeysToday = const {};
   List<CostumeOffer> _offers = const [];
   bool _loading = false;
 
@@ -28,6 +29,25 @@ class StarsProvider extends ChangeNotifier {
   Set<String> get unlocked => _unlocked;
   List<CostumeOffer> get offers => _offers;
   bool get isLoading => _loading;
+
+  /// Whether [gameId] has already paid this child today (AUM-284, AUM-285).
+  ///
+  /// The lobby shows a "got today's star" badge from this, so a child can see
+  /// which games still have one waiting instead of finding out by playing and
+  /// getting silence. Answered by rebuilding the same key the award path uses
+  /// and testing for membership — no parsing, so the format lives in exactly
+  /// one place.
+  ///
+  /// False when no child is bound, which is the honest answer: nothing has
+  /// been paid to nobody, and a badge is the wrong thing to show while the
+  /// ledger is still loading.
+  bool hasEarnedStarToday(String gameId) {
+    final childId = _childId;
+    if (childId == null) return false;
+    return _paidKeysToday.contains(
+      starPlayKey(childId: childId, gameId: gameId),
+    );
+  }
 
   /// True once the child has earned everything today's cap allows.
   ///
@@ -44,6 +64,7 @@ class StarsProvider extends ChangeNotifier {
       _balance = 0;
       _earnedToday = 0;
       _unlocked = const {};
+      _paidKeysToday = const {};
       _offers = const [];
       notifyListeners();
       return;
@@ -60,6 +81,7 @@ class StarsProvider extends ChangeNotifier {
       _balance = await _repo.balanceFor(childId);
       _earnedToday = await _repo.earnedTodayFor(childId);
       _unlocked = await _repo.unlockedFor(childId);
+      _paidKeysToday = await _repo.paidKeysToday(childId);
       _offers = await _repo.offersFor(childId);
     } catch (e) {
       debugPrint('[StarsProvider] refresh failed: $e');
