@@ -11,12 +11,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// `mascot_render_test.dart` already covers that sheets slice and render.
 /// What is worth pinning here is the *mapping*, which is cheap and is the
 /// part that can silently drift.
-// NOTE: `MascotCharacter.loadCostumed`'s character-level fallback (a character
-// with no sheets resolving to BPS) is deliberately NOT covered here. Asserting
-// it means loading a real 21-sheet character, which slices and re-encodes every
-// sheet and pushes this file past the suite timeout. It is exercised by
-// `mascot_render_test.dart`'s loading path and verified by inspection; if that
-// fallback is ever removed, choosing Lexianne shows no mascot at all.
+// NOTE: the character-level fallback this file used to warn about is gone.
+// `MascotCharacter.loadCostumed` substituted BPS when a character had no
+// sheets, which existed solely because Lexianne shipped in the picker before
+// her 21 sheets were cut (AUM-280). Her sheets have landed, every character
+// has a full set, and the branch was deleted — a wrong character is a worse
+// failure than a loud one, because a parent cannot see or report it.
+// `packages/shared_ui/test/character_sprites_test.dart` loads all three
+// characters for real and is what now catches a missing sheet.
 void main() {
   test('every ChildCharacter the picker offers can be drawn', () {
     // The picker offers ChildCharacter; the mascot renders MascotCharacter.
