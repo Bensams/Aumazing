@@ -21,9 +21,24 @@ import '../../../providers/child_provider.dart';
 ///  * scaled by the child's `animationIntensity`, and effectively still at 0;
 ///  * silent when SFX volume is 0.
 class StarEarnedOverlay extends StatefulWidget {
-  const StarEarnedOverlay({super.key, required this.granted});
+  const StarEarnedOverlay({
+    super.key,
+    required this.granted,
+    this.headline,
+    this.note,
+  });
 
   final int granted;
+
+  /// Replaces the "you earned N stars" line. Set when nothing was earned and
+  /// the moment is explaining why instead (AUM-286).
+  final String? headline;
+
+  /// An optional quieter second line under [headline], for what to do next.
+  final String? note;
+
+  /// True when this is the earning moment rather than the explaining one.
+  bool get _isEarning => granted > 0;
 
   /// Shows the moment and completes when it has gone. Awaiting this keeps the
   /// end-of-game sequence in order: celebration → stars → what next?
@@ -33,6 +48,31 @@ class StarEarnedOverlay extends StatefulWidget {
       barrierDismissible: false,
       barrierColor: Colors.black26,
       builder: (_) => StarEarnedOverlay(granted: granted),
+    );
+  }
+
+  /// The same moment, for a game that finished without earning (AUM-286).
+  ///
+  /// Same card, same timing, same gentle settle — and deliberately no chime,
+  /// because the chime means stars arrived and nothing arrived here. What it
+  /// must not be is a warning: the child finished a game, which is the thing
+  /// the app wants, and is simply being told where today's remaining stars
+  /// are. Showing nothing at all was the alternative, and "do the thing,
+  /// receive silence" is the shape this app avoids everywhere else.
+  static Future<void> showNothingEarned(
+    BuildContext context, {
+    required String headline,
+    String? note,
+  }) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black26,
+      builder: (_) => StarEarnedOverlay(
+        granted: 0,
+        headline: headline,
+        note: note,
+      ),
     );
   }
 
@@ -68,7 +108,9 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
         _controller.animateTo(1, curve: AppAnimations.gentleCurve);
       }
 
-      if ((profile?.sfxVolume ?? 0) > 0) {
+      // The chime is the sound of stars arriving, so it only plays when some
+      // did. A reward sound for no reward teaches the sound means nothing.
+      if (widget._isEarning && (profile?.sfxVolume ?? 0) > 0) {
         // The star chime already ships in every dialect's asset bundle, so the
         // currency needed no new audio.
         unawaited(context.read<AudioService>().playSfx('3_star'));
@@ -108,18 +150,44 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '⭐' * widget.granted,
-                  style: const TextStyle(fontSize: 44),
-                ),
+                if (widget._isEarning)
+                  Text(
+                    '⭐' * widget.granted,
+                    style: const TextStyle(fontSize: 44),
+                  )
+                else
+                  // One star with a tick, matching the lobby card's badge for
+                  // the same state (AUM-285) — a child meets one symbol for
+                  // "already got this one", not two.
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('⭐', style: TextStyle(fontSize: 44)),
+                      SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.check_rounded,
+                        size: 36,
+                        color: Color(0xFF6FAE97),
+                      ),
+                    ],
+                  ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  widget.granted == 1
-                      ? 'You earned 1 star!'
-                      : 'You earned ${widget.granted} stars!',
+                  widget.headline ??
+                      (widget.granted == 1
+                          ? 'You earned 1 star!'
+                          : 'You earned ${widget.granted} stars!'),
                   style: theme.textTheme.titleLarge,
                   textAlign: TextAlign.center,
                 ),
+                if (widget.note != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    widget.note!,
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
             ),
           ),

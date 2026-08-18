@@ -4,6 +4,41 @@ import '../core/repositories/star_repository.dart';
 import '../features/stars/star_catalogue.dart';
 import '../model/star_ledger_entry.dart';
 
+/// Why a finished activity did or did not pay (AUM-286).
+///
+/// The award path used to return a bare `0` for two quite different things,
+/// and the game-end flow could only respond by showing nothing at all — a
+/// child finished a game and the app said not one word. Naming the cases is
+/// what lets each one be answered.
+enum StarAwardOutcome {
+  /// Stars were granted. [StarAwardResult.granted] says how many.
+  earned,
+
+  /// This game already paid today (AUM-284). It pays again tomorrow.
+  alreadyEarnedToday,
+
+  /// The daily cap is reached, so nothing more pays today whatever is played.
+  dailyCapReached,
+
+  /// No child is bound — nothing was attempted and nothing should be said.
+  noChild,
+}
+
+/// The result of one award attempt.
+@immutable
+class StarAwardResult {
+  const StarAwardResult(this.outcome, [this.granted = 0]);
+
+  final StarAwardOutcome outcome;
+
+  /// How many stars were actually written. Zero for everything but
+  /// [StarAwardOutcome.earned] — and possibly fewer than [kStarsPerGame] even
+  /// then, when the last game of the day runs into the cap part-way.
+  final int granted;
+
+  bool get didEarn => granted > 0;
+}
+
 /// Star balance, unlocks and purchases for the active child (AUM-246).
 ///
 /// A thin cache over [StarRepository]: the ledger is the source of truth and
@@ -103,19 +138,38 @@ class StarsProvider extends ChangeNotifier {
   /// also makes a double-tapped "finish", a rebuild or a retried write unable
   /// to pay twice (STAR-E2). The assessment path keys on its run id instead,
   /// because a run is a single thing that happens once.
-  Future<int> awardForPlay({
+  Future<StarAwardResult> awardForPlay({
     required String playKey,
     StarReason reason = StarReason.gamePlayed,
   }) async {
     final childId = _childId;
-    if (childId == null) return 0;
+    if (childId == null) return const StarAwardResult(StarAwardOutcome.noChild);
+
     final granted = await _repo.awardForSession(
       childId: childId,
       gameSessionId: playKey,
       reason: reason,
     );
-    if (granted > 0) await refresh();
-    return granted;
+    if (granted > 0) {
+      await refresh();
+      return StarAwardResult(StarAwardOutcome.earned, granted);
+    }
+
+    // Nothing was written, so nothing about the ledger changed — but the
+    // *reason* has to be read from it, and a cache from before this session
+    // could be stale (the app may have been restarted since the game last
+    // paid). One extra read on a path that is rare and never in a hot loop is
+    // cheaper than telling a child the wrong thing.
+    await refresh();
+    if (_paidKeysToday.contains(playKey)) {
+      return const StarAwardResult(StarAwardOutcome.alreadyEarnedToday);
+    }
+    if (atDailyCap) {
+      return const StarAwardResult(StarAwardOutcome.dailyCapReached);
+    }
+    // Neither — an unexpected refusal. Say nothing rather than guess at a
+    // reason; a wrong explanation is worse than the silence it replaces.
+    return const StarAwardResult(StarAwardOutcome.noChild);
   }
 
   /// Buys [costume]. Returns true when the purchase happened.
