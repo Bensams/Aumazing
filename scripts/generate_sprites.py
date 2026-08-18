@@ -347,11 +347,45 @@ CHARACTERS = {
     "lexianne": {
         "from_image": (PROJECT_ROOT / "packages" / "assets" / "images"
                        / "Character" / "Lexianne_chibi.png"),
-        # Widest cell of the three; her dress and hair are broader than the
-        # boys'. Re-pin this from the generated sheets if arms get clipped.
-        "cell_w": 430,
+        # Widest cell of the three, and wider than her silhouette needs.
+        # 430 was pinned from her artwork's proportions, but the cell has to
+        # fit the widest ACTION, not the rest pose: `point` extends an arm
+        # fully out at shoulder height and is the extreme. BPS's shipped
+        # point sheet reaches the entire 203px half-width of its 406 cell
+        # (gap 0 — it is touching the edge), and at the same normalised
+        # character height Lexianne's idle silhouette is the same width as
+        # his, so 430 would have clipped her pointing hand off.
+        # CalmMascot constrains height only, so the extra transparent margin
+        # costs nothing on screen.
+        "cell_w": 500,
     },
 }
+
+
+# (character, action) pairs whose clip must be flipped before composing.
+#
+# `point` and `present` both ask the character to gesture to "its own left",
+# which lands on frame RIGHT — and `BuddyCharacter.pointAt` depends on it:
+# "the sheet points to the viewer's right, so a target on the left mirrors the
+# character". A sheet pointing the other way makes the buddy point AWAY from
+# every target it is trying to indicate.
+#
+# For Lexianne the model resolved "its own left" as frame LEFT on two separate
+# takes of `point` — systematic for her, not the random flip that a re-roll
+# fixes. Her `present` came back correctly on frame right, so the two sheets
+# also disagreed with each other, which is the failure SPRITES.md records for
+# bps_present (the book teleporting between hands).
+#
+# Flipping is safe HERE and nowhere else: mirroring is ruled out for BPS
+# (it reverses the lettering on his book) and Reiz (it swaps his lapel and
+# necklace), but Lexianne holds nothing and her outfit is symmetric — a
+# centred pendant, a plain dress, plain sandals. The only thing that changes
+# is her hair part and which hand points, and the app already mirrors her
+# wholesale at runtime whenever a target sits on the left.
+#
+# Applied to the FRAMES rather than the finished sheet so that `metrics()`
+# measures the flipped image and the footing stays correct.
+MIRROR = {("lexianne", "point")}
 
 
 # ── Costume variants ──────────────────────────────────────────────────
@@ -371,12 +405,15 @@ COSTUME_ART = (PROJECT_ROOT / "packages" / "assets" / "images" / "Character"
 
 _COSTUME_FILE = {"bps": "BPs", "lexianne": "Lexianne", "reiz": "Reiz"}
 
-for _base, _cell_w in (("bps", 406), ("lexianne", 430), ("reiz", 327)):
+for _base in ("bps", "lexianne", "reiz"):
     for _costume in ("Teddy", "Panda", "Pig"):
         CHARACTERS[f"{_base}_{_costume.lower()}"] = {
             "from_image": (COSTUME_ART / _costume
                            / f"{_COSTUME_FILE[_base]}_chibi_{_costume}.png"),
-            "cell_w": _cell_w,
+            # Literally inherited, never copied: Lexianne's base moved
+            # 430 -> 500 for her `point` reach, and a duplicated number
+            # here would have silently kept her costumes at the old cell.
+            "cell_w": CHARACTERS[_base]["cell_w"],
         }
 
 
@@ -666,6 +703,9 @@ def compose(name: str, action: str, frames_dir: Path, cell_w: int) -> Path:
 
     cut = [cutout(np.asarray(Image.open(f).convert("RGB")).astype(np.int16))
            for f in picks]
+    if (name, action) in MIRROR:
+        cut = [c[:, ::-1] for c in cut]
+        print(f"    mirrored (see MIRROR in this file)")
     met = [metrics(c) for c in cut]
 
     # A clip where the subject reaches the frame edge has been cropped by a

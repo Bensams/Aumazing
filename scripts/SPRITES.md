@@ -15,7 +15,7 @@ python scripts/generate_sprites.py reiz               # all actions
 python scripts/generate_sprites.py bps --only nod,point
 python scripts/generate_sprites.py bps --only look_up,look_down_left    # gaze grid
 python scripts/generate_sprites.py reiz --compose-only   # free: rebuild from cache
-python scripts/check_gaze.py bps reiz                 # REQUIRED after any look_* run
+python scripts/check_gaze.py bps reiz lexianne        # REQUIRED after any look_* run
 python scripts/quantize_sprites.py --apply            # run once at the end
 ```
 
@@ -178,6 +178,29 @@ to make it obvious is to shrink the iris, which is exactly the failure above.
 Its diagonals read better (they borrow the horizontal axis), and `Mascot._lean`
 carries the rest. Do not "fix" this by pushing harder.
 
+#### Lexianne's vertical gaze does not pass, and that is the same trade-off
+
+She has the same large-iris geometry, and `check_gaze.py lexianne` **exits
+non-zero** on `look_up < look_down`. Read the magnitudes before spending a clip
+on it:
+
+| | look_up y | look_down y | gap |
+|---|---|---|---|
+| Reiz (shipped, passes) | −6.39 | −5.88 | **+0.51** |
+| Lexianne | −9.39 | −10.26 | **−0.87** |
+
+`MIN_TRAVEL` is 2.5 — the point at which a shift is visible at mascot size.
+Both characters are an order of magnitude under it, so neither has a vertical
+gaze that a child could perceive; Reiz merely landed on the lucky side of a ±1
+noise band. Her *horizontal* axis is the strongest of the three (+15.9 against
+BPS's +2.6), and her diagonals pass, so eight of the nine grid cells are doing
+real work.
+
+One re-roll of `look_down` was attempted and came back **cropped** — rejected by
+`SheetTooTight`, 164 credits for nothing. Do not spend more here: the only lever
+that would move the number is shrinking the iris, which is the creepy-face
+failure above.
+
 #### Verify every run — `scripts/check_gaze.py`
 
 A wrong-way pose passes every other check here: perfectly scaled, perfectly
@@ -306,11 +329,53 @@ frame* — which is now in the `present` prompt and is the phrasing to reuse.
 So: for any new one-sided gesture, put its cell next to `idle` cell 0 and check
 the held object has not swapped hands before shipping it.
 
+### The app depends on `point` reaching frame RIGHT — check it, per character
+
+`BuddyCharacter.pointAt` mirrors the whole character when the target is on the
+left, and says why in a comment: *"the sheet points to the viewer's right, so a
+target on the left mirrors the character."* A sheet that points the other way
+therefore makes the buddy point **away** from every target — a functional bug
+that `SheetTooTight` and `check_gaze.py` both pass happily.
+
+Lexianne's `point` came back on frame LEFT on **two separate takes**, while her
+`present` came back correctly on frame right — so the pair also disagreed with
+each other. Two takes landing the same way is systematic for a character, not
+the random flip a re-roll fixes, so re-rolling a third time is throwing credits
+at it.
+
+The fix is the `MIRROR` set in `generate_sprites.py`, which flips a clip's
+frames before `metrics()` measures them. It is applied per (character, action)
+and deliberately kept tiny:
+
+* Mirroring is **not** available for BPS (it reverses the lettering on his
+  book) or Reiz (it swaps his lapel and necklace).
+* It is safe for Lexianne because she holds nothing and her outfit is
+  symmetric — centred pendant, plain dress, plain sandals. Only her hair part
+  changes, and the app already mirrors her wholesale at runtime.
+
+Check any new character's `point` against `bps_point` before shipping it.
+
 ## Known pending work
 
-- **Lexianne** has a `CHARACTERS` entry and pinned `cell_w: 430`, but no sheets
-  generated yet (~2,130 credits for all thirteen). Her `oops` comes with the
-  rest. She holds nothing, so the handedness note above does not bite for her.
+- **Costume sheets** (AUM-275 / STAR-F3) are not started, and are explicitly
+  flagged DECIDE FIRST. At 21 actions it is 27 × 21 = **567 sheets ≈ 93,000
+  credits**; the ticket's own figure of 243 predates the gaze poses. The
+  accessory-overlay alternative (STAR-F2) is ~9 PNGs.
+
+  **The costume source art exists but is not checked out.** All 27 images
+  (9 costumes × 3 characters), `scripts/generate_costumes.py` and
+  `.planning/phases/02.0-star-rewards/BACKLOG.md` live in a git **stash** —
+  `stash@{0}^3`, commit `524f05e5`, "untracked files on
+  claude/voice-over-replay-callback". `.costume_cache/` is gitignored and the
+  art was swept up by a `git stash -u`, so a plain `ls` or a `git log` over the
+  working tree finds nothing and it looks like the art was never made. It was:
+
+  ```bash
+  git checkout 524f05e5 -- packages/assets/images/Character/Character_Costume scripts/generate_costumes.py
+  ```
+
+  Restore it before costing STAR-F3 — it means the costumed REST POSES already
+  exist, which is the expensive input to the overlay approach.
 
 ## Eyeballing an `oops` take
 

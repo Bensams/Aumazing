@@ -19,6 +19,7 @@ void main() {
   for (final entry in {
     'bps': CharacterSprites.bps,
     'reiz': CharacterSprites.reiz,
+    'lexianne': CharacterSprites.lexianne,
   }.entries) {
     group(entry.key, () {
       // An optional action whose art hasn't been generated yet is absent
