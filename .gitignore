@@ -93,3 +93,6 @@ nul
 # Coursework deliverables live in Downloads, not in the repo
 /proposal/
 /*.docx
+
+# A separate project that was cloned inside this repo by accident
+/tulong-kaibigan-dev/
