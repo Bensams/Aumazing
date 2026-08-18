@@ -75,6 +75,14 @@ void main() {
       expect(style.outline, ObjectOutline.solid);
     });
 
+    test('the default outline is a 1px hairline', () {
+      // Thin enough to be a boundary rather than a decoration. A parent can
+      // widen it; nothing should ship a heavy frame around every object.
+      const style = GameObjectStyle();
+      expect(style.outlineWidth, 1);
+      expect(style.effectiveWidth, GameObjectStyle.minWidth);
+    });
+
     test('width is clamped to a sane stroke', () {
       expect(const GameObjectStyle(outlineWidth: 0).effectiveWidth,
           GameObjectStyle.minWidth);

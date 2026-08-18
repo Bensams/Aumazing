@@ -232,11 +232,21 @@ class ResultRecommendation {
     required this.icon,
     required this.label,
     required this.value,
+    this.appliesToSetting = true,
   });
 
   final IconData icon;
   final String label;
   final String value;
+
+  /// Whether this recommendation has a setting behind it that "apply" can
+  /// actually write.
+  ///
+  /// False for the ones the assessment records but the app has nowhere to
+  /// put yet — they are still shown, because the recommendation is real and
+  /// a parent can act on it themselves, but an Apply button must not claim
+  /// to have changed them.
+  final bool appliesToSetting;
 }
 
 /// A single row in the Developmental Profile card.
