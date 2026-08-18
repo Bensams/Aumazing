@@ -152,12 +152,41 @@ class GameEndChoiceDialog {
     final stars = context.read<StarsProvider>();
     await stars.bind(childId);
 
-    final granted = await stars.awardForPlay(
+    final award = await stars.awardForPlay(
       playKey: starPlayKey(childId: childId, gameId: currentGameId),
     );
-    if (granted <= 0 || !context.mounted) return;
+    if (!context.mounted) return;
 
-    await StarEarnedOverlay.show(context, granted: granted);
+    switch (award.outcome) {
+      case StarAwardOutcome.earned:
+        await StarEarnedOverlay.show(context, granted: award.granted);
+
+      case StarAwardOutcome.alreadyEarnedToday:
+        // Names the game, then points somewhere. A child who has just
+        // finished something has done the right thing and should hear so —
+        // what changed is only where the remaining stars are (AUM-286).
+        await StarEarnedOverlay.showNothingEarned(
+          context,
+          headline: "You already got today's star for "
+              '${GameRegistry.find(currentGameId)?.name ?? 'this game'}!',
+          note: stars.atDailyCap
+              ? null
+              : 'Try another game to earn more!',
+        );
+
+      case StarAwardOutcome.dailyCapReached:
+        // Word for word what the shop says for this state, so a child meets
+        // one sentence for "today is complete" and not two competing ones.
+        await StarEarnedOverlay.showNothingEarned(
+          context,
+          headline: "You've got all of today's stars!",
+        );
+
+      case StarAwardOutcome.noChild:
+        // Nothing was attempted, or the refusal had no explicable cause.
+        // Silence is right here: an invented reason would be worse.
+        break;
+    }
   }
 }
 
