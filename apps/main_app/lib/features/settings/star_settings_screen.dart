@@ -97,12 +97,20 @@ class _StarSettingsScreenState extends State<StarSettingsScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         _rule(theme, 'Finishing any game', '$kStarsPerGame ⭐'),
+        _rule(theme, 'Each game, once a day', 'then 0 ⭐'),
         _rule(theme, 'Finishing an assessment', '$kStarsPerGame ⭐'),
         _rule(theme, 'Most in one day', '$kDailyStarCap ⭐'),
         const Divider(height: AppSpacing.lg),
         _rule(theme, 'Earned today', '${stars.earnedToday} ⭐'),
         _rule(theme, 'Stars right now', '${stars.balance} ⭐'),
         const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Each game pays once a day, and pays again tomorrow. Your child can '
+          'still replay a favourite as often as they like — it just does not '
+          'earn twice, so the day\'s stars come from trying different games.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.xs),
         Text(
           'Stars are never taken away and never expire. Playing badly still '
           'earns the full amount — the reward is for trying, not for scoring.',
