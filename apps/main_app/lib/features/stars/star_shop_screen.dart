@@ -34,6 +34,18 @@ class _StarShopScreenState extends State<StarShopScreen> {
   @override
   void initState() {
     super.initState();
+    // The shop is a child-facing screen and says so, rather than inheriting
+    // whatever the previous route happened to leave set. Reached only from
+    // the child lobby today, so in practice it was already landscape — but
+    // "in practice" is how a screen ends up rotating differently depending on
+    // where the child came from. The twelve game screens declare the same
+    // thing in the same place.
+    //
+    // Nothing here touches the parent policy: parent-facing screens call
+    // `lockParentAdaptive()` in their own `initState`, which keeps a phone in
+    // portrait. See `parent_screen_orientation.dart`.
+    lockParentLandscape();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<StarsProvider>().refresh();
