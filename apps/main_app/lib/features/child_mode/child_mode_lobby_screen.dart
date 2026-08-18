@@ -14,6 +14,7 @@ import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../widgets/mascot.dart';
 import '../../widgets/mascot_host.dart';
+import '../../providers/stars_provider.dart';
 import '../stars/star_shop_screen.dart';
 import 'game_launcher.dart';
 import 'path_map_view.dart';
@@ -272,7 +273,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
           });
         }
       });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startEntryGuidance());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startEntryGuidance();
+      // After the first frame: `bind` reads a provider and notifies, which is
+      // not allowed while this one is still building.
+      _bindStars();
+    });
     _restartIdleTimer();
   }
 
@@ -793,6 +799,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   /// Opens the Star Shop. Child mode stays locked — the shop is the child's
   /// own screen, not a parent one, so it needs no verification.
+  /// Loads the star ledger for the active child so the game cards know which
+  /// games have already paid today. Cheap and idempotent — `bind` no-ops when
+  /// the child has not changed.
+  void _bindStars() {
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId == null) return;
+    context.read<StarsProvider>().bind(childId);
+  }
+
   void _openStarShop() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const StarShopScreen()),
@@ -1289,6 +1304,10 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       final card = _GameCard(
         entry: games[i],
         difficulty: difficulty,
+        // Watched, not read: coming back from a game refreshes the ledger,
+        // and the badge has to appear then rather than on the next restart.
+        starEarnedToday:
+            context.watch<StarsProvider>().hasEarnedStarToday(games[i].id),
         onTap: () => _launch(games[i].id, difficulty),
       );
       return i == 0 ? KeyedSubtree(key: _guideCardKey, child: card) : card;
@@ -1412,6 +1431,36 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       style: childProv.activeWorldStyle,
       currentStepKey: _guideCardKey,
       onLaunch: _launch,
+    );
+  }
+}
+
+/// "You already got this game's star today" (AUM-285).
+///
+/// A filled star with a tick, in the same white pill as the difficulty tier so
+/// it reads as one more piece of card furniture rather than an alert. There is
+/// deliberately no counterpart badge for games that *have* a star waiting:
+/// marking both states doubles the visual load on a screen a child scans
+/// quickly, and the useful signal is the smaller set.
+class _StarEarnedBadge extends StatelessWidget {
+  const _StarEarnedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.white.withAlpha(225),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('⭐', style: TextStyle(fontSize: 14)),
+          SizedBox(width: 3),
+          Icon(Icons.check_rounded, size: 14, color: Color(0xFF6FAE97)),
+        ],
+      ),
     );
   }
 }
@@ -1664,6 +1713,7 @@ class _GameCard extends StatelessWidget {
   const _GameCard({
     required this.entry,
     required this.difficulty,
+    required this.starEarnedToday,
     required this.onTap,
   });
 
@@ -1671,6 +1721,18 @@ class _GameCard extends StatelessWidget {
 
   /// 1 Easy / 2 Medium / 3 Hard — from the child's per-area AI level.
   final int difficulty;
+
+  /// Whether this game has already paid its star today (AUM-284).
+  ///
+  /// Shown as a small "got it" star in the corner, and deliberately nothing
+  /// else: the card keeps its full colour, its gradient and its tap target,
+  /// because the game is still completely playable and should still look
+  /// inviting. Greying it out or crossing it through would read as "you may
+  /// not", which is the opposite of what this app tells a child anywhere else
+  /// — the shop shows a progress bar rather than a padlock for the same
+  /// reason. A child replaying a favourite is doing the right thing; they are
+  /// simply not paid twice for it.
+  final bool starEarnedToday;
 
   final VoidCallback? onTap;
 
@@ -1694,7 +1756,12 @@ class _GameCard extends StatelessWidget {
       // also says which difficulty it will start at.
       child: Semantics(
         button: true,
-        label: '${entry.name}, $tier',
+        // Appended to the existing single node rather than given its own
+        // Semantics wrapper: the card is deliberately one TalkBack stop, and
+        // a badge is not worth making it two.
+        label: starEarnedToday
+            ? '${entry.name}, $tier, got today\'s star'
+            : '${entry.name}, $tier',
         excludeSemantics: true,
         onTap: onTap,
         child: Material(
@@ -1741,6 +1808,15 @@ class _GameCard extends StatelessWidget {
                               ),
                             ),
                           ),
+                          // Today's star, already earned. Top-left, opposite
+                          // the difficulty pill, so the two can never overlap
+                          // however long either gets.
+                          if (starEarnedToday)
+                            const Positioned(
+                              top: 10,
+                              left: 10,
+                              child: _StarEarnedBadge(),
+                            ),
                           // Per-game difficulty tier from the child's AI level.
                           Positioned(
                             top: 10,

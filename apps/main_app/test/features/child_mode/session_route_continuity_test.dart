@@ -4,6 +4,7 @@ import 'package:aumazing/features/child_mode/time_up_dialog.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
+import 'package:aumazing/providers/stars_provider.dart';
 import 'package:aumazing/services/screen_time_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -183,6 +184,9 @@ Widget _wrap(Widget screen) {
       ChangeNotifierProvider<AssessmentProvider>(
         create: (_) => _TestAssessmentProvider(),
       ),
+      ChangeNotifierProvider<StarsProvider>(
+        create: (_) => _NoStarsProvider(),
+      ),
     ],
     child: MaterialApp(theme: AppTheme.light, home: screen),
   );
@@ -219,4 +223,18 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   @override
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// The child lobby reads this for the "got today's star" badge (AUM-285).
+/// Nothing here exercises the badge, so it reports nothing earned and never
+/// touches a database.
+class _NoStarsProvider extends StarsProvider {
+  @override
+  bool hasEarnedStarToday(String gameId) => false;
+
+  @override
+  Future<void> bind(String? childId) async {}
+
+  @override
+  Future<void> refresh() async {}
 }

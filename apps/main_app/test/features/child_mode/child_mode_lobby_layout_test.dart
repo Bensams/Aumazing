@@ -3,6 +3,7 @@ import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
+import 'package:aumazing/providers/stars_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +47,43 @@ void main() {
   // The form factor drives the step-2 layout; pin it per test rather than
   // inferring it from the test surface.
   tearDown(() => debugSetDeviceSmallestWidthDp(null));
+
+  testWidgets('a game that paid today is badged, and only that game', (
+    tester,
+  ) async {
+    // AUM-285. Without this the once-a-day rule is invisible until a child
+    // plays a game and receives silence.
+    await tester.binding.setSurfaceSize(_tabletLandscape);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    debugSetDeviceSmallestWidthDp(720);
+
+    await _pumpLobby(tester, starsEarnedToday: {'match_it'});
+    await _openCategory(tester, 'All');
+
+    final badged = _cardsWithStarBadge(tester);
+    expect(badged, ['Match It'],
+        reason: 'exactly the game that paid should carry the badge');
+
+    // Still a full-colour, tappable card — the game remains playable and must
+    // still look it. A badge is not a padlock.
+    expect(
+      tester.widget<InkWell>(_card('Match It')).onTap,
+      isNotNull,
+    );
+    await _disposeLobby(tester);
+  });
+
+  testWidgets('no game badged is the neutral state', (tester) async {
+    await tester.binding.setSurfaceSize(_tabletLandscape);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    debugSetDeviceSmallestWidthDp(720);
+
+    await _pumpLobby(tester);
+    await _openCategory(tester, 'All');
+
+    expect(_cardsWithStarBadge(tester), isEmpty);
+    await _disposeLobby(tester);
+  });
 
   testWidgets('category cards are bounded tiles on a landscape tablet', (
     tester,
@@ -245,12 +283,30 @@ Future<void> _openCategory(WidgetTester tester, String label) async {
   expect(tester.takeException(), isNull);
 }
 
+/// Names of the game cards currently showing the "got today's star" badge.
+///
+/// Read from the card's semantics label rather than by finding a private
+/// widget type: the label is the contract the card publishes, and asserting
+/// on it checks the screen-reader wording at the same time.
+List<String> _cardsWithStarBadge(WidgetTester tester) => tester
+    .widgetList<Semantics>(find.byType(Semantics))
+    .map((w) => w.properties.label)
+    .whereType<String>()
+    .where((label) => label.contains("got today's star"))
+    .map((label) => label.split(',').first)
+    .toList();
+
 /// The card behind a category label — the box the layout actually sizes.
 Finder _card(String label) =>
     find.ancestor(of: find.text(label), matching: find.byType(InkWell)).first;
 
-Future<void> _pumpLobby(WidgetTester tester) async {
-  await tester.pumpWidget(_wrap(const ChildModeLobbyScreen()));
+Future<void> _pumpLobby(
+  WidgetTester tester, {
+  Set<String> starsEarnedToday = const {},
+}) async {
+  await tester.pumpWidget(
+    _wrap(const ChildModeLobbyScreen(), starsEarnedToday: starsEarnedToday),
+  );
   await tester.pump();
   // Short of the 900ms entry-guidance delay, which speaks through the audio
   // plugin the test has no binding for.
@@ -266,7 +322,7 @@ Future<void> _disposeLobby(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 1));
 }
 
-Widget _wrap(Widget screen) {
+Widget _wrap(Widget screen, {Set<String> starsEarnedToday = const {}}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>(
@@ -275,9 +331,29 @@ Widget _wrap(Widget screen) {
       ChangeNotifierProvider<AssessmentProvider>(
         create: (_) => _TestAssessmentProvider(),
       ),
+      // The lobby reads this for the "got today's star" badge (AUM-285).
+      ChangeNotifierProvider<StarsProvider>(
+        create: (_) => _TestStarsProvider(starsEarnedToday),
+      ),
     ],
     child: MaterialApp(theme: AppTheme.light, home: screen),
   );
+}
+
+/// Reports a fixed set of game ids as already paid today, without a database.
+class _TestStarsProvider extends StarsProvider {
+  _TestStarsProvider(this._earned);
+
+  final Set<String> _earned;
+
+  @override
+  bool hasEarnedStarToday(String gameId) => _earned.contains(gameId);
+
+  @override
+  Future<void> bind(String? childId) async {}
+
+  @override
+  Future<void> refresh() async {}
 }
 
 class _TestChildProvider extends ChildProvider {
