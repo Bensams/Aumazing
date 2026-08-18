@@ -14,6 +14,7 @@ import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../widgets/mascot.dart';
 import '../../widgets/mascot_host.dart';
+import '../stars/star_shop_screen.dart';
 import 'game_launcher.dart';
 import 'path_map_view.dart';
 import 'time_up_dialog.dart';
@@ -790,6 +791,14 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _restartIdleTimer();
   }
 
+  /// Opens the Star Shop. Child mode stays locked — the shop is the child's
+  /// own screen, not a parent one, so it needs no verification.
+  void _openStarShop() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const StarShopScreen()),
+    );
+  }
+
   Future<void> _exitToParent() async {
     final verified = await ParentVerificationDialog.show(context);
     if (verified && mounted) {
@@ -1094,6 +1103,26 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
             ),
           ),
           const Spacer(),
+          // The shop lives here and at the end of a session — never inside a
+          // game (STAR-G3). A child who can reach it mid-play tends to play
+          // for the shop rather than for the game, which is the failure mode
+          // this whole feature is shaped to avoid.
+          //
+          // Hidden entirely when the parent turned it off (STAR-G2). Stars go
+          // on accruing regardless, so turning it back on later costs nothing.
+          if (context.watch<ChildProvider>().shopEnabled)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Material(
+              color: AppColors.white.withAlpha(200),
+              shape: const CircleBorder(),
+              child: IconButton(
+                onPressed: _openStarShop,
+                icon: Icon(Icons.checkroom_rounded, color: palette.primary),
+                tooltip: 'My Costumes',
+              ),
+            ),
+          ),
           Material(
             color: AppColors.white.withAlpha(200),
             shape: const CircleBorder(),

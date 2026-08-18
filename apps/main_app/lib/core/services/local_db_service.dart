@@ -94,7 +94,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 16; // v16: Add music_category to children
+  static const _dbVersion = 17; // v17: Star Shop — ledger, unlocks, character
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -166,6 +166,8 @@ class LocalDbService {
         sensory_preferences_set INTEGER NOT NULL DEFAULT 0,
         reward_preference TEXT NOT NULL DEFAULT 'bubbles',
         use_random_reward INTEGER NOT NULL DEFAULT 0,
+        character_id TEXT NOT NULL DEFAULT 'bps',
+        equipped_costume TEXT NOT NULL DEFAULT 'none',
         comfort_settings TEXT,
         $_syncColumns
       )
@@ -178,6 +180,8 @@ class LocalDbService {
     await db.execute('''
       CREATE INDEX idx_children_sync ON ${LocalTables.children}(sync_status)
     ''');
+
+    await _createStarTables(db);
 
     // Assessment runs (assessment sessions)
     await db.execute('''
@@ -545,7 +549,53 @@ class LocalDbService {
     debugPrint('[LocalDbService] Database created with sync schema v$version');
   }
 
+  /// Star Shop storage (STAR-E1, STAR-E2). Shared by `_onCreate` and the v17
+  /// upgrade so a fresh install and a migrated one cannot drift apart.
+  ///
+  /// Note what is NOT here: a balance column. The balance is `SUM(delta)` over
+  /// the ledger, because a mutable balance under last-write-wins sync silently
+  /// discards stars a child watched themselves earn.
+  Future<void> _createStarTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${LocalTables.starLedger} (
+        id TEXT PRIMARY KEY,
+        child_id TEXT NOT NULL,
+        delta INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        game_session_id TEXT,
+        item_id TEXT,
+        created_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    // The idempotency guarantee (STAR-E2): one payout per session per reason,
+    // so a retried upload — which the sync layer does after any failure —
+    // cannot pay a child twice. Partial index because purchase rows carry no
+    // session id and must not collide with each other.
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_star_ledger_session
+        ON ${LocalTables.starLedger}(child_id, game_session_id, reason)
+        WHERE game_session_id IS NOT NULL
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_star_ledger_child
+        ON ${LocalTables.starLedger}(child_id, created_at)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${LocalTables.childUnlocks} (
+        child_id TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        unlocked_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (child_id, item_id)
+      )
+    ''');
+  }
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+
     if (oldVersion < 2) {
       // Migration from v1 to v2: Add sync columns to existing tables
       // Note: In production, you'd migrate existing data carefully
@@ -948,6 +998,29 @@ class LocalDbService {
       debugPrint(
         '[LocalDbService] Added music_category column to children (v16)',
       );
+    }
+
+    // Must stay LAST: earlier steps (v3) rebuild the children table wholesale,
+    // and columns added before that runs would be dropped by it.
+    if (oldVersion < 17) {
+      await _createStarTables(db);
+      for (final column in const [
+        "character_id TEXT NOT NULL DEFAULT 'bps'",
+        "equipped_costume TEXT NOT NULL DEFAULT 'none'",
+      ]) {
+        try {
+          await db.execute(
+            'ALTER TABLE ${LocalTables.children} ADD COLUMN $column',
+          );
+        } catch (_) {
+          // Column already present — safe to skip, same as v16 above.
+        }
+      }
+      // Existing children keep BPS, the character the app has always shown
+      // them. A migration silently reassigning a familiar companion is exactly
+      // the kind of surprise this feature is meant to avoid; the parent picks
+      // deliberately from Settings instead (STAR-A2).
+      debugPrint('[LocalDbService] v17: star ledger, unlocks, character');
     }
   }
 
