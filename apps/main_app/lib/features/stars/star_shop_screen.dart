@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_ui/shared_ui.dart';
@@ -52,8 +54,11 @@ class _StarShopScreenState extends State<StarShopScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _ShopHeader(onBack: () => Navigator.of(context).maybePop()),
-              _StarBalance(balance: stars.balance, atCap: stars.atDailyCap),
+              _ShopHeader(
+                onBack: () => Navigator.of(context).maybePop(),
+                balance: stars.balance,
+              ),
+              if (stars.atDailyCap) const _DailyCapNote(),
               Expanded(
                 child: stars.isLoading && stars.offers.isEmpty
                     ? const Center(child: CircularProgressIndicator())
@@ -88,6 +93,7 @@ class _StarShopScreenState extends State<StarShopScreen> {
     final result = await showModalBottomSheet<_CostumeAction>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _CostumeSheet(offer: offer, character: character),
     );
@@ -118,15 +124,24 @@ class _StarShopScreenState extends State<StarShopScreen> {
 
 enum _CostumeAction { wear, buy }
 
-/// Back arrow plus title. Deliberately not `ChildModeTopBar`, which is the
-/// in-game step-progress bar — the shop is not a game and has no steps.
+/// Back arrow, title, and the child's star balance in the top-right corner.
+///
+/// Deliberately not `ChildModeTopBar`, which is the in-game step-progress bar
+/// — the shop is not a game and has no steps.
+///
+/// The balance sits in the corner rather than in a centred band of its own:
+/// on a phone the vertical space it used to take is a whole row of costumes,
+/// and the number is a persistent status readout, which is where a child (and
+/// an adult reading over their shoulder) already looks for one.
 class _ShopHeader extends StatelessWidget {
-  const _ShopHeader({required this.onBack});
+  const _ShopHeader({required this.onBack, required this.balance});
 
   final VoidCallback onBack;
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -141,45 +156,82 @@ class _ShopHeader extends StatelessWidget {
             tooltip: 'Back',
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text('My Costumes', style: Theme.of(context).textTheme.headlineSmall),
+          Expanded(
+            child: Text(
+              'My Costumes',
+              style: theme.textTheme.headlineSmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _StarBalance(balance: balance),
         ],
       ),
     );
   }
 }
 
+/// The star count, as a pill in the header's trailing corner.
 class _StarBalance extends StatelessWidget {
-  const _StarBalance({required this.balance, required this.atCap});
+  const _StarBalance({required this.balance});
 
   final int balance;
-  final bool atCap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('⭐', style: TextStyle(fontSize: 32)),
-          const SizedBox(width: AppSpacing.sm),
-          Text('$balance', style: theme.textTheme.displaySmall),
-          if (atCap) ...[
-            const SizedBox(width: AppSpacing.md),
-            Flexible(
-              child: Text(
-                // A finished state, never a lockout: the child has *got*
-                // everything today offers rather than being cut off.
-                "You've got all of today's stars!",
-                style: theme.textTheme.bodyMedium,
-              ),
+    return Semantics(
+      liveRegion: true,
+      label: '$balance stars',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('⭐', style: TextStyle(fontSize: 24)),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              '$balance',
+              style: theme.textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown only once the day's stars are all earned.
+///
+/// A finished state, never a lockout: the child has *got* everything today
+/// offers rather than being cut off. It gets its own line instead of riding
+/// alongside the balance, so a long sentence can never squeeze the number.
+class _DailyCapNote extends StatelessWidget {
+  const _DailyCapNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
+      child: Text(
+        "You've got all of today's stars!",
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium,
       ),
     );
   }
@@ -198,24 +250,52 @@ class _CostumeGrid extends StatelessWidget {
   final List<CostumeOffer> offers;
   final ValueChanged<CostumeOffer> onTap;
 
+  /// The card shape we want when there is room: taller than wide, so the
+  /// character's full body reads at a glance.
+  static const double _preferredAspect = 0.72;
+
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 260,
-        childAspectRatio: 0.72,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisSpacing: AppSpacing.md,
-      ),
-      itemCount: offers.length,
-      itemBuilder: (context, i) {
-        final offer = offers[i];
-        return CostumeCard(
-          offer: offer,
-          character: character,
-          isWorn: worn == offer.costume,
-          onTap: () => onTap(offer),
+    // Sized against the real viewport rather than a fixed extent. A phone in
+    // landscape is the case that breaks a width-only rule: three columns fit
+    // across happily, but a card 0.72 as wide as it is tall is then taller
+    // than the screen, so the first row alone fills the view and the grid
+    // reads as one enormous costume. Capping the height to what is actually
+    // visible keeps a whole row on screen in every orientation.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = AppSpacing.md;
+        const pad = AppSpacing.lg;
+        final width = constraints.maxWidth;
+        final columns = width >= 900
+            ? 4
+            : width >= 600
+                ? 3
+                : 2;
+        final cardWidth = (width - pad * 2 - gap * (columns - 1)) / columns;
+        final visibleHeight = constraints.maxHeight - pad * 2;
+        final cardHeight = visibleHeight.isFinite && visibleHeight > 0
+            ? math.min(cardWidth / _preferredAspect, visibleHeight)
+            : cardWidth / _preferredAspect;
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(pad),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            childAspectRatio: cardWidth / cardHeight,
+            crossAxisSpacing: gap,
+            mainAxisSpacing: gap,
+          ),
+          itemCount: offers.length,
+          itemBuilder: (context, i) {
+            final offer = offers[i];
+            return CostumeCard(
+              offer: offer,
+              character: character,
+              isWorn: worn == offer.costume,
+              onTap: () => onTap(offer),
+            );
+          },
         );
       },
     );
@@ -230,47 +310,151 @@ class _CostumeSheet extends StatelessWidget {
   final CostumeOffer offer;
   final ChildCharacter character;
 
+  /// Roughly what the title, the progress line, both buttons and the padding
+  /// between them occupy when they are stacked. The artwork gets the rest.
+  static const double _stackedChromeHeight = 300;
+
+  /// Below this the stacked layout cannot show the artwork *and* keep both
+  /// buttons on screen, so the sheet turns side-by-side instead. A phone in
+  /// landscape is about 390 tall, which is what puts it under this line.
+  static const double _sideBySideBelow = 520;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppRadius.extraLarge),
+    final media = MediaQuery.of(context);
+
+    // Everything here is measured from the viewport rather than fixed. The
+    // previous version reserved 320 logical pixels for the artwork whatever
+    // the screen was, which overflowed a phone by ~197px and left a tablet
+    // with a postage stamp. `viewPadding` rather than `padding`, because a
+    // bottom sheet consumes the inset itself.
+    final available =
+        media.size.height - media.viewPadding.top - media.viewPadding.bottom;
+    final maxSheetHeight = available * 0.9;
+    final sideBySide = maxSheetHeight < _sideBySideBelow &&
+        media.size.width > media.size.height;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxSheetHeight),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.extraLarge),
+          ),
         ),
-      ),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(offer.costume.displayName, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: AppSpacing.md),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320),
-              child: Image.asset(
-                offer.costume.assetFor(character),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.checkroom, size: 96),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(offer.spokenProgress, style: theme.textTheme.bodyLarge),
-            const SizedBox(height: AppSpacing.lg),
-            _sheetAction(context),
-            const SizedBox(height: AppSpacing.sm),
-            AppSecondaryButton(
-              label: 'Not yet',
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: sideBySide
+                ? _sideBySideBody(context, maxSheetHeight)
+                : _stackedBody(context, maxSheetHeight),
+          ),
         ),
       ),
     );
   }
+
+  /// Portrait phones and tablets: title, costume, progress, actions, stacked.
+  Widget _stackedBody(BuildContext context, double maxSheetHeight) {
+    // Clamped at both ends: never so small the costume is unreadable, never
+    // so tall it crowds the buttons out.
+    final artHeight = (maxSheetHeight - _stackedChromeHeight)
+        .clamp(140.0, 420.0)
+        .toDouble();
+
+    // The scroll view is a backstop, not the layout: at the sizes we ship the
+    // content fits and nothing scrolls. It is here so a very large system
+    // font scrolls instead of clipping the buttons a child needs to press.
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _title(context),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: artHeight,
+            width: double.infinity,
+            child: _art(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _progress(context),
+          const SizedBox(height: AppSpacing.lg),
+          _sheetAction(context),
+          const SizedBox(height: AppSpacing.sm),
+          _notYet(context),
+        ],
+      ),
+    );
+  }
+
+  /// Landscape phones: the costume beside its actions rather than above them.
+  ///
+  /// Stacking here is what produced the reported overflow — a phone on its
+  /// side has roughly 350 usable pixels of height, and the title, artwork,
+  /// progress line and two buttons cannot all live in that column. Turning
+  /// the sheet sideways uses the axis that actually has room, and keeps
+  /// "Not yet" on screen without scrolling.
+  Widget _sideBySideBody(BuildContext context, double maxSheetHeight) {
+    // The artwork needs an explicit height even here. `Image` inside an
+    // `Expanded` is only width-constrained, so it takes the height its aspect
+    // ratio asks for — 900/657 of a third of a landscape phone is taller than
+    // the phone — and pushes the whole row past the sheet.
+    final artHeight = (maxSheetHeight - AppSpacing.lg * 2)
+        .clamp(120.0, 360.0)
+        .toDouble();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(flex: 4, child: SizedBox(height: artHeight, child: _art())),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          flex: 5,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _title(context),
+                const SizedBox(height: AppSpacing.sm),
+                _progress(context),
+                const SizedBox(height: AppSpacing.md),
+                _sheetAction(context),
+                const SizedBox(height: AppSpacing.sm),
+                _notYet(context),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _title(BuildContext context) => Text(
+        offer.costume.displayName,
+        style: Theme.of(context).textTheme.headlineSmall,
+        textAlign: TextAlign.center,
+      );
+
+  Widget _art() => Image.asset(
+        offer.costume.assetFor(character),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.checkroom, size: 96),
+      );
+
+  Widget _progress(BuildContext context) => Text(
+        offer.spokenProgress,
+        style: Theme.of(context).textTheme.bodyLarge,
+        textAlign: TextAlign.center,
+      );
+
+  Widget _notYet(BuildContext context) => AppSecondaryButton(
+        label: 'Not yet',
+        onPressed: () => Navigator.of(context).pop(),
+      );
 
   Widget _sheetAction(BuildContext context) {
     if (offer.owned) {

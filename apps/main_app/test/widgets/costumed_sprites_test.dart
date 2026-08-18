@@ -38,20 +38,24 @@ void main() {
     expect(MascotCharacter.fromId(null), MascotCharacter.bps);
   });
 
-  test('the animated costumes are the ones with sheets on disk', () {
-    // Three of the nine costumes have sprite sheets so far. This is a
-    // reminder, not a constraint: the other six are bought and worn happily,
-    // they just fall back to the base character in-game until their sheets
-    // are generated. Update the list as more land.
+  test('the shop only stocks costumes the mascot can wear', () {
+    // Three of the nine costumes have sprite sheets so far, and only those
+    // three are sold. The other six keep their price and their still art in
+    // the catalogue but stay out of the shop until their sheets land
+    // (STAR-F3 / AUM-275) — a child must not spend stars on a costume that
+    // then fails to appear on the mascot during play.
     const animated = {Costume.teddy, Costume.panda, Costume.pig};
-    for (final costume in animated) {
-      expect(Costume.purchasable, contains(costume));
+    expect(Costume.inStock.toSet(), animated);
+    for (final costume in Costume.purchasable) {
+      expect(costume.hasSpriteSheets, animated.contains(costume),
+          reason: costume.id);
     }
     expect(
       Costume.purchasable.length,
-      greaterThan(animated.length),
-      reason: 'if every costume is animated, the fallback path is now dead '
-          'code and CharacterSprites.costumed can be simplified',
+      greaterThan(Costume.inStock.length),
+      reason: 'if every costume is animated, the fallback path in '
+          'CharacterSprites.costumed is now dead code and both it and '
+          'Costume.inStock can be simplified away',
     );
   });
 }
