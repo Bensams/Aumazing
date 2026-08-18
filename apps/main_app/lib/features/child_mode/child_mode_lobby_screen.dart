@@ -1423,9 +1423,14 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     var guideIndex = path.indexWhere((e) => !completed.contains(e.game.id));
     if (guideIndex < 0) guideIndex = 0;
     final childProv = context.watch<ChildProvider>();
+    final stars = context.watch<StarsProvider>();
     return PathMapView(
       path: path,
       completedGameIds: completed,
+      starsEarnedTodayGameIds: {
+        for (final entry in path)
+          if (stars.hasEarnedStarToday(entry.game.id)) entry.game.id,
+      },
       // The parent's manual override still wins over the path level.
       difficultyOverride: childProv.difficultyOverride,
       style: childProv.activeWorldStyle,
