@@ -201,6 +201,7 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
     MascotHost.maybeOf(context)?.flash(MascotPose.encourage);
     Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => MascotHost(
+        showMascot: false, // Tulong Kaibigan draws its own buddies.
         child: TulongKaibiganScreen(
           assessmentContext: widget.assessmentContext,
           sensoryController: widget.sensoryController,

@@ -253,6 +253,7 @@ class _SabayTayoScreenState extends State<SabayTayoScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MascotHost(
+          showMascot: false, // Sabay Tayo draws its own buddy.
           child: SabayTayoScreen(
             assessmentContext: widget.assessmentContext,
             sensoryController: widget.sensoryController,

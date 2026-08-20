@@ -18,7 +18,7 @@ void main() {
     // Warmed here so the game's own await inside onLoad resolves on a
     // microtask; decoding twenty PNGs mid-pump does not, and the widget test
     // below then never gets past the first frame.
-    await EmotionArtCache.ensureLoaded();
+    await EmotionArtCache.ensureLoaded('bps');
   });
 
   AnongNararamdamanGame gameAtTier(int level) => AnongNararamdamanGame(
