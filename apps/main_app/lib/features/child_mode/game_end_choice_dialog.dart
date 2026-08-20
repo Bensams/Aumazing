@@ -117,8 +117,10 @@ class GameEndChoiceDialog {
           GameLauncher.difficultyFor(context, target);
       final screen = GameLauncher.screenFor(target.id, difficulty);
       if (screen != null) {
+        // The space world flies a spaceship on to the next round; other worlds
+        // keep the plain replacement.
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => screen),
+          GameLauncher.routeFor(context, screen),
         );
         return;
       }
