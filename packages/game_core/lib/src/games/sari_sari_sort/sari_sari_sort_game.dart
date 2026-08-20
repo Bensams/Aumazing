@@ -11,6 +11,7 @@ import 'components/category_bin.dart';
 import '../shared/answer_label.dart';
 import 'components/draggable_item.dart';
 import 'components/store_backdrop.dart';
+import 'seed_art_cache.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
@@ -190,25 +191,32 @@ class SariSariSortGame extends FlameGame
   /// is teaching. And the small, fiddly items (kendi, biskwit) are gone —
   /// they read as specks at any size that fits three across, and a picture the
   /// child cannot identify is not a categorisation task, it is a guess.
-  static const Map<StoreCategory, List<StoreItemData>> _catalogue = {
+  /// Full asset path of a seed picture card in the shared bank. The bank groups
+  /// cards by their own category folder (fruits/food/toys/essentials/animals),
+  /// which is independent of the [StoreCategory] the item sorts into — a banana
+  /// is drawn under `fruits/` but sorts into [StoreCategory.food].
+  static String _seed(String bankCategory, String slug) =>
+      'packages/shared_ui/assets/seed_cards/$bankCategory/$slug.png';
+
+  static final Map<StoreCategory, List<StoreItemData>> _catalogue = {
     StoreCategory.toys: [
-      StoreItemData(name: 'Bola', en: 'Ball', emoji: '⚽', category: StoreCategory.toys, color: Color(0xFF6C9BD2)),     // ball blue
-      StoreItemData(name: 'Manika', en: 'Doll', emoji: '🪆', category: StoreCategory.toys, color: Color(0xFFE89AB8)),   // doll pink
-      StoreItemData(name: 'Kotse', en: 'Toy car', emoji: '🚗', category: StoreCategory.toys, color: Color(0xFFE07B54)), // toy car orange
-      StoreItemData(name: 'Teddy', en: 'Teddy', emoji: '🧸', category: StoreCategory.toys, color: Color(0xFFC49A6C)),   // teddy bear tan
+      StoreItemData(name: 'Bola', en: 'Ball', emoji: '⚽', category: StoreCategory.toys, color: Color(0xFF6C9BD2), card: _seed('toys', 'ball')),       // ball blue
+      StoreItemData(name: 'Manika', en: 'Doll', emoji: '🪆', category: StoreCategory.toys, color: Color(0xFFE89AB8), card: _seed('toys', 'doll')),     // doll pink
+      StoreItemData(name: 'Kotse', en: 'Toy car', emoji: '🚗', category: StoreCategory.toys, color: Color(0xFFE07B54), card: _seed('toys', 'car')),    // toy car orange
+      StoreItemData(name: 'Teddy', en: 'Teddy', emoji: '🧸', category: StoreCategory.toys, color: Color(0xFFC49A6C), card: _seed('toys', 'teddy')),    // teddy bear tan
     ],
     StoreCategory.food: [
-      StoreItemData(name: 'Tinapay', en: 'Bread', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B)),  // bread tan
-      StoreItemData(name: 'Saging', en: 'Banana', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547)),  // banana yellow
-      StoreItemData(name: 'Mansanas', en: 'Apple', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E)), // apple red
-      StoreItemData(name: 'Gatas', en: 'Milk', emoji: '🥛', category: StoreCategory.food, color: Color(0xFFF1EEE2)),     // milk cream
-      StoreItemData(name: 'Tubig', en: 'Water', emoji: '💧', category: StoreCategory.food, color: Color(0xFF8FD2EF)),    // water light blue
+      StoreItemData(name: 'Tinapay', en: 'Bread', emoji: '🍞', category: StoreCategory.food, color: Color(0xFFD9A05B), card: _seed('food', 'bread')),    // bread tan
+      StoreItemData(name: 'Saging', en: 'Banana', emoji: '🍌', category: StoreCategory.food, color: Color(0xFFF5D547), card: _seed('fruits', 'banana')), // banana yellow
+      StoreItemData(name: 'Mansanas', en: 'Apple', emoji: '🍎', category: StoreCategory.food, color: Color(0xFFE0413E), card: _seed('fruits', 'apple')), // apple red
+      StoreItemData(name: 'Gatas', en: 'Milk', emoji: '🥛', category: StoreCategory.food, color: Color(0xFFF1EEE2), card: _seed('food', 'milk')),        // milk cream
+      StoreItemData(name: 'Tubig', en: 'Water', emoji: '💧', category: StoreCategory.food, color: Color(0xFF8FD2EF), card: _seed('food', 'water')),      // water light blue
     ],
     StoreCategory.essentials: [
-      StoreItemData(name: 'Sabon', en: 'Soap', emoji: '🧼', category: StoreCategory.essentials, color: Color(0xFF8BC36A)),       // soap green
-      StoreItemData(name: 'Sipilyo', en: 'Toothbrush', emoji: '🪥', category: StoreCategory.essentials, color: Color(0xFF45C4C0)), // toothbrush teal
-      StoreItemData(name: 'Tisyu', en: 'Tissue', emoji: '🧻', category: StoreCategory.essentials, color: Color(0xFFF1EEE2)),     // tissue white
-      StoreItemData(name: 'Syampu', en: 'Shampoo', emoji: '🧴', category: StoreCategory.essentials, color: Color(0xFFB088D9)),   // shampoo purple
+      StoreItemData(name: 'Sabon', en: 'Soap', emoji: '🧼', category: StoreCategory.essentials, color: Color(0xFF8BC36A), card: _seed('essentials', 'soap')),             // soap green
+      StoreItemData(name: 'Sipilyo', en: 'Toothbrush', emoji: '🪥', category: StoreCategory.essentials, color: Color(0xFF45C4C0), card: _seed('essentials', 'toothbrush')), // toothbrush teal
+      StoreItemData(name: 'Tisyu', en: 'Tissue', emoji: '🧻', category: StoreCategory.essentials, color: Color(0xFFF1EEE2), card: _seed('essentials', 'tissue')),         // tissue white
+      StoreItemData(name: 'Syampu', en: 'Shampoo', emoji: '🧴', category: StoreCategory.essentials, color: Color(0xFFB088D9), card: _seed('essentials', 'shampoo')),      // shampoo purple
     ],
   };
 
@@ -216,6 +224,13 @@ class SariSariSortGame extends FlameGame
   /// cards and recordings so an already-learned object stays recognizable
   /// when the task changes from sorting it to sharing it with a person.
   static Map<StoreCategory, List<StoreItemData>> get catalogue => _catalogue;
+
+  /// Every distinct seed-card path in the catalogue, for preloading.
+  static Iterable<String> get _cardPaths => _catalogue.values
+      .expand((items) => items)
+      .map((i) => i.card)
+      .whereType<String>()
+      .toSet();
 
   /// Tracks recently used items per category to reduce repetition.
   final Set<String> _usedItems = {};
@@ -234,6 +249,10 @@ class SariSariSortGame extends FlameGame
       gameVersion: gameVersion ?? '1.0.0',
     );
     analyticsStartSession();
+
+    // Preload the drawn seed cards before the first tray is built so items show
+    // their picture from frame one; any that fail to decode fall back to emoji.
+    await SeedArtCache.ensureLoaded(_cardPaths);
 
     _buildBins();
     onPlayInstructionVo?.call();
