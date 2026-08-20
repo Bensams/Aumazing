@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flame/components.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart';
@@ -107,6 +109,30 @@ void main() {
       for (final item in catalogue.values.expand((l) => l)) {
         expect(item.label(GameLanguage.tagalog), item.name);
         expect(item.label(GameLanguage.cebuano), item.name);
+      }
+    });
+
+    test('every item has a drawn seed card that exists in the bank', () {
+      // The card is what the child actually sees now; the emoji is only the
+      // fallback. A typo'd slug or folder silently drops the whole item back to
+      // its emoji, which is invisible until a session — so pin every path to a
+      // real file. Card paths are full package paths; the shared_ui package
+      // sits one directory up from game_core in the monorepo.
+      for (final item in catalogue.values.expand((l) => l)) {
+        expect(item.card, isNotNull, reason: '${item.name} has no seed card');
+        final rel = item.card!.replaceFirst(
+            'packages/shared_ui/', '../shared_ui/');
+        expect(File(rel).existsSync(), isTrue,
+            reason: '${item.name} points at a missing card: ${item.card}');
+      }
+    });
+
+    test('a card is kept only where the emoji fallback also survives', () {
+      // render() falls back to the emoji when a card fails to decode, so a
+      // blank emoji would leave nothing on a decode failure.
+      for (final item in catalogue.values.expand((l) => l)) {
+        expect(item.emoji.trim(), isNotEmpty,
+            reason: '${item.name} has no emoji fallback for its card');
       }
     });
   });
