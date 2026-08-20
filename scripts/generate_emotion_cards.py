@@ -88,18 +88,47 @@ INK_SOFT = 30.0       # edge-feather ramp, in channel values
 COLORS = 255
 
 # ── References ────────────────────────────────────────────────────────
-# One entry, deliberately — see the note at the top of the file.
-CHARACTER = {
-    "art": CHARACTER_ART / "BPS_chibi.png",
-    "face": ("a cheerful young Filipino boy with fair skin, warm brown eyes, "
-             "and messy spiky black hair"),
-    # Spelled out rather than left to the reference image because nano-banana
-    # reliably drops the garment it is not told about, and BPS without his
-    # plaid overshirt is just a boy in a white tee.
-    "clothes": ("an open pale blue and orange plaid button-up shirt over a "
-                "plain white t-shirt, light grey trousers and white sneakers"),
+# The face cards are generated once PER CHARACTER, so the buddy the child reads
+# emotions on is the character their parent picked — the same figure they see as
+# the mascot everywhere else, not a stranger. The single-character rule in the
+# file header still holds WITHIN one child's session: a session renders exactly
+# one character's faces, chosen by profile, never a mix.
+#
+# `subj`/`poss`/`noun` carry the pronouns into the geometry prompts, which were
+# all written for BPS as "He/his/boy". They are the only per-character axis the
+# expression text needs; the brow, eye and mouth geometry is identical across
+# characters because an emotion is the same regardless of who wears it.
+CHARACTERS = {
+    "bps": {
+        "art": CHARACTER_ART / "BPS_chibi.png",
+        "face": ("a cheerful young Filipino boy with fair skin, warm brown "
+                 "eyes, and messy spiky black hair"),
+        # Spelled out rather than left to the reference image because
+        # nano-banana reliably drops the garment it is not told about, and BPS
+        # without his plaid overshirt is just a boy in a white tee.
+        "clothes": ("an open pale blue and orange plaid button-up shirt over a "
+                    "plain white t-shirt"),
+        "subj": "he", "poss": "his", "noun": "boy",
+    },
+    "reiz": {
+        "art": CHARACTER_ART / "Reiz_Chibi_nb.png",
+        "face": ("a friendly young Filipino boy with fair skin, dark grey "
+                 "eyes, and tousled dark charcoal-black hair"),
+        "clothes": ("a black blazer over a plain white t-shirt, with a thin "
+                    "silver dog-tag necklace"),
+        "subj": "he", "poss": "his", "noun": "boy",
+    },
+    "lexianne": {
+        "art": CHARACTER_ART / "Lexianne_chibi.png",
+        "face": ("a cheerful young Filipina girl with fair skin, warm brown "
+                 "eyes, and long wavy dark brown hair"),
+        "clothes": ("a white short-puff-sleeve dress with a thin gold "
+                    "necklace"),
+        "subj": "she", "poss": "her", "noun": "girl",
+    },
 }
-CHARACTER["look"] = f"{CHARACTER['face']}, wearing {CHARACTER['clothes']}"
+for _c in CHARACTERS.values():
+    _c["look"] = f"{_c['face']}, wearing {_c['clothes']}"
 
 # The style reference committed alongside the routine-card script, reused
 # unchanged: this set has to sit beside those cards in the same app, drawn by
@@ -159,50 +188,54 @@ NOPANEL = (
     "scene — the drawing sits directly on empty white with nothing enclosing "
     "it.")
 
+# Written with {subj}/{poss}/{noun} tokens so one geometry description serves
+# every character — an emotion is the same face movement whoever wears it, and
+# only the pronouns change. `{Subj}`/`{Poss}` are the sentence-start capitals.
+# Filled by `str.format` in `prompt_for`; keep any literal brace out of these.
 FACES = {
     "face_neutral": (
-        "His face is calm and relaxed: eyebrows level and straight, eyes "
+        "{Poss} face is calm and relaxed: eyebrows level and straight, eyes "
         "normal size and open, mouth a small straight line with only the "
-        "faintest hint of a curve. He is not smiling and not frowning — this "
-        "is his resting face."),
+        "faintest hint of a curve. {Subj} is not smiling and not frowning — "
+        "this is {poss} resting face."),
     "face_happy": (
-        "He is HAPPY: a big open smile showing the upper teeth, mouth corners "
-        "pulled up high, eyes crinkled into cheerful upward curves, eyebrows "
-        "relaxed and slightly raised, cheeks round and rosy."),
+        "{Subj} is HAPPY: a big open smile showing the upper teeth, mouth "
+        "corners pulled up high, eyes crinkled into cheerful upward curves, "
+        "eyebrows relaxed and slightly raised, cheeks round and rosy."),
     "face_sad": (
-        "He is SAD: the INNER ends of both eyebrows are pulled UP and together "
-        "into a little peak above the nose, eyes looking slightly downward, "
-        "mouth closed and curved clearly DOWN at both corners, and one single "
-        "small blue tear on his left cheek. He is not crying loudly and his "
-        "mouth is not open."),
+        "{Subj} is SAD: the INNER ends of both eyebrows are pulled UP and "
+        "together into a little peak above the nose, eyes looking slightly "
+        "downward, mouth closed and curved clearly DOWN at both corners, and "
+        "one single small blue tear on {poss} left cheek. {Subj} is not crying "
+        "loudly and {poss} mouth is not open."),
     # The hardest card in the set, and the one that came back wrong first time.
     # Asked for "scared" with the brow described only as "raised and pulled
     # together", the model drew a lowered V-shaped scowl — the ANGRY brow — and
-    # returned a boy who looks annoyed. Scared and angry are then two cards a
+    # returned a child who looks annoyed. Scared and angry are then two cards a
     # child cannot tell apart, and angry is one of the answers, so half the
     # trials using either become guesses. The fix is to forbid the wrong shape
     # explicitly, not just to describe the right one.
     "face_scared": (
-        "He is SCARED and frightened, NOT angry: both eyebrows are lifted HIGH "
-        "UP towards his hairline and curve UPWARDS in worried arcs, with the "
-        "inner ends the HIGHEST point. The eyebrows must NOT slant down towards "
-        "the nose, must NOT form a V or an angry frown, and must NOT be lowered "
-        "over the eyes. Eyes stretched wide open and round with a lot of white "
-        "showing around small dark pupils. Mouth open in a small tense oval, "
-        "corners pulled slightly down. One small pale blue sweat bead at his "
-        "temple. His face is pale rather than rosy. He looks worried and "
-        "timid."),
+        "{Subj} is SCARED and frightened, NOT angry: both eyebrows are lifted "
+        "HIGH UP towards {poss} hairline and curve UPWARDS in worried arcs, "
+        "with the inner ends the HIGHEST point. The eyebrows must NOT slant "
+        "down towards the nose, must NOT form a V or an angry frown, and must "
+        "NOT be lowered over the eyes. Eyes stretched wide open and round with "
+        "a lot of white showing around small dark pupils. Mouth open in a "
+        "small tense oval, corners pulled slightly down. One small pale blue "
+        "sweat bead at {poss} temple. {Poss} face is pale rather than rosy. "
+        "{Subj} looks worried and timid."),
     "face_surprised": (
-        "He is SURPRISED: eyes wide and round, both eyebrows raised high and "
-        "STRAIGHT ACROSS in flat arcs (their inner ends are NOT pulled up into "
-        "a peak), and the mouth open in a big round O shape. His expression is "
-        "startled but not frightened — no sweat, no pale skin, no lifted "
-        "shoulders."),
+        "{Subj} is SURPRISED: eyes wide and round, both eyebrows raised high "
+        "and STRAIGHT ACROSS in flat arcs (their inner ends are NOT pulled up "
+        "into a peak), and the mouth open in a big round O shape. {Poss} "
+        "expression is startled but not frightened — no sweat, no pale skin, "
+        "no lifted shoulders."),
     "face_angry": (
-        "He is ANGRY: the INNER ends of both eyebrows are pushed DOWN and "
+        "{Subj} is ANGRY: the INNER ends of both eyebrows are pushed DOWN and "
         "together into a hard V frown above the nose, eyes narrowed, mouth "
-        "closed and pressed into a firm downward curve, cheeks flushed red. He "
-        "is scowling, not crying — no tears."),
+        "closed and pressed into a firm downward curve, cheeks flushed red. "
+        "{Subj} is scowling, not crying — no tears."),
 }
 
 # name -> the situation. The object is the subject; his face stays neutral so
@@ -304,16 +337,16 @@ def headers() -> dict:
 MAX_REF_PX = 1024     # the model renders far smaller; more is only slower upload
 
 
-def character_ref() -> Path:
-    """BPS's artwork, flattened onto white and scaled for upload."""
-    src = CHARACTER["art"]
+def character_ref(char: str) -> Path:
+    """A character's artwork, flattened onto white and scaled for upload."""
+    src = CHARACTERS[char]["art"]
     if not src.exists():
         sys.exit(f"character artwork not found at {src}")
     im = Image.open(src).convert("RGBA")
     flat = Image.new("RGB", im.size, (255, 255, 255))
     flat.paste(im, (0, 0), im)
     flat.thumbnail((MAX_REF_PX, MAX_REF_PX), Image.LANCZOS)
-    out = CACHE / "ref_bps.png"
+    out = CACHE / f"ref_{char}.png"
     flat.save(out)
     return out
 
@@ -333,14 +366,13 @@ def upload(path: Path) -> str:
 
 
 # ── Generation ────────────────────────────────────────────────────────
-def prompt_for(name: str) -> str:
-    body = CARDS[name]
+def prompt_for(name: str, char: str) -> str:
     is_face = name in FACES
     is_scene = name in SCENES
 
     if is_scene:
-        # No character reference language at all: naming him invites him into a
-        # picture that is supposed to be about the object, and a scene with his
+        # No character reference language at all: naming them invites them into
+        # a picture that is supposed to be about the object, and a scene with a
         # face in it hands the child the answer.
         return (
             "Draw a single children's picture card showing an object or a "
@@ -350,41 +382,60 @@ def prompt_for(name: str) -> str:
             "The SECOND reference image shows three finished cards from the "
             "same set. Match their drawing style, line weight, colour palette "
             "and framing exactly, so this card belongs beside them.\n\n"
-            f"SCENE: {body}\n\n" + STYLE
+            f"SCENE: {CARDS[name]}\n\n" + STYLE
         )
 
+    c = CHARACTERS[char]
+    obj = "him" if c["subj"] == "he" else "her"
     who = (
-        "The FIRST reference image is the character. Keep him recognisably the "
-        f"same boy: {CHARACTER['look']}. Same hair shape, same hair colour, "
-        "same eye colour and same skin tone in every card.\n\n"
+        f"The FIRST reference image is the character. Keep {obj} recognisably "
+        f"the same {c['noun']}: {c['look']}. Same hair shape, same hair "
+        "colour, same eye colour and same skin tone in every card.\n\n"
         "The SECOND reference image shows three finished cards from the same "
         "set. Match their drawing style, line weight, colour palette and "
         "framing exactly, so this card belongs beside them.\n\n"
     )
 
     if is_face:
+        body = CARDS[name].format(
+            Subj=c["subj"].capitalize(), subj=c["subj"],
+            Poss=c["poss"].capitalize(), poss=c["poss"], noun=c["noun"])
         return (
-            "Draw a single children's picture card: a portrait of one boy's "
-            "face showing one clear emotion.\n\n" + who +
+            f"Draw a single children's picture card: a portrait of one "
+            f"{c['noun']}'s face showing one clear emotion.\n\n" + who +
             f"EXPRESSION: {body}\n\n" + FACE_FRAMING + "\n\n" + STYLE
         )
 
     return (
-        "Draw a single children's picture card showing a boy doing a kind "
-        "thing.\n\n" + who + f"SCENE: {body}\n\n" + STYLE
+        f"Draw a single children's picture card showing a {c['noun']} doing a "
+        f"kind thing.\n\n" + who + f"SCENE: {CARDS[name]}\n\n" + STYLE
     )
 
 
-def generate(name: str, char_url: str, style_url: str) -> Path:
-    raw = CACHE / f"raw_{name}.png"
+# A scene has no character in it, so its raw and its output are shared by every
+# character; a face or a response is per-character and carries the name in both.
+def raw_path(name: str, char: str) -> Path:
+    return CACHE / (f"raw_{name}.png" if name in SCENES
+                    else f"raw_{char}_{name}.png")
+
+
+def out_name(name: str, char: str) -> str:
+    # face_sad -> face_lexianne_sad, so the game can load the child's own
+    # character's set and fall back to the generic face_*.png if one is missing.
+    return name.replace("face_", f"face_{char}_") if name in FACES else name
+
+
+def generate(name: str, char: str, char_url: str, style_url: str) -> Path:
+    raw = raw_path(name, char)
+    tag = name if name in SCENES else f"{char}/{name}"
     if raw.exists():
-        print(f"[{name}] cached")
+        print(f"[{tag}] cached")
         return raw
 
     body = {
         "model": "google/nano-banana-edit",
         "input": {
-            "prompt": prompt_for(name),
+            "prompt": prompt_for(name, char),
             "image_urls": [char_url, style_url],
             "output_format": "png",
             "image_size": "1:1",
@@ -395,9 +446,9 @@ def generate(name: str, char_url: str, style_url: str) -> Path:
     r.raise_for_status()
     d = r.json()
     if d.get("code") != 200:
-        sys.exit(f"[{name}] createTask failed: {d}")
+        sys.exit(f"[{tag}] createTask failed: {d}")
     task_id = d["data"]["taskId"]
-    print(f"[{name}] -> task {task_id}")
+    print(f"[{tag}] -> task {task_id}")
 
     data = {}
     for _ in range(90):
@@ -406,13 +457,13 @@ def generate(name: str, char_url: str, style_url: str) -> Path:
                              headers=headers(), params={"taskId": task_id},
                              timeout=60).json().get("data") or {})
         if data.get("state") == "success":
-            print(f"[{name}] {data.get('costTime')}ms, "
+            print(f"[{tag}] {data.get('costTime')}ms, "
                   f"{data.get('creditsConsumed')} credits")
             break
         if data.get("state") == "fail":
-            sys.exit(f"[{name}] failed: {data.get('failMsg')}")
+            sys.exit(f"[{tag}] failed: {data.get('failMsg')}")
     else:
-        sys.exit(f"[{name}] timed out")
+        sys.exit(f"[{tag}] timed out")
 
     url = json.loads(data["resultJson"])["resultUrls"][0]
     raw.write_bytes(requests.get(url, timeout=600).content)
@@ -458,7 +509,7 @@ def content_box(rgba: np.ndarray) -> tuple:
     return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
 
 
-def postprocess(raw: Path, name: str) -> Path:
+def postprocess(raw: Path, name: str, char: str) -> Path:
     """Key out the page, trim to the drawing, re-pad square, shrink, palettise.
 
     Squaring every card here is what lets the game position art with one rule
@@ -481,7 +532,7 @@ def postprocess(raw: Path, name: str) -> Path:
                                    (CARD_PX - drawing.height) // 2))
 
     DEST.mkdir(parents=True, exist_ok=True)
-    out = DEST / f"{name}.png"
+    out = DEST / f"{out_name(name, char)}.png"
     card.quantize(colors=COLORS, method=Image.FASTOCTREE).save(out, optimize=True)
     print(f"  {out.name:26} {x1-x0:4}x{y1-y0:4} -> {CARD_PX}px  "
           f"{out.stat().st_size/1e3:5.0f} KB")
@@ -493,6 +544,11 @@ def main():
     ap.add_argument("--only", help="comma-separated subset of card names")
     ap.add_argument("--faces-only", action="store_true",
                     help="just the six face cards — the ones worth iterating on")
+    ap.add_argument("--character",
+                    help="comma-separated subset of characters "
+                         f"({', '.join(CHARACTERS)}); default all. Faces are "
+                         "generated once per character; scenes and responses "
+                         "are drawn once, as BPS.")
     ap.add_argument("--post-only", action="store_true",
                     help="skip the API, re-run post-processing on cached raws")
     ap.add_argument("--force", action="store_true",
@@ -509,15 +565,27 @@ def main():
     for n in names:
         if n not in CARDS:
             sys.exit(f"unknown card: {n}")
-    CACHE.mkdir(parents=True, exist_ok=True)
 
+    chars = args.character.split(",") if args.character else list(CHARACTERS)
+    for ch in chars:
+        if ch not in CHARACTERS:
+            sys.exit(f"unknown character: {ch}")
+
+    # The unit of work is a (card, character) pair. Faces are drawn for every
+    # requested character; a scene has no person in it and a response card is
+    # tier-3 filler, so both are drawn once as BPS regardless of --character —
+    # the child's own character is what matters on the face cards they read.
+    jobs = [(n, ch) for ch in chars for n in names if n in FACES]
+    jobs += [(n, "bps") for n in names if n not in FACES]
+
+    CACHE.mkdir(parents=True, exist_ok=True)
     if args.force:
-        for n in names:
-            (CACHE / f"raw_{n}.png").unlink(missing_ok=True)
+        for n, ch in jobs:
+            raw_path(n, ch).unlink(missing_ok=True)
 
     if args.post_only:
-        raws = {n: CACHE / f"raw_{n}.png" for n in names}
-        missing = [n for n, p in raws.items() if not p.exists()]
+        raws = {(n, ch): raw_path(n, ch) for n, ch in jobs}
+        missing = [f"{ch}/{n}" for (n, ch), p in raws.items() if not p.exists()]
         if missing:
             sys.exit(f"no cached raw for: {', '.join(missing)}")
     else:
@@ -528,18 +596,21 @@ def main():
                      f"rebuild it with generate_routine_cards.py "
                      f"--rebuild-style-ref")
         style_url = upload(STYLE_REF)
-        char_url = upload(character_ref())
         print(f"style -> {style_url}")
-        print(f"bps   -> {char_url}")
+        needed = sorted({ch for _, ch in jobs})
+        char_urls = {ch: upload(character_ref(ch)) for ch in needed}
+        for ch, u in char_urls.items():
+            print(f"{ch:9} -> {u}")
 
         with ThreadPoolExecutor(max_workers=args.jobs) as ex:
-            futs = {n: ex.submit(generate, n, char_url, style_url)
-                    for n in names}
-            raws = {n: f.result() for n, f in futs.items()}
+            futs = {(n, ch): ex.submit(generate, n, ch, char_urls[ch],
+                                       style_url)
+                    for n, ch in jobs}
+            raws = {k: f.result() for k, f in futs.items()}
 
     print("\npost-processing")
-    for n in names:
-        postprocess(raws[n], n)
+    for n, ch in jobs:
+        postprocess(raws[(n, ch)], n, ch)
 
 
 if __name__ == "__main__":

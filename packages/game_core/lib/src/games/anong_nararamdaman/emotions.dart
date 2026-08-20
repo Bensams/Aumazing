@@ -74,9 +74,16 @@ enum FaceArt {
   /// Basename of the face picture, without extension.
   final String assetName;
 
-  /// Full bundled path, resolvable from any package in the workspace.
+  /// The generic (character-agnostic) face path — the original BPS-styled set,
+  /// kept as the fallback when a chosen character has no art for this face.
   String get assetPath =>
       'packages/shared_ui/assets/emotion_cards/face_$assetName.png';
+
+  /// The path to [character]'s own drawing of this face (bps / reiz /
+  /// lexianne), so the buddy the child reads is the character they picked. The
+  /// cache tries this first and falls back to [assetPath].
+  String assetPathFor(String character) =>
+      'packages/shared_ui/assets/emotion_cards/face_${character}_$assetName.png';
 }
 
 /// The pairs of emotions children actually confuse.

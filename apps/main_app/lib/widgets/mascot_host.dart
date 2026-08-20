@@ -178,9 +178,16 @@ class MascotHost extends StatefulWidget {
     this.entrance = MascotEntrance.fromLeft,
     this.greetOnAppear = true,
     this.semanticLabel,
+    this.showMascot = true,
   });
 
   final Widget child;
+
+  /// Whether the visible mascot is painted over [child]. False for a game that
+  /// draws its own character (see [kGamesWithOwnCharacter]): the scope and
+  /// controller stay in place so a screen's reaction calls remain valid, but no
+  /// second character appears in the corner.
+  final bool showMascot;
 
   /// Own the controller yourself when the code that drives the mascot sits
   /// *above* this host (a parent's callback can't reach it via [maybeOf],
@@ -250,6 +257,12 @@ class _MascotHostState extends State<MascotHost> {
     } on ProviderNotFoundException {
       profile = null;
     }
+    // A game that draws its own character keeps the controller (so its reaction
+    // calls stay valid) but hides the corner mascot, so the child sees one
+    // character, not two.
+    if (!widget.showMascot) {
+      return _MascotScope(notifier: _controller, child: widget.child);
+    }
     return _MascotScope(
       notifier: _controller,
       child: Stack(
@@ -299,3 +312,23 @@ class _MascotHostState extends State<MascotHost> {
 class _MascotScope extends InheritedNotifier<MascotController> {
   const _MascotScope({required super.notifier, required super.child});
 }
+
+/// Game ids whose Flame scene already draws its own on-screen character (the
+/// buddy who points, greets, takes turns or needs help). For these the corner
+/// mascot is suppressed via `MascotHost.showMascot: false`, so a child is never
+/// asked to read "where is he looking?" with two characters in the room.
+///
+/// The mascot *controller* still lives — reaction calls
+/// (`MascotHost.maybeOf(context)?.reassure()` etc.) stay valid no-ops — only
+/// the visible character is withheld. The in-game buddy carries the feedback.
+///
+/// `anong_nararamdaman` draws the child's own character as the emotion face
+/// (see the game's per-character face art), so the corner mascot steps aside
+/// there too — the feeling on screen belongs to the one character on screen.
+const Set<String> kGamesWithOwnCharacter = {
+  'sabay_tayo',
+  'kumusta',
+  'my_turn_your_turn',
+  'tulong_kaibigan',
+  'anong_nararamdaman',
+};

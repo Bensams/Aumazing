@@ -294,6 +294,7 @@ class _KumustaScreenState extends State<KumustaScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MascotHost(
+          showMascot: false, // Kumusta draws its own buddy.
           child: KumustaScreen(
             assessmentContext: widget.assessmentContext,
             sensoryController: widget.sensoryController,

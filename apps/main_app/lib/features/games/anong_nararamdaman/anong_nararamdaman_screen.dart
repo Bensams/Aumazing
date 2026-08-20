@@ -111,6 +111,10 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
       totalRounds: _totalRounds,
       itemsPerRound: config.itemsPerRound,
       childId: childId,
+      // The buddy whose feelings the child reads is the character they picked —
+      // the same one they see as the mascot — normalised so an unknown id falls
+      // back to BPS rather than a missing face set.
+      character: MascotCharacter.fromId(childProvider.profile?.characterId).name,
       profile: widget.assessmentContext == 'practice'
           ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
           : DifficultyProfile.assessment,
@@ -271,6 +275,7 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MascotHost(
+          showMascot: false, // Anong Nararamdaman draws its own emotion face.
           child: AnongNararamdamanScreen(
             assessmentContext: widget.assessmentContext,
             sensoryController: widget.sensoryController,
