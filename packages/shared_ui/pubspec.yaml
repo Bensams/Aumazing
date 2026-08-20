@@ -39,6 +39,8 @@ flutter:
     # scripts/generate_seed_cards.py and scripts/generate_seed_lines.py.
     - assets/seed_cards/
     - assets/seed_cards/animals/
+    - assets/seed_cards/fruits/
+    - assets/seed_cards/toys/
     - assets/seed_cards/audio/en/
     - assets/seed_cards/audio/tl/
     - assets/seed_cards/audio/ceb/

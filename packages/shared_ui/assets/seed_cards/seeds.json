@@ -89,6 +89,276 @@
         "tl": "audio/tl/Duck.wav",
         "ceb": "audio/ceb/Duck.wav"
       }
+    },
+    {
+      "slug": "cow",
+      "category": "animals",
+      "names": {
+        "en": "Cow",
+        "tl": "Baka",
+        "ceb": "Baka"
+      },
+      "card": "animals/cow.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "pig",
+      "category": "animals",
+      "names": {
+        "en": "Pig",
+        "tl": "Baboy",
+        "ceb": "Baboy"
+      },
+      "card": "animals/pig.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "elephant",
+      "category": "animals",
+      "names": {
+        "en": "Elephant",
+        "tl": "Elepante",
+        "ceb": "Elepante"
+      },
+      "card": "animals/elephant.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "frog",
+      "category": "animals",
+      "names": {
+        "en": "Frog",
+        "tl": "Palaka",
+        "ceb": "Baki"
+      },
+      "card": "animals/frog.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "apple",
+      "category": "fruits",
+      "names": {
+        "en": "Apple",
+        "tl": "Mansanas",
+        "ceb": "Mansanas"
+      },
+      "card": "fruits/apple.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "banana",
+      "category": "fruits",
+      "names": {
+        "en": "Banana",
+        "tl": "Saging",
+        "ceb": "Saging"
+      },
+      "card": "fruits/banana.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "orange",
+      "category": "fruits",
+      "names": {
+        "en": "Orange",
+        "tl": "Kahel",
+        "ceb": "Kahel"
+      },
+      "card": "fruits/orange.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "grapes",
+      "category": "fruits",
+      "names": {
+        "en": "Grapes",
+        "tl": "Ubas",
+        "ceb": "Ubas"
+      },
+      "card": "fruits/grapes.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "watermelon",
+      "category": "fruits",
+      "names": {
+        "en": "Watermelon",
+        "tl": "Pakwan",
+        "ceb": "Pakwan"
+      },
+      "card": "fruits/watermelon.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "strawberry",
+      "category": "fruits",
+      "names": {
+        "en": "Strawberry",
+        "tl": "Strawberry",
+        "ceb": "Strawberry"
+      },
+      "card": "fruits/strawberry.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "mango",
+      "category": "fruits",
+      "names": {
+        "en": "Mango",
+        "tl": "Mangga",
+        "ceb": "Mangga"
+      },
+      "card": "fruits/mango.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "pineapple",
+      "category": "fruits",
+      "names": {
+        "en": "Pineapple",
+        "tl": "Pinya",
+        "ceb": "Pinya"
+      },
+      "card": "fruits/pineapple.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "ball",
+      "category": "toys",
+      "names": {
+        "en": "Ball",
+        "tl": "Bola",
+        "ceb": "Bola"
+      },
+      "card": "toys/ball.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "doll",
+      "category": "toys",
+      "names": {
+        "en": "Doll",
+        "tl": "Manika",
+        "ceb": "Munyeka"
+      },
+      "card": "toys/doll.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "car",
+      "category": "toys",
+      "names": {
+        "en": "Car",
+        "tl": "Kotse",
+        "ceb": "Awto"
+      },
+      "card": "toys/car.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "teddy",
+      "category": "toys",
+      "names": {
+        "en": "Teddy bear",
+        "tl": "Teddy",
+        "ceb": "Teddy"
+      },
+      "card": "toys/teddy.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "blocks",
+      "category": "toys",
+      "names": {
+        "en": "Blocks",
+        "tl": "Bloke",
+        "ceb": "Bloke"
+      },
+      "card": "toys/blocks.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
+    },
+    {
+      "slug": "kite",
+      "category": "toys",
+      "names": {
+        "en": "Kite",
+        "tl": "Saranggola",
+        "ceb": "Tabanog"
+      },
+      "card": "toys/kite.png",
+      "lines": {
+        "en": null,
+        "tl": null,
+        "ceb": null
+      }
     }
   ]
 }
