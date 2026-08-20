@@ -110,6 +110,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -154,6 +155,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -198,6 +200,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onInstructionChanged: (_) {}, // placeholder
           onGameComplete: ({
@@ -244,6 +247,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onTurnChanged: (_) {}, // placeholder
           onGameComplete: ({
@@ -293,6 +297,7 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -337,6 +342,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -436,6 +442,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -484,6 +491,7 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -535,6 +543,7 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -586,6 +595,7 @@ class GameRegistry {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
@@ -639,6 +649,7 @@ class GameRegistry {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onGameComplete: ({
             required int score,
