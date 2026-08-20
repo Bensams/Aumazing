@@ -1,0 +1,94 @@
+{
+  "seeds": [
+    {
+      "slug": "dog",
+      "category": "animals",
+      "names": {
+        "en": "Dog",
+        "tl": "Aso",
+        "ceb": "Iro"
+      },
+      "card": "animals/dog.png",
+      "lines": {
+        "en": "audio/en/Dog.wav",
+        "tl": "audio/tl/Dog.wav",
+        "ceb": "audio/ceb/Dog.wav"
+      }
+    },
+    {
+      "slug": "cat",
+      "category": "animals",
+      "names": {
+        "en": "Cat",
+        "tl": "Pusa",
+        "ceb": "Iring"
+      },
+      "card": "animals/cat.png",
+      "lines": {
+        "en": "audio/en/Cat.wav",
+        "tl": "audio/tl/Cat.wav",
+        "ceb": "audio/ceb/Cat.wav"
+      }
+    },
+    {
+      "slug": "bird",
+      "category": "animals",
+      "names": {
+        "en": "Bird",
+        "tl": "Ibon",
+        "ceb": "Langgam"
+      },
+      "card": "animals/bird.png",
+      "lines": {
+        "en": "audio/en/Bird.wav",
+        "tl": "audio/tl/Bird.wav",
+        "ceb": "audio/ceb/Bird.wav"
+      }
+    },
+    {
+      "slug": "fish",
+      "category": "animals",
+      "names": {
+        "en": "Fish",
+        "tl": "Isda",
+        "ceb": "Isda"
+      },
+      "card": "animals/fish.png",
+      "lines": {
+        "en": "audio/en/Fish.wav",
+        "tl": "audio/tl/Fish.wav",
+        "ceb": "audio/ceb/Fish.wav"
+      }
+    },
+    {
+      "slug": "rabbit",
+      "category": "animals",
+      "names": {
+        "en": "Rabbit",
+        "tl": "Kuneho",
+        "ceb": "Koneho"
+      },
+      "card": "animals/rabbit.png",
+      "lines": {
+        "en": "audio/en/Rabbit.wav",
+        "tl": "audio/tl/Rabbit.wav",
+        "ceb": "audio/ceb/Rabbit.wav"
+      }
+    },
+    {
+      "slug": "duck",
+      "category": "animals",
+      "names": {
+        "en": "Duck",
+        "tl": "Pato",
+        "ceb": "Itik"
+      },
+      "card": "animals/duck.png",
+      "lines": {
+        "en": "audio/en/Duck.wav",
+        "tl": "audio/tl/Duck.wav",
+        "ceb": "audio/ceb/Duck.wav"
+      }
+    }
+  ]
+}
