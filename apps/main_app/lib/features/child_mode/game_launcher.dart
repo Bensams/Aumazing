@@ -115,7 +115,13 @@ class GameLauncher {
   /// MascotHost.maybeOf lookups to find it.
   static Widget? screenFor(String gameId, int difficulty) {
     final game = _gameFor(gameId, difficulty);
-    return game == null ? null : MascotHost(child: game);
+    if (game == null) return null;
+    // A game that draws its own character suppresses the corner mascot, so a
+    // child is never shown two characters at once.
+    return MascotHost(
+      showMascot: !kGamesWithOwnCharacter.contains(gameId),
+      child: game,
+    );
   }
 
   static Widget? _gameFor(String gameId, int difficulty) {
