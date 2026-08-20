@@ -28,6 +28,7 @@ export 'parent_verification_dialog.dart';
 export 'progress_dots.dart';
 export 'rainbow_border_card.dart';
 export 'section_title.dart';
+export 'spaceship_transition.dart';
 export 'status_pill_badge.dart';
 export 'voice_over_prompt_bubble.dart';
 export 'world_backdrop.dart';
