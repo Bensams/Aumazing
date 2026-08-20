@@ -168,6 +168,154 @@ SEEDS = {
             "orange feet. Soft butter-yellow feathers. Cute and cheerful, "
             "standing upright." + NOPANEL),
     },
+    "cow": {
+        "category": "animals", "en": "Cow", "tl": "Baka", "ceb": "Baka",
+        "subject": (
+            "a cute cartoon cow standing and facing the viewer: a round body, "
+            "a big friendly head with two little rounded horns and floppy ears, "
+            "big round eyes, a soft pink muzzle with a gentle smile, white hide "
+            "with a few soft grey patches, and four short legs. Cute and "
+            "friendly, mouth closed." + NOPANEL),
+    },
+    "pig": {
+        "category": "animals", "en": "Pig", "tl": "Baboy", "ceb": "Baboy",
+        "subject": (
+            "a cute cartoon piglet standing and facing the viewer: a round "
+            "body, a round head with two small floppy ears, big friendly round "
+            "eyes, a round pink snout with two little nostrils and a gentle "
+            "smile, soft rose-pink skin, four short legs and a little curly "
+            "tail. Cute and friendly." + NOPANEL),
+    },
+    "elephant": {
+        "category": "animals", "en": "Elephant", "tl": "Elepante",
+        "ceb": "Elepante",
+        "subject": (
+            "a cute cartoon baby elephant standing and facing the viewer: a "
+            "round body, a big head with two large round ears, big friendly "
+            "round eyes, a short curled-up trunk and a gentle smile, soft "
+            "grey-blue skin and four sturdy round legs. Cute and gentle, no "
+            "tusks." + NOPANEL),
+    },
+    "frog": {
+        "category": "animals", "en": "Frog", "tl": "Palaka", "ceb": "Baki",
+        "subject": (
+            "a cute cartoon frog sitting and facing the viewer: a round green "
+            "body, a wide gentle closed smile, two big round eyes on top of "
+            "its head, a paler green tummy and four little legs with rounded "
+            "toes. Cute and friendly, mouth closed, no tongue." + NOPANEL),
+    },
+
+    # ── Fruits ───────────────────────────────────────────────────────
+    # Drawn as plain, appetising objects with NO face — a face would read as a
+    # character rather than the fruit the child is meant to name.
+    "apple": {
+        "category": "fruits", "en": "Apple", "tl": "Mansanas",
+        "ceb": "Mansanas",
+        "subject": (
+            "a single bright red apple, a rounded heart-like silhouette with a "
+            "small dip at the top, one short brown stem and one small green "
+            "leaf. A soft pale highlight on one side. No face." + NOPANEL),
+    },
+    "banana": {
+        "category": "fruits", "en": "Banana", "tl": "Saging", "ceb": "Saging",
+        "subject": (
+            "a single ripe yellow banana, a smooth curved crescent shape with "
+            "a small brown tip at each end. No face." + NOPANEL),
+    },
+    "orange": {
+        "category": "fruits", "en": "Orange", "tl": "Kahel", "ceb": "Kahel",
+        "subject": (
+            "a single round orange fruit, bright orange, with a small round "
+            "dimple at the top and one small green leaf. A soft pale highlight "
+            "on one side. No face." + NOPANEL),
+    },
+    "grapes": {
+        "category": "fruits", "en": "Grapes", "tl": "Ubas", "ceb": "Ubas",
+        "subject": (
+            "a single bunch of purple grapes, a neat triangular cluster of "
+            "about eight round berries, with one short brown stem and one "
+            "small green leaf at the top. No face." + NOPANEL),
+    },
+    "watermelon": {
+        "category": "fruits", "en": "Watermelon", "tl": "Pakwan",
+        "ceb": "Pakwan",
+        "subject": (
+            "a single triangular slice of watermelon: bright pink-red flesh "
+            "with a few small black seeds, a thin white layer, and a rounded "
+            "green rind along the curved edge. No face." + NOPANEL),
+    },
+    "strawberry": {
+        "category": "fruits", "en": "Strawberry", "tl": "Strawberry",
+        "ceb": "Strawberry",
+        "subject": (
+            "a single red strawberry, a rounded heart-shaped berry pointing "
+            "down, dotted with tiny seeds, topped with a small green leafy "
+            "crown. No face." + NOPANEL),
+    },
+    "mango": {
+        "category": "fruits", "en": "Mango", "tl": "Mangga", "ceb": "Mangga",
+        "subject": (
+            "a single ripe mango, a smooth rounded oval that curves gently to "
+            "one side, warm golden-yellow with a soft blush, one short stem "
+            "and one small green leaf at the top. No face." + NOPANEL),
+    },
+    "pineapple": {
+        "category": "fruits", "en": "Pineapple", "tl": "Pinya", "ceb": "Pinya",
+        "subject": (
+            "a single pineapple standing upright: a golden-yellow oval body "
+            "with a simple criss-cross diamond pattern, topped with a crown of "
+            "pointed green leaves. No face." + NOPANEL),
+    },
+
+    # ── Toys ─────────────────────────────────────────────────────────
+    # Plain objects, except the doll and teddy which naturally have a face.
+    # These mirror Sari-Sari Sort's toy category (bola, manika, kotse, teddy).
+    "ball": {
+        "category": "toys", "en": "Ball", "tl": "Bola", "ceb": "Bola",
+        "subject": (
+            "a single classic ball, a round sphere divided into simple curved "
+            "panels in sky blue and white, with a soft pale highlight on one "
+            "side. No face." + NOPANEL),
+    },
+    "doll": {
+        "category": "toys", "en": "Doll", "tl": "Manika", "ceb": "Munyeka",
+        "subject": (
+            "a single cute rag doll standing and facing the viewer: a round "
+            "head with simple dot eyes, rosy cheeks and a small smile, short "
+            "brown yarn hair, a simple mint-green dress, and little arms and "
+            "legs. Friendly and sweet." + NOPANEL),
+    },
+    "car": {
+        "category": "toys", "en": "Car", "tl": "Kotse", "ceb": "Awto",
+        "subject": (
+            "a single cute toy car seen from the side: a rounded chunky red "
+            "body with one window, two black round wheels and a small yellow "
+            "headlight. Simple and toy-like. No face." + NOPANEL),
+    },
+    "teddy": {
+        "category": "toys", "en": "Teddy bear", "tl": "Teddy", "ceb": "Teddy",
+        "subject": (
+            "a single cute teddy bear sitting and facing the viewer: a round "
+            "head with two round ears, small dot eyes, a little oval muzzle "
+            "with a stitched nose and gentle smile, a round tan body and short "
+            "rounded arms and legs. Soft and cuddly." + NOPANEL),
+    },
+    "blocks": {
+        "category": "toys", "en": "Blocks", "tl": "Bloke", "ceb": "Bloke",
+        "subject": (
+            "a small stack of toy building blocks: three cube blocks, one sky "
+            "blue, one butter yellow and one rose pink, stacked and slightly "
+            "offset, each with a soft highlight. No letters, no numbers, no "
+            "face." + NOPANEL),
+    },
+    "kite": {
+        "category": "toys", "en": "Kite", "tl": "Saranggola", "ceb": "Tabanog",
+        "subject": (
+            "a single diamond-shaped kite, divided into four coloured panels "
+            "(mint green, sky blue, butter yellow, rose pink), with a simple "
+            "cross frame and a wavy tail with two small bows hanging from the "
+            "bottom point. No face." + NOPANEL),
+    },
 }
 
 
