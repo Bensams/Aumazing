@@ -134,7 +134,12 @@ class GamePalette {
 
 /// Catalogue of the three built-in palettes.
 abstract final class GamePalettes {
-  // ── Boy — natural ocean & sage (calm, ASD-friendly) ──────────────────
+  // ── Boy — natural sea mist (calm, ASD-friendly) ──────────────────────
+  // A single flat natural tone rather than a gradient: predictable and calm,
+  // and it never buries a game shape behind a shifting blend. Expressed as a
+  // two-stop gradient of one colour so every consumer keeps treating the
+  // background as a [LinearGradient]. Tones are left empty so all games share
+  // the same flat colour.
   static const GamePalette boy = GamePalette(
     theme: GameTheme.boy,
     primary: Color(0xFF5E94B5), // muted ocean blue
@@ -144,23 +149,16 @@ abstract final class GamePalettes {
     gameBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF9CCBE6), Color(0xFFDCEFE6), Color(0xFF97C9AE)],
+      colors: [Color(0xFFDCEFE6), Color(0xFFDCEFE6)], // soft sea mist
     ),
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFA6D2EC), Color(0xFFE1F1EA), Color(0xFF9FD0B6)],
+      colors: [Color(0xFFE1F1EA), Color(0xFFE1F1EA)], // soft sage mist
     ),
-    backgroundTones: [
-      Color(0xFF9CCBE6), // sky blue
-      Color(0xFF97C9AE), // sage green
-      Color(0xFFACD6EE), // light blue
-      Color(0xFFA6D2BE), // mint green
-      Color(0xFF8FC2DA), // teal
-    ],
   );
 
-  // ── Girl — natural rose & peach (calm, ASD-friendly) ─────────────────
+  // ── Girl — natural peach cream (calm, ASD-friendly) ──────────────────
   static const GamePalette girl = GamePalette(
     theme: GameTheme.girl,
     primary: Color(0xFFCB7E97), // muted rose
@@ -170,23 +168,16 @@ abstract final class GamePalettes {
     gameBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFF2BFD0), Color(0xFFFBE6DC), Color(0xFFF4C6A8)],
+      colors: [Color(0xFFFBE6DC), Color(0xFFFBE6DC)], // soft peach cream
     ),
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFF0BCCF), Color(0xFFFBEAE2), Color(0xFFF5CBAE)],
+      colors: [Color(0xFFFBEAE2), Color(0xFFFBEAE2)], // soft rose cream
     ),
-    backgroundTones: [
-      Color(0xFFF2BFD0), // rose
-      Color(0xFFF4C6A8), // peach
-      Color(0xFFEFB9D2), // pink
-      Color(0xFFF6CFB6), // warm peach
-      Color(0xFFEDB6C6), // blush
-    ],
   );
 
-  // ── Neutral — the existing lavender & mint pastel ────────────────────
+  // ── Neutral — natural soft lavender ──────────────────────────────────
   static const GamePalette neutral = GamePalette(
     theme: GameTheme.neutral,
     primary: AppColors.primaryPurple,
@@ -196,20 +187,13 @@ abstract final class GamePalettes {
     gameBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFA9E3CC), Color(0xFFABD2F0), Color(0xFFC7B4EC)],
+      colors: [Color(0xFFECE5FB), Color(0xFFECE5FB)], // soft lavender
     ),
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFC9B6EE), Color(0xFFECE5FB), Color(0xFFA9E3CC)],
+      colors: [Color(0xFFECE5FB), Color(0xFFECE5FB)], // soft lavender
     ),
-    backgroundTones: [
-      Color(0xFFC7B4EC), // lavender
-      Color(0xFFA9E3CC), // mint
-      Color(0xFFABD2F0), // sky
-      Color(0xFFFBE49A), // butter
-      Color(0xFFF7C6B4), // peach
-    ],
   );
 
   /// Returns the palette for [theme].
