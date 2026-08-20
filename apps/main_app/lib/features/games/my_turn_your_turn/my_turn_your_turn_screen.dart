@@ -281,6 +281,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         // screen carries its own — without it the mascot is simply absent
         // for the whole retry, reactions included.
         builder: (_) => MascotHost(
+          showMascot: false, // My Turn Your Turn draws its own buddy.
           child: MyTurnYourTurnScreen(
             assessmentContext: widget.assessmentContext,
             sensoryController: widget.sensoryController,
