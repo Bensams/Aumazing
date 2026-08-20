@@ -54,6 +54,7 @@ class AnongNararamdamanGame extends FlameGame
     required this.onStepChanged,
     required this.onGameComplete,
     required this.childId,
+    this.character = 'bps',
     this.totalRounds = 4,
     this.itemsPerRound = 3,
     this.gameVersion,
@@ -129,6 +130,13 @@ class AnongNararamdamanGame extends FlameGame
   final int itemsPerRound;
 
   final String childId;
+
+  /// The child's chosen character ([MascotCharacter.name]: bps / reiz /
+  /// lexianne), so the buddy whose feelings the child reads is the same figure
+  /// they picked and see as the mascot — not a stranger. Falls back to the
+  /// generic face art when a character's own emotion set is missing.
+  final String character;
+
   final String? gameVersion;
   final DifficultyProfile profile;
 
@@ -241,7 +249,7 @@ class AnongNararamdamanGame extends FlameGame
     // the painted face swap to the picture mid-trial — a face changing
     // appearance under them is exactly the unpredictability this app avoids,
     // and here it would change the very thing they are being asked to read.
-    await EmotionArtCache.ensureLoaded();
+    await EmotionArtCache.ensureLoaded(character);
 
     analyticsInitialize(
       gameId: 'anong_nararamdaman',
