@@ -10,6 +10,7 @@ import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../sari_sari_sort_game.dart' show StoreCategory;
+import '../seed_art_cache.dart';
 
 /// Data describing a single sari-sari store item (Filipino context).
 class StoreItemData {
@@ -24,7 +25,15 @@ class StoreItemData {
   final String en;
 
   /// Emoji glyph used as the item's visual.
+  ///
+  /// Retained as the fallback even when [card] is set: if the drawn card fails
+  /// to decode the item still shows something identifiable rather than a blank.
   final String emoji;
+
+  /// Full asset path of the drawn "seed" picture card for this item, or null to
+  /// use the [emoji] glyph. Lives in the shared seed bank
+  /// (`packages/shared_ui/assets/seed_cards/…`); loaded by [SeedArtCache].
+  final String? card;
 
   /// The category this item belongs to (the correct bin).
   final StoreCategory category;
@@ -39,6 +48,7 @@ class StoreItemData {
     required this.emoji,
     required this.category,
     required this.color,
+    this.card,
   });
 
   /// The printed label for [language].
@@ -250,12 +260,29 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
       borderWidth: 3.0,
     );
 
-    _emojiPaint.render(
-      canvas,
-      data.emoji,
-      Vector2(size.x / 2, size.y * 0.40),
-      anchor: Anchor.center,
-    );
+    // Prefer the drawn seed card; fall back to the emoji glyph if it hasn't
+    // decoded (or the item has none). The card is square and pre-trimmed, so it
+    // drops straight into a square box with no letterboxing arithmetic.
+    final cardImage = SeedArtCache.of(data.card);
+    if (cardImage != null) {
+      final boxSide = size.y * 0.58;
+      final left = (size.x - boxSide) / 2;
+      final top = size.y * 0.06;
+      canvas.drawImageRect(
+        cardImage,
+        Rect.fromLTWH(
+            0, 0, cardImage.width.toDouble(), cardImage.height.toDouble()),
+        Rect.fromLTWH(left, top, boxSide, boxSide),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    } else {
+      _emojiPaint.render(
+        canvas,
+        data.emoji,
+        Vector2(size.x / 2, size.y * 0.40),
+        anchor: Anchor.center,
+      );
+    }
 
     // White backing pill so the label stays legible on any item color.
     canvas.drawRRect(

@@ -32,3 +32,17 @@ flutter:
     # Emotion faces, situation scenes and caring-response cards for
     # Ano'ng Nararamdaman?. Same treatment as the routine cards.
     - assets/emotion_cards/
+    # Seed object bank — reusable drawn picture cards of everyday objects
+    # (animals, later fruits/toys/…) plus their en/tl/ceb naming voice lines,
+    # indexed by seed_cards/seeds.json. Self-contained: cards, audio and the
+    # manifest all resolve against assets/seed_cards/. Written by
+    # scripts/generate_seed_cards.py and scripts/generate_seed_lines.py.
+    - assets/seed_cards/
+    - assets/seed_cards/animals/
+    - assets/seed_cards/fruits/
+    - assets/seed_cards/toys/
+    - assets/seed_cards/food/
+    - assets/seed_cards/essentials/
+    - assets/seed_cards/audio/en/
+    - assets/seed_cards/audio/tl/
+    - assets/seed_cards/audio/ceb/
