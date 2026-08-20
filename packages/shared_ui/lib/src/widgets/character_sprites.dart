@@ -160,6 +160,25 @@ class CharacterSprites {
   static Future<CharacterSprites> lexianne() => _load('lexianne');
 
 
+  /// Warms the process-wide cache for [character] wearing [costume], so the
+  /// next widget to show that mascot finds the sheets already decoded and never
+  /// flashes its fallback while they load.
+  ///
+  /// Best-effort by design: warming is an optimisation, never a gate. It
+  /// resolves to the same cached future [costumed] would — so a caller that
+  /// later awaits [costumed] does no second decode — and it swallows a missing
+  /// sheet rather than throwing, because a warm that fails must never break the
+  /// action (equipping a costume, switching child) it was only trying to get
+  /// ahead of. The real show through [costumed] still degrades to the base
+  /// outfit if the sheets truly are absent.
+  static Future<void> precacheCostumed(String character, String costume) async {
+    try {
+      await costumed(character, costume);
+    } catch (_) {
+      // Deliberately swallowed — see above.
+    }
+  }
+
   /// Loads every sheet in [layout] for [name]. Sheets are generated offline by
   /// `scripts/generate_sprites.py`; see that script for the grid contract.
   static Future<CharacterSprites> _load(String name) {
