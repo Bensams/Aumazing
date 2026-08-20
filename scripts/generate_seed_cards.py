@@ -316,6 +316,94 @@ SEEDS = {
             "cross frame and a wavy tail with two small bows hanging from the "
             "bottom point. No face." + NOPANEL),
     },
+
+    # ── Food staples ─────────────────────────────────────────────────
+    # Everyday sari-sari food, drawn as plain face-less objects. tl/ceb share
+    # the same word for these staples (tinapay, gatas, tubig …).
+    "bread": {
+        "category": "food", "en": "Bread", "tl": "Tinapay", "ceb": "Tinapay",
+        "subject": (
+            "a single golden-brown loaf of bread: a rounded rectangular loaf "
+            "with a few soft score lines across the top and a warm crust. It "
+            "is an inanimate object — absolutely NO eyes, NO face, NO cheeks, "
+            "NO mouth. No text." + NOPANEL),
+    },
+    "milk": {
+        "category": "food", "en": "Milk", "tl": "Gatas", "ceb": "Gatas",
+        "subject": (
+            "a single carton of milk: a white rectangular carton with a peaked "
+            "folded top and a small sky-blue stripe near the bottom, with a "
+            "soft highlight. No text, no face." + NOPANEL),
+    },
+    "water": {
+        "category": "food", "en": "Water", "tl": "Tubig", "ceb": "Tubig",
+        "subject": (
+            "a single clear bottle of water: a rounded plastic bottle with a "
+            "blue screw cap, pale blue water inside and a soft highlight down "
+            "one side. No text, no face." + NOPANEL),
+    },
+    "egg": {
+        "category": "food", "en": "Egg", "tl": "Itlog", "ceb": "Itlog",
+        "subject": (
+            "a single white egg: a smooth plain oval, softly rounded, with a "
+            "gentle pale highlight on one side. No face." + NOPANEL),
+    },
+    "rice": {
+        "category": "food", "en": "Rice", "tl": "Kanin", "ceb": "Kan-on",
+        "subject": (
+            "a single bowl of rice: a simple round sky-blue bowl filled with a "
+            "rounded mound of fluffy white rice, with a soft highlight. No "
+            "face." + NOPANEL),
+    },
+
+    # ── Household essentials ─────────────────────────────────────────
+    "soap": {
+        "category": "essentials", "en": "Soap", "tl": "Sabon", "ceb": "Sabon",
+        "subject": (
+            "a single bar of soap: a rounded rectangular bar in mint green "
+            "with a soft highlight and one small round bubble beside it. No "
+            "text, no face." + NOPANEL),
+    },
+    "toothbrush": {
+        "category": "essentials", "en": "Toothbrush", "tl": "Sipilyo",
+        "ceb": "Sipilyo",
+        "subject": (
+            "a single toothbrush lying flat and horizontal: a long slim handle "
+            "in sky blue with a small head of short white bristles at one end. "
+            "No text, no face." + NOPANEL),
+    },
+    "tissue": {
+        "category": "essentials", "en": "Tissue", "tl": "Tisyu",
+        "ceb": "Tisyu",
+        "subject": (
+            "a single box of tissues: a rectangular box, white with a soft "
+            "blue stripe, and one white tissue popping up through the oval "
+            "opening on top. No text, no face." + NOPANEL),
+    },
+    "shampoo": {
+        "category": "essentials", "en": "Shampoo", "tl": "Syampu",
+        "ceb": "Syampu",
+        "subject": (
+            "a single shampoo bottle: a rounded plastic bottle in lavender "
+            "with a small flip cap on top and a plain blank label panel. No "
+            "text, no face." + NOPANEL),
+    },
+    "toothpaste": {
+        "category": "essentials", "en": "Toothpaste", "tl": "Toothpaste",
+        "ceb": "Toothpaste",
+        "subject": (
+            "a single tube of toothpaste: a rounded tube with a small white "
+            "cap, the body sky blue and white, and a little curl of mint-green "
+            "paste squeezed from the open end. No text, no face." + NOPANEL),
+    },
+    "towel": {
+        "category": "essentials", "en": "Towel", "tl": "Tuwalya",
+        "ceb": "Tuwalya",
+        "subject": (
+            "a single neatly folded towel: a soft rectangular peach towel with "
+            "a couple of gentle fold lines and one thin darker stripe near the "
+            "top edge. No face." + NOPANEL),
+    },
 }
 
 
