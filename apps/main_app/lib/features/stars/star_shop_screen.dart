@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/stars_provider.dart';
 import 'star_catalogue.dart';
+import 'widgets/costume_apply_overlay.dart';
 import 'widgets/costume_card.dart';
 
 /// The Star Shop: browse costumes, try one on, buy it, wear it (STAR-C1…C4,
@@ -113,7 +114,7 @@ class _StarShopScreenState extends State<StarShopScreen> {
 
     switch (result) {
       case _CostumeAction.wear:
-        await context.read<ChildProvider>().setEquippedCostume(offer.costume);
+        await _equip(offer.costume, character);
       case _CostumeAction.buy:
         // STAR-C6. While the parent is being asked the item reads as "asked",
         // not "denied" — a child who requested a costume has done nothing
@@ -128,9 +129,26 @@ class _StarShopScreenState extends State<StarShopScreen> {
         if (bought) {
           // Equipping immediately is the point of buying — a child who spends
           // their stars should see the result on their character at once.
-          await context.read<ChildProvider>().setEquippedCostume(offer.costume);
+          await _equip(offer.costume, character);
         }
     }
+  }
+
+  /// Records the choice, then holds a brief "putting it on" moment while the
+  /// costume's animated sheets warm, so the child returns to the lobby with the
+  /// change already on their character rather than watching it pop in a beat
+  /// later. The overlay awaits the same decode the provider already kicked off
+  /// in [ChildProvider.setEquippedCostume], so there is no duplicate work — it
+  /// just gives that warm-up a calm face and keeps the shop from closing ahead
+  /// of it.
+  Future<void> _equip(Costume costume, ChildCharacter character) async {
+    await context.read<ChildProvider>().setEquippedCostume(costume);
+    if (!mounted) return;
+    await CostumeApplyOverlay.show(
+      context,
+      character: character,
+      costume: costume,
+    );
   }
 }
 
