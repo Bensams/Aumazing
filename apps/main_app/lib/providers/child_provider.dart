@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -659,6 +661,28 @@ class ChildProvider extends ChangeNotifier {
     await _loadLanguage();
     await _loadVoicePack();
     await _loadDifficultyOverride();
+    _warmEquippedCostume();
+  }
+
+  /// Gets the active child's equipped-costume sprite sheets decoding in the
+  /// background, so the lobby mascot shows the right outfit the instant it is
+  /// built instead of flashing its fallback while 21 sheets are sliced.
+  ///
+  /// Fire-and-forget on purpose: warming is an optimisation and must never hold
+  /// up a child switch, a launch, or a costume change. Called wherever the pair
+  /// (character, costume) can change — the active child loading or switching
+  /// ([_loadActiveChildPreferences]), and the two mutators below. The decode is
+  /// cached process-wide by [CharacterSprites], so repeat calls for an outfit
+  /// already warmed cost nothing.
+  void _warmEquippedCostume() {
+    final profile = _profile;
+    if (profile == null) return;
+    unawaited(
+      CharacterSprites.precacheCostumed(
+        profile.characterId,
+        profile.equippedCostume,
+      ),
+    );
   }
 
   /// Removes every locally stored preference and cached progress key that
@@ -759,6 +783,7 @@ class ChildProvider extends ChangeNotifier {
     _profile = _profile!.copyWith(characterId: character.id);
     await _localDb.upsertChild(_profile!, markPending: true);
     _replaceInList(_profile!);
+    _warmEquippedCostume();
     notifyListeners();
   }
 
@@ -773,6 +798,7 @@ class ChildProvider extends ChangeNotifier {
     _profile = _profile!.copyWith(equippedCostume: costume.id);
     await _localDb.upsertChild(_profile!, markPending: true);
     _replaceInList(_profile!);
+    _warmEquippedCostume();
     notifyListeners();
   }
 

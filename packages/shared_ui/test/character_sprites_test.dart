@@ -146,4 +146,28 @@ void main() {
       });
     });
   }
+
+  group('precacheCostumed', () {
+    // Warming exists so the lobby mascot never flashes its fallback while a
+    // costume's sheets decode. It runs fire-and-forget from the child provider,
+    // so its one hard promise is that it never throws into that caller — a
+    // costume with no sheets must warm the base outfit quietly, not surface an
+    // error where nothing is there to catch it.
+    test('a costume with no sheets warms quietly instead of throwing', () async {
+      await expectLater(
+        CharacterSprites.precacheCostumed('bps', 'costume-that-does-not-exist'),
+        completes,
+      );
+    });
+
+    test('an empty or "none" costume warms the base character', () async {
+      await expectLater(
+        CharacterSprites.precacheCostumed('bps', 'none'),
+        completes,
+      );
+      // The base sheets are now cached, so the mascot resolves without a decode
+      // wait — the whole point of warming ahead of the build.
+      expect((await CharacterSprites.bps()).rest, isNotNull);
+    });
+  });
 }
