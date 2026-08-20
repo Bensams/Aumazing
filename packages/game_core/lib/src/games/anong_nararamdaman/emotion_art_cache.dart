@@ -32,6 +32,11 @@ class EmotionArtCache {
   static bool _loading = false;
   static bool _loaded = false;
 
+  /// Whose faces are currently in [_faces]. The scenes and responses are
+  /// character-agnostic and loaded once; only the face set is swapped when a
+  /// child with a different character plays.
+  static String? _character;
+
   /// True once a load pass has finished, whatever it managed to decode.
   static bool get isLoaded => _loaded;
 
@@ -39,22 +44,34 @@ class EmotionArtCache {
   static ui.Image? scene(SceneArt art) => _scenes[art];
   static ui.Image? response(ResponseArt art) => _responses[art];
 
-  /// Decodes every picture. Safe to call more than once.
-  static Future<void> ensureLoaded() async {
-    if (_loaded || _loading) return;
+  /// Decodes every picture for [character] (bps / reiz / lexianne). Safe to
+  /// call more than once; reloads only the face set when the character changes,
+  /// and is a no-op once the same character's art is in hand.
+  static Future<void> ensureLoaded(String character) async {
+    if (_loading) return;
+    if (_loaded && _character == character) return;
     _loading = true;
 
+    // Faces: the chosen character's own drawing, falling back to the generic
+    // set for any expression that character has no art for yet.
+    _faces.clear();
     for (final art in FaceArt.values) {
-      final image = await _tryLoad(art.assetPath);
+      final image = await _tryLoad(art.assetPathFor(character)) ??
+          await _tryLoad(art.assetPath);
       if (image != null) _faces[art] = image;
     }
-    for (final art in SceneArt.values) {
-      final image = await _tryLoad(art.assetPath);
-      if (image != null) _scenes[art] = image;
-    }
-    for (final art in ResponseArt.values) {
-      final image = await _tryLoad(art.assetPath);
-      if (image != null) _responses[art] = image;
+    _character = character;
+
+    // Scenes and responses have no character in them: load once and keep.
+    if (!_loaded) {
+      for (final art in SceneArt.values) {
+        final image = await _tryLoad(art.assetPath);
+        if (image != null) _scenes[art] = image;
+      }
+      for (final art in ResponseArt.values) {
+        final image = await _tryLoad(art.assetPath);
+        if (image != null) _responses[art] = image;
+      }
     }
 
     _loading = false;
@@ -84,6 +101,7 @@ class EmotionArtCache {
     _faces.clear();
     _scenes.clear();
     _responses.clear();
+    _character = null;
     _loaded = false;
     _loading = false;
   }

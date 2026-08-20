@@ -191,6 +191,10 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
         alignment: Alignment.bottomLeft,
         padding: const EdgeInsets.only(left: 12, bottom: 12),
         semanticLabel: 'BPS the mascot',
+        // My Turn Your Turn draws its own buddy; the corner mascot steps aside
+        // for it so the child sees one character, then returns for the games
+        // that have none of their own.
+        showMascot: _currentGame != GameType.myTurnYourTurn,
         child: Stack(
         children: [
           // Current game
