@@ -113,6 +113,7 @@ class GameLabGameFactory {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onCorrectMatch: wrappedOnCorrectMatch,
           onGameComplete: ({
@@ -153,6 +154,7 @@ class GameLabGameFactory {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onCorrectMatch: wrappedOnCorrectMatch,
           onGameComplete: ({
@@ -207,6 +209,7 @@ class GameLabGameFactory {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onCorrectMatch: wrappedOnCorrectMatch,
           onInstructionChanged: (_) {},
@@ -263,6 +266,7 @@ class GameLabGameFactory {
           totalRounds: config.totalRounds,
           childId: config.childId,
           gameVersion: config.gameVersion,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onCorrectMatch: wrappedOnCorrectMatch,
           onTurnChanged: (_) {},
@@ -320,6 +324,7 @@ class GameLabGameFactory {
           childId: config.childId,
           gameVersion: config.gameVersion,
           strings: config.strings,
+          profile: DifficultyProfile.forLevel(config.difficulty),
           onStepChanged: onStepChanged,
           onCorrectDrop: wrappedOnCorrectMatch,
           onGameComplete: ({
