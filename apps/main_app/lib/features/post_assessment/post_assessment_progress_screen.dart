@@ -249,7 +249,12 @@ class _PostAssessmentProgressScreenState
     // The mascot keeps the child company through post-assessment too; the
     // host must sit above the game screen for its lookups to resolve.
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => MascotHost(child: screen)),
+      MaterialPageRoute(
+        builder: (_) => MascotHost(
+          showMascot: !kGamesWithOwnCharacter.contains(gameId),
+          child: screen,
+        ),
+      ),
     );
   }
 
