@@ -102,10 +102,16 @@ void main() {
       preLevels: const {'communication': preLevel},
       postLevels: const {'communication': postLevel},
     )));
-    await tester.pumpAndSettle();
+    // The finish path runs to the child hand-off. Fixed pumps (not
+    // pumpAndSettle) land us inside the milestone celebration, whose companion
+    // twinkles continuously and so never "settles": the first flushes the
+    // finalize chain and pushes the hand-off, the second lets its route
+    // transition in — well short of the 4.5 s celebration hold.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
 
     // Celebration first, then the written instruction and its narration.
-    expect(find.text('You did it!'), findsOneWidget);
+    expect(find.text('Post-Assessment Complete!'), findsOneWidget);
     await tester.pump(kHandoffCelebrationDuration);
     await tester.pump(kHandoffVoiceDelay);
     await tester.pumpAndSettle();
