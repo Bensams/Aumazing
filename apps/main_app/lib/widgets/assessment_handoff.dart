@@ -7,6 +7,7 @@ import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 
 import '../providers/child_provider.dart';
 import 'mascot.dart';
+import 'milestone_victory_scene.dart';
 
 /// Builds the narrator the hand-off screen speaks through.
 ///
@@ -38,6 +39,8 @@ class AssessmentHandoffScreen extends StatefulWidget {
   const AssessmentHandoffScreen({
     super.key,
     required this.onParentVerified,
+    this.title = 'You did it!',
+    this.subtitle = 'You finished all the activities!',
     this.celebrationDuration = kHandoffCelebrationDuration,
     this.voiceDelay = kHandoffVoiceDelay,
     this.voiceOverFactory,
@@ -46,6 +49,13 @@ class AssessmentHandoffScreen extends StatefulWidget {
   /// Runs once the parent has passed verification. Receives this screen's
   /// context so the caller can navigate from it.
   final void Function(BuildContext context) onParentVerified;
+
+  /// The milestone headline shown on the victory scene. Pre- and
+  /// post-assessment pass their own copy; the default is a neutral celebration.
+  final String title;
+
+  /// The supporting line under [title].
+  final String subtitle;
 
   /// How long the celebration phase holds.
   final Duration celebrationDuration;
@@ -61,8 +71,7 @@ class AssessmentHandoffScreen extends StatefulWidget {
       _AssessmentHandoffScreenState();
 }
 
-class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen>
-    with TickerProviderStateMixin {
+class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
   /// Whether the celebration phase is currently showing.
   bool _showCelebration = true;
 
@@ -73,19 +82,6 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen>
 
   Timer? _celebrationTimer;
   Timer? _voiceTimer;
-
-  // ── Celebration animations ──────────────────────────────────────────
-  late final AnimationController _trophyScaleController;
-  late final Animation<double> _trophyScale;
-
-  late final AnimationController _textFadeController;
-  late final Animation<double> _textFade;
-
-  late final AnimationController _starsController;
-
-  /// Delays the text fade-in behind the trophy. Held so dispose can cancel it
-  /// rather than leaving a pending callback against a dead ticker.
-  Timer? _textFadeTimer;
 
   /// Narrator for the hand-off prompt. Built here rather than shared, matching
   /// every other child-facing screen: each owns its own player pool and the
@@ -99,39 +95,6 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen>
     lockParentLandscape();
 
     _voiceOver = (widget.voiceOverFactory ?? _defaultVoiceOver)(context);
-
-    // Trophy bounce-in animation
-    _trophyScaleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _trophyScale = CurvedAnimation(
-      parent: _trophyScaleController,
-      curve: Curves.elasticOut,
-    );
-
-    // Text fade-in animation (starts slightly after trophy)
-    _textFadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _textFade = CurvedAnimation(
-      parent: _textFadeController,
-      curve: Curves.easeIn,
-    );
-
-    // Floating stars/emojis animation
-    _starsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    );
-
-    // Start the celebration sequence
-    _trophyScaleController.forward();
-    _textFadeTimer = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) _textFadeController.forward();
-    });
-    _starsController.forward();
 
     // Play celebration SFX
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -180,11 +143,7 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen>
   void dispose() {
     _celebrationTimer?.cancel();
     _voiceTimer?.cancel();
-    _textFadeTimer?.cancel();
     _voiceOver.dispose();
-    _trophyScaleController.dispose();
-    _textFadeController.dispose();
-    _starsController.dispose();
     super.dispose();
   }
 
@@ -221,137 +180,18 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen>
   // ── Celebration phase ───────────────────────────────────────────────
 
   Widget _buildCelebration(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
-    return Container(
+    // The upgraded milestone scene *replaces* the old emoji-trophy phase — the
+    // child's own companion climbs a golden podium to the trophy and celebrates
+    // beside it. It plays no sound or narration itself: this screen owns the one
+    // game-complete cue (above) and the later hand-off line, so the two never
+    // stack or overlap.
+    return KeyedSubtree(
       key: const ValueKey('celebration'),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFFFF3E0), // warm cream/orange top
-            Color(0xFFFFE0B2), // soft amber
-            Color(0xFFFFF9C4), // light yellow bottom
-          ],
-        ),
-      ),
-      child: SafeArea(
-        child: AnimatedBuilder(
-          animation:
-              Listenable.merge([_trophyScaleController, _starsController]),
-          builder: (context, _) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                // Floating celebration emojis
-                ..._buildFloatingEmojis(size),
-
-                // Center content: trophy + text
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Trophy with scale animation
-                      ScaleTransition(
-                        scale: _trophyScale,
-                        child: const Text(
-                          '🏆',
-                          style: TextStyle(fontSize: 96),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // "You did it!" text with fade animation
-                      FadeTransition(
-                        opacity: _textFade,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'You did it!',
-                              style: AppTextStyles.headlineLarge.copyWith(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFFE65100),
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'You finished all the games!',
-                              style: AppTextStyles.titleMedium.copyWith(
-                                color: const Color(0xFFBF360C),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Star sparkle below the trophy
-                      FadeTransition(
-                        opacity: _textFade,
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('⭐', style: TextStyle(fontSize: 28)),
-                            SizedBox(width: 8),
-                            Text('🌟', style: TextStyle(fontSize: 32)),
-                            SizedBox(width: 8),
-                            Text('⭐', style: TextStyle(fontSize: 28)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+      child: MilestoneVictoryScene(
+        title: widget.title,
+        subtitle: widget.subtitle,
       ),
     );
-  }
-
-  /// Generates floating emoji widgets that drift upward during the celebration.
-  List<Widget> _buildFloatingEmojis(Size screenSize) {
-    const emojis = ['⭐', '🌟', '✨', '💫', '🎉', '🎈', '🏆', '💖', '🎊'];
-    final count = 18;
-    final widgets = <Widget>[];
-
-    for (var i = 0; i < count; i++) {
-      final emoji = emojis[i % emojis.length];
-      // Distribute across the screen width
-      final xFraction = (i * 0.0618 + 0.05) % 1.0; // golden-ratio spacing
-      final delay = (i * 0.05) % 0.6;
-      final speed = 0.3 + (i % 5) * 0.15;
-      final fontSize = 18.0 + (i % 4) * 6.0;
-
-      final t = (_starsController.value - delay).clamp(0.0, 1.0) /
-          (1.0 - delay).clamp(0.01, 1.0);
-      final progress = t.clamp(0.0, 1.0);
-      final y = 1.0 - progress * speed;
-      final x = xFraction +
-          (progress * 3.14159 * 2).clamp(0.0, 6.28) *
-              0.02 *
-              ((i % 2 == 0) ? 1 : -1);
-
-      widgets.add(
-        Positioned(
-          left: x * screenSize.width,
-          top: y * screenSize.height,
-          child: Opacity(
-            opacity: (1.0 - progress).clamp(0.0, 1.0) * 0.8,
-            child: Text(emoji, style: TextStyle(fontSize: fontSize)),
-          ),
-        ),
-      );
-    }
-
-    return widgets;
   }
 
   /// The BPS mascot: waves hello when this phase appears, then rests with a

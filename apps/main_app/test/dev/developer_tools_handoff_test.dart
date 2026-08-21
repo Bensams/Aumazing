@@ -191,12 +191,12 @@ void main() {
       await openToolbox(tester);
       await runAction(tester, const Key('developerToolsCompletePre'));
 
-      // The child sees the celebration, then the hand-off instruction.
-      expect(find.text('You did it!'), findsOneWidget);
-      await tester.pump(kHandoffCelebrationDuration);
+      // runAction settles past the milestone celebration into the child
+      // hand-off (the celebration-first ordering is pinned in
+      // assessment_handoff_test / milestone_victory_test). What matters here is
+      // that the parent-facing results stay locked behind verification: the
+      // spoken instruction and the gate are on screen, the results are not.
       await tester.pump(kHandoffVoiceDelay);
-      await tester.pumpAndSettle();
-
       expect(find.text(kHandoffInstructionText), findsOneWidget);
       expect(find.text('I\'m the Parent'), findsOneWidget);
       expect(find.byType(PreAssessmentResultScreen), findsNothing);
