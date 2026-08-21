@@ -19,6 +19,8 @@ import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/support_profile.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/widgets/assessment_handoff.dart';
+import 'package:aumazing/widgets/mascot.dart';
+import 'package:aumazing/widgets/milestone_victory_scene.dart';
 
 /// The child finishes an assessment holding the device, and the next screen is
 /// written for their parent. Two things therefore have to hold: the child is
@@ -85,6 +87,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('numpad_submit')));
     await tester.pumpAndSettle();
   }
+
+  // ── The milestone victory scene ──────────────────────────────────────
+
+  group('the celebration is the milestone victory scene', () {
+    testWidgets('the companion appears in the trophy phase, not just later',
+        (tester) async {
+      narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(host(AssessmentHandoffScreen(
+        title: 'Pre-Assessment Complete!',
+        subtitle: 'You finished all the activities!',
+        onParentVerified: (_) {},
+        voiceOverFactory: (_) => narrator,
+      )));
+      await tester.pump();
+
+      // The reusable scene, the child's companion and a drawn trophy are all on
+      // screen while the celebration holds — and the hand-off line is not.
+      expect(find.byType(MilestoneVictoryScene), findsOneWidget);
+      expect(find.byType(Mascot), findsOneWidget);
+      expect(find.byKey(kMilestoneTrophyKey), findsOneWidget);
+      expect(find.text('Pre-Assessment Complete!'), findsOneWidget);
+      expect(find.text(kHandoffInstructionText), findsNothing);
+    });
+  });
 
   // ── The spoken hand-off ──────────────────────────────────────────────
 

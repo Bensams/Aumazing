@@ -237,6 +237,7 @@ class AssessmentProvider extends ChangeNotifier {
       _preSnapshot = null;
       _postSnapshot = null;
       _pathCompleted = {};
+      _pathVictoryShownSignature = null;
     }
     _loadedChildId = childId;
     _isLoading = true;
@@ -274,6 +275,7 @@ class AssessmentProvider extends ChangeNotifier {
       await _restoreSupportProfile(childId);
       await _restoreSnapshots(childId);
       await _restorePathProgress(childId);
+      await _restorePathVictory(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
       // with a real model prediction in the background now that we may be
@@ -824,6 +826,46 @@ class AssessmentProvider extends ChangeNotifier {
 
   static String _pathProgressKey(String childId) => 'path_progress_$childId';
 
+  // ── Learning-path milestone victory (one-time per path) ────────────────
+
+  /// The signature of the path whose completion victory was already shown, or
+  /// null when none has been. Compared against the *current* path's signature
+  /// so a genuinely new recommendation can celebrate again.
+  String? _pathVictoryShownSignature;
+  String? get pathVictoryShownSignature => _pathVictoryShownSignature;
+
+  static String _pathVictoryKey(String childId) => 'path_victory_shown_$childId';
+
+  /// Whether the path with [signature] has already had its completion victory.
+  bool pathVictoryAlreadyShown(String signature) =>
+      signature.isNotEmpty && _pathVictoryShownSignature == signature;
+
+  /// Records that the path with [signature] has had its completion victory, so
+  /// replaying its final game never replays the celebration. Persisted so the
+  /// one-time guarantee survives an app restart.
+  Future<void> markPathVictoryShown(String childId, String signature) async {
+    if (signature.isEmpty) return;
+    if (_pathVictoryShownSignature == signature) return;
+    _pathVictoryShownSignature = signature;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pathVictoryKey(childId), signature);
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persist path victory failed: $e');
+    }
+  }
+
+  Future<void> _restorePathVictory(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (childId != _loadedChildId) return; // switched away mid-restore
+      _pathVictoryShownSignature = prefs.getString(_pathVictoryKey(childId));
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restore path victory failed: $e');
+    }
+  }
+
   /// Marks a path game as completed and persists the progress.
   Future<void> markPathGameCompleted(String childId, String gameId) async {
     if (!_pathCompleted.add(gameId)) return; // already recorded
@@ -854,9 +896,15 @@ class AssessmentProvider extends ChangeNotifier {
   /// path, so the child starts the new sequence from step 1.
   Future<void> _resetPathProgress(String childId) async {
     _pathCompleted = {};
+    // A fresh recommendation starts fresh: the previous path's victory no
+    // longer applies, and the new path's (different signature) has not been
+    // celebrated yet. Clearing the stored signature is belt-and-suspenders on
+    // top of the signature comparison, matching how progress itself resets.
+    _pathVictoryShownSignature = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_pathProgressKey(childId));
+      await prefs.remove(_pathVictoryKey(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] reset path progress failed: $e');
     }
@@ -1359,6 +1407,7 @@ class AssessmentProvider extends ChangeNotifier {
     // Path progress is per child and restored on load; dropping it here stops
     // one child's completed steps showing under another after a switch.
     _pathCompleted = {};
+    _pathVictoryShownSignature = null;
     // Invalidate any load still in flight: its child is no longer loaded,
     // so its late writes are discarded rather than resurrected (AUM-160).
     _loadedChildId = null;
