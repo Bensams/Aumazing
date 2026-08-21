@@ -154,7 +154,7 @@ abstract final class GamePalettes {
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFE1F1EA), Color(0xFFE1F1EA)], // soft sage mist
+      colors: [Color(0xFFF3F1EC), Color(0xFFF3F1EC)], // dirty white
     ),
   );
 
@@ -173,7 +173,7 @@ abstract final class GamePalettes {
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFFBEAE2), Color(0xFFFBEAE2)], // soft rose cream
+      colors: [Color(0xFFF3F1EC), Color(0xFFF3F1EC)], // dirty white
     ),
   );
 
@@ -192,7 +192,7 @@ abstract final class GamePalettes {
     parentBackground: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFECE5FB), Color(0xFFECE5FB)], // soft lavender
+      colors: [Color(0xFFF3F1EC), Color(0xFFF3F1EC)], // dirty white
     ),
   );
 
