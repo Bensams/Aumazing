@@ -141,6 +141,24 @@ class LearningPathService {
         .every((e) => completedGameIds.contains(e.game.id));
   }
 
+  /// Whether every game on [path] has been completed. False for an empty path
+  /// — there is no milestone in finishing nothing.
+  static bool isComplete(
+    List<LearningPathEntry> path,
+    Set<String> completedGameIds,
+  ) =>
+      path.isNotEmpty &&
+      path.every((e) => completedGameIds.contains(e.game.id));
+
+  /// A stable identity for [path] — the ordered game ids joined together.
+  ///
+  /// Two genuinely different recommendations (different games, or a different
+  /// order) produce different signatures, so the milestone victory for a path
+  /// can be shown once and a *later* fresh recommendation can earn its own.
+  /// An empty path has an empty signature.
+  static String signatureFor(List<LearningPathEntry> path) =>
+      path.map((e) => e.game.id).join('>');
+
   /// The path entry after [currentGameId], or null when the current game is
   /// last on the path (or not on it). Used by the post-reward Next choice so
   /// the child moves through the path in the AI's recommended order.
