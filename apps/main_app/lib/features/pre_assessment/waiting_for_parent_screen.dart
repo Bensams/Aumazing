@@ -4,6 +4,7 @@ import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
+import '../../widgets/milestone_victory_scene.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -34,6 +35,8 @@ class WaitingForParentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AssessmentHandoffScreen(
+      title: MilestoneKind.preAssessment.title,
+      subtitle: MilestoneKind.preAssessment.subtitle,
       voiceOverFactory: voiceOverFactory,
       onParentVerified: _showSummaryDialog,
     );
