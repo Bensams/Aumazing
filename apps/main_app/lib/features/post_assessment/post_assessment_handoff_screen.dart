@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../model/area_level.dart';
 import '../../widgets/assessment_handoff.dart';
+import '../../widgets/milestone_victory_scene.dart';
 import 'post_assessment_result_screen.dart';
 
 /// Screen shown to the child after all post-assessment games are complete.
@@ -39,6 +40,8 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AssessmentHandoffScreen(
+      title: MilestoneKind.postAssessment.title,
+      subtitle: MilestoneKind.postAssessment.subtitle,
       voiceOverFactory: voiceOverFactory,
       onParentVerified: _showResults,
     );
