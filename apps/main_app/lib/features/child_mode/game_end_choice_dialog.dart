@@ -12,6 +12,9 @@ import '../stars/widgets/star_earned_overlay.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/screen_time_service.dart';
+import '../../widgets/mascot.dart';
+import '../../widgets/milestone_victory_scene.dart';
+import '../../widgets/milestone_victory_screen.dart';
 import 'game_launcher.dart';
 import 'time_up_dialog.dart';
 
@@ -70,6 +73,14 @@ class GameEndChoiceDialog {
     if (!context.mounted) return;
     final path =
         LearningPathService.fromContext(context, activeGameIds: activeIds);
+
+    // Milestone: this practice completion just finished every game on the
+    // child's current recommended path. Celebrate it — once — instead of
+    // offering a misleading "Next", then return them to the path map so the
+    // fully-completed path is visible.
+    if (await _maybeShowPathVictory(context, path, currentGameId)) return;
+    if (!context.mounted) return;
+
     var pathNext = LearningPathService.nextOnPath(path, currentGameId);
     if (pathNext != null) {
       // Sequential unlock: only offer the next step if it's actually open
@@ -126,6 +137,60 @@ class GameEndChoiceDialog {
       }
     }
     Navigator.of(context).pop(); // Back to the lobby
+  }
+
+  /// Shows the learning-path milestone victory when — and only when — the game
+  /// that just finished was the last one still outstanding on the child's
+  /// current recommended path. Returns true when it took over the flow (the
+  /// caller must then stop), false to fall through to the normal end choice.
+  ///
+  /// The guard rails, in order:
+  ///  * the path must be non-empty (an empty path is no path);
+  ///  * the just-completed game must actually be *on* the path — finishing an
+  ///    unrelated game from "All Games" never triggers it;
+  ///  * every game on the path must now be completed;
+  ///  * the victory for *this* path (by stable signature) must not already have
+  ///    been shown — so replaying the final game never replays it, while a
+  ///    genuinely new recommendation later can still celebrate.
+  ///
+  /// The shown-signature is persisted *before* the celebration is presented, so
+  /// a duplicated completion callback or a double tap cannot open two victories.
+  static Future<bool> _maybeShowPathVictory(
+    BuildContext context,
+    List<LearningPathEntry> path,
+    String currentGameId,
+  ) async {
+    if (path.isEmpty) return false;
+    if (!path.any((e) => e.game.id == currentGameId)) return false;
+
+    final assess = context.read<AssessmentProvider>();
+    final completed = assess.pathCompletedGameIds;
+    if (!LearningPathService.isComplete(path, completed)) return false;
+
+    final signature = LearningPathService.signatureFor(path);
+    if (assess.pathVictoryAlreadyShown(signature)) return false;
+
+    final childId = context.read<ChildProvider>().profile?.id;
+    if (childId == null) return false;
+
+    // Persist the one-time flag first: this is what makes "exactly once"
+    // structural rather than dependent on the celebration finishing.
+    await assess.markPathVictoryShown(childId, signature);
+    if (!context.mounted) return true;
+
+    // The companion is always the child's own profile choice.
+    final profile = context.read<ChildProvider>().profile;
+    await MilestoneVictoryScreen.show(
+      context,
+      kind: MilestoneKind.learningPath,
+      character: MascotCharacter.fromId(profile?.characterId),
+      costumeId: profile?.equippedCostume,
+    );
+    if (!context.mounted) return true;
+
+    // Back to the lobby / path map, where the finished path is now visible.
+    Navigator.of(context).pop();
+    return true;
   }
 
   /// Grants the fixed payout for the play that just finished and, if anything
