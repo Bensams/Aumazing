@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 // shared_ui exports its own AnimatedBuilder, which would shadow Flutter's.
 import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 
@@ -30,6 +31,19 @@ enum MilestoneKind {
         MilestoneKind.preAssessment => 'You finished all the activities!',
         MilestoneKind.learningPath => 'You finished every activity on your path!',
         MilestoneKind.postAssessment => 'You finished all the activities!',
+      };
+
+  /// The voice-over line that *speaks* the milestone. The written [title] is
+  /// not drawn on the scene — it overflows and a pre-reader cannot use it — so
+  /// this narrated line carries the headline instead. Falls back to
+  /// "You finished it!" in any pack that lacks its own recording.
+  VoiceOverCue get voiceCue => switch (this) {
+        MilestoneKind.preAssessment =>
+          VoiceOverCue.milestonePreAssessmentComplete,
+        MilestoneKind.learningPath =>
+          VoiceOverCue.milestoneLearningPathComplete,
+        MilestoneKind.postAssessment =>
+          VoiceOverCue.milestonePostAssessmentComplete,
       };
 }
 
@@ -450,30 +464,20 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     );
   }
 
+  /// The visible message is deliberately the subtitle *only*. The headline
+  /// [MilestoneVictoryScene.title] is spoken (see [MilestoneKind.voiceCue]),
+  /// not drawn: at a child-legible size it overflows the landscape stage and,
+  /// being text, is no use to a pre-reader anyway. It is still exposed to
+  /// screen readers through the scene's container [Semantics] label.
   Widget _buildMessage() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          widget.title,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.headlineLarge.copyWith(
-            fontSize: 34,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFFE65100),
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          widget.subtitle,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.titleMedium.copyWith(
-            color: const Color(0xFFBF360C),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+    return Text(
+      widget.subtitle,
+      textAlign: TextAlign.center,
+      style: AppTextStyles.headlineSmall.copyWith(
+        fontSize: 26,
+        color: const Color(0xFFE65100),
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 

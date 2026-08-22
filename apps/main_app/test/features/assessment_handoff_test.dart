@@ -107,7 +107,9 @@ void main() {
       expect(find.byType(MilestoneVictoryScene), findsOneWidget);
       expect(find.byType(Mascot), findsOneWidget);
       expect(find.byKey(kMilestoneTrophyKey), findsOneWidget);
-      expect(find.text('Pre-Assessment Complete!'), findsOneWidget);
+      // The headline is voiced, not drawn; the subtitle is what shows.
+      expect(find.text('You finished all the activities!'), findsOneWidget);
+      expect(find.text('Pre-Assessment Complete!'), findsNothing);
       expect(find.text(kHandoffInstructionText), findsNothing);
     });
   });
@@ -124,10 +126,11 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('You did it!'), findsOneWidget);
+      expect(find.text('You finished all the activities!'), findsOneWidget);
       expect(find.text(kHandoffInstructionText), findsNothing);
       expect(narrator.played, isEmpty,
-          reason: 'the celebration has its own message and its own SFX');
+          reason: 'no milestone cue was supplied to the bare screen, and the '
+              'hand-off line never plays during the celebration');
 
       // Still nothing part-way through the celebration.
       await tester.pump(kHandoffCelebrationDuration ~/ 2);
@@ -222,7 +225,12 @@ void main() {
       await reachHandoff(tester);
 
       expect(find.text(kHandoffInstructionText), findsOneWidget);
-      expect(narrator.played, [VoiceOverCue.giveTheDeviceToYourParent]);
+      // The milestone line is spoken first (during the celebration), then the
+      // hand-off line after it — in that order, never overlapping.
+      expect(narrator.played, [
+        VoiceOverCue.milestonePreAssessmentComplete,
+        VoiceOverCue.giveTheDeviceToYourParent,
+      ]);
       expect(find.byType(PreAssessmentResultScreen), findsNothing);
       expect(find.byType(GameSummaryDialog), findsNothing);
     });
@@ -306,7 +314,10 @@ void main() {
       await reachHandoff(tester);
 
       expect(find.text(kHandoffInstructionText), findsOneWidget);
-      expect(narrator.played, [VoiceOverCue.giveTheDeviceToYourParent]);
+      expect(narrator.played, [
+        VoiceOverCue.milestonePostAssessmentComplete,
+        VoiceOverCue.giveTheDeviceToYourParent,
+      ]);
       expect(find.byType(PostAssessmentResultScreen), findsNothing,
           reason: 'this screen compares the child\'s own before/after levels '
               'and is written for a parent');
