@@ -7,25 +7,42 @@ import 'package:flutter/animation.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 import '../../../config/game_motion.dart';
+import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// Shape used in the Copy Me game for sequence demonstrations.
 enum CopyMeShapeType { circle, star, heart, diamond }
 
-class SequenceShape extends PositionComponent with TapCallbacks {
+/// A palette card in the Copy Me game — one of the four fixed shapes the child
+/// copies the pattern with. It accepts **both** gestures: a tap picks the shape,
+/// and a drag lifts the card and carries it up toward the pattern row before
+/// dropping it in. Either way the game is told which shape the child chose.
+class SequenceShape extends PositionComponent
+    with TapCallbacks, DragCallbacks, FingertipDrag {
   SequenceShape({
     required this.shapeType,
     required this.shapeColor,
     required this.index,
     required this.onTapped,
+    this.onDragDropped,
     super.position,
     super.size,
-  });
+  }) {
+    homePosition = this.position.clone();
+  }
 
   final CopyMeShapeType shapeType;
   final Color shapeColor;
   final int index;
+
+  /// Fired when the child taps the card (picks this shape).
   final void Function(int index) onTapped;
+
+  /// Fired when the child releases a drag of this card. [dropCenter] is the
+  /// card's centre in game space; the game decides whether it landed on the
+  /// pattern row and, if so, treats it as picking this shape. The card always
+  /// returns to its palette slot afterward.
+  final void Function(int index, Vector2 dropCenter)? onDragDropped;
 
   bool isHighlighted = false;
   bool isCorrect = false;
@@ -33,6 +50,11 @@ class SequenceShape extends PositionComponent with TapCallbacks {
   bool isHint = false;
   bool isPressed = false;
   bool inputEnabled = false;
+
+  /// Resting position in the palette; a dragged card glides back here.
+  late Vector2 homePosition;
+
+  bool _dragging = false;
 
   static const double _cornerRadius = 24.0;
 
@@ -48,13 +70,15 @@ class SequenceShape extends PositionComponent with TapCallbacks {
       Vector2.all(0.93),
       EffectController(duration: 0.08, curve: Curves.easeIn),
     ));
-
-    onTapped(index);
   }
 
   @override
   void onTapUp(TapUpEvent event) {
+    final wasPressed = isPressed;
     _releasePress();
+    // A completed tap (not a drag) picks this shape — but only if the press
+    // actually started while input was live.
+    if (wasPressed && inputEnabled) onTapped(index);
   }
 
   @override
@@ -70,6 +94,70 @@ class SequenceShape extends PositionComponent with TapCallbacks {
     add(ScaleEffect.by(
       Vector2.all(1 / 0.93),
       EffectController(duration: 0.1, curve: Curves.easeOut),
+    ));
+  }
+
+  // ── Drag handling ────────────────────────────────────────────────────
+  //
+  // The palette card is fixed furniture, so a drag lifts a copy that follows
+  // the finger and always returns home; the "choice" is reported on release.
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    if (!inputEnabled) return;
+    _dragging = true;
+    isPressed = false;
+    priority = 100; // float above the other cards + slots while dragging
+    startFingertipFollow(event.canvasPosition);
+    add(ScaleEffect.to(
+      Vector2.all(1.12),
+      EffectController(duration: 0.12, curve: Curves.easeOut),
+    ));
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    if (!_dragging) return;
+    moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (_dragging) followFingertip(dt);
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    if (!_dragging) return;
+    final dropCenter = visualCenter;
+    _dragging = false;
+    stopFingertipFollow();
+    priority = 0;
+    _returnHome();
+    onDragDropped?.call(index, dropCenter);
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    super.onDragCancel(event);
+    if (!_dragging) return;
+    _dragging = false;
+    stopFingertipFollow();
+    priority = 0;
+    _returnHome();
+  }
+
+  void _returnHome() {
+    add(MoveToEffect(
+      homePosition,
+      EffectController(duration: 0.2, curve: Curves.easeOut),
+    ));
+    add(ScaleEffect.to(
+      Vector2.all(1.0),
+      EffectController(duration: 0.12, curve: Curves.easeOut),
     ));
   }
 
