@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:game_core/game_core.dart';
-import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/area_level.dart';
 import '../../providers/assessment_provider.dart';
@@ -123,25 +122,6 @@ class GameLauncher {
       showMascot: !kGamesWithOwnCharacter.contains(gameId),
       child: game,
     );
-  }
-
-  /// The route that carries the child into [screen].
-  ///
-  /// In the space world (Night Sky) a game launch and a round-to-round jump are
-  /// both framed as travel: a spaceship flies across the star field to the next
-  /// round. Every other world keeps the plain push it always had, so the
-  /// transition only ever appears where the child has opted into that scene.
-  /// Reduced motion collapses the flight to a cross-fade inside the route.
-  static Route<T> routeFor<T>(BuildContext context, Widget screen) {
-    final child = context.read<ChildProvider>();
-    if (child.activeWorld == WorldTheme.nightSky) {
-      return SpaceshipTransitionRoute<T>(
-        builder: (_) => screen,
-        style: child.activeWorldStyle,
-        reducedMotion: child.reducedMotion,
-      );
-    }
-    return MaterialPageRoute<T>(builder: (_) => screen);
   }
 
   static Widget? _gameFor(String gameId, int difficulty) {
