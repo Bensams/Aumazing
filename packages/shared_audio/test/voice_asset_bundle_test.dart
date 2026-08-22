@@ -55,6 +55,11 @@ void main() {
     // is exactly the "on disk but not in the bundle" gap this file exists to
     // catch.
     VoiceOverCue.sceneIceCreamFell,
+    // The milestone victory scene draws no written headline — this line *is*
+    // the headline, spoken. `milestone/` is a folder of its own that the
+    // pubspec had never listed before, the exact "on disk but not bundled" gap
+    // this file catches; a pack missing it degrades to "You finished it!".
+    VoiceOverCue.milestoneLearningPathComplete,
   ];
 
   group('naming cues are in the asset bundle', () {

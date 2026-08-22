@@ -110,8 +110,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
-    // Celebration first, then the written instruction and its narration.
-    expect(find.text('Post-Assessment Complete!'), findsOneWidget);
+    // Celebration first, then the written instruction and its narration. The
+    // headline is voiced, not drawn — the subtitle is what shows.
+    expect(find.text('You finished all the activities!'), findsOneWidget);
     await tester.pump(kHandoffCelebrationDuration);
     await tester.pump(kHandoffVoiceDelay);
     await tester.pumpAndSettle();
