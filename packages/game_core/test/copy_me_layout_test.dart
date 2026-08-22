@@ -1,4 +1,7 @@
+import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart';
 
@@ -60,5 +63,58 @@ void main() {
     final game = await loadGame();
     // Input is only handed to the child once the demo has played.
     expect(palette(game).every((c) => !c.inputEnabled), isTrue);
+  });
+
+  group('palette tap vs drag', () {
+    late FlameGame host;
+    late SequenceShape card;
+    var tapped = 0;
+    Vector2? dropped;
+
+    setUp(() async {
+      host = FlameGame();
+      host.onGameResize(Vector2(800, 600));
+      tapped = 0;
+      dropped = null;
+      card = SequenceShape(
+        shapeType: CopyMeShapeType.circle,
+        shapeColor: const Color(0xFF43A047),
+        index: 0,
+        onTapped: (_) => tapped++,
+        onDragDropped: (_, at) => dropped = at,
+        position: Vector2(100, 400),
+        size: Vector2.all(120),
+      )..inputEnabled = true;
+      await host.add(card);
+      await host.ready();
+    });
+
+    DragStartEvent start(Vector2 at) =>
+        DragStartEvent(1, host, DragStartDetails(globalPosition: at.toOffset()));
+    DragUpdateEvent move(Vector2 to) => DragUpdateEvent(
+        1, host, DragUpdateDetails(globalPosition: to.toOffset()));
+
+    test('a still (or wobbly) press registers as a tap, not a drag', () {
+      final home = card.position.clone();
+      card.onDragStart(start(Vector2(160, 460)));
+      card.onDragUpdate(move(Vector2(166, 464))); // ~7px, under the slop
+      card.onDragEnd(DragEndEvent(1, DragEndDetails()));
+
+      expect(tapped, 1, reason: 'a press that barely moves is a tap');
+      expect(dropped, isNull);
+      expect(card.position, home, reason: 'a tap must not move the card');
+    });
+
+    test('a real drag reports a drop, not a tap', () {
+      card.onDragStart(start(Vector2(160, 460)));
+      card.onDragUpdate(move(Vector2(300, 200))); // well past the slop
+      card.update(1 / 60);
+      card.onDragUpdate(move(Vector2(400, 150)));
+      card.update(1 / 60);
+      card.onDragEnd(DragEndEvent(1, DragEndDetails()));
+
+      expect(dropped, isNotNull, reason: 'a drag reports where it was dropped');
+      expect(tapped, 0, reason: 'a drag is not a tap');
+    });
   });
 }
