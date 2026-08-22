@@ -42,6 +42,7 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
     return AssessmentHandoffScreen(
       title: MilestoneKind.postAssessment.title,
       subtitle: MilestoneKind.postAssessment.subtitle,
+      milestoneVoiceCue: MilestoneKind.postAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
       onParentVerified: _showResults,
     );

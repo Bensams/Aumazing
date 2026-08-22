@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -60,7 +61,8 @@ void main() {
       );
 
   group('the scene', () {
-    testWidgets('shows the milestone title and subtitle', (tester) async {
+    testWidgets('shows the subtitle; the title is voiced, not drawn',
+        (tester) async {
       await tester.pumpWidget(host(
         const Scaffold(
           body: MilestoneVictoryScene(
@@ -72,9 +74,11 @@ void main() {
       ));
       await tester.pump();
 
-      expect(find.text('You Completed Your Learning Path!'), findsOneWidget);
       expect(find.text('You finished every activity on your path!'),
           findsOneWidget);
+      // The headline is not drawn — it overflows and a pre-reader cannot use
+      // it; it is spoken instead (and kept for screen readers via semantics).
+      expect(find.text('You Completed Your Learning Path!'), findsNothing);
     });
 
     testWidgets('the companion uses the profile characterId and costume',
@@ -170,6 +174,26 @@ void main() {
   });
 
   group('the learning-path screen', () {
+    testWidgets('speaks the milestone line for its kind', (tester) async {
+      final narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(host(
+        MilestoneVictoryScreen(
+          kind: MilestoneKind.learningPath,
+          reducedMotion: true,
+          playSfx: false,
+          holdDuration: const Duration(milliseconds: 50),
+          voiceOverFactory: (_) => narrator,
+          onContinue: () {},
+        ),
+        profile: profileWith(),
+      ));
+      await tester.pump();
+      // The line is spoken a beat into the celebration, after the chime.
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(narrator.played, [VoiceOverCue.milestoneLearningPathComplete]);
+    });
+
     testWidgets('reveals a continue control and fires onContinue exactly once',
         (tester) async {
       var continued = 0;
@@ -179,6 +203,7 @@ void main() {
           reducedMotion: true,
           playSfx: false,
           holdDuration: const Duration(milliseconds: 50),
+          voiceOverFactory: (_) => _RecordingVoiceOver(),
           onContinue: () => continued++,
         ),
         profile: profileWith(),
@@ -209,6 +234,7 @@ void main() {
           kind: MilestoneKind.learningPath,
           reducedMotion: true,
           playSfx: false,
+          voiceOverFactory: (_) => _RecordingVoiceOver(),
           // The normal post-arrival hold is long; the max-hold safety valve is
           // short, so it is what actually reveals the control here.
           holdDuration: const Duration(seconds: 30),
@@ -232,6 +258,22 @@ void main() {
       expect(continued, 1);
     });
   });
+}
+
+/// Records the cues asked for instead of reaching a platform player.
+class _RecordingVoiceOver extends VoiceOverService {
+  _RecordingVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  final List<VoiceOverCue> played = [];
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {
+    played.add(cue);
+  }
 }
 
 class _TestChildProvider extends ChildProvider {
