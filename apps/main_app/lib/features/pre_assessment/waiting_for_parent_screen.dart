@@ -37,6 +37,7 @@ class WaitingForParentScreen extends StatelessWidget {
     return AssessmentHandoffScreen(
       title: MilestoneKind.preAssessment.title,
       subtitle: MilestoneKind.preAssessment.subtitle,
+      milestoneVoiceCue: MilestoneKind.preAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
       onParentVerified: _showSummaryDialog,
     );
