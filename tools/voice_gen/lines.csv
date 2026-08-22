@@ -207,3 +207,6 @@ emotions/scenes/JackInBox.wav,The toy popped out of the box!,no,0.5,0.5,neutral
 emotions/scenes/SurpriseBalloons.wav,Balloons appeared all at once!,no,0.5,0.5,neutral
 emotions/scenes/TowerFell.wav,His block tower got knocked over.,no,0.5,0.5,neutral
 emotions/scenes/PuzzleStuck.wav,The puzzle piece will not fit.,no,0.5,0.5,neutral
+milestone/MilestonePreComplete.wav,Pre-assessment complete!,no,0.6,0.5,excited
+milestone/MilestonePathComplete.wav,You completed your learning path!,no,0.6,0.5,excited
+milestone/MilestonePostComplete.wav,Post-assessment complete!,no,0.6,0.5,excited
