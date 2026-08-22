@@ -44,8 +44,31 @@ class _PreviewApp extends StatelessWidget {
   }
 }
 
-class _PreviewScreen extends StatelessWidget {
+class _PreviewScreen extends StatefulWidget {
   const _PreviewScreen();
+
+  @override
+  State<_PreviewScreen> createState() => _PreviewScreenState();
+}
+
+class _PreviewScreenState extends State<_PreviewScreen> {
+  late final List<LearningPathEntry> _pathEntries = _path;
+
+  /// Starts with two done, so the trail shows both a travelled and an ahead
+  /// stretch and step 3 is current. The "Finish current game" button adds the
+  /// current step's id here, which is what drives the spaceship's flight.
+  late final Set<String> _completed = {
+    _pathEntries[0].game.id,
+    _pathEntries[1].game.id,
+  };
+
+  void _finishCurrent() {
+    final next = _pathEntries.firstWhere(
+      (e) => !_completed.contains(e.game.id),
+      orElse: () => _pathEntries.last,
+    );
+    setState(() => _completed.add(next.game.id));
+  }
 
   /// Six real registry games, so the per-game gradients and icons on the
   /// platforms are the ones the child would actually see.
@@ -76,13 +99,16 @@ class _PreviewScreen extends StatelessWidget {
     final world = _worldFlag == 'classic'
         ? WorldStyles.classic
         : WorldStyles.nightSky;
-    final path = _path;
-    // Two done, so the trail shows both a travelled and an ahead stretch and
-    // step 3 is the current one.
-    final completed = {path[0].game.id, path[1].game.id};
+    final path = _pathEntries;
+    final completed = _completed;
     final showScene = world.hasBackdrop;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _finishCurrent,
+        icon: const Icon(Icons.rocket_launch_rounded),
+        label: const Text('Finish current game'),
+      ),
       body: Container(
         decoration: showScene
             ? null

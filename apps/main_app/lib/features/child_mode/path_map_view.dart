@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
@@ -33,7 +35,7 @@ enum PathStepState {
 ///
 /// The scene itself is not drawn here; the lobby paints [WorldBackdrop] behind
 /// its whole body so the header sits on the same sky.
-class PathMapView extends StatelessWidget {
+class PathMapView extends StatefulWidget {
   const PathMapView({
     super.key,
     required this.path,
@@ -43,6 +45,7 @@ class PathMapView extends StatelessWidget {
     required this.style,
     required this.currentStepKey,
     required this.onLaunch,
+    this.reducedMotion = false,
   });
 
   final List<LearningPathEntry> path;
@@ -67,6 +70,10 @@ class PathMapView extends StatelessWidget {
 
   final void Function(String gameId, int difficulty) onLaunch;
 
+  /// Reduced-motion opt-out: the spaceship snaps to its new step instead of
+  /// flying, and does not idle-bob.
+  final bool reducedMotion;
+
   /// Horizontal distance between one platform's centre and the next.
   static const _stepSpacing = 172.0;
 
@@ -79,16 +86,86 @@ class PathMapView extends StatelessWidget {
   /// Leading and trailing breathing room inside the scroll.
   static const _edgeInset = AppSpacing.lg;
 
+  @override
+  State<PathMapView> createState() => _PathMapViewState();
+}
+
+class _PathMapViewState extends State<PathMapView>
+    with TickerProviderStateMixin {
+  /// The flight from one step's dock to the next. Idle at 0 (docked at the
+  /// source) or 1 (docked at the destination); animates 0→1 on a completion.
+  late final AnimationController _flight;
+
+  /// A gentle idle bob so the docked ship reads as hovering, not stuck on.
+  late final AnimationController _bob;
+
+  /// The step the ship is docked at (or flying towards).
+  late int _shownIndex;
+
+  /// Where the current flight started; null when the ship has never moved.
+  int? _fromIndex;
+
+  /// The spaceship is a space-world motif — it rides the path only in a world
+  /// that dresses the scene for it (Night Sky). Classic keeps the bare map.
+  bool get _showShip => widget.style.hasBackdrop;
+
+  @override
+  void initState() {
+    super.initState();
+    _shownIndex = _currentIndex;
+    _flight = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _bob = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    if (!widget.reducedMotion && _showShip) _bob.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(PathMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A completion (or a switch to a longer/shorter path) moved the "play next"
+    // step. Fly the ship there. The controller ticks only while this route is
+    // on screen — when the child finishes a game the lobby is covered, so the
+    // flight is queued and plays the moment they come back to the path, which
+    // is exactly when they can see it.
+    final target = _currentIndex;
+    if (target == _shownIndex) return;
+    if (widget.reducedMotion || !_showShip) {
+      setState(() => _shownIndex = target);
+      return;
+    }
+    setState(() {
+      _fromIndex = _shownIndex;
+      _shownIndex = target;
+    });
+    _flight.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _flight.dispose();
+    _bob.dispose();
+    super.dispose();
+  }
+
   /// The first step the child has not finished — the one to play next.
   int get _currentIndex {
-    final i = path.indexWhere((e) => !completedGameIds.contains(e.game.id));
+    final i = widget.path
+        .indexWhere((e) => !widget.completedGameIds.contains(e.game.id));
     return i < 0 ? 0 : i;
   }
 
   PathStepState _stateFor(int index) {
-    final entry = path[index];
-    if (completedGameIds.contains(entry.game.id)) return PathStepState.done;
-    if (!LearningPathService.isUnlocked(path, index, completedGameIds)) {
+    final entry = widget.path[index];
+    if (widget.completedGameIds.contains(entry.game.id)) {
+      return PathStepState.done;
+    }
+    if (!LearningPathService.isUnlocked(
+        widget.path, index, widget.completedGameIds)) {
       return PathStepState.locked;
     }
     return index == _currentIndex
@@ -98,17 +175,29 @@ class PathMapView extends StatelessWidget {
 
   /// Centre of the platform for [index] within the scroll content.
   Offset _anchor(int index, double height) {
-    final x = _edgeInset + _platformWidth / 2 + index * _stepSpacing;
+    final x = PathMapView._edgeInset +
+        PathMapView._platformWidth / 2 +
+        index * PathMapView._stepSpacing;
     // Even steps ride high, odd steps dip — a simple alternation reads as a
     // journey without the trail ever doubling back on itself.
-    final y = height * 0.5 + (index.isEven ? -_amplitude : _amplitude);
+    final y =
+        height * 0.5 + (index.isEven ? -PathMapView._amplitude : PathMapView._amplitude);
     return Offset(x, y);
   }
 
+  /// Where the ship hovers for a step: just off the platform's bottom-right
+  /// corner, so it reads as parked on that card without a landing pad drawn.
+  Offset _dock(Offset anchor) => Offset(
+        anchor.dx + PathMapView._platformWidth / 2 - 6,
+        anchor.dy + _PathStep.height / 2 - 40,
+      );
+
   @override
   Widget build(BuildContext context) {
-    final contentWidth =
-        _edgeInset * 2 + _platformWidth + (path.length - 1) * _stepSpacing;
+    final path = widget.path;
+    final contentWidth = PathMapView._edgeInset * 2 +
+        PathMapView._platformWidth +
+        (path.length - 1) * PathMapView._stepSpacing;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -122,6 +211,8 @@ class PathMapView extends StatelessWidget {
             width: contentWidth,
             height: height,
             child: Stack(
+              // The ship rises above its dock on the flight arc; don't clip it.
+              clipBehavior: Clip.none,
               children: [
                 // The trail sits under the platforms so it appears to run
                 // behind them rather than across their faces.
@@ -131,15 +222,15 @@ class PathMapView extends StatelessWidget {
                       anchors: anchors,
                       travelled: [
                         for (final entry in path)
-                          completedGameIds.contains(entry.game.id),
+                          widget.completedGameIds.contains(entry.game.id),
                       ],
-                      style: style,
+                      style: widget.style,
                     ),
                   ),
                 ),
                 for (var i = 0; i < path.length; i++)
                   Positioned(
-                    left: anchors[i].dx - _platformWidth / 2,
+                    left: anchors[i].dx - PathMapView._platformWidth / 2,
                     // The platform's own column is taller than the anchor
                     // point; centre it vertically on the anchor.
                     top: anchors[i].dy - _PathStep.height / 2,
@@ -149,18 +240,78 @@ class PathMapView extends StatelessWidget {
                         entry: path[i].game,
                         stepNumber: i + 1,
                         state: _stateFor(i),
-                        starEarnedToday: starsEarnedTodayGameIds.contains(
+                        starEarnedToday: widget.starsEarnedTodayGameIds.contains(
                           path[i].game.id,
                         ),
                         difficulty:
-                            (difficultyOverride ?? path[i].difficulty)
+                            (widget.difficultyOverride ?? path[i].difficulty)
                                 .clamp(1, 3),
-                        style: style,
+                        style: widget.style,
                         onTap: _onTapFor(i),
                       ),
                     ),
                   ),
+                // The travelling marker rides above every platform.
+                if (_showShip) _buildShip(anchors),
               ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The spaceship, docked on the current step and flying to the next when the
+  /// path advances.
+  Widget _buildShip(List<Offset> anchors) {
+    if (anchors.isEmpty) return const SizedBox.shrink();
+    const shipSize = 58.0;
+    // Guard the indices: a path can shrink between builds.
+    final toIdx = _shownIndex.clamp(0, anchors.length - 1);
+    final fromIdx = (_fromIndex ?? _shownIndex).clamp(0, anchors.length - 1);
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([_flight, _bob]),
+      builder: (context, _) {
+        final flying = _flight.isAnimating;
+        final e = Curves.easeInOut.transform(_flight.value);
+
+        final from = _dock(anchors[fromIdx]);
+        final to = _dock(anchors[toIdx]);
+        var pos = Offset.lerp(from, to, e)!;
+
+        // A single sine hump: the ship lifts off the card, arcs over the trail,
+        // and settles onto the next — no doubling back, nothing to overshoot.
+        final arc = math.sin(e * math.pi);
+        pos = pos.translate(0, -arc * 40);
+
+        // Bank the nose along the direction of travel at the peak of the arc,
+        // returning upright as it docks. Idle, it sits level.
+        final delta = to - from;
+        final travelAngle =
+            delta.distance < 1 ? 0.0 : math.atan2(delta.dy, delta.dx);
+        final angle = travelAngle * arc;
+
+        // Grows a touch mid-flight (coming closer), plus a small idle bob so a
+        // parked ship still breathes.
+        final scale = 1 + 0.16 * arc;
+        final bob = (!flying && !widget.reducedMotion)
+            ? math.sin(_bob.value * math.pi * 2) * 3
+            : 0.0;
+
+        return Positioned(
+          left: pos.dx - shipSize / 2,
+          top: pos.dy - shipSize / 2 + bob,
+          child: IgnorePointer(
+            child: Transform.rotate(
+              angle: angle,
+              child: Transform.scale(
+                scale: scale,
+                child: Spaceship(
+                  size: shipSize,
+                  accent: widget.style.currentRing,
+                ),
+              ),
             ),
           ),
         );
@@ -170,14 +321,15 @@ class PathMapView extends StatelessWidget {
 
   /// The guiding hand anchors on the current step, so only that one is keyed.
   Widget _wrapCurrent(int index, Widget child) => index == _currentIndex
-      ? KeyedSubtree(key: currentStepKey, child: child)
+      ? KeyedSubtree(key: widget.currentStepKey, child: child)
       : child;
 
   VoidCallback? _onTapFor(int index) {
     if (_stateFor(index) == PathStepState.locked) return null;
     final difficulty =
-        (difficultyOverride ?? path[index].difficulty).clamp(1, 3);
-    return () => onLaunch(path[index].game.id, difficulty);
+        (widget.difficultyOverride ?? widget.path[index].difficulty)
+            .clamp(1, 3);
+    return () => widget.onLaunch(widget.path[index].game.id, difficulty);
   }
 }
 
