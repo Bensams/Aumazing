@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flame/components.dart' hide Timer;
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
 
+import 'components/pattern_slot.dart';
 import 'components/sequence_shape.dart';
 import '../../automation/developer_automation.dart';
 import '../shared/answer_label.dart';
@@ -19,7 +21,11 @@ import '../shared/game_layout.dart';
 /// The app highlights shapes in an increasing sequence and the child
 /// must reproduce the sequence by tapping in order.
 class CopyMeGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin, DeveloperAutomationHooks {
+    with
+        TapCallbacks,
+        DragCallbacks,
+        EnhancedGameplayAnalyticsMixin,
+        DeveloperAutomationHooks {
   CopyMeGame({
     required this.totalRounds,
     required this.onStepChanged,
@@ -113,7 +119,20 @@ class CopyMeGame extends FlameGame
   int _consecutiveErrors = 0; // Track consecutive invalid taps
   DateTime? _inputStartTime;
 
+  /// The four palette cards (bottom row) the child taps or drags to copy with.
   final List<SequenceShape> _shapes = [];
+
+  /// The pattern row (top strip): four slots that show the pattern during the
+  /// demo, then fill in again as the child copies it back.
+  final List<PatternSlot> _slots = [];
+
+  /// Bounding box of the pattern row, used to decide whether a dragged palette
+  /// card was dropped onto it.
+  Rect _patternRowRect = Rect.zero;
+
+  /// The "TAP THE SHAPES TO COPY!" caption, shown only during the input phase.
+  TextComponent? _copyCaption;
+
   List<int> _sequence = [];
   int _inputIndex = 0;
   bool _demonstrating = false;
@@ -192,15 +211,74 @@ class CopyMeGame extends FlameGame
   void _layoutShapes() {
     final gameW = size.x;
     final gameH = size.y;
-    final availH = gameH - kTopOverlayBand;
-    var cardSize = math.min(gameW / 5.5, gameH / 3.0);
-    if (cardSize > availH) cardSize = availH;
+
+    // Two rows now: the pattern row (top) plus the palette row (bottom), each
+    // with a caption above it. Size the cards so both rows and their captions
+    // fit under the overlay strip and clear of the mascot band.
+    const topCapBand = 30.0; // "Watch the pattern!…" line above the slots
+    const midCapBand = 30.0; // "TAP THE SHAPES TO COPY!" above the palette
+    const rowGap = 20.0; // breathing room between the two blocks
+    final availH = gameH - kTopOverlayBand - 12;
+
+    var cardSize = math.min(
+      gameW / 5.4,
+      (availH - topCapBand - midCapBand - rowGap) / 2,
+    );
+    cardSize = cardSize.clamp(40.0, availH / 2);
+
     final gap = cardSize * 0.22;
     final totalW = 4 * cardSize + 3 * gap;
     final startX = (gameW - totalW) / 2;
-    // Centred in the space below the overlay strip, not the whole screen.
-    final centerY = kTopOverlayBand + (availH - cardSize) / 2;
+    double xFor(int i) => startX + i * (cardSize + gap);
 
+    // Stack the two blocks and centre them vertically in the available band.
+    final blockH = topCapBand + cardSize + rowGap + midCapBand + cardSize;
+    final blockTop = kTopOverlayBand + (availH - blockH) / 2;
+
+    final slotRowY = blockTop + topCapBand;
+    final paletteRowY = slotRowY + cardSize + rowGap + midCapBand;
+
+    _patternRowRect = Rect.fromLTWH(
+      startX - gap,
+      slotRowY - gap,
+      totalW + 2 * gap,
+      cardSize + 2 * gap,
+    );
+
+    // Top caption (always visible).
+    add(_caption(
+      'Watch the pattern! Then copy it in the row below.',
+      y: blockTop + 4,
+      width: gameW,
+      fontSize: math.max(13.0, cardSize * 0.16),
+      color: const Color(0xFF4A4458),
+      bold: false,
+    ));
+
+    // Middle caption ("TAP THE SHAPES TO COPY!") — its text is set during the
+    // input phase and cleared during the demo, so it only shows when it applies.
+    _copyCaption = _caption(
+      '',
+      y: slotRowY + cardSize + rowGap + 2,
+      width: gameW,
+      fontSize: math.max(13.0, cardSize * 0.17),
+      color: const Color(0xFF3F8F5B),
+      bold: true,
+    );
+    add(_copyCaption!);
+
+    // Pattern row — the dashed placeholder slots.
+    for (var i = 0; i < 4; i++) {
+      final slot = PatternSlot(
+        index: i,
+        position: Vector2(xFor(i), slotRowY),
+        size: Vector2.all(cardSize),
+      );
+      _slots.add(slot);
+      add(slot);
+    }
+
+    // Palette row — the four tappable / draggable shape cards.
     for (var i = 0; i < 4; i++) {
       final data = _shapeData[i];
       final shape = SequenceShape(
@@ -208,12 +286,36 @@ class CopyMeGame extends FlameGame
         shapeColor: data.$2,
         index: i,
         onTapped: _onShapeTapped,
-        position: Vector2(startX + i * (cardSize + gap), centerY),
+        onDragDropped: _onShapeDragDropped,
+        position: Vector2(xFor(i), paletteRowY),
         size: Vector2.all(cardSize),
       );
       _shapes.add(shape);
       add(shape);
     }
+  }
+
+  TextComponent _caption(
+    String text, {
+    required double y,
+    required double width,
+    required double fontSize,
+    required Color color,
+    required bool bold,
+  }) {
+    return TextComponent(
+      text: text,
+      position: Vector2(width / 2, y),
+      anchor: Anchor.topCenter,
+      textRenderer: TextPaint(
+        style: TextStyle(
+          fontSize: fontSize,
+          color: color,
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+          letterSpacing: bold ? 0.5 : 0.0,
+        ),
+      ),
+    );
   }
 
   void _startRound() {
@@ -223,14 +325,21 @@ class CopyMeGame extends FlameGame
     _hintsUsedThisRound = 0;
     _adaptive.startRound(); // any step-down only lasts one round
 
-    // Build sequence: length = round + 1 (round 0 → 1 item, etc.)
+    // Build sequence: length = round + 1 (round 0 → 1 item, etc.), capped at
+    // the four pattern slots.
     final rng = math.Random();
-    final len = (_currentRound + 1).clamp(1, 5);
+    final len = (_currentRound + 1).clamp(1, 4);
     _sequence = List.generate(len, (_) => rng.nextInt(4));
 
     // Start analytics round tracking
     analyticsStartRound(roundNumber: _currentRound + 1);
     analyticsAddRoundData('sequence_length', len);
+
+    // Empty the pattern row and hide the copy caption while demonstrating.
+    for (final slot in _slots) {
+      slot.clear();
+    }
+    _copyCaption?.text = '';
 
     // Disable input during demo
     for (final s in _shapes) {
@@ -263,19 +372,30 @@ class CopyMeGame extends FlameGame
     analyticsShowStimulus();
     analyticsRecordPrompt(promptType: 'sequence_demonstration');
 
+    // Demonstrate: drop each shape into its pattern slot, left to right, so the
+    // child watches the pattern build up in the row they will copy it into.
     for (var i = 0; i < _sequence.length; i++) {
       if (!isMounted) return;
       final idx = _sequence[i];
+      _slots[i].fill(_shapeData[idx].$1, _shapeData[idx].$2);
       _shapes[idx].highlight();
       onPlaySequenceHighlightSfx?.call(i);
       await Future.delayed(const Duration(milliseconds: 700));
     }
 
+    // Hold the finished pattern briefly, then clear it — the child copies it
+    // back from memory into the now-empty slots.
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!isMounted) return;
+    for (final slot in _slots) {
+      slot.clear();
+    }
+
     _demonstrating = false;
     _inputPhase = true;
     _inputStartTime = DateTime.now();
     onPhaseChanged?.call(false);
+    _copyCaption?.text = 'TAP THE SHAPES TO COPY!';
 
     // Brief pause before "your turn" VO so it doesn't overlap with last highlight
     await Future.delayed(const Duration(milliseconds: 400));
@@ -293,6 +413,15 @@ class CopyMeGame extends FlameGame
     _startNoResponseTimer();
   }
 
+  /// A drag of palette card [index] was released at [dropCenter]. If it landed
+  /// on the pattern row it counts as picking that shape, exactly like a tap;
+  /// otherwise the card simply returns home with no effect.
+  void _onShapeDragDropped(int index, Vector2 dropCenter) {
+    if (!_inputPhase || _demonstrating) return;
+    if (!_patternRowRect.contains(Offset(dropCenter.x, dropCenter.y))) return;
+    _onShapeTapped(index);
+  }
+
   void _onShapeTapped(int index) {
     if (!_inputPhase || _demonstrating) return;
 
@@ -307,6 +436,10 @@ class CopyMeGame extends FlameGame
       // Correct
       _adaptive.recordCorrect();
         _shapes[index].showCorrect();
+
+      // Drop the chosen shape into the next empty pattern slot so the child
+      // sees the copy taking shape as they go.
+      _slots[_inputIndex].fill(_shapeData[index].$1, _shapeData[index].$2);
 
       // Play position-based shimmer SFX for this correct tap, then name the
       // shape that was tapped.
@@ -441,9 +574,13 @@ class CopyMeGame extends FlameGame
       } else {
         // Record retry
         analyticsRecordRetry();
-        
-        // Reset input — child retries this sequence
+
+        // Reset input — child re-copies this sequence from the start, so the
+        // pattern slots they had filled empty back out.
         _inputIndex = 0;
+        for (final slot in _slots) {
+          slot.clear();
+        }
         _startNoResponseTimer();
       }
     }
