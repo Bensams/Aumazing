@@ -54,111 +54,123 @@ class SequenceShape extends PositionComponent
   /// Resting position in the palette; a dragged card glides back here.
   late Vector2 homePosition;
 
+  // ── Tap / drag arbitration ───────────────────────────────────────────
+  //
+  // Tap and drag live on the SAME card. Flame's drag recognizer claims the
+  // pointer the instant it moves at all, which knocks the tap recognizer out
+  // of the gesture arena — so on a component with both TapCallbacks and
+  // DragCallbacks, onTapUp only fires for a perfectly still finger. Children
+  // are never that still, so a tap is resolved in onDragEnd instead: a press
+  // that never travels past [_tapSlop] counts as a tap; anything further is a
+  // real drag. This is the same pattern Match It and My Turn Your Turn use.
+
+  /// The pointer is currently being tracked by the drag recognizer.
+  bool _pointerDown = false;
+
+  /// The pointer has travelled past [_tapSlop] — this is a drag, not a tap.
   bool _dragging = false;
+
+  /// Where the pointer went down, in game space. The tap/drag test is the
+  /// DISPLACEMENT from here, not the running sum of deltas, so a trembling
+  /// finger that never leaves the card keeps its tap.
+  Vector2? _pointerOrigin;
+
+  /// Pointer travel (game px) below which a release counts as a tap.
+  static const double _tapSlop = 14.0;
 
   static const double _cornerRadius = 24.0;
 
   @override
-  void onTapDown(TapDownEvent event) {
-    if (!inputEnabled) return;
-
-    // Immediate visual feedback: show pressed state
-    isPressed = true;
-
-    // Slight scale-down for tactile press feel
-    add(ScaleEffect.by(
-      Vector2.all(0.93),
-      EffectController(duration: 0.08, curve: Curves.easeIn),
-    ));
-  }
+  void onTapDown(TapDownEvent event) {}
 
   @override
   void onTapUp(TapUpEvent event) {
-    final wasPressed = isPressed;
-    _releasePress();
-    // A completed tap (not a drag) picks this shape — but only if the press
-    // actually started while input was live.
-    if (wasPressed && inputEnabled) onTapped(index);
+    // Only reached for the rare tap the arena awards to the tap recognizer
+    // (a genuinely motionless finger); the usual path is onDragEnd.
+    if (!inputEnabled || _pointerDown) return;
+    onTapped(index);
   }
 
-  @override
-  void onTapCancel(TapCancelEvent event) {
-    _releasePress();
-  }
-
-  void _releasePress() {
-    if (!isPressed) return;
-    isPressed = false;
-
-    // Bounce back to normal scale
-    add(ScaleEffect.by(
-      Vector2.all(1 / 0.93),
-      EffectController(duration: 0.1, curve: Curves.easeOut),
-    ));
-  }
-
-  // ── Drag handling ────────────────────────────────────────────────────
-  //
-  // The palette card is fixed furniture, so a drag lifts a copy that follows
-  // the finger and always returns home; the "choice" is reported on release.
+  // ── Drag-and-drop input ──────────────────────────────────────────────
 
   @override
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
     if (!inputEnabled) return;
-    _dragging = true;
-    isPressed = false;
-    priority = 100; // float above the other cards + slots while dragging
-    startFingertipFollow(event.canvasPosition);
-    add(ScaleEffect.to(
-      Vector2.all(1.12),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    _pointerDown = true;
+    _dragging = false;
+    isPressed = true;
+    _pointerOrigin = event.canvasPosition.clone();
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    if (!_dragging) return;
+    if (!inputEnabled || !_pointerDown) return;
+
+    if (!_dragging) {
+      // Still tap-like: leave the card in its slot so a shaky tap doesn't
+      // visibly nudge it.
+      final origin = _pointerOrigin;
+      if (origin != null &&
+          (event.canvasEndPosition - origin).length < _tapSlop) {
+        return;
+      }
+      // Confirmed as a drag: lift the card and start following the fingertip.
+      _dragging = true;
+      isPressed = false;
+      priority = 100; // float above the other cards + slots while dragging
+      add(ScaleEffect.to(
+        Vector2.all(1.12),
+        EffectController(duration: 0.1, curve: Curves.easeOut),
+      ));
+      startFingertipFollow(event.canvasEndPosition);
+      return;
+    }
+
     moveFingertip(event.canvasEndPosition);
   }
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (_dragging) followFingertip(dt);
+    followFingertip(dt);
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (!_dragging) return;
-    final dropCenter = visualCenter;
+    if (!_pointerDown) return;
+    _pointerDown = false;
+    isPressed = false;
+
+    if (!_dragging) {
+      // Released without ever leaving the card — that was a tap.
+      if (inputEnabled) onTapped(index);
+      return;
+    }
+
     _dragging = false;
+    // Read the centre before the card snaps back, so the drop point is the card
+    // as the child last saw it.
+    final dropCenter = visualCenter;
     stopFingertipFollow();
     priority = 0;
-    _returnHome();
+    scale = Vector2.all(1.0);
+    position = homePosition.clone(); // palette cards are fixed furniture
     onDragDropped?.call(index, dropCenter);
   }
 
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
+    _pointerDown = false;
+    isPressed = false;
     if (!_dragging) return;
     _dragging = false;
     stopFingertipFollow();
     priority = 0;
-    _returnHome();
-  }
-
-  void _returnHome() {
-    add(MoveToEffect(
-      homePosition,
-      EffectController(duration: 0.2, curve: Curves.easeOut),
-    ));
-    add(ScaleEffect.to(
-      Vector2.all(1.0),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    scale = Vector2.all(1.0);
+    position = homePosition.clone();
   }
 
   void highlight() {
