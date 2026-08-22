@@ -207,3 +207,6 @@ emotions/scenes/JackInBox,Biglang lumabas ang laruan sa kahon!,"warm, clear, fri
 emotions/scenes/SurpriseBalloons,Biglang sumulpot ang mga lobo!,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/scenes/TowerFell,Natumba ang tore niyang blocks.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/scenes/PuzzleStuck,Ayaw pumasok ng piyesa ng puzzle.,"warm, clear, friendly kid's voice, calm pace",neutral
+milestone/MilestonePreComplete,Tapos na ang pre-assessment!,"excited, bouncy, cheerful kid's voice, high energy",excited
+milestone/MilestonePathComplete,Natapos mo na ang iyong learning path!,"excited, bouncy, cheerful kid's voice, high energy",excited
+milestone/MilestonePostComplete,Tapos na ang post-assessment!,"excited, bouncy, cheerful kid's voice, high energy",excited
