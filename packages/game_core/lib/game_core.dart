@@ -31,6 +31,7 @@ export 'src/games/match_it/components/matchable_shape.dart';
 // Games — Copy Me
 export 'src/games/copy_me/copy_me_game.dart';
 export 'src/games/copy_me/components/sequence_shape.dart';
+export 'src/games/copy_me/components/pattern_slot.dart';
 
 // Games — Do What I Say
 export 'src/games/do_what_i_say/do_what_i_say_game.dart';
