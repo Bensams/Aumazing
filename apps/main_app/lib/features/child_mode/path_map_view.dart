@@ -99,20 +99,35 @@ class _PathMapViewState extends State<PathMapView>
   /// A gentle idle bob so the docked ship reads as hovering, not stuck on.
   late final AnimationController _bob;
 
-  /// The step the ship is docked at (or flying towards).
+  /// Where the ship is drawn — its dock, or the source it is flying from.
   late int _shownIndex;
+
+  /// Where the ship should end up. Differs from [_shownIndex] while a flight is
+  /// pending (the child finished a game but has not come back to the path yet)
+  /// or in progress.
+  late int _targetIndex;
 
   /// Where the current flight started; null when the ship has never moved.
   int? _fromIndex;
+
+  /// The route the map lives on, watched so a queued flight plays the moment
+  /// the child returns to the path rather than while it is hidden behind a
+  /// game. Finishing a game marks the step done while the lobby is covered, so
+  /// without this the flight would run — and finish — off screen.
+  ModalRoute<dynamic>? _route;
 
   /// The spaceship is a space-world motif — it rides the path only in a world
   /// that dresses the scene for it (Night Sky). Classic keeps the bare map.
   bool get _showShip => widget.style.hasBackdrop;
 
+  /// True when the path is actually what the child is looking at, so a flight
+  /// started now would be seen.
+  bool get _visible => _route?.isCurrent ?? true;
+
   @override
   void initState() {
     super.initState();
-    _shownIndex = _currentIndex;
+    _shownIndex = _targetIndex = _currentIndex;
     _flight = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -125,28 +140,56 @@ class _PathMapViewState extends State<PathMapView>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
+      _route = route;
+      _route?.secondaryAnimation?.addStatusListener(_onCoverChanged);
+    }
+  }
+
+  /// The lobby route's cover animation runs forward when a game is pushed over
+  /// it and back to [AnimationStatus.dismissed] when the child returns. That
+  /// return is the cue to play any flight that was queued while away.
+  void _onCoverChanged(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed) _maybeFly();
+  }
+
+  @override
   void didUpdateWidget(PathMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A completion (or a switch to a longer/shorter path) moved the "play next"
-    // step. Fly the ship there. The controller ticks only while this route is
-    // on screen — when the child finishes a game the lobby is covered, so the
-    // flight is queued and plays the moment they come back to the path, which
-    // is exactly when they can see it.
+    // A completion (or a longer/shorter path) moved the "play next" step. Note
+    // the new target and fly if the child can see it; otherwise the flight is
+    // held until they come back (see [_onCoverChanged]).
     final target = _currentIndex;
-    if (target == _shownIndex) return;
+    if (target != _targetIndex) {
+      _targetIndex = target;
+      _maybeFly();
+    }
+  }
+
+  /// Flies the ship from where it sits to the current target, when there is a
+  /// gap to close and the path is on screen. Reduced motion (or a non-space
+  /// world) snaps instead.
+  void _maybeFly() {
+    if (!mounted || _flight.isAnimating || _shownIndex == _targetIndex) return;
     if (widget.reducedMotion || !_showShip) {
-      setState(() => _shownIndex = target);
+      setState(() => _shownIndex = _targetIndex);
       return;
     }
+    if (!_visible) return; // held until the child returns to the path
     setState(() {
       _fromIndex = _shownIndex;
-      _shownIndex = target;
+      _shownIndex = _targetIndex;
     });
     _flight.forward(from: 0);
   }
 
   @override
   void dispose() {
+    _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
     _flight.dispose();
     _bob.dispose();
     super.dispose();
@@ -194,6 +237,14 @@ class _PathMapViewState extends State<PathMapView>
 
   @override
   Widget build(BuildContext context) {
+    // A flight can be queued while the path is hidden behind a game (finishing
+    // it advances the step off screen). As soon as the path is on screen again
+    // and idle, play it — this is the belt to the cover-animation listener's
+    // braces, and covers routes whose secondary animation never fires.
+    if (_shownIndex != _targetIndex && _visible && !_flight.isAnimating) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeFly());
+    }
+
     final path = widget.path;
     final contentWidth = PathMapView._edgeInset * 2 +
         PathMapView._platformWidth +
