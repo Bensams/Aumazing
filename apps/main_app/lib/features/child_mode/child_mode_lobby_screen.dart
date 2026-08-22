@@ -788,9 +788,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     if (screen == null) return;
     _speakChoice(VoiceOverCue.letsGo);
     _hideGuide(restartIdle: false); // the game speaks for itself from here
-    // In the space world this flies a spaceship across to the game; elsewhere
-    // it is the plain push it always was.
-    await Navigator.of(context).push(GameLauncher.routeFor(context, screen));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     // Back in the lobby: pick the child up again rather than dropping them
     // into silence, and re-arm the idle guidance.
     if (!_lobbyActive) return;
@@ -1436,6 +1434,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       // The parent's manual override still wins over the path level.
       difficultyOverride: childProv.difficultyOverride,
       style: childProv.activeWorldStyle,
+      reducedMotion: childProv.reducedMotion,
       currentStepKey: _guideCardKey,
       onLaunch: _launch,
     );
