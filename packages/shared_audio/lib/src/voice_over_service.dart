@@ -49,6 +49,7 @@ enum VoiceOverCategory {
   items,      // Sari-sari store item names: "Tinapay", "Gatas", etc.
   routines,   // Ano'ng Susunod routine titles and step names: "Umaga", "Maligo"
   emotions,   // Ano'ng Nararamdaman emotion names: "Masaya", "Takot"
+  milestone,  // Whole-milestone victory lines: pre/post assessment, learning path
 }
 
 /// Individual voice-over cues mapped to their .wav asset files.
@@ -203,6 +204,19 @@ enum VoiceOverCue {
   youDidSoWell,
   youFinishedIt,
   youreAmazing,
+
+  // ── Milestone (major completions) ─────────────────────────────────
+  //
+  // Spoken once, on the full-screen victory scene, when a child finishes a
+  // *whole* milestone — the entire pre-assessment, every game on their
+  // recommended learning path, or the entire post-assessment. Bigger than the
+  // per-game reward lines above, and never heard mid-session. On the scene the
+  // written title is deliberately not shown (it overflows and a pre-reader
+  // cannot use it), so this line carries the message. Each falls back to
+  // [youFinishedIt] where its own recording is not yet in a pack.
+  milestonePreAssessmentComplete,
+  milestoneLearningPathComplete,
+  milestonePostAssessmentComplete,
 
   // ── Transition ────────────────────────────────────────────────────
   //
@@ -487,6 +501,13 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.youFinishedIt: VoiceOverCategory.rewardAndCelebration,
   VoiceOverCue.youreAmazing: VoiceOverCategory.rewardAndCelebration,
 
+  // Milestone — a dedicated category so these whole-milestone lines are never
+  // drawn by the random end-of-game praise picker (which only ever draws from
+  // corePraise and rewardAndCelebration).
+  VoiceOverCue.milestonePreAssessmentComplete: VoiceOverCategory.milestone,
+  VoiceOverCue.milestoneLearningPathComplete: VoiceOverCategory.milestone,
+  VoiceOverCue.milestonePostAssessmentComplete: VoiceOverCategory.milestone,
+
   // Transition
   VoiceOverCue.getReady: VoiceOverCategory.transition,
   VoiceOverCue.goodJobMovingOn: VoiceOverCategory.transition,
@@ -762,6 +783,14 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
       'voice_over/reward_and_celebration/YouFinishedIt.wav',
   VoiceOverCue.youreAmazing:
       'voice_over/reward_and_celebration/YoureAmazing.wav',
+
+  // Milestone
+  VoiceOverCue.milestonePreAssessmentComplete:
+      'voice_over/milestone/MilestonePreComplete.wav',
+  VoiceOverCue.milestoneLearningPathComplete:
+      'voice_over/milestone/MilestonePathComplete.wav',
+  VoiceOverCue.milestonePostAssessmentComplete:
+      'voice_over/milestone/MilestonePostComplete.wav',
 
   // Transition
   VoiceOverCue.getReady: 'voice_over/transition/GetReady.wav',
@@ -1492,6 +1521,13 @@ class VoiceOverService {
     // outcome the screen cannot afford — the child would sit there with no
     // idea what is being asked of them.
     VoiceOverCue.giveTheDeviceToYourParent: VoiceOverCue.wait,
+
+    // A pack generated before the milestone lines existed says "You finished
+    // it!" instead of leaving the victory scene silent — the same celebratory
+    // truth, just less specific about which whole thing was finished.
+    VoiceOverCue.milestonePreAssessmentComplete: VoiceOverCue.youFinishedIt,
+    VoiceOverCue.milestoneLearningPathComplete: VoiceOverCue.youFinishedIt,
+    VoiceOverCue.milestonePostAssessmentComplete: VoiceOverCue.youFinishedIt,
   };
 
   /// Applies the current [speed] to [player] before it starts a clip.

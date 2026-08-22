@@ -10,6 +10,11 @@ import '../providers/child_provider.dart';
 import 'mascot.dart';
 import 'milestone_victory_scene.dart';
 
+/// Builds the narrator the milestone scene speaks through. Injectable so a
+/// widget test can observe the cue without a platform audio player.
+typedef MilestoneVoiceOverFactory = VoiceOverService Function(
+    BuildContext context);
+
 /// How long the finished pose is held before the continue control appears, so
 /// the child has a beat to take in that they have arrived and the trophy is
 /// theirs.
@@ -44,6 +49,7 @@ class MilestoneVictoryScreen extends StatefulWidget {
     this.holdDuration = kMilestoneHoldDuration,
     this.maxHold = kMilestoneMaxHold,
     this.playSfx = true,
+    this.voiceOverFactory,
     this.continueSemanticLabel = 'Continue',
   });
 
@@ -68,6 +74,10 @@ class MilestoneVictoryScreen extends StatefulWidget {
   /// Whether to play the game-complete cue. A test seam; production leaves it
   /// on and the [AudioService]/[HapticService] honour the child's settings.
   final bool playSfx;
+
+  /// Overrides how the milestone narrator is built. Tests inject a recording
+  /// double; production builds one from the child's own voice settings.
+  final MilestoneVoiceOverFactory? voiceOverFactory;
 
   final String continueSemanticLabel;
 
@@ -114,12 +124,19 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
   bool _continued = false;
   Timer? _holdTimer;
   Timer? _maxHoldTimer;
+  Timer? _voiceTimer;
+  bool _spokeMilestone = false;
+
+  /// Narrator for the milestone line, built from the child's own voice pack.
+  late final VoiceOverService _voiceOver;
 
   @override
   void initState() {
     super.initState();
     // Child-facing: stay landscape with the games and the lobby.
     lockParentLandscape();
+
+    _voiceOver = (widget.voiceOverFactory ?? _defaultVoiceOver)(context);
 
     // The one celebration cue, played once, honouring the child's settings.
     if (widget.playSfx) {
@@ -140,9 +157,28 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
       });
     }
 
+    // Speak the milestone once, a beat after the completion chime so the
+    // narration lands clear of it rather than under it. The written headline is
+    // not drawn on the scene, so this line is what tells a pre-reader what they
+    // just achieved.
+    _voiceTimer = Timer(const Duration(milliseconds: 650), () {
+      if (!mounted || _spokeMilestone) return;
+      _spokeMilestone = true;
+      _voiceOver.play(widget.kind.voiceCue);
+    });
+
     // Never trap the child: even if arrival is never reported, reveal the
     // control by the max hold.
     _maxHoldTimer = Timer(widget.maxHold, _revealContinue);
+  }
+
+  /// Builds the narrator from the child's own language, pack and prompt speed.
+  static VoiceOverService _defaultVoiceOver(BuildContext context) {
+    final childProvider = context.read<ChildProvider>();
+    return VoiceOverService(
+      languageCode: childProvider.voiceAssetFolder,
+      speed: childProvider.voicePlaybackRate,
+    );
   }
 
   /// The companion has reached the trophy — hold the pose briefly, then let the
@@ -175,6 +211,8 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
   void dispose() {
     _holdTimer?.cancel();
     _maxHoldTimer?.cancel();
+    _voiceTimer?.cancel();
+    _voiceOver.dispose();
     super.dispose();
   }
 

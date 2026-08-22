@@ -41,6 +41,7 @@ class AssessmentHandoffScreen extends StatefulWidget {
     required this.onParentVerified,
     this.title = 'You did it!',
     this.subtitle = 'You finished all the activities!',
+    this.milestoneVoiceCue,
     this.celebrationDuration = kHandoffCelebrationDuration,
     this.voiceDelay = kHandoffVoiceDelay,
     this.voiceOverFactory,
@@ -56,6 +57,13 @@ class AssessmentHandoffScreen extends StatefulWidget {
 
   /// The supporting line under [title].
   final String subtitle;
+
+  /// The milestone line spoken *at the start of the celebration* — the written
+  /// [title] is not drawn on the victory scene, so this narrates it. Null (the
+  /// default, and every non-assessment caller) speaks nothing extra. It plays
+  /// once, seconds before the [VoiceOverCue.giveTheDeviceToYourParent] hand-off
+  /// line, so the two never overlap.
+  final VoiceOverCue? milestoneVoiceCue;
 
   /// How long the celebration phase holds.
   final Duration celebrationDuration;
@@ -82,6 +90,11 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
 
   Timer? _celebrationTimer;
   Timer? _voiceTimer;
+  Timer? _milestoneVoiceTimer;
+
+  /// Set the moment the milestone line is dispatched, so a rebuild never speaks
+  /// it twice.
+  bool _spokeMilestone = false;
 
   /// Narrator for the hand-off prompt. Built here rather than shared, matching
   /// every other child-facing screen: each owns its own player pool and the
@@ -105,6 +118,18 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
         // AudioService may not be available; ignore gracefully.
       }
     });
+
+    // Speak the milestone headline once, a beat into the celebration so it
+    // lands clear of the completion SFX. The scene shows no title, so this line
+    // carries it. It finishes long before the hand-off prompt, which is only
+    // dispatched after the celebration ends.
+    if (widget.milestoneVoiceCue case final cue?) {
+      _milestoneVoiceTimer = Timer(const Duration(milliseconds: 650), () {
+        if (!mounted || _spokeMilestone) return;
+        _spokeMilestone = true;
+        _voiceOver.play(cue);
+      });
+    }
 
     // Hand over once the celebration has had its moment.
     _celebrationTimer = Timer(widget.celebrationDuration, () {
@@ -143,6 +168,7 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
   void dispose() {
     _celebrationTimer?.cancel();
     _voiceTimer?.cancel();
+    _milestoneVoiceTimer?.cancel();
     _voiceOver.dispose();
     super.dispose();
   }
