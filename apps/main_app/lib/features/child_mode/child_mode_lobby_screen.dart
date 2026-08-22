@@ -789,8 +789,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _speakChoice(VoiceOverCue.letsGo);
     _hideGuide(restartIdle: false); // the game speaks for itself from here
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    // Back in the lobby: pick the child up again rather than dropping them
-    // into silence, and re-arm the idle guidance.
+    // Back in the lobby. Rebuild so the path re-reads its completed set and
+    // the spaceship flies on to the newly unlocked step now that the child is
+    // looking at the map again (the flight was held while the game covered it).
+    if (mounted) setState(() {});
+    // Pick the child up again rather than dropping them into silence, and
+    // re-arm the idle guidance.
     if (!_lobbyActive) return;
     _speakChoice(VoiceOverCue.chooseOne);
     _idlePrompts = 0;

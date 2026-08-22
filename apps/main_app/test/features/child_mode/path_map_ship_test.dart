@@ -24,9 +24,10 @@ List<LearningPathEntry> _path() {
 /// Hosts a [PathMapView] whose completed set can be advanced, so a test can
 /// drive a completion the way finishing a game does in the app.
 class _Host extends StatefulWidget {
-  const _Host({required this.style, this.reducedMotion = false});
+  const _Host({required this.style, this.reducedMotion = false, this.navKey});
   final WorldStyle style;
   final bool reducedMotion;
+  final GlobalKey<NavigatorState>? navKey;
 
   @override
   State<_Host> createState() => _HostState();
@@ -47,6 +48,7 @@ class _HostState extends State<_Host> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: widget.navKey,
       home: Scaffold(
         body: SizedBox(
           width: 900,
@@ -100,6 +102,43 @@ void main() {
     // pump, not pumpAndSettle — the idle hover bob never settles.)
     await tester.pump(const Duration(milliseconds: 900));
     final endX = tester.getCenter(find.byType(Spaceship)).dx;
+    expect(endX, greaterThan(startX + 100));
+  });
+
+  testWidgets('a flight queued while in a game plays on return to the path',
+      (tester) async {
+    final navKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      _Host(style: WorldStyles.nightSky, navKey: navKey),
+    );
+    await tester.pump();
+    final startX = tester.getCenter(find.byType(Spaceship)).dx;
+
+    // Cover the path with a game screen, the way launching a game does.
+    navKey.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('game'))),
+    );
+    await tester.pumpAndSettle();
+
+    // Finish the current game while the path is hidden — the flight is queued,
+    // not run off screen.
+    tester.state<_HostState>(find.byType(_Host)).finishCurrent();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    // Return to the path. The queued flight now plays: partway through, the
+    // ship is between its old dock and its destination (proving it animated on
+    // return rather than having jumped while hidden); then it lands advanced.
+    navKey.currentState!.pop();
+    await tester.pump(); // begin the pop
+    await tester.pump(const Duration(milliseconds: 400)); // pop completes
+    await tester.pump(const Duration(milliseconds: 300)); // into the flight
+    final midX = tester.getCenter(find.byType(Spaceship)).dx;
+    await tester.pump(const Duration(milliseconds: 1000)); // land
+    final endX = tester.getCenter(find.byType(Spaceship)).dx;
+
+    expect(midX, greaterThan(startX));
+    expect(midX, lessThan(endX));
     expect(endX, greaterThan(startX + 100));
   });
 
