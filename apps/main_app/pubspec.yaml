@@ -49,6 +49,8 @@ dependencies:
   http: ^1.2.0
   # Salted PBKDF2 hashing for the parent-lock PIN (see ParentPinService).
   crypto: ^3.0.3
+  share_plus: ^10.1.4
+  pdf: ^3.11.3
   # On-device AI inference (XGBoost exported to ONNX, run via ONNX Runtime).
   onnxruntime: ^1.4.1
 
