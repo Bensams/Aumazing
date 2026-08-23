@@ -1,0 +1,83 @@
+Aumazing — Proprietary Software License
+
+Copyright (c) 2026 Ecnovators. All rights reserved.
+
+
+1. OWNERSHIP
+
+This repository, including all source code, documentation, generated art,
+audio, voice-over, music, sound effects, models, and other assets
+(collectively, the "Software"), is the proprietary and confidential property
+of Ecnovators. The Software is protected by copyright and other intellectual
+property laws and treaties.
+
+No title to or ownership of the Software is transferred by access to this
+repository. All rights not expressly granted in writing are reserved.
+
+
+2. RESTRICTIONS
+
+Without the prior written permission of Ecnovators, no person or entity may:
+
+  (a) copy, reproduce, or create derivative works of the Software;
+  (b) modify, adapt, translate, or merge the Software with other material;
+  (c) publish, distribute, sublicense, lease, rent, lend, or sell the
+      Software, or make it available to any third party;
+  (d) host the Software, or make its functionality available as a service,
+      to any third party;
+  (e) reverse engineer, decompile, or disassemble the Software, or attempt to
+      derive its source code, except to the extent this restriction is
+      expressly prohibited by applicable law;
+  (f) remove, obscure, or alter any copyright, trademark, or other
+      proprietary notice contained in the Software.
+
+
+3. CONFIDENTIALITY
+
+The Software constitutes confidential information of Ecnovators. Any person
+granted access must not disclose it to any third party and must protect it
+with no less care than they apply to their own confidential information.
+
+
+4. THIRD-PARTY COMPONENTS
+
+The Software incorporates third-party components that remain subject to their
+own licenses, which are not superseded by this License. Those licenses govern
+the use of their respective components, and nothing in this License limits any
+right granted by them.
+
+A machine-generated list of the open-source components distributed with the
+application is available in the running app via Flutter's license registry.
+Attribution obligations that apply to the shipped product include, without
+limitation, the OpenStreetMap contributor attribution required by the Open
+Database License for map tile data.
+
+Asset provenance and the licensing status of shipped audio are tracked
+separately in docs/audio-licensing.md.
+
+
+5. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+
+6. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL ECNOVATORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+7. TERMINATION
+
+Any permission granted in writing by Ecnovators terminates automatically upon
+breach of this License. Upon termination, all copies of the Software must be
+destroyed.
+
+
+8. CONTACT
+
+Requests for permission should be directed to Ecnovators.
