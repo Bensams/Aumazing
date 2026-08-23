@@ -98,9 +98,14 @@ class EntitlementService extends ChangeNotifier {
   }
 
   /// Re-reads the entitlement from Supabase (RLS: own row only).
-  Future<void> refresh() async {
+  ///
+  /// Returns true when the read reached the backend, false when it failed
+  /// and the cached value was kept. Callers that must distinguish
+  /// "confirmed not premium" from "could not check" need that difference
+  /// — see [waitForActivation].
+  Future<bool> refresh() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return false;
     try {
       final row = await Supabase.instance.client
           .from('entitlements')
@@ -115,23 +120,39 @@ class EntitlementService extends ChangeNotifier {
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_cacheKey(user.id), premium);
+      return true;
     } catch (e) {
       debugPrint('[Entitlement] refresh failed (keeping cache): $e');
+      return false;
     }
   }
 
-  /// Polls for the webhook to land after a successful checkout
-  /// (payment confirmed → webhook → entitlement row). Returns true once
+  /// Polls for the webhook to land after the parent returns from a
+  /// successful checkout (payment confirmed → signed webhook →
+  /// entitlement row). Returns true only once the *backend* confirms
   /// Premium is active.
+  ///
+  /// Reaching the success URL is not evidence of payment — it is just a
+  /// browser redirect, and the only thing that grants Premium is the
+  /// signature-verified webhook. So this deliberately requires a
+  /// successful backend read within the window: a stale cached `true`, or
+  /// an offline device that cannot check, reports false rather than
+  /// unlocking on the redirect alone.
   Future<bool> waitForActivation({
     Duration timeout = const Duration(seconds: 20),
+    Duration pollInterval = const Duration(seconds: 2),
   }) async {
     final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      await refresh();
-      if (_isPremium) return true;
-      await Future.delayed(const Duration(seconds: 2));
+    var confirmed = false;
+    while (true) {
+      final reachedBackend = await refresh();
+      if (reachedBackend) {
+        confirmed = true;
+        if (_isPremium) return true;
+      }
+      if (!DateTime.now().isBefore(deadline)) break;
+      await Future.delayed(pollInterval);
     }
-    return _isPremium;
+    return confirmed && _isPremium;
   }
 }
