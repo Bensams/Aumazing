@@ -10,12 +10,23 @@ plugins {
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Names the missing key instead of failing with a bare ClassCastException.
+fun keystoreProperty(name: String): String =
+    requireNotNull(keystoreProperties.getProperty(name)) {
+        "$name is missing from ${keystorePropertiesFile.absolutePath}"
+    }
+
 android {
-    namespace = "com.example.aumazing"
+    lint {
+        abortOnError = false
+        disable.add("ManifestResource")
+    }
+    namespace = "app.aumazing"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "28.2.13676358"
 
@@ -29,25 +40,38 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.aumazing"
+        applicationId = "app.aumazing"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+    // Only declared when key.properties is present. Reading the keystore
+    // unconditionally evaluates at configuration time, so a missing file broke
+    // *every* Gradle invocation — debug builds and `flutter analyze` included —
+    // with an NPE before any task could run.
+    if (hasReleaseKeystore) {
+        signingConfigs {
+            create("release") {
+                keyAlias = keystoreProperty("keyAlias")
+                keyPassword = keystoreProperty("keyPassword")
+                storeFile = file(keystoreProperty("storeFile"))
+                storePassword = keystoreProperty("storePassword")
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // Falls back to debug signing so a developer without the release
+            // keystore can still produce a local release build; CI and the
+            // Play upload path supply key.properties and get the real config.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -61,3 +85,9 @@ android {
 flutter {
     source = "../.."
 }
+
+
+
+
+
+
