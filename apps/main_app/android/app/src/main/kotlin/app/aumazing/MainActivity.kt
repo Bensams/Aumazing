@@ -1,4 +1,4 @@
-package com.example.aumazing
+package app.aumazing
 
 import android.content.pm.ActivityInfo
 import android.content.res.Resources
