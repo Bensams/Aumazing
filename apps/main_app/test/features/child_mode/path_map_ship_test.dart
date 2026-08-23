@@ -24,10 +24,16 @@ List<LearningPathEntry> _path() {
 /// Hosts a [PathMapView] whose completed set can be advanced, so a test can
 /// drive a completion the way finishing a game does in the app.
 class _Host extends StatefulWidget {
-  const _Host({required this.style, this.reducedMotion = false, this.navKey});
+  const _Host({
+    required this.style,
+    this.reducedMotion = false,
+    this.navKey,
+    this.onShipDocked,
+  });
   final WorldStyle style;
   final bool reducedMotion;
   final GlobalKey<NavigatorState>? navKey;
+  final VoidCallback? onShipDocked;
 
   @override
   State<_Host> createState() => _HostState();
@@ -45,6 +51,10 @@ class _HostState extends State<_Host> {
     setState(() => completed = {...completed, next.game.id});
   }
 
+  /// Rebuild without advancing — the lobby does this after taking a parked
+  /// path "Next", which is what arms the already-docked announce.
+  void tick() => setState(() {});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -61,6 +71,7 @@ class _HostState extends State<_Host> {
             reducedMotion: widget.reducedMotion,
             currentStepKey: GlobalKey(),
             onLaunch: (_, __) {},
+            onShipDocked: widget.onShipDocked,
           ),
         ),
       ),
@@ -154,5 +165,99 @@ void main() {
     expect(tester.hasRunningAnimations, isFalse);
     final afterX = tester.getCenter(find.byType(Spaceship)).dx;
     expect(afterX, greaterThan(startX + 100));
+  });
+
+  testWidgets('onShipDocked fires once the ship finishes flying to the next '
+      'step', (tester) async {
+    var docked = 0;
+    await tester.pumpWidget(
+      _Host(style: WorldStyles.nightSky, onShipDocked: () => docked++),
+    );
+    await tester.pump();
+
+    // Nothing has completed yet — the ship is idle on its dock, no dock event.
+    expect(docked, 0);
+
+    tester.state<_HostState>(find.byType(_Host)).finishCurrent();
+    await tester.pump(); // kick off the flight
+
+    // Still in flight — the game must not open until the ship arrives.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(docked, 0, reason: 'launched before the ship docked');
+
+    // Past the 1100ms flight the ship lands and the dock is announced once.
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(); // let the post-frame notify run
+    expect(docked, 1);
+  });
+
+  testWidgets('reduced motion announces the dock on the snap', (tester) async {
+    var docked = 0;
+    await tester.pumpWidget(
+      _Host(
+        style: WorldStyles.nightSky,
+        reducedMotion: true,
+        onShipDocked: () => docked++,
+      ),
+    );
+    await tester.pump();
+    expect(docked, 0);
+
+    tester.state<_HostState>(find.byType(_Host)).finishCurrent();
+    await tester.pump(); // snap, no flight
+    await tester.pump(); // let the post-frame notify run
+    expect(tester.hasRunningAnimations, isFalse);
+    expect(docked, 1, reason: 'a snapped arrival is still an arrival');
+  });
+
+  testWidgets('classic world announces the dock on the snap', (tester) async {
+    var docked = 0;
+    await tester.pumpWidget(
+      _Host(style: WorldStyles.classic, onShipDocked: () => docked++),
+    );
+    await tester.pump();
+    expect(find.byType(Spaceship), findsNothing);
+    expect(docked, 0);
+
+    tester.state<_HostState>(find.byType(_Host)).finishCurrent();
+    await tester.pump();
+    await tester.pump();
+    expect(docked, 1, reason: 'no ship still means the step advanced');
+  });
+
+  testWidgets(
+      'returning to a ship already on the current step still announces dock',
+      (tester) async {
+    var docked = 0;
+    final navKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      _Host(
+        style: WorldStyles.nightSky,
+        navKey: navKey,
+        onShipDocked: () => docked++,
+      ),
+    );
+    await tester.pump();
+    expect(docked, 0);
+
+    // Cover the path without advancing it — a replay of an earlier step, then
+    // "Next", lands back on a ship that has nowhere to fly.
+    navKey.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('game')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(docked, 0);
+
+    navKey.currentState!.pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // Lobby setState after taking the parked launch.
+    tester.state<_HostState>(find.byType(_Host)).tick();
+    await tester.pump();
+    await tester.pump(); // post-frame notify
+    expect(docked, 1, reason: 'a parked Next must not wait on a flight that '
+        'will never start');
   });
 }
