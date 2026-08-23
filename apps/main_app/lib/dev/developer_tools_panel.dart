@@ -14,6 +14,7 @@ import '../providers/child_provider.dart';
 import '../services/active_games_service.dart';
 import '../services/entitlement_service.dart';
 import '../services/learning_path_service.dart';
+import 'build_info.dart';
 import 'developer_automation_registry.dart';
 import 'developer_autoplay_controller.dart';
 import 'developer_tools_config.dart';
@@ -153,6 +154,9 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
                 ],
               ),
               const Divider(),
+              // Build provenance first: a tester checks this to confirm they
+              // are running the updated code rather than a stale build.
+              _stateRow('Build', BuildInfo.summary),
               _stateRow('Child',
                   hasChild ? '${profile!.displayName} ($childId)' : 'None selected'),
               _stateRow('Premium', premiumState),
