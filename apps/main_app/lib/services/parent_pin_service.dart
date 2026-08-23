@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/services/protected_storage.dart';
+
 /// How the parent lock challenges whoever is trying to leave child mode.
 enum ParentLockMode {
   /// A freshly randomised 4-digit code, shown on screen as English words
@@ -80,6 +82,7 @@ class ParentPinService extends ChangeNotifier {
   ParentLockMode _mode = ParentLockMode.wordCode;
   String? _salt;
   String? _hash;
+  final ProtectedStorage _protectedStorage = ProtectedStorage();
   int _failedAttempts = 0;
   DateTime? _lockoutUntil;
 
@@ -157,8 +160,14 @@ class ParentPinService extends ChangeNotifier {
       try {
         final prefs = await SharedPreferences.getInstance();
         final storedMode = prefs.getString(_modeKey(accountId));
-        _salt = prefs.getString(_saltKey(accountId));
-        _hash = prefs.getString(_hashKey(accountId));
+        _salt = await _protectedStorage.read(
+          _saltKey(accountId),
+          legacyKey: _saltKey(accountId),
+        );
+        _hash = await _protectedStorage.read(
+          _hashKey(accountId),
+          legacyKey: _hashKey(accountId),
+        );
         _failedAttempts = prefs.getInt(_attemptsKey(accountId)) ?? 0;
         final lockoutMs = prefs.getInt(_lockoutKey(accountId));
         _lockoutUntil = lockoutMs == null
@@ -227,8 +236,8 @@ class ParentPinService extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_saltKey(accountId), salt);
-      await prefs.setString(_hashKey(accountId), hash);
+      await _protectedStorage.write(_saltKey(accountId), salt);
+      await _protectedStorage.write(_hashKey(accountId), hash);
       await prefs.setString(_modeKey(accountId), ParentLockMode.customPin.name);
       await prefs.remove(_attemptsKey(accountId));
       await prefs.remove(_lockoutKey(accountId));
@@ -251,8 +260,8 @@ class ParentPinService extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_saltKey(accountId));
-      await prefs.remove(_hashKey(accountId));
+      await _protectedStorage.delete(_saltKey(accountId));
+      await _protectedStorage.delete(_hashKey(accountId));
       await prefs.remove(_attemptsKey(accountId));
       await prefs.remove(_lockoutKey(accountId));
       await prefs.setString(_modeKey(accountId), ParentLockMode.wordCode.name);
