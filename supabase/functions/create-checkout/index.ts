@@ -119,9 +119,15 @@ Deno.serve(async (req) => {
     status: "pending",
   });
   if (insertError) {
-    // The webhook can still resolve the user from session metadata, so a
-    // failed pending row is logged but not fatal.
+    // This row is the ONLY trusted binding between a PayMongo session and
+    // an account: the webhook refuses to grant Premium for a session it
+    // cannot find here, because session metadata is attacker-shaped input
+    // rather than something we wrote. Without the row a completed payment
+    // would strand the parent with no entitlement, so fail the checkout
+    // now — before they are sent to the payment page — instead of taking
+    // money we cannot honour.
     console.error("payment_records insert failed:", insertError);
+    return json({ error: "could not create checkout session" }, 500);
   }
 
   return json({ checkout_url: checkoutUrl, checkout_session_id: sessionId });

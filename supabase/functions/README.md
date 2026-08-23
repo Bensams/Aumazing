@@ -6,9 +6,43 @@ FR-10, FR-17, NFR-06, Use Cases 12 & 13). Two functions:
 | Function | Auth | Purpose |
 | --- | --- | --- |
 | `create-checkout` | Supabase JWT (default) | Creates a PayMongo Checkout Session (₱149/month, cards + GCash + GrabPay + Maya), records a pending `payment_records` row, returns the hosted `checkout_url` for the in-app WebView. |
-| `paymongo-webhook` | PayMongo HMAC signature (deploy with `--no-verify-jwt`) | Verifies the `Paymongo-Signature` header, dedupes on event id via `webhook_events`, grants a 30-day `entitlements` period (`is_premium` + `expires_at`; paying again extends the running period) on `checkout_session.payment.paid`, revokes on refund events. There is no auto-renewal — expiry is enforced by `expires_at`, which clients cache and check locally (works offline). |
+| `paymongo-webhook` | PayMongo HMAC signature (deploy with `--no-verify-jwt`) | Verifies the `Paymongo-Signature` header, dedupes on event id via `webhook_events`, grants Premium (`is_premium`) on `checkout_session.payment.paid`, revokes on refund events. |
 
-There is also an account-lifecycle function:
+### Payment outcome rules (AUM-168 — atomic grant/revoke only)
+
+Every outcome decision lives in `_shared/payment_outcomes.ts` as pure
+functions; `paymongo-webhook/index.ts` is a thin shell that verifies,
+loads state, calls `decide()`, and applies the returned effects. The
+rules are unit-tested in `tests/payment_outcomes_test.ts` — run with
+`deno test supabase/functions/tests/`.
+
+The guarantees that suite pins:
+
+- **Grants are bound to a stored checkout.** A paid event only grants if
+  a `payment_records` row matches its `checkout_session_id`. Event
+  metadata is treated as a *claim*: if `metadata.user_id` disagrees with
+  the stored owner, the event is rejected rather than applied to either
+  account. Underpayment and currency mismatches do not grant.
+- **Nothing negative touches an entitlement.** `payment.failed`,
+  `checkout_session.expired`, and the cancelled/timed-out variants settle
+  the payment row only.
+- **Idempotency is keyed on the payment's state transition** (AUM-168),
+  the event id. One purchase can emit two event ids
+  (`checkout_session.payment.paid` and `payment.paid`); a grant applies
+  only to a record that is not already `paid`, so Premium is never
+  granted twice.
+- **Out-of-order deliveries cannot corrupt newer state.** A late
+  `expired` cannot undo a `paid` record; a refund of an older payment
+  cannot revoke Premium a newer payment bought.
+- **An invalid signature produces no database writes at all** (AUM-168),
+  a `webhook_events` row, which previously let an unauthenticated caller
+  occupy an `event_id` and get the genuine signed delivery dropped as a
+  duplicate.
+
+`payment_records.status` values: `pending` → `paid` | `failed` |
+`cancelled` | `expired` | `refunded`.
+
+There is also an account-lifecycle function (AUM-204 is separate):
 
 | Function | Auth | Purpose |
 | --- | --- | --- |
@@ -20,7 +54,7 @@ Premium — entitlement rows are written only here with the service role.
 ## One-time setup
 
 1. Apply the migrations `supabase/migrations/20260703_paymongo_entitlements.sql`
-   and `supabase/migrations/20260720_entitlement_expiry.sql`
+   and `supabase/migrations/20260821_apply_payment_outcome.sql`
    (`supabase db push`).
 
 2. Set the function secrets (PayMongo Dashboard → Developers → API Keys,
