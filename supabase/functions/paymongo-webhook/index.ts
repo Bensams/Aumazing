@@ -6,59 +6,34 @@
 // Events are logged to webhook_events and deduped on the PayMongo event id,
 // so redeliveries and replays are no-ops (manuscript R-04, R-09).
 //
+// This file is deliberately thin: it verifies, loads state, calls the pure
+// `decide` in ../_shared/payment_outcomes.ts, and hands the single effect
+// that decision returns to `apply_payment_outcome`, which commits the
+// payment transition and the entitlement effect in ONE database
+// transaction under a row lock. Every outcome rule — grant, failure,
+// cancellation, expiry, refund, ordering and ownership — lives in that
+// module and is unit-tested there (AUM-168).
+//
 // Secrets required (supabase secrets set ...):
 //   PAYMONGO_WEBHOOK_SECRET — whsk_... from the PayMongo webhook you create
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const GRANT_EVENTS = ["checkout_session.payment.paid"];
-const REVOKE_EVENTS = ["payment.refunded", "payment.refund.updated"];
+import {
+  decide,
+  type Decision,
+  parseEvent,
+  type ParsedEvent,
+  type PaymentStatus,
+  type StoredEntitlement,
+  type StoredPayment,
+} from "../_shared/payment_outcomes.ts";
+import { verifySignature } from "../_shared/paymongo_signature.ts";
 
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(message),
-  );
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
-/// Paymongo-Signature: "t=<ts>,te=<test-mode sig>,li=<live-mode sig>".
-/// The signed message is "<t>.<raw body>"; compare against te or li
-/// depending on the event's livemode flag.
-async function verifySignature(
-  header: string | null,
-  rawBody: string,
-  livemode: boolean,
-  secret: string,
-): Promise<boolean> {
-  if (!header) return false;
-  const parts = new Map(
-    header.split(",").map((p) => p.trim().split("=") as [string, string]),
-  );
-  const timestamp = parts.get("t");
-  const expected = livemode ? parts.get("li") : parts.get("te");
-  if (!timestamp || !expected) return false;
-  const computed = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
-  return timingSafeEqual(computed, expected);
+function toDate(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 Deno.serve(async (req) => {
@@ -73,55 +48,64 @@ Deno.serve(async (req) => {
   }
 
   const rawBody = await req.text();
-  let body: any;
+  let body: unknown;
   try {
     body = JSON.parse(rawBody);
   } catch {
+    // Unparseable body: no event id to dedupe on, nothing to log against.
     return new Response("invalid payload", { status: 400 });
   }
 
-  const event = body?.data;
-  const eventId = event?.id as string | undefined;
-  const eventType = event?.attributes?.type as string | undefined;
-  const livemode = event?.attributes?.livemode === true;
-  const resource = event?.attributes?.data; // e.g. the checkout session
+  const now = new Date();
+  const event: ParsedEvent | null = parseEvent(body, now);
 
+  // Signature is checked against the livemode flag we can read off the
+  // raw payload, so a malformed event still gets a real verification
+  // attempt rather than being waved through.
+  // deno-lint-ignore no-explicit-any
+  const rawLivemode = (body as any)?.data?.attributes?.livemode === true;
   const signatureValid = await verifySignature(
     req.headers.get("paymongo-signature"),
     rawBody,
-    livemode,
+    event?.livemode ?? rawLivemode,
     secret,
   );
+
+  if (!signatureValid) {
+    // An unverified caller must produce NO database side effects at all.
+    // The previous version upserted a webhook_events row here, which let
+    // anyone who could reach the URL write unbounded rows — and, worse,
+    // occupy an event_id so the genuine signed delivery of that same id
+    // would later be dropped as a duplicate.
+    console.error(
+      `Rejected webhook ${event?.eventId ?? "?"}: bad signature`,
+    );
+    return new Response("invalid signature", { status: 401 });
+  }
+
+  // Signed but not shaped like an event we understand. Acknowledge so
+  // PayMongo stops retrying; write nothing.
+  if (!event) {
+    console.error("Signed webhook with malformed payload; ignoring");
+    return new Response("ok", { status: 200 });
+  }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (!signatureValid) {
-    // Log the rejected delivery for the audit trail, grant nothing.
-    await admin.from("webhook_events").upsert(
-      {
-        event_id: eventId,
-        event_type: eventType,
-        signature_valid: false,
-        payload: body,
-        processed: false,
-      },
-      { onConflict: "event_id", ignoreDuplicates: true },
-    );
-    console.error(`Rejected webhook ${eventId ?? "?"}: bad signature`);
-    return new Response("invalid signature", { status: 401 });
-  }
-
   // Dedupe on the PayMongo event id: if the row already exists this is a
-  // redelivery/replay — acknowledge without reprocessing.
+  // redelivery/replay — acknowledge without reprocessing. This is the
+  // cheap first line of defence; `decide` plus `apply_payment_outcome`
+  // independently guard against a second *distinct* event id for the
+  // same purchase.
   const { data: inserted, error: logError } = await admin
     .from("webhook_events")
     .upsert(
       {
-        event_id: eventId,
-        event_type: eventType,
+        event_id: event.eventId,
+        event_type: event.eventType,
         signature_valid: true,
         payload: body,
         processed: false,
@@ -133,79 +117,145 @@ Deno.serve(async (req) => {
     console.error("webhook_events insert failed:", logError);
     return new Response("storage error", { status: 500 });
   }
-  if (!inserted || inserted.length === 0) {
-    return new Response("already processed", { status: 200 });
-  }
-  const logId = inserted[0].id;
-
-  let processed = false;
-  const now = new Date().toISOString();
-
-  if (eventType && GRANT_EVENTS.includes(eventType)) {
-    const sessionId = resource?.id as string | undefined;
-    let userId = resource?.attributes?.metadata?.user_id as string | undefined;
-    if (!userId && sessionId) {
-      const { data: record } = await admin
-        .from("payment_records")
-        .select("user_id")
-        .eq("checkout_session_id", sessionId)
-        .maybeSingle();
-      userId = record?.user_id;
-    }
-
-    if (userId) {
-      if (sessionId) {
-        await admin
-          .from("payment_records")
-          .update({ status: "paid", updated_at: now })
-          .eq("checkout_session_id", sessionId);
-      }
-      const { error: grantError } = await admin.from("entitlements").upsert({
-        user_id: userId,
-        is_premium: true,
-        source: livemode ? "paymongo" : "paymongo_test",
-        activated_at: now,
-        updated_at: now,
-      });
-      if (grantError) {
-        console.error("entitlement grant failed:", grantError);
-      } else {
-        processed = true;
-        console.log(`Premium granted to ${userId} (event ${eventId})`);
-      }
-    } else {
-      console.error(`No user for paid session ${sessionId} (event ${eventId})`);
-    }
-  } else if (eventType && REVOKE_EVENTS.includes(eventType)) {
-    // Refund/chargeback (R-09): downgrade the account. The payment resource
-    // carries the checkout metadata when created through a checkout session.
-    const userId =
-      resource?.attributes?.metadata?.user_id as string | undefined;
-    if (userId) {
-      const { error: revokeError } = await admin.from("entitlements").upsert({
-        user_id: userId,
-        is_premium: false,
-        source: livemode ? "paymongo" : "paymongo_test",
-        updated_at: now,
-      });
-      if (revokeError) {
-        console.error("entitlement revoke failed:", revokeError);
-      } else {
-        processed = true;
-        console.log(`Premium revoked for ${userId} (event ${eventId})`);
-      }
-    } else {
-      console.error(`Refund event ${eventId} carries no user_id metadata`);
-    }
+  let logId: string;
+  if (inserted && inserted.length > 0) {
+    logId = inserted[0].id;
   } else {
-    // Unhandled event type: acknowledged, logged, nothing to do.
-    processed = true;
+    // A prior attempt may have failed after inserting its unprocessed row.
+    // Reuse that row so cleanup failures remain retryable instead of being
+    // acknowledged as a duplicate forever.
+    const { data: existing, error: existingError } = await admin
+      .from("webhook_events")
+      .select("id, processed")
+      .eq("event_id", event.eventId)
+      .maybeSingle();
+    if (existingError) {
+      console.error("webhook_events dedupe lookup failed:", existingError);
+      return new Response("storage error", { status: 500 });
+    }
+    if (!existing || existing.processed === true) {
+      return new Response("already processed", { status: 200 });
+    }
+    logId = existing.id;
+  }
+
+  // Every early return past this point deletes the log row first, so
+  // PayMongo's retry is not dropped as a duplicate of a delivery we never
+  // finished handling.
+  const retryable = async (message: string, detail: unknown) => {
+    console.error(message, detail);
+    const { error: cleanupError } = await admin
+      .from("webhook_events")
+      .delete()
+      .eq("id", logId);
+    if (cleanupError) {
+      // Leave processed=false when cleanup fails; the next delivery will
+      // reclaim this row through the unprocessed-dedupe path above.
+      console.error("webhook_events cleanup failed; retry remains enabled:", cleanupError);
+    }
+    return new Response("storage error", { status: 500 });
+  };
+
+  // Load the stored payment this event claims to be about. The session id
+  // is the binding key written by create-checkout; without a match we
+  // have no verified owner and `decide` refuses to grant.
+  let payment: StoredPayment | null = null;
+  if (event.sessionId) {
+    const { data: row, error: paymentError } = await admin
+      .from("payment_records")
+      .select(
+        "id, user_id, checkout_session_id, amount, currency, status, updated_at",
+      )
+      .eq("checkout_session_id", event.sessionId)
+      .maybeSingle();
+    if (paymentError) {
+      return await retryable("payment_records lookup failed:", paymentError);
+    }
+    if (row) {
+      payment = {
+        id: row.id,
+        userId: row.user_id,
+        checkoutSessionId: row.checkout_session_id,
+        amount: row.amount,
+        currency: row.currency,
+        status: row.status as PaymentStatus,
+        updatedAt: toDate(row.updated_at),
+      };
+    }
+  }
+
+  let entitlement: StoredEntitlement | null = null;
+  if (payment) {
+    const { data: row, error: entitlementError } = await admin
+      .from("entitlements")
+      .select("user_id, is_premium, activated_at, updated_at")
+      .eq("user_id", payment.userId)
+      .maybeSingle();
+    if (entitlementError) {
+      return await retryable("entitlements lookup failed:", entitlementError);
+    }
+    if (row) {
+      entitlement = {
+        userId: row.user_id,
+        isPremium: row.is_premium === true,
+        activatedAt: toDate(row.activated_at),
+        updatedAt: toDate(row.updated_at),
+      };
+    }
+  }
+
+  const decision: Decision = decide({ event, payment, entitlement, now });
+
+  // The decision authorises at most one write, and that write is applied
+  // as a single transaction: the payment transition and the entitlement
+  // effect commit together or not at all. The function locks the payment
+  // row and re-checks the status the decision was reasoned about, so of
+  // two concurrent deliveries for one purchase exactly one applies —
+  // the loser gets `applied: false` and grants nothing.
+  let outcome = "no_effect";
+  if (decision.apply) {
+    const a = decision.apply;
+    const { data: result, error } = await admin.rpc("apply_payment_outcome", {
+      p_payment_id: a.paymentId,
+      p_user_id: a.userId,
+      p_expected_status: a.expectedStatus,
+      p_new_status: a.newStatus,
+      p_effect: a.effect,
+      p_source: a.source,
+      p_at: a.at.toISOString(),
+    });
+    if (error) {
+      // Nothing was committed — the transaction rolled back — so a retry
+      // sees the original state and can complete the whole outcome.
+      return await retryable("apply_payment_outcome failed:", error);
+    }
+    const applied = (result as { applied?: boolean } | null)?.applied === true;
+    outcome = applied
+      ? "applied"
+      : `not_applied:${(result as { reason?: string } | null)?.reason ?? "?"}`;
+    // A refused application is a correct, expected outcome (a concurrent
+    // winner already settled it) — but it is NOT this delivery's success,
+    // so it must not be recorded as one.
+    if (!applied) {
+      await admin
+        .from("webhook_events")
+        .update({ processed: false })
+        .eq("id", logId);
+      console.log(
+        `Webhook ${event.eventId} (${event.eventType}): ` +
+          `${decision.reason} → ${outcome}`,
+      );
+      return new Response("ok", { status: 200 });
+    }
   }
 
   await admin
     .from("webhook_events")
-    .update({ processed })
+    .update({ processed: decision.processed })
     .eq("id", logId);
 
+  console.log(
+    `Webhook ${event.eventId} (${event.eventType}): ${decision.reason} → ${outcome}`,
+  );
   return new Response("ok", { status: 200 });
 });
