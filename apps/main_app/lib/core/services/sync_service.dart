@@ -35,6 +35,7 @@ class SyncService {
   Timer? _retryTimer;
   bool _isSyncing = false;
   bool _isInitialized = false;
+  bool _disposed = false;
 
   /// Consecutive retry passes since the last fully successful sync;
   /// indexes into [_retryDelays] for exponential backoff.
@@ -51,6 +52,10 @@ class SyncService {
   /// Max records per remote upsert call, to bound payload size.
   static const _uploadChunkSize = 200;
 
+  /// Debounce before a connectivity-triggered sync. Tests pass
+  /// [Duration.zero] so reconnect does not wait the production 2s.
+  final Duration syncDebounce;
+
   // Expose state for UI
   final _syncStateController = StreamController<SyncState>.broadcast();
   SyncState _currentState = SyncState.idle();
@@ -59,6 +64,7 @@ class SyncService {
     LocalDbService? localDb,
     SupabaseService? supabase,
     ConnectivityService? connectivity,
+    this.syncDebounce = const Duration(seconds: 2),
   }) : _localDb = localDb ?? localDbService,
        _supabase = supabase ?? supabaseService,
        _connectivity = connectivity ?? connectivityService;
@@ -111,7 +117,8 @@ class SyncService {
   /// Schedule a sync operation (debounced)
   void _scheduleSync() {
     _retryTimer?.cancel();
-    _retryTimer = Timer(const Duration(seconds: 2), () {
+    _retryTimer = Timer(syncDebounce, () {
+      if (_disposed) return;
       startSync();
     });
   }
@@ -121,6 +128,8 @@ class SyncService {
   /// This is the main entry point for syncing. It processes records
   /// in dependency order to avoid foreign key violations.
   Future<void> startSync() async {
+    if (_disposed) return;
+
     if (_isSyncing) {
       debugPrint('[SyncService] Sync already in progress');
       return;
@@ -173,15 +182,18 @@ class SyncService {
         ),
       );
     } finally {
-      _isSyncing = false;
-
-      // Schedule retry if there are still pending records
-      if (_connectivity.isOnline) {
-        final counts = await _localDb.getPendingCounts();
-        final totalPending = counts.values.fold<int>(0, (a, b) => a + b);
-        if (totalPending > 0) {
-          _scheduleRetry();
+      try {
+        // Keep isSyncing true until this check finishes so callers waiting
+        // on it do not dispose the DB under a still-running query.
+        if (!_disposed && _connectivity.isOnline) {
+          final counts = await _localDb.getPendingCounts();
+          final totalPending = counts.values.fold<int>(0, (a, b) => a + b);
+          if (totalPending > 0) {
+            _scheduleRetry();
+          }
         }
+      } finally {
+        _isSyncing = false;
       }
     }
   }
@@ -192,6 +204,7 @@ class SyncService {
     final delay = _retryDelays[_retryAttempt.clamp(0, _retryDelays.length - 1)];
     _retryAttempt++;
     _retryTimer = Timer(delay, () {
+      if (_disposed) return;
       startSync();
     });
     debugPrint('[SyncService] Scheduled retry in ${delay.inSeconds}s');
@@ -200,6 +213,7 @@ class SyncService {
   /// Update sync state and notify listeners
   void _updateState(SyncState state) {
     _currentState = state;
+    if (_disposed) return;
     _syncStateController.add(state);
   }
 
@@ -966,6 +980,7 @@ class SyncService {
 
   /// Dispose and clean up resources
   void dispose() {
+    _disposed = true;
     _connectivitySubscription?.cancel();
     _retryTimer?.cancel();
     _syncStateController.close();
