@@ -18,6 +18,7 @@ import '../../../providers/child_provider.dart';
 import '../loading_screen.dart';
 import 'forgot_password_screen.dart';
 import 'otp_verification_screen.dart';
+import 'credits_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -113,11 +114,11 @@ class _LoginScreenState extends State<LoginScreen>
     connectivityService.checkConnectivity().then((online) {
       if (mounted) setState(() => _isOffline = !online);
     });
-    _connectivitySub = connectivityService.onConnectivityChanged.listen(
-      (online) {
-        if (mounted) setState(() => _isOffline = !online);
-      },
-    );
+    _connectivitySub = connectivityService.onConnectivityChanged.listen((
+      online,
+    ) {
+      if (mounted) setState(() => _isOffline = !online);
+    });
   }
 
   /// Check SharedPreferences for a stored guest refresh token.
@@ -127,7 +128,8 @@ class _LoginScreenState extends State<LoginScreen>
     final prefs = await SharedPreferences.getInstance();
     // A returning guest is either a cloud-backed anonymous account (refresh
     // token) or an established offline guest (persisted locally).
-    final hasToken = prefs.getString('guest_refresh_token') != null ||
+    final hasToken =
+        prefs.getString('guest_refresh_token') != null ||
         (prefs.getBool('guest_established') ?? false);
     if (mounted && hasToken != _hasExistingGuestAccount) {
       setState(() => _hasExistingGuestAccount = hasToken);
@@ -137,7 +139,9 @@ class _LoginScreenState extends State<LoginScreen>
   void _verifyMusicPlaying() async {
     try {
       final audioService = context.read<AudioService>();
-      debugPrint('[LoginScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}');
+      debugPrint(
+        '[LoginScreen] Checking music state: isMusicPlaying=${audioService.isMusicPlaying}',
+      );
       if (!audioService.isMusicPlaying) {
         debugPrint('[LoginScreen] Music not playing, starting...');
         await audioService.playCategoryMusic(kDefaultBgmCategory);
@@ -204,7 +208,9 @@ class _LoginScreenState extends State<LoginScreen>
             if (controller.value.isInitialized &&
                 !controller.value.isPlaying &&
                 !controller.value.isBuffering) {
-              debugPrint('[LoginScreen] Video paused unexpectedly, resuming...');
+              debugPrint(
+                '[LoginScreen] Video paused unexpectedly, resuming...',
+              );
               controller.play();
             }
           });
@@ -262,18 +268,17 @@ class _LoginScreenState extends State<LoginScreen>
     if (message.contains('configuration error') || message.length > 100) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(
-            child: Text(message),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
+        builder:
+            (context) => AlertDialog(
+              title: Text(title),
+              content: SingleChildScrollView(child: Text(message)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
@@ -293,8 +298,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_isLogin && !_privacyAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Please accept the Data Privacy Notice to continue.'),
+          content: Text('Please accept the Data Privacy Notice to continue.'),
         ),
       );
       return;
@@ -327,9 +331,10 @@ class _LoginScreenState extends State<LoginScreen>
           if (mounted) {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => OtpVerificationScreen(
-                  email: _emailController.text.trim(),
-                ),
+                builder:
+                    (_) => OtpVerificationScreen(
+                      email: _emailController.text.trim(),
+                    ),
               ),
             );
           }
@@ -343,9 +348,10 @@ class _LoginScreenState extends State<LoginScreen>
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => OtpVerificationScreen(
-                email: _emailController.text.trim(),
-              ),
+              builder:
+                  (_) => OtpVerificationScreen(
+                    email: _emailController.text.trim(),
+                  ),
             ),
           );
         }
@@ -354,10 +360,12 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       debugPrint('Unexpected error: $e');
-      _showError(friendly(
-        e,
-        fallback: 'An unexpected error occurred. Please try again.',
-      ));
+      _showError(
+        friendly(
+          e,
+          fallback: 'An unexpected error occurred. Please try again.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -420,9 +428,9 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleForgotPassword() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
   }
 
   Future<void> _handleGuestSignIn() async {
@@ -488,7 +496,9 @@ class _LoginScreenState extends State<LoginScreen>
       decoration: BoxDecoration(
         color: AppColors.butterLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.statusWarningDark.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: AppColors.statusWarningDark.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
@@ -605,9 +615,10 @@ class _LoginScreenState extends State<LoginScreen>
                                 header: true,
                                 child: Text(
                                   _isLogin ? 'Log In' : 'Sign Up!',
-                                  semanticsLabel: _isLogin
-                                      ? 'Log in screen'
-                                      : 'Sign up screen',
+                                  semanticsLabel:
+                                      _isLogin
+                                          ? 'Log in screen'
+                                          : 'Sign up screen',
                                   style: AppTextStyles.headlineLarge.copyWith(
                                     color: AppColors.primaryPurple,
                                     fontSize: 22,
@@ -635,76 +646,82 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
 
                             // ── Form ───────────────────────────────
-                            _dimIfOffline(Form(
-                              key: _formKey,
-                              child: Column(
-                                children: [
-                                  if (!_isLogin) ...[
+                            _dimIfOffline(
+                              Form(
+                                key: _formKey,
+                                child: Column(
+                                  children: [
+                                    if (!_isLogin) ...[
+                                      _buildTextField(
+                                        controller: _nameController,
+                                        label: 'Full Name',
+                                        icon: Icons.person_outline,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Please enter your name';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                    ],
                                     _buildTextField(
-                                      controller: _nameController,
-                                      label: 'Full Name',
-                                      icon: Icons.person_outline,
+                                      controller: _emailController,
+                                      label: 'Email',
+                                      icon: Icons.email_outlined,
+                                      keyboardType: TextInputType.emailAddress,
                                       validator: (value) {
                                         if (value == null || value.isEmpty) {
-                                          return 'Please enter your name';
+                                          return 'Please enter your email';
+                                        }
+                                        if (!RegExp(
+                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                        ).hasMatch(value)) {
+                                          return 'Please enter a valid email';
                                         }
                                         return null;
                                       },
                                     ),
                                     const SizedBox(height: AppSpacing.sm),
-                                  ],
-                                  _buildTextField(
-                                    controller: _emailController,
-                                    label: 'Email',
-                                    icon: Icons.email_outlined,
-                                    keyboardType: TextInputType.emailAddress,
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your email';
-                                      }
-                                      if (!RegExp(
-                                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                          .hasMatch(value)) {
-                                        return 'Please enter a valid email';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  _buildTextField(
-                                    controller: _passwordController,
-                                    label: 'Password',
-                                    icon: Icons.lock_outline,
-                                    obscureText: _obscurePassword,
-                                    suffixIcon: IconButton(
-                                      tooltip: _obscurePassword
-                                          ? 'Show password'
-                                          : 'Hide password',
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                        size: 20,
-                                        color: AppColors.mutedForeground,
+                                    _buildTextField(
+                                      controller: _passwordController,
+                                      label: 'Password',
+                                      icon: Icons.lock_outline,
+                                      obscureText: _obscurePassword,
+                                      suffixIcon: IconButton(
+                                        tooltip:
+                                            _obscurePassword
+                                                ? 'Show password'
+                                                : 'Hide password',
+                                        icon: Icon(
+                                          _obscurePassword
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          size: 20,
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                        onPressed: () {
+                                          setState(
+                                            () =>
+                                                _obscurePassword =
+                                                    !_obscurePassword,
+                                          );
+                                        },
                                       ),
-                                      onPressed: () {
-                                        setState(() => _obscurePassword =
-                                            !_obscurePassword);
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return 'Please enter your password';
+                                        }
+                                        if (value.length < 6) {
+                                          return 'At least 6 characters';
+                                        }
+                                        return null;
                                       },
                                     ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your password';
-                                      }
-                                      if (value.length < 6) {
-                                        return 'At least 6 characters';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            )),
+                            ),
 
                             if (_isLogin)
                               Align(
@@ -714,7 +731,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       _isLoading ? null : _handleForgotPassword,
                                   style: TextButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 4),
+                                      vertical: 4,
+                                    ),
                                   ),
                                   child: Text(
                                     'Forgot Password?',
@@ -730,14 +748,17 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
 
                             // ── Submit button ──────────────────────
-                            _dimIfOffline(AppPrimaryButton(
-                              label: _isLogin ? 'Log In' : 'Sign Up',
-                              onPressed: (_isLoading ||
-                                      (!_isLogin && !_privacyAccepted))
-                                  ? null
-                                  : _submitForm,
-                              isLoading: _isLoading,
-                            )),
+                            _dimIfOffline(
+                              AppPrimaryButton(
+                                label: _isLogin ? 'Log In' : 'Sign Up',
+                                onPressed:
+                                    (_isLoading ||
+                                            (!_isLogin && !_privacyAccepted))
+                                        ? null
+                                        : _submitForm,
+                                isLoading: _isLoading,
+                              ),
+                            ),
 
                             const SizedBox(height: AppSpacing.sm),
 
@@ -759,78 +780,81 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: AppSpacing.sm),
 
                             // ── Google sign-in ─────────────────────
-                            _dimIfOffline(SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed:
-                                    _isLoading ? null : _handleGoogleSignIn,
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child:
-                                          SvgPicture.string(_googleLogoSvg),
+                            _dimIfOffline(
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed:
+                                      _isLoading ? null : _handleGoogleSignIn,
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Continue with Google',
-                                      style: AppTextStyles.labelLarge.copyWith(
-                                        fontSize: 13,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: SvgPicture.string(
+                                          _googleLogoSvg,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Continue with Google',
+                                        style: AppTextStyles.labelLarge
+                                            .copyWith(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            )),
+                            ),
 
                             const SizedBox(height: AppSpacing.xs),
 
                             // ── Facebook sign-in ───────────────────
-                            _dimIfOffline(SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed:
-                                    _isLoading ? null : _handleFacebookSignIn,
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  foregroundColor: const Color(0xFF1877F2),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: SvgPicture.string(
-                                        _facebookLogoSvg,
-                                      ),
+                            _dimIfOffline(
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed:
+                                      _isLoading ? null : _handleFacebookSignIn,
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Continue with Facebook',
-                                      style: AppTextStyles.labelLarge.copyWith(
-                                        fontSize: 13,
-                                      ),
+                                    foregroundColor: const Color(0xFF1877F2),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: SvgPicture.string(
+                                          _facebookLogoSvg,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Continue with Facebook',
+                                        style: AppTextStyles.labelLarge
+                                            .copyWith(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            )),
+                            ),
 
                             const SizedBox(height: AppSpacing.sm),
 
@@ -844,21 +868,24 @@ class _LoginScreenState extends State<LoginScreen>
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12,
                                   ),
-                                  foregroundColor: _isOffline
-                                      ? AppColors.primaryPurple
-                                      : AppColors.mutedForeground,
+                                  foregroundColor:
+                                      _isOffline
+                                          ? AppColors.primaryPurple
+                                          : AppColors.mutedForeground,
                                   // Offline, guest is the recommended path —
                                   // give it primary-button weight.
-                                  backgroundColor: _isOffline
-                                      ? AppColors.lavenderLight
-                                      : null,
+                                  backgroundColor:
+                                      _isOffline
+                                          ? AppColors.lavenderLight
+                                          : null,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   side: BorderSide(
-                                    color: _isOffline
-                                        ? AppColors.primaryPurple
-                                        : AppColors.border,
+                                    color:
+                                        _isOffline
+                                            ? AppColors.primaryPurple
+                                            : AppColors.border,
                                     width: _isOffline ? 1.5 : 1,
                                   ),
                                 ),
@@ -914,18 +941,20 @@ class _LoginScreenState extends State<LoginScreen>
                                 // 47x18dp tap target. TextButton carries the
                                 // 48dp minimum without changing how it looks.
                                 TextButton(
-                                  onPressed: _isLoading
-                                      ? null
-                                      : () {
-                                          setState(() {
-                                            _isLogin = !_isLogin;
-                                            _privacyAccepted = false;
-                                            _formKey.currentState?.reset();
-                                          });
-                                        },
+                                  onPressed:
+                                      _isLoading
+                                          ? null
+                                          : () {
+                                            setState(() {
+                                              _isLogin = !_isLogin;
+                                              _privacyAccepted = false;
+                                              _formKey.currentState?.reset();
+                                            });
+                                          },
                                   style: TextButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8),
+                                      horizontal: 8,
+                                    ),
                                     minimumSize: const Size(
                                       kMinInteractiveDimension,
                                       kMinInteractiveDimension,
@@ -933,9 +962,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                   child: Text(
                                     _isLogin ? 'Register' : 'Log In',
-                                    semanticsLabel: _isLogin
-                                        ? 'Register a new account'
-                                        : 'Go to log in',
+                                    semanticsLabel:
+                                        _isLogin
+                                            ? 'Register a new account'
+                                            : 'Go to log in',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.primaryPurple,
                                       fontWeight: FontWeight.w700,
@@ -943,6 +973,16 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               ],
+                            ),
+
+                            TextButton.icon(
+                              onPressed: () => showCreditsDialog(context),
+                              icon: const Icon(Icons.auto_awesome, size: 16),
+                              label: const Text('Credits'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.primaryPurple,
+                                visualDensity: VisualDensity.compact,
+                              ),
                             ),
                           ],
                         ),
@@ -967,9 +1007,10 @@ class _LoginScreenState extends State<LoginScreen>
             child: FloatingActionButton(
               onPressed: _toggleMusic,
               backgroundColor: AppColors.white.withValues(alpha: 0.9),
-              tooltip: _musicOn
-                  ? 'Turn background music off'
-                  : 'Turn background music on',
+              tooltip:
+                  _musicOn
+                      ? 'Turn background music off'
+                      : 'Turn background music on',
               child: Icon(
                 _musicOn ? Icons.music_note : Icons.music_off,
                 color: AppColors.primaryPurple,
@@ -996,9 +1037,10 @@ class _LoginScreenState extends State<LoginScreen>
               value: _privacyAccepted,
               activeColor: AppColors.primaryPurple,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: _isLoading
-                  ? null
-                  : (v) => setState(() => _privacyAccepted = v ?? false),
+              onChanged:
+                  _isLoading
+                      ? null
+                      : (v) => setState(() => _privacyAccepted = v ?? false),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -1019,11 +1061,12 @@ class _LoginScreenState extends State<LoginScreen>
                         fontWeight: FontWeight.w700,
                         decoration: TextDecoration.underline,
                       ),
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = _showPrivacyNotice,
+                      recognizer:
+                          TapGestureRecognizer()..onTap = _showPrivacyNotice,
                     ),
                     const TextSpan(
-                      text: ', and consent to the collection and processing '
+                      text:
+                          ', and consent to the collection and processing '
                           'of my and my child\'s information.',
                     ),
                   ],
@@ -1045,42 +1088,43 @@ class _LoginScreenState extends State<LoginScreen>
         return PopScope(
           canPop: dismissible,
           child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
-          title: Row(
-            children: [
-              const Icon(Icons.privacy_tip_outlined,
-                  color: AppColors.primaryPurple),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  'Data Privacy Notice',
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.card),
+            title: Row(
+              children: [
+                const Icon(
+                  Icons.privacy_tip_outlined,
+                  color: AppColors.primaryPurple,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Data Privacy Notice',
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 460,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Aumazing respects your privacy and complies with the '
-                    'Data Privacy Act of 2012 (RA 10173). By creating an '
-                    'account, you consent to our collection and processing of '
-                    'the following information:',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _privacySection(
-                    'What we collect',
-                    [
+              ],
+            ),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Aumazing respects your privacy and complies with the '
+                      'Data Privacy Act of 2012 (RA 10173). By creating an '
+                      'account, you consent to our collection and processing of '
+                      'the following information:',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _privacySection('What we collect', [
                       'Parent account: your name and email address, for sign-in '
                           'and account recovery.',
                       'Child profile: nickname, birth date or age, sex, and '
@@ -1092,62 +1136,53 @@ class _LoginScreenState extends State<LoginScreen>
                           'background-theme preferences.',
                       'Device location: used only momentarily to find nearby '
                           'therapy centers (Premium) and never stored.',
-                    ],
-                  ),
-                  _privacySection(
-                    'How we use it',
-                    [
+                    ]),
+                    _privacySection('How we use it', [
                       'To deliver assessments, personalize learning modules, '
                           'track your child\'s progress, and improve the app.',
                       'Aumazing is a learning-support tool only. It does not '
                           'provide a medical diagnosis.',
-                    ],
-                  ),
-                  _privacySection(
-                    'Where it is stored',
-                    [
+                    ]),
+                    _privacySection('Where it is stored', [
                       'Data is saved on your device and securely synced to our '
                           'cloud provider (Supabase) when you are online.',
-                    ],
-                  ),
-                  _privacySection(
-                    'Your rights',
-                    [
+                    ]),
+                    _privacySection('Your rights', [
                       'You may access, correct, or request deletion of your data, '
                           'and withdraw consent at any time, through the app '
                           'settings or by contacting the Aumazing team.',
                       'Children\'s data is collected with your consent and used '
                           'solely to support your child\'s learning.',
-                    ],
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              if (dismissible)
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Close',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            if (dismissible)
+                ),
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  _acceptPrivacy();
+                  Navigator.of(context).pop();
+                },
                 child: Text(
-                  'Close',
-                  style: AppTextStyles.labelLarge
-                      .copyWith(color: AppColors.mutedForeground),
+                  'I Agree',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.primaryPurple,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            TextButton(
-              onPressed: () {
-                _acceptPrivacy();
-                Navigator.of(context).pop();
-              },
-              child: Text(
-                'I Agree',
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: AppColors.primaryPurple,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+            ],
           ),
         );
       },
@@ -1174,14 +1209,18 @@ class _LoginScreenState extends State<LoginScreen>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('•  ',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.primaryPurple)),
+                  Text(
+                    '•  ',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
                   Expanded(
                     child: Text(
                       p,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
