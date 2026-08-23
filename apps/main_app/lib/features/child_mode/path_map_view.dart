@@ -45,6 +45,7 @@ class PathMapView extends StatefulWidget {
     required this.style,
     required this.currentStepKey,
     required this.onLaunch,
+    this.onShipDocked,
     this.reducedMotion = false,
   });
 
@@ -70,9 +71,23 @@ class PathMapView extends StatefulWidget {
 
   final void Function(String gameId, int difficulty) onLaunch;
 
+  /// Fired when the ship is docked at the current step and the path is what
+  /// the child is looking at: the end of a flight, a reduced-motion / classic
+  /// snap, or a return to the map when the ship was already there (a replay
+  /// of an earlier step does not move it). The lobby uses it to launch a path
+  /// "Next" that was parked while the game covered the map, so the next game
+  /// opens the moment the ship arrives — and still opens if there was no
+  /// flight to wait on.
+  final VoidCallback? onShipDocked;
+
   /// Reduced-motion opt-out: the spaceship snaps to its new step instead of
   /// flying, and does not idle-bob.
   final bool reducedMotion;
+
+  /// How long the ship takes to fly from one step to the next. The lobby's
+  /// parked-"Next" fallback waits this long (plus a frame) so a launch that
+  /// never gets a dock signal still opens rather than hanging on the map.
+  static const flightDuration = Duration(milliseconds: 1100);
 
   /// Horizontal distance between one platform's centre and the next.
   static const _stepSpacing = 172.0;
@@ -130,8 +145,12 @@ class _PathMapViewState extends State<PathMapView>
     _shownIndex = _targetIndex = _currentIndex;
     _flight = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    );
+      duration: PathMapView.flightDuration,
+    )..addStatusListener((status) {
+        // The ship has settled on the destination step. Hand the moment to the
+        // lobby so a parked path "Next" opens right as the ship docks.
+        if (status == AnimationStatus.completed) _notifyDocked();
+      });
     _bob = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -152,9 +171,16 @@ class _PathMapViewState extends State<PathMapView>
 
   /// The lobby route's cover animation runs forward when a game is pushed over
   /// it and back to [AnimationStatus.dismissed] when the child returns. That
-  /// return is the cue to play any flight that was queued while away.
+  /// return is the cue to play any flight that was queued while away — or, if
+  /// the ship is already on the current step, to announce the dock so a parked
+  /// path "Next" can open without waiting for a flight that will never start.
   void _onCoverChanged(AnimationStatus status) {
-    if (status == AnimationStatus.dismissed) _maybeFly();
+    if (status != AnimationStatus.dismissed) return;
+    if (_shownIndex == _targetIndex) {
+      _notifyDocked();
+      return;
+    }
+    _maybeFly();
   }
 
   @override
@@ -167,7 +193,14 @@ class _PathMapViewState extends State<PathMapView>
     if (target != _targetIndex) {
       _targetIndex = target;
       _maybeFly();
+      return;
     }
+    // Already on that step (replay of an earlier game, then "Next") and the
+    // path is on screen. The lobby has just rebuilt after taking a parked
+    // launch — announce the dock so it does not wait for a flight that will
+    // never start. Ignored while a flight is in progress (shown already
+    // equals target from the moment takeoff begins).
+    if (_visible && !_flight.isAnimating) _notifyDocked();
   }
 
   /// Flies the ship from where it sits to the current target, when there is a
@@ -177,6 +210,7 @@ class _PathMapViewState extends State<PathMapView>
     if (!mounted || _flight.isAnimating || _shownIndex == _targetIndex) return;
     if (widget.reducedMotion || !_showShip) {
       setState(() => _shownIndex = _targetIndex);
+      _notifyDocked(); // no flight to wait on — it is already docked
       return;
     }
     if (!_visible) return; // held until the child returns to the path
@@ -185,6 +219,18 @@ class _PathMapViewState extends State<PathMapView>
       _shownIndex = _targetIndex;
     });
     _flight.forward(from: 0);
+  }
+
+  /// Announces a dock to [PathMapView.onShipDocked] after the current frame.
+  /// Deferred because the callers fire mid-tick (a flight-status change) or
+  /// mid-build (a snap), and the lobby answers by pushing the next game's
+  /// route — which must not run while the framework is still laying out.
+  void _notifyDocked() {
+    final cb = widget.onShipDocked;
+    if (cb == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cb();
+    });
   }
 
   @override

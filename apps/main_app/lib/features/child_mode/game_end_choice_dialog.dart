@@ -16,6 +16,7 @@ import '../../widgets/mascot.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../../widgets/milestone_victory_screen.dart';
 import 'game_launcher.dart';
+import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
 
 /// What the child picked on the post-game choice.
@@ -126,6 +127,20 @@ class GameEndChoiceDialog {
       final difficulty = override?.clamp(1, 3) ??
           pathDifficulty ??
           GameLauncher.difficultyFor(context, target);
+      // "Next" along the learning path goes home first: the launch is parked
+      // and the dialog pops back to My Path, so the child watches the
+      // spaceship fly to the step they just unlocked before the next game
+      // opens (the lobby fires the parked launch once the ship docks).
+      //
+      // Only the path takes the scenic route — a registry-order "next" (child
+      // not on a path) has no map to fly on, and a replay is the same step,
+      // so both keep the direct screen swap.
+      if (!replay && choice == _EndChoice.next && pathNext != null) {
+        PendingPathLaunch.set(target.id, difficulty);
+        Navigator.of(context).pop(); // Back to My Path; lobby takes over
+        return;
+      }
+
       final screen = GameLauncher.screenFor(target.id, difficulty);
       if (screen != null) {
         Navigator.of(context).pushReplacement(

@@ -18,6 +18,7 @@ import '../../providers/stars_provider.dart';
 import '../stars/star_shop_screen.dart';
 import 'game_launcher.dart';
 import 'path_map_view.dart';
+import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
 
 /// Size of a game card in step 2 — the row on a phone, the grid on a tablet.
@@ -78,6 +79,18 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   /// Admin-enabled game ids; null until loaded (path shown once known).
   Set<String>? _activeGameIds;
+
+  /// A path "Next" parked the following step's launch (see [PendingPathLaunch])
+  /// and sent the child home to My Path. Held here from the moment they land
+  /// back on the map until the spaceship finishes flying to that step, then
+  /// launched automatically by [_onShipDocked]. Null the rest of the time.
+  (String gameId, int difficulty)? _autoLaunch;
+
+  /// Safety net for [_autoLaunch]: if the map never announces a dock (the
+  /// ship was already on that step, or My Path was not showing so the map
+  /// mounted already at the destination), still fire the launch after the
+  /// flight would have finished.
+  Timer? _autoLaunchFallback;
 
   /// Screen-time usage ticker — runs for the whole child-mode session
   /// (this lobby stays mounted underneath the game screens).
@@ -360,6 +373,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     // An app kill skips this, which is exactly what lets the persisted
     // session resume after a quick restart.
     ScreenTimeService.instance.endSessionOwned(_screenTimeToken);
+    _autoLaunchFallback?.cancel();
     _idleGuideTimer?.cancel();
     _voRepeatTimer?.cancel();
     _entryHideTimer?.cancel();
@@ -789,16 +803,62 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     _speakChoice(VoiceOverCue.letsGo);
     _hideGuide(restartIdle: false); // the game speaks for itself from here
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    // Back in the lobby. Rebuild so the path re-reads its completed set and
-    // the spaceship flies on to the newly unlocked step now that the child is
-    // looking at the map again (the flight was held while the game covered it).
-    if (mounted) setState(() {});
-    // Pick the child up again rather than dropping them into silence, and
-    // re-arm the idle guidance.
+    if (!mounted) return;
+    // A path "Next" parks the following step here before popping home (see
+    // GameEndChoiceDialog). Pick it up the moment we are back, so the rebuild
+    // below both advances the map and arms the auto-launch the ship's arrival
+    // will fire. Taken exactly once — a stale slot can never launch twice.
+    _autoLaunch = PendingPathLaunch.take();
+    _autoLaunchFallback?.cancel();
+    _autoLaunchFallback = null;
+    // Rebuild so the path re-reads its completed set and the spaceship flies on
+    // to the newly unlocked step now that the child is looking at the map again
+    // (the flight was held while the game covered it). A parked Next always
+    // lands on My Path — even if this game was opened from All — so the child
+    // sees the ship arrive before the next game opens.
+    setState(() {
+      if (_autoLaunch != null && !_viewingPath) {
+        _viewingAll = false;
+        _selected = null;
+        _viewingPath = true;
+      }
+    });
     if (!_lobbyActive) return;
+    // When a launch is parked the ship is mid-flight to the next game and will
+    // open it on docking — so stay quiet rather than prompting "choose one"
+    // over a choice that has already been made. Otherwise pick the child up
+    // again and re-arm the idle guidance.
+    if (_autoLaunch != null) {
+      // If the map never announces a dock, still open the game after the
+      // flight would have landed rather than leaving the child stranded.
+      _autoLaunchFallback = Timer(
+        PathMapView.flightDuration + const Duration(milliseconds: 200),
+        _onShipDocked,
+      );
+      return;
+    }
     _speakChoice(VoiceOverCue.chooseOne);
     _idlePrompts = 0;
     _restartIdleTimer();
+  }
+
+  /// The spaceship has finished flying to the step the child just unlocked. If
+  /// a path "Next" parked that step's launch, open it now — the flight home was
+  /// the "watch the ship reach the new platform" beat, and the game opens the
+  /// instant it docks. No-op on every other dock (a normal completion where the
+  /// child chose Lobby or Again leaves nothing parked).
+  ///
+  /// Kept parked when the lobby is not what the child is looking at: a snap
+  /// that ran while the game still covered the map must not consume the slot
+  /// and then refuse to launch.
+  void _onShipDocked() {
+    if (!_lobbyActive) return;
+    final pending = _autoLaunch;
+    if (pending == null) return;
+    _autoLaunch = null;
+    _autoLaunchFallback?.cancel();
+    _autoLaunchFallback = null;
+    _launch(pending.$1, pending.$2);
   }
 
   /// Opens the Star Shop. Child mode stays locked — the shop is the child's
@@ -1441,6 +1501,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       reducedMotion: childProv.reducedMotion,
       currentStepKey: _guideCardKey,
       onLaunch: _launch,
+      onShipDocked: _onShipDocked,
     );
   }
 }
