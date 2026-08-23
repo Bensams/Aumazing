@@ -7,15 +7,18 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: CreditsDialog())),
     );
-    expect(find.text('Credits'), findsOneWidget);
-    expect(find.text('Capstone Team & Characters'), findsOneWidget);
-    expect(find.text('Institutional & Capstone Details'), findsOneWidget);
-    expect(find.text('Art & Visual Media'), findsOneWidget);
-    expect(find.text('Audio & Music'), findsOneWidget);
-    expect(find.text('Open Source & Technology'), findsOneWidget);
+    expect(find.text('Aumazing'), findsOneWidget);
+    expect(find.text('PROJECT PROPONENTS & DEVELOPERS'), findsOneWidget);
+    expect(find.text('EXPERT VALIDATORS & PRACTITIONERS'), findsOneWidget);
+    expect(find.text('INSTITUTIONAL & CAPSTONE DETAILS'), findsOneWidget);
+    expect(find.text('SYSTEM ARCHITECTURE & CORE TECHNOLOGIES'), findsOneWidget);
+    expect(find.text('ART, AUDIO & SENSORY DESIGN'), findsOneWidget);
+    expect(find.text('DISCLAIMER'), findsOneWidget);
     expect(find.text('Benedict Paul S. Samson'), findsOneWidget);
     expect(find.text('Ruel Jr. A. Mendio'), findsOneWidget);
     expect(find.text('Alexandra Mendoza'), findsOneWidget);
+    expect(find.text("Ma'am Lea"), findsOneWidget);
+    expect(find.text('Kenneth Ray'), findsOneWidget);
   });
 
   testWidgets('close control dismisses dialog', (tester) async {
