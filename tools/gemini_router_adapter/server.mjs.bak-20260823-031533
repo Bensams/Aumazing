@@ -1,0 +1,373 @@
+#!/usr/bin/env node
+
+import http from "node:http";
+
+const listenHost = process.env.ADAPTER_HOST || "127.0.0.1";
+const listenPort = Number(process.env.ADAPTER_PORT || 8787);
+const routerBaseUrl = (process.env.ROUTER_BASE_URL || "http://127.0.0.1:20128/v1").replace(/\/+$/, "");
+const routerApiKey = process.env.ROUTER_API_KEY || "";
+const defaultModel = process.env.ROUTER_MODEL || "gemi/gemini-3-7-flash-openai";
+
+function json(res, status, value) {
+  const body = JSON.stringify(value);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+      } catch (error) {
+        reject(new Error(`Invalid JSON request: ${error.message}`));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function textFromParts(parts = []) {
+  return parts
+    .filter((part) => typeof part?.text === "string")
+    .map((part) => part.text)
+    .join("");
+}
+
+function openAIContentFromParts(parts = []) {
+  const content = [];
+  for (const part of parts) {
+    if (typeof part?.text === "string") {
+      content.push({ type: "text", text: part.text });
+      continue;
+    }
+    const inline = part?.inlineData || part?.inline_data;
+    if (inline?.data && inline?.mimeType) {
+      content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${inline.mimeType};base64,${inline.data}`,
+        },
+      });
+      continue;
+    }
+    const file = part?.fileData || part?.file_data;
+    if (file?.fileUri) {
+      content.push({
+        type: "image_url",
+        image_url: { url: file.fileUri },
+      });
+    }
+  }
+  return content;
+}
+
+function geminiContentsToOpenAI(contents = []) {
+  const toolIds = new Map();
+  let toolCounter = 0;
+  return contents.map((item) => {
+    const role = item.role === "model" ? "assistant" : item.role === "function" ? "tool" : item.role || "user";
+    const parts = item.parts || [];
+    const functionResponses = parts.filter((part) => part.functionResponse);
+    if (functionResponses.length) {
+      return functionResponses.map((part) => {
+        const response = part.functionResponse;
+        const toolCallId = toolIds.get(response.name) || `call_gemini_${++toolCounter}`;
+        return {
+          role: "tool",
+          tool_call_id: toolCallId,
+          name: response.name,
+          content: JSON.stringify(response.response ?? {}),
+        };
+      });
+    }
+    const functionCalls = parts.filter((part) => part.functionCall);
+    if (functionCalls.length) {
+      const toolCalls = functionCalls.map((part) => {
+        const call = part.functionCall;
+        const id = `call_gemini_${++toolCounter}`;
+        toolIds.set(call.name, id);
+        return {
+          id,
+          type: "function",
+          function: {
+            name: call.name,
+            arguments: JSON.stringify(call.args || {}),
+          },
+        };
+      });
+      const text = textFromParts(parts);
+      return {
+        role: "assistant",
+        // 9Router rejects an assistant message whose content is null,
+        // even when it contains valid tool_calls. Use an empty string for
+        // tool-only assistant turns.
+        content: text || "",
+        tool_calls: toolCalls,
+      };
+    }
+    const content = openAIContentFromParts(parts);
+    return {
+      role,
+      content: content.length === 1 && content[0].type === "text"
+        ? content[0].text
+        : content,
+    };
+  }).flat();
+}
+
+function toolsToOpenAI(tools = []) {
+  return tools
+    .flatMap((tool) => tool.functionDeclarations || [])
+    .map((fn) => ({
+      type: "function",
+      function: {
+        name: fn.name,
+        description: fn.description,
+        parameters: fn.parameters || { type: "object", properties: {} },
+      },
+    }));
+}
+
+function sanitizeOpenAIMessages(messages = []) {
+  return messages.map((message) => {
+    const sanitized = { ...message };
+    // 9Router rejects null assistant content, including valid tool-only turns.
+    if (sanitized.role === "assistant" && sanitized.content == null) {
+      sanitized.content = "";
+    }
+    // Prevent malformed tool history from breaking the whole request.
+    if (sanitized.role === "tool" && sanitized.content == null) {
+      sanitized.content = "{}";
+    }
+    if (Array.isArray(sanitized.tool_calls)) {
+      sanitized.tool_calls = sanitized.tool_calls
+        .filter((call) => call?.function?.name)
+        .map((call) => ({
+          ...call,
+          function: {
+            ...call.function,
+            arguments: typeof call.function.arguments === "string"
+              ? call.function.arguments
+              : JSON.stringify(call.function.arguments || {}),
+          },
+        }));
+    }
+    return sanitized;
+  });
+}
+
+function toOpenAIRequest(gemini) {
+  const messages = [];
+  if (gemini.systemInstruction) {
+    messages.push({
+      role: "system",
+      content: textFromParts(gemini.systemInstruction.parts || []),
+    });
+  }
+  messages.push(...geminiContentsToOpenAI(gemini.contents || []));
+
+  const generation = gemini.generationConfig || {};
+  const request = {
+    model: process.env.ROUTER_MODEL || defaultModel,
+    messages: sanitizeOpenAIMessages(messages),
+    stream: gemini.stream !== false,
+  };
+  if (typeof generation.temperature === "number") request.temperature = generation.temperature;
+  if (typeof generation.topP === "number") request.top_p = generation.topP;
+  if (typeof generation.topK === "number") request.top_k = generation.topK;
+  if (typeof generation.maxOutputTokens === "number") request.max_tokens = generation.maxOutputTokens;
+
+  const tools = toolsToOpenAI(gemini.tools || []);
+  if (tools.length) request.tools = tools;
+  return request;
+}
+
+function geminiTextEvent(text, model) {
+  return `${JSON.stringify({
+    candidates: [{
+      content: { role: "model", parts: [{ text }] },
+    }],
+    modelVersion: model,
+  })}\n`;
+}
+
+function geminiToolEvent(toolCall, model) {
+  const fn = toolCall.function || {};
+  let args = {};
+  try {
+    args = JSON.parse(fn.arguments || "{}");
+  } catch {
+    args = {};
+  }
+  // Some OpenAI-compatible backends occasionally use a shorter alias for
+  // the required Gemini CLI tool parameter. Normalize it at the adapter
+  // boundary so the native Gemini tool bridge receives the schema it expects.
+  if (fn.name === "ReadFile" && args.file_path == null && args.path != null) {
+    args.file_path = args.path;
+    delete args.path;
+  }
+  return `${JSON.stringify({
+    candidates: [{
+      content: {
+        role: "model",
+        parts: [{
+          functionCall: {
+            name: fn.name || "unknown",
+            args,
+          },
+        }],
+      },
+      modelVersion: model,
+    }],
+  })}\n`;
+}
+
+function geminiUsageEvent(usage, model) {
+  if (!usage) return "";
+  return `${JSON.stringify({
+    usageMetadata: {
+      promptTokenCount: usage.prompt_tokens,
+      candidatesTokenCount: usage.completion_tokens,
+      totalTokenCount: usage.total_tokens,
+    },
+    modelVersion: model,
+  })}\n`;
+}
+
+async function proxy(req, res) {
+  const body = await readBody(req);
+  // Gemini CLI validates `-m` against Google's own model catalog before it
+  // sends a request. The caller must therefore use a valid Gemini alias such
+  // as `flash`; the adapter deliberately replaces that alias with the
+  // configured 9Router model.
+  const model = defaultModel;
+  const openaiBody = toOpenAIRequest(body);
+  openaiBody.model = defaultModel;
+
+  const incomingAuth = req.headers.authorization;
+  const authorization = routerApiKey
+    ? `Bearer ${routerApiKey}`
+    : incomingAuth || "";
+
+  const upstream = await fetch(`${routerBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(authorization ? { authorization } : {}),
+    },
+    body: JSON.stringify(openaiBody),
+  });
+
+  if (!upstream.ok) {
+    const errorText = await upstream.text();
+    res.writeHead(upstream.status, { "content-type": "application/json; charset=utf-8" });
+    res.end(errorText || JSON.stringify({ error: { message: "Router request failed" } }));
+    return;
+  }
+
+  if (!openaiBody.stream) {
+    const result = await upstream.json();
+    const choice = result.choices?.[0];
+    const message = choice?.message || {};
+    const parts = [];
+    if (message.content) parts.push({ text: message.content });
+    for (const call of message.tool_calls || []) {
+      let args = {};
+      try { args = JSON.parse(call.function?.arguments || "{}"); } catch {}
+      parts.push({ functionCall: { name: call.function?.name, args } });
+    }
+    return json(res, 200, {
+      candidates: [{ content: { role: "model", parts }, finishReason: choice?.finish_reason || "STOP" }],
+      usageMetadata: result.usage,
+      modelVersion: result.model || model,
+    });
+  }
+
+  res.writeHead(200, {
+    // Gemini CLI parses this endpoint as newline-delimited JSON, not SSE.
+    "content-type": "application/x-ndjson; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastModel = model;
+  let usage;
+  let emittedContent = false;
+  let emittedToolCall = false;
+
+  const emit = (chunk) => {
+    const delta = chunk.choices?.[0]?.delta || {};
+    if (chunk.model) lastModel = chunk.model;
+    if (chunk.usage) usage = chunk.usage;
+    if (delta.content) {
+      emittedContent = true;
+      res.write(geminiTextEvent(delta.content, lastModel));
+    }
+    for (const call of delta.tool_calls || []) {
+      emittedToolCall = true;
+      res.write(geminiToolEvent(call, lastModel));
+    }
+  };
+
+  const consumeLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") return;
+    try { emit(JSON.parse(payload)); } catch {}
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    for (const line of lines) consumeLine(line);
+  }
+  if (buffer) consumeLine(buffer);
+  res.write(geminiUsageEvent(usage, lastModel));
+  // Gemini CLI requires a terminal candidate with a finish reason. OpenAI
+  // streams commonly end with only the transport closing (or [DONE]), which
+  // otherwise leaves the CLI reporting "Model stream ended without a finish
+  // reason".
+  res.write(`${JSON.stringify({
+    candidates: [{
+      content: { role: "model", parts: [] },
+      finishReason: "STOP",
+    }],
+    modelVersion: lastModel,
+  })}\n`);
+  // Gemini's native stream expects JSON `data:` events only. Unlike the
+  // OpenAI stream, it does not use `data: [DONE]`; emitting that sentinel
+  // makes Gemini CLI try to parse "[DONE]" as JSON.
+  res.end();
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    return json(res, 200, { ok: true, routerBaseUrl, model: defaultModel });
+  }
+  if (req.method !== "POST" || !req.url.includes("/models/")) {
+    return json(res, 404, { error: { message: "Expected Gemini generateContent request" } });
+  }
+  try {
+    await proxy(req, res);
+  } catch (error) {
+    json(res, 502, { error: { message: error.message } });
+  }
+});
+
+server.listen(listenPort, listenHost, () => {
+  console.log(`Gemini router adapter listening at http://${listenHost}:${listenPort}`);
+  console.log(`Forwarding to ${routerBaseUrl} using model ${defaultModel}`);
+});
