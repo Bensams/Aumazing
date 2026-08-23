@@ -37,7 +37,10 @@ class AiAssessmentService {
 
     final url = Uri.parse('$_baseUrl/predict-from-sessions');
     final body = jsonEncode({
-      'child_id': childId,
+      // The raw-session endpoint only aggregates gameplay features. It does
+      // not need an identity, so never send a child's database identifier to
+      // the AI service. Keep [childId] in the method signature for callers
+      // and local result association.
       'sessions': sessions
           .map((s) => {
                 'game_id': s.gameId,
