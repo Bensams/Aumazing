@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../config/supabase_config.dart';
 import 'local_db_service.dart';
+import 'protected_storage.dart';
 
 class GoogleAuthTokens {
   const GoogleAuthTokens({required this.idToken, this.accessToken});
@@ -333,21 +334,33 @@ class AuthService {
   String? _previousGuestUserId;
 
   final LocalDbService _localDb;
+  final ProtectedStorage _protectedStorage;
 
   AuthService({
     SupabaseAuthClient? supabaseAuth,
     GoogleAuthClient? googleAuth,
     FacebookAuthClient? facebookAuth,
     LocalDbService? localDb,
+    ProtectedStorage? protectedStorage,
   }) : _supabaseAuth =
            supabaseAuth ??
            DefaultSupabaseAuthClient(Supabase.instance.client.auth),
        _googleAuth = googleAuth ?? DefaultGoogleAuthClient(),
        _facebookAuth = facebookAuth ?? DefaultFacebookAuthClient(),
-       _localDb = localDb ?? localDbService;
+       _localDb = localDb ?? localDbService,
+       _protectedStorage = protectedStorage ?? ProtectedStorage();
 
   User? get currentUser => _supabaseAuth.currentUser;
   bool get isLoggedIn => currentUser != null;
+
+  /// Whether the in-memory Supabase session has passed its server expiry.
+  /// Callers should route to authentication rather than rendering stale data.
+  bool get isSessionExpired {
+    final expiresAt = _supabaseAuth.currentSession?.expiresAt;
+    return expiresAt != null &&
+        DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
+            .isBefore(DateTime.now());
+  }
 
   /// True when signed in with a permanent (bound) account — i.e. a Supabase
   /// user that is not anonymous. Guest/anonymous sessions return false.
@@ -427,9 +440,14 @@ class AuthService {
   /// the new user ID in the local SQLite database.
   Future<AuthResponse> signInAnonymouslyOrReuse() async {
     // 1. Try to restore a previously stored guest session
-    final prefs = await SharedPreferences.getInstance();
-    final storedRefreshToken = prefs.getString(_guestRefreshTokenKey);
-    final oldGuestUserId = prefs.getString(_guestUserIdKey);
+    final storedRefreshToken = await _protectedStorage.read(
+      _guestRefreshTokenKey,
+      legacyKey: _guestRefreshTokenKey,
+    );
+    final oldGuestUserId = await _protectedStorage.read(
+      _guestUserIdKey,
+      legacyKey: _guestUserIdKey,
+    );
 
     if (storedRefreshToken != null) {
       try {
@@ -441,10 +459,10 @@ class AuthService {
           // Update the stored refresh token in case it was rotated
           final newRefreshToken = restored.session?.refreshToken;
           if (newRefreshToken != null) {
-            await prefs.setString(_guestRefreshTokenKey, newRefreshToken);
+            await _protectedStorage.write(_guestRefreshTokenKey, newRefreshToken);
           }
           // Persist the user ID (may already match, but ensure it's stored)
-          await prefs.setString(_guestUserIdKey, restored.user!.id);
+          await _protectedStorage.write(_guestUserIdKey, restored.user!.id);
           debugPrint('[AuthService] Stored guest user ID: ${restored.user!.id}');
           return restored;
         }
@@ -452,11 +470,11 @@ class AuthService {
         // User exists but is no longer anonymous (was bound to a provider).
         // Clear the stored token and create a new guest account.
         debugPrint('[AuthService] Stored guest account is bound, creating new guest...');
-        await prefs.remove(_guestRefreshTokenKey);
+        await _protectedStorage.delete(_guestRefreshTokenKey);
       } catch (e) {
         // Refresh failed (token expired, revoked, etc.) — create a new guest.
         debugPrint('[AuthService] Guest session restore failed: $e');
-        await prefs.remove(_guestRefreshTokenKey);
+        await _protectedStorage.delete(_guestRefreshTokenKey);
       }
     }
 
@@ -485,11 +503,11 @@ class AuthService {
     // 4. Persist the new guest session's refresh token and user ID for future reuse
     final refreshToken = response.session?.refreshToken;
     if (refreshToken != null) {
-      await prefs.setString(_guestRefreshTokenKey, refreshToken);
+      await _protectedStorage.write(_guestRefreshTokenKey, refreshToken);
       debugPrint('[AuthService] Stored guest refresh token for reuse');
     }
     if (newUserId != null) {
-      await prefs.setString(_guestUserIdKey, newUserId);
+      await _protectedStorage.write(_guestUserIdKey, newUserId);
       debugPrint('[AuthService] Stored guest user ID: $newUserId');
     }
 
@@ -502,9 +520,8 @@ class AuthService {
   /// Facebook, email) so that a fresh guest account will be created on
   /// the next guest sign-in.
   Future<void> clearStoredGuestSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_guestRefreshTokenKey);
-    await prefs.remove(_guestUserIdKey);
+    await _protectedStorage.delete(_guestRefreshTokenKey);
+    await _protectedStorage.delete(_guestUserIdKey);
     _previousGuestUserId = null;
     debugPrint('[AuthService] Cleared stored guest session and user ID');
   }
@@ -512,8 +529,7 @@ class AuthService {
   /// Returns the stored guest user ID from SharedPreferences, or null if
   /// no guest session has been persisted yet.
   Future<String?> getStoredGuestUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_guestUserIdKey);
+    return _protectedStorage.read(_guestUserIdKey, legacyKey: _guestUserIdKey);
   }
 
   /// Returns the previous guest user ID when a migration occurred during
