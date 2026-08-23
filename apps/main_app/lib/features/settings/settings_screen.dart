@@ -15,6 +15,7 @@ import 'bind_account_modal.dart';
 import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
 import 'star_settings_screen.dart';
+import 'gameplay_export_screen.dart';
 import 'widgets/background_picker.dart';
 import 'widgets/settings_scaffold.dart';
 import 'widgets/object_style_picker.dart';
@@ -85,6 +86,13 @@ class SettingsScreen extends StatelessWidget {
           subtitle: 'Daily and per-session play limits',
           onTap:
               () => _push(context, _ScreenTimeSettingsScreen(palette: palette)),
+        ),
+        _CategoryTile(
+          icon: Icons.file_download_outlined,
+          color: const Color(0xFF4D9A8A),
+          title: 'Export Gameplay Data',
+          subtitle: 'Share de-identified CSV, JSON, and PDF summary',
+          onTap: () => _push(context, GameplayExportScreen(palette: palette)),
         ),
         _CategoryTile(
           icon: Icons.lock_outline_rounded,
