@@ -1,0 +1,23 @@
+# Release signing configuration for the Android app.
+#
+# Copy this file to `key.properties` (same directory) and fill in the real
+# values. `key.properties` and `*.jks` / `*.keystore` are gitignored — never
+# commit the keystore or its passwords.
+#
+#   cp key.properties.template key.properties
+#
+# Without `key.properties` the build still works: `signingConfigs.release` is
+# not declared and release builds fall back to debug signing. Only a build that
+# will be uploaded to Play needs the real keystore.
+#
+# Generate an upload keystore with:
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# See https://flutter.dev/to/reference-keystore
+
+storePassword=<password used when the keystore was created>
+keyPassword=<password for the key alias, often the same as storePassword>
+keyAlias=upload
+# Absolute path, or relative to apps/main_app/android/app/
+storeFile=<path to upload-keystore.jks>
