@@ -14,6 +14,7 @@ import '../model/support_profile.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../model/area_level.dart';
 import '../services/ai_assessment_service.dart';
+import '../services/ai_prediction_fallback_service.dart';
 import '../services/entitlement_service.dart';
 import '../services/local_recommendation_rules.dart';
 import '../services/on_device_ai_assessment_service.dart';
@@ -429,18 +430,21 @@ class AssessmentProvider extends ChangeNotifier {
       final onDevice = OnDeviceAiAssessmentService();
       final service = AiAssessmentService();
       try {
-        var modelSource = 'xgboost_onnx';
-        var prediction = await onDevice.predictFromSessions(
-          childId: childId,
-          sessions: sessions,
+        final prediction = await const AiPredictionFallbackService().predict(
+          onDevice:
+              () => onDevice.predictFromSessions(
+                childId: childId,
+                sessions: sessions,
+              ),
+          cloud:
+              () => service.predictFromSessions(
+                childId: childId,
+                sessions: sessions,
+              ),
+          rubric: () async => null,
         );
-        if (prediction == null) {
-          modelSource = 'xgboost';
-          prediction = await service.predictFromSessions(
-            childId: childId,
-            sessions: sessions,
-          );
-        }
+        final modelSource =
+            prediction?.onDevice == true ? 'xgboost_onnx' : 'xgboost';
         // Still unreachable — keep the rubric fallback and retry on the
         // next dashboard open.
         if (prediction == null) return;
@@ -834,7 +838,8 @@ class AssessmentProvider extends ChangeNotifier {
   String? _pathVictoryShownSignature;
   String? get pathVictoryShownSignature => _pathVictoryShownSignature;
 
-  static String _pathVictoryKey(String childId) => 'path_victory_shown_$childId';
+  static String _pathVictoryKey(String childId) =>
+      'path_victory_shown_$childId';
 
   /// Whether the path with [signature] has already had its completion victory.
   bool pathVictoryAlreadyShown(String signature) =>
@@ -1238,26 +1243,35 @@ class AssessmentProvider extends ChangeNotifier {
       // Prefer on-device ONNX inference (works offline); fall back to the
       // cloud API only if the on-device model isn't available.
       var modelSource = 'xgboost_onnx';
-      var prediction = await onDevice.predictFromSessions(
-        childId: childId,
-        sessions: runSessionList,
+      var rubricUsed = false;
+      final prediction = await const AiPredictionFallbackService().predict(
+        onDevice:
+            () => onDevice.predictFromSessions(
+              childId: childId,
+              sessions: runSessionList,
+            ),
+        cloud:
+            () => service.predictFromSessions(
+              childId: childId,
+              sessions: runSessionList,
+            ),
+        rubric: () async {
+          if (_rubricResult == null) return null;
+          rubricUsed = true;
+          return _predictionFromRubric(_rubricResult!);
+        },
       );
-      if (prediction != null) {
+      if (prediction?.onDevice == true) {
         debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
-      } else {
+      } else if (prediction != null && !rubricUsed) {
         modelSource = 'xgboost';
-        prediction = await service.predictFromSessions(
-          childId: childId,
-          sessions: runSessionList,
-        );
       }
 
       // Last resort: synthesize the prediction from the rubric labels so a
       // completed assessment ALWAYS yields area levels and a learning path,
       // even when the ONNX assets fail and no cloud server exists.
-      if (prediction == null && _rubricResult != null) {
+      if (rubricUsed) {
         modelSource = 'rubric_based';
-        prediction = _predictionFromRubric(_rubricResult!);
         debugPrint(
           '[AssessmentProvider] ⚠️ AI unavailable — synthesized '
           'prediction from rubric labels',
