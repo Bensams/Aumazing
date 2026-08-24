@@ -6,6 +6,7 @@ import '../pages/beta_page.dart';
 import '../pages/centers_page.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/modules_page.dart';
+import '../pages/payments_page.dart';
 import '../pages/rubric_page.dart';
 import '../pages/users_page.dart';
 
@@ -30,6 +31,7 @@ class _AdminShellState extends State<AdminShell> {
     CentersPage(),
     RubricPage(),
     AuditPage(),
+    PaymentsPage(),
   ];
 
   @override
@@ -127,6 +129,10 @@ class _AdminShellState extends State<AdminShell> {
               NavigationRailDestination(
                 icon: Icon(Icons.receipt_long_rounded),
                 label: Text('Audit Log'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.payments_rounded),
+                label: Text('Payments'),
               ),
             ],
           ),
