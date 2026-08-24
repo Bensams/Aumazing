@@ -1,0 +1,44 @@
+name: Android Release Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'apps/main_app/**'
+      - 'packages/**'
+      - '.github/workflows/android-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/main_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze application
+        run: flutter analyze
+      - name: Run Flutter tests
+        run: flutter test
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Build release app bundle
+        run: flutter build appbundle --release
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aumazing-android-release-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            apps/main_app/build/app/outputs/flutter-apk/app-release.apk
+            apps/main_app/build/app/outputs/bundle/release/app-release.aab
