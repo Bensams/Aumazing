@@ -222,6 +222,18 @@ class _LoadingScreenState extends State<LoadingScreen> {
     }
     if (!mounted) return;
 
+    // Never route into the app with a token that has already expired. Supabase
+    // normally refreshes sessions, but a stale/offline restore must fail
+    // closed and return the parent to authentication.
+    if (_authService.isSessionExpired) {
+      try {
+        await _authService.signOut();
+      } catch (e) {
+        debugPrint('[LoadingScreen] expired-session cleanup failed: $e');
+      }
+      result = const BootstrapResult(destination: BootstrapDestination.login);
+    }
+
     // First open / fresh install: until the Data Privacy Notice is accepted,
     // always land on the login page (which shows the mandatory notice) so the
     // parent cannot skip straight to child profile setup or home.
