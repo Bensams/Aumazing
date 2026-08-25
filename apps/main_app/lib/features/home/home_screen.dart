@@ -23,6 +23,7 @@ import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
 import '../premium/premium_upgrade_screen.dart';
+import 'gameplay_report_screen.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
 import '../post_assessment/post_assessment_progress_screen.dart';
@@ -1893,50 +1894,84 @@ class _HomeScreenState extends State<HomeScreen> {
               ...sessions.take(5).map((session) {
                 final gameName = session.gameId.replaceAll('_', ' ');
                 final time = _formatDuration(session.duration);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.lavenderLight,
-                          borderRadius: BorderRadius.circular(8),
+                return InkWell(
+                  key: ValueKey('recentActivityItem-${session.id}'),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    final isPremium = EntitlementService.instance.isPremium;
+                    if (!isPremium) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Detailed gameplay reports are a Premium feature.',
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.games_rounded,
-                          size: 18,
-                          color: AppColors.textSecondary,
-                        ),
+                      );
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder:
+                            (_) =>
+                                isPremium
+                                    ? GameplayReportScreen(
+                                      session: session,
+                                      palette:
+                                          context
+                                              .read<ChildProvider>()
+                                              .activePalette,
+                                    )
+                                    : PremiumUpgradeScreen(
+                                      authService: _authService,
+                                    ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              gameName[0].toUpperCase() + gameName.substring(1),
-                              style: AppTextStyles.labelLarge.copyWith(
-                                color: AppColors.textPrimary,
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lavenderLight,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.games_rounded,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                gameName[0].toUpperCase() +
+                                    gameName.substring(1),
+                                style: AppTextStyles.labelLarge.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                            ),
-                            Text(
-                              '${session.score}/${session.totalItems} correct · $time',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
+                              Text(
+                                '${session.score}/${session.totalItems} correct · $time',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        _formatDate(session.endedAt),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                        Text(
+                          _formatDate(session.endedAt),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               }),
