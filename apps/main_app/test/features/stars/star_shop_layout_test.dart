@@ -169,12 +169,67 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('owned and unowned costume cards keep equal dimensions', (
+    tester,
+  ) async {
+    await _pumpShop(
+      tester,
+      _phonePortrait,
+      balance: 0,
+      owned: const {Costume.teddy},
+    );
+
+    final cards = <Costume, Rect>{
+      for (final costume in [Costume.none, Costume.teddy, Costume.panda])
+        costume: tester.getRect(_card(costume)),
+    };
+
+    // Compare rendered grid cards through the actual StarShopScreen: the
+    // always-owned character, an owned costume, and an unaffordable costume.
+    _expectSameSize(cards[Costume.teddy]!, cards[Costume.panda]!);
+    _expectSameSize(cards[Costume.none]!, cards[Costume.panda]!);
+
+    final artworkRegions = <Costume, Rect>{
+      for (final costume in [Costume.none, Costume.teddy, Costume.panda])
+        costume: tester.getRect(_artworkRegion(costume)),
+    };
+    _expectSameSize(
+      artworkRegions[Costume.teddy]!,
+      artworkRegions[Costume.panda]!,
+    );
+    _expectSameSize(
+      artworkRegions[Costume.none]!,
+      artworkRegions[Costume.panda]!,
+    );
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Finder _card(Costume costume) => find.descendant(
+  of: find.byWidgetPredicate(
+    (widget) => widget is CostumeCard && widget.offer.costume == costume,
+  ),
+  matching: find.byType(InkWell),
+);
+
+Finder _artworkRegion(Costume costume) => find.descendant(
+  of: find.byWidgetPredicate(
+    (widget) => widget is CostumeCard && widget.offer.costume == costume,
+  ),
+  matching: find.byType(Stack),
+);
+
+void _expectSameSize(Rect actual, Rect expected) {
+  expect(actual.width, moreOrLessEquals(expected.width, epsilon: 0.01));
+  expect(actual.height, moreOrLessEquals(expected.height, epsilon: 0.01));
 }
 
 Future<void> _pumpShop(
   WidgetTester tester,
   Size size, {
   int balance = 0,
+  Set<Costume> owned = const {},
 }) async {
   // The view, not `setSurfaceSize`: that resizes the render surface but
   // leaves MediaQuery reporting the default 800x600, so a screen that sizes
@@ -189,7 +244,7 @@ Future<void> _pumpShop(
       providers: [
         ChangeNotifierProvider<ChildProvider>(create: (_) => _TestChild()),
         ChangeNotifierProvider<StarsProvider>(
-          create: (_) => _TestStars(balance),
+          create: (_) => _TestStars(balance, owned: owned),
         ),
       ],
       child: MaterialApp(theme: AppTheme.light, home: const StarShopScreen()),
@@ -213,9 +268,10 @@ class _TestChild extends ChildProvider {
 /// Offers built from the catalogue rather than hand-listed, so a costume
 /// gaining its sprite sheets is covered here the day it lands.
 class _TestStars extends StarsProvider {
-  _TestStars(this._balance);
+  _TestStars(this._balance, {Set<Costume> owned = const {}}) : _owned = owned;
 
   final int _balance;
+  final Set<Costume> _owned;
 
   @override
   int get balance => _balance;
@@ -228,9 +284,13 @@ class _TestStars extends StarsProvider {
 
   @override
   List<CostumeOffer> get offers => [
-        for (final costume in Costume.inStock)
-          CostumeOffer(costume: costume, owned: false, balance: _balance),
-      ];
+    for (final costume in Costume.inStock)
+      CostumeOffer(
+        costume: costume,
+        owned: _owned.contains(costume),
+        balance: _balance,
+      ),
+  ];
 
   @override
   Future<void> refresh() async {}
