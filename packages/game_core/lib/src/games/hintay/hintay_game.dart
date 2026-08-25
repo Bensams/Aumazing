@@ -12,6 +12,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Hintay!" (Wait For It).
 ///
@@ -36,7 +37,7 @@ import '../../config/difficulty_profile.dart';
 ///   visible timer would let the child solve it by reading the clock, and a
 ///   ticking clock is exactly the anxiety source the app avoids elsewhere.
 class HintayGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   HintayGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -282,6 +283,7 @@ class HintayGame extends FlameGame
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    if (!isLifecycleActive) return;
 
     analyticsInitialize(
       gameId: 'hintay',
@@ -321,6 +323,7 @@ class HintayGame extends FlameGame
   // ── Round / trial flow ───────────────────────────────────────────────
 
   void _startRound() {
+    if (!isLifecycleActive) return;
     _trialInRound = 0;
     _hintsUsedThisRound = 0;
     _adaptive.startRound();
@@ -397,10 +400,10 @@ class HintayGame extends FlameGame
 
   @override
   void onTapDown(TapDownEvent event) {
+    if (!isLifecycleActive || isCompletionStarted) return;
     super.onTapDown(event);
     final star = _star;
     if (star == null || _trialResolved) return;
-
     final point = event.localPosition;
     final onStar = star.distanceFrom(point) <= star.radius * 1.25;
 
@@ -439,7 +442,7 @@ class HintayGame extends FlameGame
   }
 
   void _resolveCorrect() {
-    if (_trialResolved) return;
+    if (!isLifecycleActive || isCompletionStarted || _trialResolved) return;
     _trialResolved = true;
     _windowTimer?.cancel();
     _hintTimer?.cancel();
@@ -487,6 +490,7 @@ class HintayGame extends FlameGame
   }
 
   void _finish() {
+    if (!tryBeginCompletion()) return;
     _cancelTimers();
     analyticsMarkCompleted();
     analyticsCompleteSession();
@@ -500,8 +504,6 @@ class HintayGame extends FlameGame
       errorCount: _errorCount,
       totalResponseTimeMs: _totalResponseTimeMs,
       extras: {
-        // Beyond the shared four: the attention-specific measures. These are
-        // what make this session useful to the assessment model.
         'premature_taps': _prematureTaps,
         'missed_trials': _missedTrials,
         'hint_count': _hintCount,
