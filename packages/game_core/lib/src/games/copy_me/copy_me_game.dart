@@ -15,6 +15,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// Copy Me — a "Simon Says" style sequence memory game with XGBoost-ready analytics.
 ///
@@ -22,6 +23,7 @@ import '../shared/game_layout.dart';
 /// must reproduce the sequence by tapping in order.
 class CopyMeGame extends FlameGame
     with
+        GameLifecycleGuard,
         TapCallbacks,
         DragCallbacks,
         EnhancedGameplayAnalyticsMixin,
@@ -482,6 +484,7 @@ class CopyMeGame extends FlameGame
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
+          if (!tryBeginCompletion()) return;
           // Game complete
           analyticsMarkCompleted();
           analyticsCompleteSession();
@@ -493,20 +496,12 @@ class CopyMeGame extends FlameGame
           analyticsAddGameSpecificMetric('max_sequence_length',
             totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
 
-          // Play game-complete SFX and the children's cheer immediately (uses
-          // AudioService — separate player pool from VoiceOverService, so no
-          // conflict with the voice-over).
           onPlayGameCompleteSfx?.call();
 
-          // Wait for the last shape's name to finish before the celebration VO
-          // (both use VoiceOverService, so they would cut each other off). One
-          // shape name is short, so this is much less than the two seconds the
-          // old full praise line needed.
-          Future.delayed(const Duration(milliseconds: 900), () {
-            if (!isMounted) return;
+          // Wait for the last shape's name to finish before the celebration VO.
+          guardedDelay(const Duration(milliseconds: 900), () {
             onPlayCelebrationVo?.call();
-
-            Future.delayed(const Duration(milliseconds: 600), () {
+            guardedDelay(const Duration(milliseconds: 600), () {
               onGameComplete(
                 score: _score,
                 totalItems: totalRounds,

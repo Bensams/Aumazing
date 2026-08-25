@@ -9,6 +9,7 @@ import 'package:shared_ui/shared_ui.dart';
 import 'components/sequence_shape.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// Copy Me Game — Full Analytics Integration Example
 ///
@@ -32,7 +33,7 @@ import '../../analytics/models/models.dart';
 /// )
 /// ```
 class CopyMeGameAnalyticsExample extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   CopyMeGameAnalyticsExample({
     required this.totalRounds,
     required this.childId,
@@ -95,7 +96,7 @@ class CopyMeGameAnalyticsExample extends FlameGame
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-
+    if (!isLifecycleActive) return;
     // 1. Initialize analytics with all required metadata
     analyticsInitialize(
       gameId: 'copy_me',
@@ -175,7 +176,9 @@ class CopyMeGameAnalyticsExample extends FlameGame
   }
 
   Future<void> _playDemoSequence() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    final token = lifecycleToken;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (!isLifecycleTokenValid(token)) return;
 
     for (final idx in _sequence) {
       if (!isMounted) return;
@@ -184,11 +187,11 @@ class CopyMeGameAnalyticsExample extends FlameGame
       // Track demonstration as a "prompt" since we're showing the child what to do
       analyticsRecordPrompt(promptType: 'sequence_demonstration');
 
-      await Future.delayed(const Duration(milliseconds: 700));
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (!isLifecycleTokenValid(token)) return;
     }
 
-    if (!isMounted) return;
-
+    if (!isLifecycleTokenValid(token)) return;
     // Demo complete, enable input
     _isDemonstrating = false;
     _isInputPhase = true;
@@ -208,7 +211,7 @@ class CopyMeGameAnalyticsExample extends FlameGame
 
   @override
   void onTapDown(TapDownEvent event) {
-    // 9. Let analytics track the touch first
+    if (!isLifecycleActive || isCompletionStarted) return;
     analyticsHandleTapDown(event);
 
     // Check if touch is on a shape
@@ -351,42 +354,24 @@ class CopyMeGameAnalyticsExample extends FlameGame
     }
   }
 
-  // ── Game Completion ───────────────────────────────────────────────────────
-
   void _finishGame() {
-    // 17. Mark session completed
+    if (!tryBeginCompletion()) return;
     analyticsMarkCompleted();
-
-    // Calculate overall imitation success rate
     final overallImitationSuccess = _score / totalRounds;
     analyticsAddGameSpecificMetric('overall_imitation_success', overallImitationSuccess);
     analyticsAddGameSpecificMetric('total_demonstrations_needed', _demonstrationsNeeded);
-
-    // 18. End the analytics session
     analyticsCompleteSession();
-
-    // 19. Get the complete metrics
     final metrics = analyticsSession!;
-
-    // Small delay for visual feedback
-    Future.delayed(const Duration(milliseconds: 600), () {
-      // 20. Pass metrics to the completion handler
+    guardedDelay(const Duration(milliseconds: 600), () {
       onGameComplete(metrics);
     });
   }
 
   // ── Early Exit Handling ───────────────────────────────────────────────────
-
-  /// Call this when the user exits before completing all rounds
   void handleEarlyExit() {
-    // 21. Record early exit
+    if (!tryBeginCompletion()) return;
+    _cancelNoResponseTimer();
     analyticsRecordExit();
-
-    // The analytics mixin will:
-    // - Set earlyExit = true
-    // - Calculate metrics for completed rounds
-    // - Finalize the session
-
     final metrics = analyticsSession!;
     onGameComplete(metrics);
   }

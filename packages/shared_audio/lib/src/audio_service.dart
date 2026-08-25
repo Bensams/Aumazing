@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -42,6 +43,34 @@ final _musicAudioContext = AudioContext(
 /// and iOS. The previous [BytesSource] approach caused Android's
 /// MediaPlayer to reset during preparation, producing no sound.
 class AudioService {
+  bool _disposed = false;
+  int _generation = 0;
+  Future<void>? _disposeFuture;
+  final Map<AudioPlayer, Future<void>> _playerQueues = {};
+  final Set<AudioPlayer> _reservedSfxPlayers = {};
+
+  Future<void> _enqueuePlayer(
+    AudioPlayer player,
+    Future<void> Function() operation,
+  ) {
+    final previous = _playerQueues[player] ?? Future<void>.value();
+    final run = previous.then<void>(
+      (_) => operation(),
+      onError: (_, __) => operation(),
+    );
+    _playerQueues[player] = run.catchError((_) {});
+    return run;
+  }
+
+  bool _valid(int generation) => !_disposed && generation == _generation;
+
+  Future<void> _bounded(Future<void> operation) async {
+    try {
+      await operation.timeout(const Duration(seconds: 4));
+    } on TimeoutException {
+      debugPrint('[AudioService] Audio operation timed out');
+    }
+  }
   AudioConfig _config;
 
   /// Dedicated player for looping background music.
@@ -64,10 +93,10 @@ class AudioService {
 
   AudioService({AudioConfig? config})
       : _config = config ?? AudioConfig.defaults {
-    _musicPlayer = AudioPlayer()..setAudioContext(_musicAudioContext);
-    // Override the default 'assets/' prefix so we can supply the full
-    // Flutter asset-bundle path for package-based assets.
+    _musicPlayer = AudioPlayer();
     _musicPlayer.audioCache = AudioCache(prefix: '');
+    _playerQueues[_musicPlayer] =
+        _enqueuePlayer(_musicPlayer, () => _musicPlayer.setAudioContext(_musicAudioContext));
   }
 
   AudioConfig get config => _config;
@@ -77,11 +106,14 @@ class AudioService {
 
   // ── Configuration ──────────────────────────────────────────────────
 
-  /// Update the audio configuration (e.g. from a settings screen).
   void updateConfig(AudioConfig config) {
+    if (_disposed) return;
     _config = config;
-    // Apply volume change immediately to the playing music
-    _musicPlayer.setVolume(_config.effectiveMusicVolume);
+    final generation = _generation;
+    unawaited(_bounded(_enqueuePlayer(_musicPlayer, () async {
+      if (!_valid(generation)) return;
+      await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+    })));
   }
 
   // ── Background Music ───────────────────────────────────────────────
@@ -90,44 +122,58 @@ class AudioService {
   ///
   /// [trackName] is just the filename, e.g. `'bg_music.ogg'`.
   /// The full asset path is resolved automatically via the package prefix.
-  ///
-  /// Music loops indefinitely until [stopMusic] is called.
-  Future<void> playMusic(String trackName) async {
-    if (!_config.musicEnabled) return;
-
-    // Don't restart the same track
-    if (_currentTrack == trackName && isMusicPlaying) return;
-
-    final assetPath = '$_assetPrefix/$trackName';
-
-    try {
-      await _musicPlayer.stop();
-      _musicPlayer.setReleaseMode(ReleaseMode.loop);
-      await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-      await _musicPlayer.play(AssetSource(assetPath));
-      _currentTrack = trackName;
-    } catch (e) {
-      debugPrint('[AudioService] ✖ Error playing music "$trackName": $e');
-    }
+  Future<void> playMusic(String trackName) {
+    if (_disposed || !_config.musicEnabled) return Future<void>.value();
+    if (_currentTrack == trackName && isMusicPlaying) return Future<void>.value();
+    final generation = _generation;
+    return _bounded(_enqueuePlayer(_musicPlayer, () async {
+      if (!_valid(generation) || !_config.musicEnabled) return;
+      try {
+        await _musicPlayer.stop();
+        if (!_valid(generation)) return;
+        await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+        await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+        if (!_valid(generation)) return;
+        await _musicPlayer.play(AssetSource('$_assetPrefix/$trackName'));
+        if (_valid(generation)) _currentTrack = trackName;
+      } catch (e) {
+        if (_valid(generation)) debugPrint('[AudioService] Error playing music "$trackName": $e');
+      }
+    }));
   }
 
   /// Pause background music (can be resumed with [resumeMusic]).
-  Future<void> pauseMusic() async {
-    await _musicPlayer.pause();
+  Future<void> pauseMusic() {
+    if (_disposed) return Future<void>.value();
+    final generation = _generation;
+    return _bounded(_enqueuePlayer(_musicPlayer, () async {
+      if (!_valid(generation)) return;
+      await _musicPlayer.pause();
+    }));
   }
 
   /// Resume previously paused music.
-  Future<void> resumeMusic() async {
-    if (!_config.musicEnabled) return;
-    await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-    await _musicPlayer.resume();
+  Future<void> resumeMusic() {
+    if (_disposed || !_config.musicEnabled) return Future<void>.value();
+    final generation = _generation;
+    return _bounded(_enqueuePlayer(_musicPlayer, () async {
+      if (!_valid(generation)) return;
+      await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+      if (_valid(generation)) await _musicPlayer.resume();
+    }));
   }
 
   /// Stop background music entirely.
-  Future<void> stopMusic() async {
-    await _musicPlayer.stop();
-    _currentTrack = null;
-    _currentCategory = null;
+  Future<void> stopMusic() {
+    if (_disposed) return Future<void>.value();
+    final generation = ++_generation;
+    return _bounded(_enqueuePlayer(_musicPlayer, () async {
+      if (!_valid(generation)) return;
+      await _musicPlayer.stop();
+      if (!_valid(generation)) return;
+      _currentTrack = null;
+      _currentCategory = null;
+    }));
   }
 
   /// Play a random track from the provided list.
@@ -199,40 +245,47 @@ class AudioService {
   /// it scales the child's own volume setting rather than replacing it.
   ///
   /// Uses [AssetSource] for reliable playback on both Android and iOS.
-  Future<void> playSfx(String sfxName, {double volumeScale = 1.0}) async {
-    if (!_config.sfxEnabled) return;
-
-    final assetPath = '$_assetPrefix/$sfxName';
-
-    try {
-      final player = _getAvailableSfxPlayer();
-      await player.setVolume(
-          (_config.effectiveSfxVolume * volumeScale).clamp(0.0, 1.0));
-      await player.play(AssetSource(assetPath));
-    } catch (e) {
-      debugPrint('[AudioService] ✖ Error playing SFX "$sfxName": $e');
-    }
+  Future<void> playSfx(String sfxName, {double volumeScale = 1.0}) {
+    if (_disposed || !_config.sfxEnabled) return Future<void>.value();
+    final generation = _generation;
+    final player = _getAvailableSfxPlayer();
+    _reservedSfxPlayers.add(player);
+    final operation = _enqueuePlayer(player, () async {
+      try {
+        if (!_valid(generation) || !_config.sfxEnabled) return;
+        await player.setVolume(
+            (_config.effectiveSfxVolume * volumeScale).clamp(0.0, 1.0));
+        if (!_valid(generation)) return;
+        await player.play(AssetSource('$_assetPrefix/$sfxName'));
+      } catch (e) {
+        if (_valid(generation)) debugPrint('[AudioService] Error playing SFX "$sfxName": $e');
+      } finally {
+        _reservedSfxPlayers.remove(player);
+      }
+    });
+    return _bounded(operation);
   }
 
-  /// Find or create an available SFX player from the pool.
   AudioPlayer _getAvailableSfxPlayer() {
-    // Reuse a player that's finished/stopped
     for (final player in _sfxPlayers) {
+      if (_reservedSfxPlayers.contains(player)) continue;
       if (player.state == PlayerState.completed ||
           player.state == PlayerState.stopped) {
         return player;
       }
     }
-    // Create a new one (pool grows as needed, capped at 8)
     if (_sfxPlayers.length < 8) {
-      final player = AudioPlayer()..setAudioContext(_sfxAudioContext);
-      // Use empty prefix so we can supply full package asset paths.
+      final player = AudioPlayer();
       player.audioCache = AudioCache(prefix: '');
       _sfxPlayers.add(player);
+      _playerQueues[player] =
+          _enqueuePlayer(player, () => player.setAudioContext(_sfxAudioContext));
       return player;
     }
-    // Fallback: reuse the oldest
-    return _sfxPlayers.first;
+    return _sfxPlayers.firstWhere(
+      (player) => !_reservedSfxPlayers.contains(player),
+      orElse: () => _sfxPlayers.first,
+    );
   }
 
   // ── UI Sound Effects ───────────────────────────────────────────────
@@ -371,13 +424,22 @@ class AudioService {
 
   // ── Lifecycle ──────────────────────────────────────────────────────
 
-  /// Release all audio resources. Call when the app/screen is disposed.
-  Future<void> dispose() async {
-    await _musicPlayer.dispose();
-    for (final player in _sfxPlayers) {
-      await player.dispose();
-    }
-    _sfxPlayers.clear();
-    _currentTrack = null;
+  Future<void> dispose() {
+    if (_disposeFuture != null) return _disposeFuture!;
+    _disposed = true;
+    _generation++;
+    final players = <AudioPlayer>[_musicPlayer, ..._sfxPlayers];
+    final future = Future.wait<void>([
+      for (final player in players)
+        _enqueuePlayer(player, () => player.dispose()),
+    ]).whenComplete(() {
+      _playerQueues.clear();
+      _reservedSfxPlayers.clear();
+      _sfxPlayers.clear();
+      _currentTrack = null;
+      _currentCategory = null;
+    });
+    _disposeFuture = future;
+    return future;
   }
 }

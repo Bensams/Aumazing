@@ -17,6 +17,7 @@ export 'src/config/game_motion.dart';
 // Shared game components
 export 'src/games/shared/answer_label.dart';
 export 'src/games/shared/ghost_hand.dart';
+export 'src/games/shared/game_lifecycle_guard.dart';
 // The cell-fitting rule every character-drawing game has to honour; see the
 // file for what a stretched buddy looks like and why only some devices show it.
 export 'src/games/shared/sprite_fit.dart';

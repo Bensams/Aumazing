@@ -18,6 +18,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// The three sari-sari store categories the child sorts items into.
 ///
@@ -54,7 +55,7 @@ enum StoreCategory {
 /// Communication (item identification), and emits the same XGBoost-ready
 /// telemetry as the assessment games via [EnhancedGameplayAnalyticsMixin].
 class SariSariSortGame extends FlameGame
-    with DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   SariSariSortGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -589,6 +590,7 @@ class SariSariSortGame extends FlameGame
     onStepChanged(_currentRound);
 
     if (_currentRound >= totalRounds) {
+      if (!tryBeginCompletion()) return;
       onPlayGameCompleteSfx?.call();
       onPlayCelebrationVo?.call();
 
@@ -604,7 +606,7 @@ class SariSariSortGame extends FlameGame
       analyticsAddGameSpecificMetric('hint_count', _hintCount);
       analyticsCompleteSession();
 
-      Future.delayed(const Duration(milliseconds: 600), () {
+      guardedDelay(const Duration(milliseconds: 600), () {
         onGameComplete(
           score: _score,
           totalItems: totalRounds * itemsPerRound,

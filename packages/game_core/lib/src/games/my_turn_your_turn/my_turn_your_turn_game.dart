@@ -15,6 +15,7 @@ import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
 import '../../automation/developer_automation.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// My Turn, Your Turn — a turn-taking game with a virtual buddy.
 ///
@@ -25,6 +26,7 @@ import '../../automation/developer_automation.dart';
 /// control (early taps), waiting, and completion.
 class MyTurnYourTurnGame extends FlameGame
     with
+        GameLifecycleGuard,
         TapCallbacks,
         DragCallbacks,
         EnhancedGameplayAnalyticsMixin,
@@ -487,6 +489,7 @@ class MyTurnYourTurnGame extends FlameGame
     analyticsAddRoundData('turns_taken', _turnsInRound);
 
     if (_currentRound >= totalRounds) {
+      if (!tryBeginCompletion()) return true;
       onPlayGameCompleteSfx?.call();
       onPlayCelebrationVo?.call();
 
@@ -505,7 +508,7 @@ class MyTurnYourTurnGame extends FlameGame
       analyticsAddGameSpecificMetric('turn_completion_rate',
           _score / (totalRounds * _turnsPerSide));
 
-      Future.delayed(const Duration(milliseconds: 600), () {
+      guardedDelay(const Duration(milliseconds: 600), () {
         onGameComplete(
           score: _score,
           totalItems: totalRounds * _turnsPerSide,
