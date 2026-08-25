@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
+import 'package:aumazing/services/entitlement_service.dart';
 
 AssessmentResult _result(String gameId, DateTime completedAt, {int score = 5}) {
   return AssessmentResult(
@@ -19,9 +20,17 @@ AssessmentResult _result(String gameId, DateTime completedAt, {int score = 5}) {
   );
 }
 
+class _GateAssessmentProvider extends AssessmentProvider {
+  _GateAssessmentProvider({required this.hasPost});
+
+  final bool hasPost;
+
+  @override
+  bool get hasPostAssessment => hasPost;
+}
+
 void main() {
-  group('AssessmentProvider.latestPerGame (retake replaces, never stacks)',
-      () {
+  group('AssessmentProvider.latestPerGame (retake replaces, never stacks)', () {
     test('keeps only the newest result per game', () {
       final firstRun = DateTime(2026, 7, 1);
       final retake = DateTime(2026, 7, 3);
@@ -36,8 +45,7 @@ void main() {
       final latest = AssessmentProvider.latestPerGame(results);
 
       expect(latest.length, 2, reason: 'one result per game, not doubled');
-      expect(
-          latest.firstWhere((r) => r.gameId == 'match_it').score, 9);
+      expect(latest.firstWhere((r) => r.gameId == 'match_it').score, 9);
       expect(latest.firstWhere((r) => r.gameId == 'copy_me').score, 8);
     });
 
@@ -59,6 +67,35 @@ void main() {
         _result('my_turn_your_turn', run),
       ];
       expect(AssessmentProvider.latestPerGame(results).length, 4);
+    });
+  });
+
+  group('nextCycleLocked', () {
+    setUp(() {
+      EntitlementService.instance.debugSetRealPremium(false);
+    });
+
+    tearDown(() {
+      EntitlementService.instance.debugSetRealPremium(false);
+    });
+
+    test('keeps the first Free assessment cycle available', () {
+      final provider = _GateAssessmentProvider(hasPost: false);
+
+      expect(provider.nextCycleLocked, isFalse);
+    });
+
+    test('locks a repeat cycle for Free users after a post-assessment', () {
+      final provider = _GateAssessmentProvider(hasPost: true);
+
+      expect(provider.nextCycleLocked, isTrue);
+    });
+
+    test('keeps repeat cycles available to Premium users', () {
+      EntitlementService.instance.debugSetRealPremium(true);
+      final provider = _GateAssessmentProvider(hasPost: true);
+
+      expect(provider.nextCycleLocked, isFalse);
     });
   });
 

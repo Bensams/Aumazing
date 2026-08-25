@@ -1326,183 +1326,254 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildAssessmentStatus() {
-    return Consumer<AssessmentProvider>(
-      builder: (context, assessProv, _) {
-        if (assessProv.isLoading) {
-          return _buildLoadingCard('Loading assessment results…');
-        }
-        if (!assessProv.hasPreAssessment) {
-          return AppCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppColors.statusWarningBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.info_outline_rounded,
-                    color: AppColors.statusWarningDark,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return ListenableBuilder(
+      listenable: EntitlementService.instance,
+      builder:
+          (context, _) => Consumer<AssessmentProvider>(
+            builder: (context, assessProv, _) {
+              if (assessProv.isLoading) {
+                return _buildLoadingCard('Loading assessment results…');
+              }
+              if (!assessProv.hasPreAssessment) {
+                return AppCard(
+                  child: Row(
                     children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final title = Text(
-                            'Pre-Assessment Needed',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
-                          );
-                          // The pill repeats the heading word for word. On a
-                          // narrow card there is no room for both, and the
-                          // heading already carries the message.
-                          if (constraints.maxWidth < 320) return title;
-                          return Row(
-                            children: [
-                              Expanded(child: title),
-                              const SizedBox(width: AppSpacing.sm),
-                              const StatusPillBadge(
-                                label: 'Pre-Assessment Needed',
-                                level: StatusLevel.warning,
-                                compact: true,
-                              ),
-                            ],
-                          );
-                        },
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.statusWarningBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.info_outline_rounded,
+                          color: AppColors.statusWarningDark,
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Start the pre-assessment to determine your child\'s starting level and get a recommended learning module.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final title = Text(
+                                  'Pre-Assessment Needed',
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                );
+                                // The pill repeats the heading word for word. On a
+                                // narrow card there is no room for both, and the
+                                // heading already carries the message.
+                                if (constraints.maxWidth < 320) return title;
+                                return Row(
+                                  children: [
+                                    Expanded(child: title),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    const StatusPillBadge(
+                                      label: 'Pre-Assessment Needed',
+                                      level: StatusLevel.warning,
+                                      compact: true,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Start the pre-assessment to determine your child\'s starting level and get a recommended learning module.',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          );
-        }
+                );
+              }
 
-        // Show recommendation — tapping opens the child lobby directly on
-        // the AI-recommended learning path.
-        return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: _openLearningPath,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.statusSuccessBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.recommend_rounded,
-                        color: AppColors.statusSuccessDark,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Recommended Module',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.textPrimary,
+              if (assessProv.nextCycleLocked) {
+                return AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CtaBand(
+                        leading: const Icon(
+                          Icons.lock_rounded,
+                          color: AppColors.mutedForeground,
+                        ),
+                        content: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Fresh Recommendation Locked',
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
                             ),
+                            Text(
+                              'Subscribe to Premium to unlock a fresh personalized '
+                              'learning path after every assessment.',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                        label: 'Unlock',
+                        icon: Icons.star_rounded,
+                        onPressed:
+                            () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder:
+                                    (_) => PremiumUpgradeScreen(
+                                      authService: _authService,
+                                    ),
+                              ),
+                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.trending_up_rounded,
+                            size: 18,
+                            color: AppColors.statusSuccessDark,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            assessProv.recommendedModuleName ?? 'Basic Skills',
-                            style: AppTextStyles.headlineSmall.copyWith(
-                              color: AppColors.textPrimary,
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Post-assessment completed - view progress below',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.statusSuccessDark,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    StatusPillBadge(
-                      label: 'Level ${assessProv.recommendedLevel}',
-                      level: StatusLevel.info,
-                      compact: true,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-              ),
-              if (assessProv.hasPostAssessment) ...[
-                const SizedBox(height: AppSpacing.sm),
-                const Divider(),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
+                    ],
+                  ),
+                );
+              }
+
+              // Show recommendation — tapping opens the child lobby directly on
+              // the AI-recommended learning path.
+              return AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.trending_up_rounded,
-                      size: 18,
-                      color: AppColors.statusSuccessDark,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Post-assessment completed — view progress below',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.statusSuccessDark,
-                        ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _openLearningPath,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.statusSuccessBg,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.recommend_rounded,
+                              color: AppColors.statusSuccessDark,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Recommended Module',
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  assessProv.recommendedModuleName ??
+                                      'Basic Skills',
+                                  style: AppTextStyles.headlineSmall.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          StatusPillBadge(
+                            label: 'Level ${assessProv.recommendedLevel}',
+                            level: StatusLevel.info,
+                            compact: true,
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
                       ),
                     ),
+                    if (assessProv.hasPostAssessment) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.trending_up_rounded,
+                            size: 18,
+                            color: AppColors.statusSuccessDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Post-assessment completed — view progress below',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.statusSuccessDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    // Learning path finished → offer the post-assessment so the
+                    // improvement can be measured (Use Case 7).
+                    if (_postAssessmentReady(assessProv)) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(),
+                      const SizedBox(height: AppSpacing.xs),
+                      _CtaBand(
+                        leading: const Icon(
+                          Icons.emoji_events_rounded,
+                          size: 18,
+                          color: AppColors.primaryPurple,
+                        ),
+                        content: Text(
+                          'Learning path complete! Measure the progress with '
+                          'a post-assessment.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        label: 'Start Post-Assessment',
+                        icon: Icons.play_arrow_rounded,
+                        onPressed:
+                            () => _pushChildFacing(
+                              const PostAssessmentProgressScreen(),
+                            ),
+                      ),
+                    ],
                   ],
                 ),
-              ],
-              // Learning path finished → offer the post-assessment so the
-              // improvement can be measured (Use Case 7).
-              if (_postAssessmentReady(assessProv)) ...[
-                const SizedBox(height: AppSpacing.sm),
-                const Divider(),
-                const SizedBox(height: AppSpacing.xs),
-                _CtaBand(
-                  leading: const Icon(
-                    Icons.emoji_events_rounded,
-                    size: 18,
-                    color: AppColors.primaryPurple,
-                  ),
-                  content: Text(
-                    'Learning path complete! Measure the progress with '
-                    'a post-assessment.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  label: 'Start Post-Assessment',
-                  icon: Icons.play_arrow_rounded,
-                  onPressed:
-                      () => _pushChildFacing(
-                        const PostAssessmentProgressScreen(),
-                      ),
-                ),
-              ],
-            ],
+              );
+            },
           ),
-        );
-      },
     );
   }
 

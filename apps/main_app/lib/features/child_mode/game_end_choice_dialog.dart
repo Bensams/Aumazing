@@ -68,12 +68,19 @@ class GameEndChoiceDialog {
       return;
     }
 
-    // Prefer the AI learning path's order; fall back to registry order when
-    // the child isn't on a path (no assessment yet, or game not on it).
+    // Prefer the AI learning path's order while this assessment cycle is
+    // available. A locked repeat cycle must behave like a non-path game:
+    // registry-order Next, with no personalized milestone or continuation.
     final activeIds = await ActiveGamesService.instance.activeGameIds;
     if (!context.mounted) return;
+    final assessment = context.read<AssessmentProvider>();
     final path =
-        LearningPathService.fromContext(context, activeGameIds: activeIds);
+        assessment.nextCycleLocked
+            ? const <LearningPathEntry>[]
+            : LearningPathService.fromContext(
+              context,
+              activeGameIds: activeIds,
+            );
 
     // Milestone: this practice completion just finished every game on the
     // child's current recommended path. Celebrate it — once — instead of
@@ -86,15 +93,14 @@ class GameEndChoiceDialog {
     if (pathNext != null) {
       // Sequential unlock: only offer the next step if it's actually open
       // (it normally is — finishing the current game just unlocked it).
-      final completed =
-          context.read<AssessmentProvider>().pathCompletedGameIds;
-      final nextIndex =
-          path.indexWhere((e) => e.game.id == pathNext!.game.id);
+      final completed = context.read<AssessmentProvider>().pathCompletedGameIds;
+      final nextIndex = path.indexWhere((e) => e.game.id == pathNext!.game.id);
       if (!LearningPathService.isUnlocked(path, nextIndex, completed)) {
         pathNext = null;
       }
     }
-    final next = pathNext?.game ??
+    final next =
+        pathNext?.game ??
         (path.isEmpty ? GameLauncher.nextEntry(currentGameId) : null);
     final current = GameRegistry.find(currentGameId);
     final palette = context.read<ChildProvider>().activePalette;
@@ -103,14 +109,15 @@ class GameEndChoiceDialog {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black26,
-      builder: (_) => _GameEndChoiceContent(
-        palette: palette,
-        currentGameIcon: current?.icon,
-        currentGameLogo: current?.logoAsset,
-        nextGameIcon: next?.icon,
-        nextGameLogo: next?.logoAsset,
-        nextGameName: next?.name,
-      ),
+      builder:
+          (_) => _GameEndChoiceContent(
+            palette: palette,
+            currentGameIcon: current?.icon,
+            currentGameLogo: current?.logoAsset,
+            nextGameIcon: next?.icon,
+            nextGameLogo: next?.logoAsset,
+            nextGameName: next?.name,
+          ),
     );
     if (!context.mounted) return;
 
@@ -124,7 +131,8 @@ class GameEndChoiceDialog {
         final i = path.indexWhere((e) => e.game.id == currentGameId);
         pathDifficulty = i < 0 ? null : path[i].difficulty;
       }
-      final difficulty = override?.clamp(1, 3) ??
+      final difficulty =
+          override?.clamp(1, 3) ??
           pathDifficulty ??
           GameLauncher.difficultyFor(context, target);
       // "Next" along the learning path goes home first: the launch is parked
@@ -143,9 +151,9 @@ class GameEndChoiceDialog {
 
       final screen = GameLauncher.screenFor(target.id, difficulty);
       if (screen != null) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => screen),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => screen));
         return;
       }
     }
@@ -247,11 +255,10 @@ class GameEndChoiceDialog {
         // what changed is only where the remaining stars are (AUM-286).
         await StarEarnedOverlay.showNothingEarned(
           context,
-          headline: "You already got today's star for "
+          headline:
+              "You already got today's star for "
               '${GameRegistry.find(currentGameId)?.name ?? 'this game'}!',
-          note: stars.atDailyCap
-              ? null
-              : 'Try another game to earn more!',
+          note: stars.atDailyCap ? null : 'Try another game to earn more!',
         );
 
       case StarAwardOutcome.dailyCapReached:
