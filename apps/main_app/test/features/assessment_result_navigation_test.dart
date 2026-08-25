@@ -2,6 +2,9 @@ import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/features/pre_assessment/assessment_dashboard_screen.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_intro_screen.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_result_screen.dart';
+import 'package:aumazing/features/therapy/therapy_directory_screen.dart';
+import 'package:aumazing/model/ai_assessment_response.dart';
+import 'package:aumazing/model/area_level.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/support_profile.dart';
@@ -53,6 +56,40 @@ AssessmentResult _result(String gameId) => AssessmentResult(
 
 final _results = [_result('copy_me'), _result('match_it')];
 
+const _criticalAiResponse = AiAssessmentResponse(
+  predictedProfile: 'mixed_support',
+  confidence: 0.8,
+  summary: 'Several areas may benefit from additional support.',
+  supportLevel: 'high',
+  recommendedModules: [],
+  areaLevels: {
+    'communication': AreaLevel(
+      level: 'needs_support',
+      levelInt: 0,
+      levelName: 'Needs Support',
+      confidence: 0.9,
+    ),
+    'social': AreaLevel(
+      level: 'needs_support',
+      levelInt: 0,
+      levelName: 'Needs Support',
+      confidence: 0.9,
+    ),
+    'play': AreaLevel(
+      level: 'needs_support',
+      levelInt: 0,
+      levelName: 'Needs Support',
+      confidence: 0.9,
+    ),
+    'attention': AreaLevel(
+      level: 'needs_support',
+      levelInt: 0,
+      levelName: 'Needs Support',
+      confidence: 0.9,
+    ),
+  },
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -75,6 +112,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle(const Duration(seconds: 5));
+    expect(find.text('Explore Therapy Center support'), findsNothing);
 
     expect(find.text(AssessmentLabels.title), findsOneWidget);
     expect(find.text(AssessmentLabels.continueToHome), findsOneWidget);
@@ -86,6 +124,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(_Home), findsOneWidget);
+  });
+
+  testWidgets('critical completion results offer Therapy Center support', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder:
+            (_) => PreAssessmentResultScreen(
+              profile: _finalizedProfile,
+              results: _results,
+              aiResponse: _criticalAiResponse,
+            ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    expect(find.text('Explore Therapy Center support'), findsOneWidget);
+    expect(find.textContaining('not a medical diagnosis'), findsOneWidget);
+    expect(find.text('Browse Therapy Centers'), findsOneWidget);
+
+    await tester.tap(find.text('Browse Therapy Centers'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TherapyDirectoryScreen), findsOneWidget);
+    expect(find.text('Therapy Directory'), findsOneWidget);
+  });
+
+  testWidgets('critical completion results can be dismissed for later', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder:
+            (_) => PreAssessmentResultScreen(
+              profile: _finalizedProfile,
+              results: _results,
+              aiResponse: _criticalAiResponse,
+            ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    expect(find.text('Explore Therapy Center support'), findsOneWidget);
+    expect(find.text('Browse Therapy Centers'), findsOneWidget);
+    expect(find.text('Maybe Later'), findsOneWidget);
+
+    await tester.tap(find.text('Maybe Later'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Explore Therapy Center support'), findsNothing);
+    expect(find.text('Browse Therapy Centers'), findsNothing);
+    expect(find.text(AssessmentLabels.title), findsOneWidget);
+    expect(find.text(AssessmentLabels.continueToHome), findsOneWidget);
   });
 
   testWidgets('review results go back to the dashboard', (tester) async {
