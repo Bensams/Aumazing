@@ -22,6 +22,10 @@ class CostumeCard extends StatelessWidget {
   final CostumeOffer offer;
   final ChildCharacter character;
   final bool isWorn;
+  // Keep the artwork area stable: the unaffordable footer is two lines tall,
+  // while owned, worn, and affordable states have only one line of content.
+  static const double _footerBandHeight = 28;
+  static const double _borderWidth = 1.5;
   final VoidCallback onTap;
 
   @override
@@ -41,7 +45,7 @@ class CostumeCard extends StatelessWidget {
             borderRadius: AppRadius.largeBorder,
             border: Border.all(
               color: isWorn ? theme.colorScheme.primary : theme.dividerColor,
-              width: isWorn ? 3 : 1.5,
+              width: _borderWidth,
             ),
           ),
           child: Column(
@@ -61,10 +65,14 @@ class CostumeCard extends StatelessWidget {
                       ),
                     ),
                     if (offer.owned)
-                      Icon(
-                        isWorn ? Icons.check_circle : Icons.inventory_2,
-                        color: theme.colorScheme.primary,
-                        size: 24,
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Icon(
+                          isWorn ? Icons.check_circle : Icons.inventory_2,
+                          color: theme.colorScheme.primary,
+                          size: 24,
+                        ),
                       ),
                   ],
                 ),
@@ -76,7 +84,7 @@ class CostumeCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: AppSpacing.xs),
-              _footer(context),
+              SizedBox(height: _footerBandHeight, child: _footer(context)),
             ],
           ),
         ),
