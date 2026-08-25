@@ -56,7 +56,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
       }
 
       // Convert anonymous/guest to permanent account
-      await widget.authService.convertAnonymousToPermanent(
+      final response = await widget.authService.convertAnonymousToPermanent(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
@@ -64,9 +64,11 @@ class _BindAccountModalState extends State<BindAccountModal> {
       // Clear stored guest session so a new guest account will be created
       // on the next guest sign-in (this account is now bound).
       await widget.authService.clearStoredGuestSession();
+      widget.authService.clearGuestMode();
 
       // Backfill guest data and sync to Supabase
-      final newUserId = widget.authService.currentUser?.id;
+      final newUserId =
+          response.user?.id ?? widget.authService.currentUser?.id;
       if (newUserId != null) {
         if (previousUserId != null) {
           await ChildProvider.migrateSavedActiveChild(
@@ -112,14 +114,16 @@ class _BindAccountModalState extends State<BindAccountModal> {
         await widget.authService.signInAnonymously();
       }
 
-      await widget.authService.bindAnonymousWithGoogle();
+      final response = await widget.authService.bindAnonymousWithGoogle();
 
       // Clear stored guest session so a new guest account will be created
       // on the next guest sign-in (this account is now bound).
       await widget.authService.clearStoredGuestSession();
+      widget.authService.clearGuestMode();
 
       // Backfill guest data and sync to Supabase
-      final newUserId = widget.authService.currentUser?.id;
+      final newUserId =
+          response.user?.id ?? widget.authService.currentUser?.id;
       if (newUserId != null) {
         if (previousUserId != null) {
           await ChildProvider.migrateSavedActiveChild(
@@ -291,6 +295,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
                   backgroundColor: AppColors.primaryPurple,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  alignment: Alignment.center,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
