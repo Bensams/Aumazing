@@ -14,13 +14,14 @@ import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
 import '../../automation/developer_automation.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// Do What I Say — instruction-following game with XGBoost-ready analytics.
 ///
 /// Displays shapes and a text instruction like "Tap the RED circle".
 /// The child taps the correct shape. Tracks comprehensive analytics for ML analysis.
 class DoWhatISayGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin, DeveloperAutomationHooks {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin, DeveloperAutomationHooks {
   DoWhatISayGame({
     required this.totalRounds,
     required this.onStepChanged,
@@ -433,6 +434,7 @@ class DoWhatISayGame extends FlameGame
       analyticsAddRoundData('instruction_followed', true);
 
       if (_currentRound >= totalRounds) {
+        if (!tryBeginCompletion()) return;
         // Game complete — play game complete SFX and celebration VO
         _cancelNoResponseTimer();
         onPlayGameCompleteSfx?.call();
@@ -461,7 +463,7 @@ class DoWhatISayGame extends FlameGame
           4 + ((totalRounds - 1) ~/ 2).clamp(0, 2));
         analyticsAddGameSpecificMetric('hint_count', _hintCount);
 
-        Future.delayed(const Duration(milliseconds: 600), () {
+        guardedDelay(const Duration(milliseconds: 600), () {
           onGameComplete(
             score: _score,
             totalItems: totalRounds,
