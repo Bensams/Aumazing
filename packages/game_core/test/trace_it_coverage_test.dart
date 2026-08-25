@@ -82,6 +82,7 @@ void main() {
     swipe(game.debugCurrentPath, stride: 1);
 
     expect(completedRounds, 1);
+    expect(game.debugHasInk, isFalse);
   });
 
   test('a swipe nowhere near the guide does not complete it', () async {
