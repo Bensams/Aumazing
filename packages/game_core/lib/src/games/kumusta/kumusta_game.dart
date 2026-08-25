@@ -15,6 +15,7 @@ import 'buddy_art_cache.dart';
 import 'components/buddy.dart';
 import 'components/greeting_button.dart';
 import 'greetings.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// "Kumusta!" — a buddy offers a greeting; the child answers it.
 ///
@@ -36,7 +37,7 @@ import 'greetings.dart';
 ///   buddy re-offers the same greeting. No card is disabled, dimmed, or taken
 ///   away, so a child who taps to explore never shrinks the board.
 class KumustaGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   KumustaGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -283,6 +284,7 @@ class KumustaGame extends FlameGame
 
   @override
   void onRemove() {
+    invalidateLifecycle();
     _cancelTimers();
     super.onRemove();
   }
@@ -654,6 +656,7 @@ class KumustaGame extends FlameGame
   }
 
   void _finish() {
+    if (!tryBeginCompletion()) return;
     _cancelTimers();
     _clearPrompts();
     analyticsMarkCompleted();

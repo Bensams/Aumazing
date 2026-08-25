@@ -14,6 +14,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// Data for a single match pair used in the Match It game.
 class MatchPairData {
@@ -51,6 +52,7 @@ class MatchPairData {
 /// Tracks comprehensive gameplay analytics for ML analysis.
 class MatchItGame extends FlameGame
     with
+        GameLifecycleGuard,
         TapCallbacks,
         DragCallbacks,
         EnhancedGameplayAnalyticsMixin,
@@ -544,6 +546,7 @@ class MatchItGame extends FlameGame
         onStepChanged(_currentRound);
 
         if (_currentRound >= totalRounds) {
+          if (!tryBeginCompletion()) return;
           // Game complete — cancel timer and play game complete SFX and celebration VO
           _cancelNoResponseTimer();
           onPlayGameCompleteSfx?.call();
@@ -561,7 +564,7 @@ class MatchItGame extends FlameGame
 
           // Hold until the last pair has finished disappearing, so the game
           // never cuts to the results screen over a half-faded card.
-          Future.delayed(roundTransitionDelay, () {
+          guardedDelay(roundTransitionDelay, () {
             onGameComplete(
               score: _score,
               totalItems: totalRounds * 3,

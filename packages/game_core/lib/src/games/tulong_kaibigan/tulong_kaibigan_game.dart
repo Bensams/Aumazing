@@ -18,6 +18,7 @@ import '../shared/answer_label.dart';
 import '../shared/game_layout.dart';
 import '../shared/ghost_hand.dart';
 import 'buddy_art_cache.dart';
+import '../shared/game_lifecycle_guard.dart';
 import 'components/buddy_component.dart';
 
 enum TulongDropOutcome { correct, wrongItem, wrongRecipient, motorMiss }
@@ -59,7 +60,7 @@ class TulongKaibiganMetrics {
 }
 
 class TulongKaibiganGame extends FlameGame
-    with DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   TulongKaibiganGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -525,9 +526,8 @@ class TulongKaibiganGame extends FlameGame
       _startIdleTimer();
     });
   }
-
   void _advanceRequest() {
-    if (!isMounted) return;
+    if (!isLifecycleActive) return;
     _requestIndex++;
     if (_requestIndex < _requests.length) {
       _setupTrial();
@@ -541,33 +541,30 @@ class TulongKaibiganGame extends FlameGame
     } else {
       onPlayLevelCompleteSfx?.call();
       onPlayTransitionVo?.call();
-      Future.delayed(const Duration(milliseconds: 700), _setupRound);
+      guardedDelay(const Duration(milliseconds: 700), _setupRound);
     }
   }
 
   void _completeGame() {
+    if (!tryBeginCompletion()) return;
     _cancelTimers();
     onPlayGameCompleteSfx?.call();
     onPlayCelebrationVo?.call();
     analyticsMarkCompleted();
     analyticsAddGameSpecificMetric(
-      'wrongRecipientRate',
-      socialMetrics.wrongRecipientRate,
+      'wrongRecipientRate', socialMetrics.wrongRecipientRate,
     );
     analyticsAddGameSpecificMetric(
-      'dragHesitationMs',
-      socialMetrics.averageDragHesitationMs,
+      'dragHesitationMs', socialMetrics.averageDragHesitationMs,
     );
     analyticsAddGameSpecificMetric(
-      'bubbleRecallErrors',
-      socialMetrics.bubbleRecallErrors,
+      'bubbleRecallErrors', socialMetrics.bubbleRecallErrors,
     );
     analyticsAddGameSpecificMetric(
-      'promptLevelUsed',
-      socialMetrics.promptLevelUsed,
+      'promptLevelUsed', socialMetrics.promptLevelUsed,
     );
     analyticsCompleteSession();
-    Future.delayed(const Duration(milliseconds: 600), () {
+    guardedDelay(const Duration(milliseconds: 600), () {
       onGameComplete(
         score: _score,
         totalItems: totalRounds * itemsPerRound,
@@ -730,14 +727,13 @@ class TulongKaibiganGame extends FlameGame
   @override
   void onGameResize(Vector2 newSize) {
     super.onGameResize(newSize);
-    // Runs before onLoad on the very first frame, so both helpers no-op until
-    // there is something to place.
     _layoutBuddies();
     _layoutItems();
   }
 
   @override
   void onRemove() {
+    invalidateLifecycle();
     _cancelTimers();
     super.onRemove();
   }
