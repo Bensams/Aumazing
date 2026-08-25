@@ -19,6 +19,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../../config/game_motion.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// Where an object may stand, as fractions of the playfield.
 ///
@@ -74,7 +75,7 @@ enum AttentionSlot {
 ///   escalates the prompt and the same trial continues. Ending it would teach
 ///   that following someone's attention is a thing you can lose at.
 class SabayTayoGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   SabayTayoGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -419,6 +420,7 @@ class SabayTayoGame extends FlameGame
 
   @override
   void onRemove() {
+    invalidateLifecycle();
     _cancelTimers();
     super.onRemove();
   }
@@ -841,6 +843,7 @@ class SabayTayoGame extends FlameGame
   }
 
   void _finish() {
+    if (!tryBeginCompletion()) return;
     _cancelTimers();
     _clearObjects();
     _buddy?.faceChild();
