@@ -11,11 +11,13 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../widgets/mascot.dart';
 import '../../widgets/mascot_host.dart';
 import '../../providers/stars_provider.dart';
 import '../stars/star_shop_screen.dart';
+import '../premium/premium_upgrade_screen.dart';
 import 'game_launcher.dart';
 import 'path_map_view.dart';
 import 'pending_path_launch.dart';
@@ -798,6 +800,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   List<GameEntry> _allGames() => GameLauncher.supportedGames();
 
   Future<void> _launch(String gameId, int difficulty) async {
+    if (_viewingPath && context.read<AssessmentProvider>().nextCycleLocked) {
+      _autoLaunch = null;
+      _autoLaunchFallback?.cancel();
+      _autoLaunchFallback = null;
+      return;
+    }
     final screen = GameLauncher.screenFor(gameId, difficulty);
     if (screen == null) return;
     _speakChoice(VoiceOverCue.letsGo);
@@ -873,9 +881,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   }
 
   void _openStarShop() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const StarShopScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const StarShopScreen()));
   }
 
   Future<void> _exitToParent() async {
@@ -917,117 +925,126 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.watch<ChildProvider>().activePalette;
-    // Watched so difficulty chips refresh when the AI result or the parent's
-    // override changes.
-    final level = context.watch<AssessmentProvider>().recommendedLevel;
-    context.watch<ChildProvider>().difficultyOverride;
+    return ListenableBuilder(
+      listenable: EntitlementService.instance,
+      builder: (context, _) {
+        final palette = context.watch<ChildProvider>().activePalette;
+        // Watched so difficulty chips refresh when the AI result or the parent's
+        // override changes.
+        final level = context.watch<AssessmentProvider>().recommendedLevel;
+        context.watch<ChildProvider>().difficultyOverride;
 
-    // My Path is a scene, not a row on the lobby: when it is open the world
-    // fills the whole body so the header and mascot sit on the same sky. The
-    // scene is decoration, so the lowest graphics tier — which exists to cut
-    // GPU and sensory load — drops it and falls back to the lobby gradient.
-    final world = context.watch<ChildProvider>().activeWorldStyle;
-    final showScene =
-        _viewingPath &&
-        world.hasBackdrop &&
-        context.watch<ChildProvider>().graphicsQuality != GraphicsQuality.low;
+        // My Path is a scene, not a row on the lobby: when it is open the world
+        // fills the whole body so the header and mascot sit on the same sky. The
+        // scene is decoration, so the lowest graphics tier — which exists to cut
+        // GPU and sensory load — drops it and falls back to the lobby gradient.
+        final world = context.watch<ChildProvider>().activeWorldStyle;
+        final showScene =
+            _viewingPath &&
+            world.hasBackdrop &&
+            context.watch<ChildProvider>().graphicsQuality !=
+                GraphicsQuality.low;
 
-    return Scaffold(
-      body: Container(
-        decoration:
-            showScene ? null : BoxDecoration(gradient: palette.gameBackground),
-        child: Stack(
-          key: _rootStackKey,
-          fit: StackFit.expand,
-          children: [
-            if (showScene) WorldBackdrop(style: world),
-            SafeArea(
-              // Any touch counts as engagement for the guided-start idle timer.
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: _onUserInteraction,
-                child: Stack(
-                  key: _stackKey,
-                  children: [
-                    // The games row scrolls horizontally; if it moves while the
-                    // hand is up, the hand moves with its card.
-                    NotificationListener<ScrollNotification>(
-                      onNotification: (_) {
-                        _reanchorGuide();
-                        return false;
-                      },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(palette, level),
-                          Expanded(
-                            child:
-                                !_inView
-                                    ? _buildCategoryButtons(palette)
-                                    : _buildGamesRow(level, palette),
+        return Scaffold(
+          body: Container(
+            decoration:
+                showScene
+                    ? null
+                    : BoxDecoration(gradient: palette.gameBackground),
+            child: Stack(
+              key: _rootStackKey,
+              fit: StackFit.expand,
+              children: [
+                if (showScene) WorldBackdrop(style: world),
+                SafeArea(
+                  // Any touch counts as engagement for the guided-start idle timer.
+                  child: Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _onUserInteraction,
+                    child: Stack(
+                      key: _stackKey,
+                      children: [
+                        // The games row scrolls horizontally; if it moves while the
+                        // hand is up, the hand moves with its card.
+                        NotificationListener<ScrollNotification>(
+                          onNotification: (_) {
+                            _reanchorGuide();
+                            return false;
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHeader(palette, level),
+                              Expanded(
+                                child:
+                                    !_inView
+                                        ? _buildCategoryButtons(palette)
+                                        : _buildGamesRow(level, palette),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    _buildMascotCorner(),
-                    if (_guideOnScreen) ..._buildGuideLayer(),
-                  ],
-                ),
-              ),
-            ),
-            // The door: the path view revealed through a window growing out of
-            // the button. Drawn last so it covers the lobby beneath it.
-            if (_doorActive && _doorFromRect != null) ...[
-              // Taps are swallowed for the whole animation. The clip means the
-              // lobby is still reachable *outside* the window, and a second
-              // button pressed mid-transition would leave the view in a state
-              // the door never accounted for.
-              const Positioned.fill(
-                child: AbsorbPointer(child: SizedBox.expand()),
-              ),
-              Positioned.fill(
-                child: ListenableBuilder(
-                  listenable: _doorController,
-                  // The path view is built **once** per lobby build and handed
-                  // to the builder, not rebuilt inside it. Building it per
-                  // frame meant re-running the backdrop, header and the whole
-                  // level map sixty times a second, which is what made the
-                  // door stutter. The RepaintBoundary takes the rest: the
-                  // finished scene is rasterised once and every later frame
-                  // only re-composites it under a new clip.
-                  child: RepaintBoundary(
-                    child: _buildPathPresentation(palette, level, world),
-                  ),
-                  builder: (context, child) {
-                    final raw = _doorController.value;
-                    // Reduced motion: window pinned open, fade carries the
-                    // whole change. Otherwise the window grows and the fade is
-                    // just a soft first frame.
-                    final t = _doorFadeOnly ? 1.0 : _doorCurve.transform(raw);
-                    final opacity =
-                        _doorFadeOnly
-                            ? raw
-                            : (raw / _doorFadeFraction).clamp(0.0, 1.0);
-                    return Opacity(
-                      // Free once opaque — RenderOpacity skips the layer at 1.0
-                      // — so the cross-fade costs nothing after it finishes.
-                      opacity: opacity,
-                      child: ClipRRect(
-                        clipper: _DoorClipper(
-                          from: _doorFromRect!,
-                          progress: t,
                         ),
-                        child: child,
-                      ),
-                    );
-                  },
+                        _buildMascotCorner(),
+                        if (_guideOnScreen) ..._buildGuideLayer(),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                // The door: the path view revealed through a window growing out of
+                // the button. Drawn last so it covers the lobby beneath it.
+                if (_doorActive && _doorFromRect != null) ...[
+                  // Taps are swallowed for the whole animation. The clip means the
+                  // lobby is still reachable *outside* the window, and a second
+                  // button pressed mid-transition would leave the view in a state
+                  // the door never accounted for.
+                  const Positioned.fill(
+                    child: AbsorbPointer(child: SizedBox.expand()),
+                  ),
+                  Positioned.fill(
+                    child: ListenableBuilder(
+                      listenable: _doorController,
+                      // The path view is built **once** per lobby build and handed
+                      // to the builder, not rebuilt inside it. Building it per
+                      // frame meant re-running the backdrop, header and the whole
+                      // level map sixty times a second, which is what made the
+                      // door stutter. The RepaintBoundary takes the rest: the
+                      // finished scene is rasterised once and every later frame
+                      // only re-composites it under a new clip.
+                      child: RepaintBoundary(
+                        child: _buildPathPresentation(palette, level, world),
+                      ),
+                      builder: (context, child) {
+                        final raw = _doorController.value;
+                        // Reduced motion: window pinned open, fade carries the
+                        // whole change. Otherwise the window grows and the fade is
+                        // just a soft first frame.
+                        final t =
+                            _doorFadeOnly ? 1.0 : _doorCurve.transform(raw);
+                        final opacity =
+                            _doorFadeOnly
+                                ? raw
+                                : (raw / _doorFadeFraction).clamp(0.0, 1.0);
+                        return Opacity(
+                          // Free once opaque — RenderOpacity skips the layer at 1.0
+                          // — so the cross-fade costs nothing after it finishes.
+                          opacity: opacity,
+                          child: ClipRRect(
+                            clipper: _DoorClipper(
+                              from: _doorFromRect!,
+                              progress: t,
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1190,18 +1207,18 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
           // Hidden entirely when the parent turned it off (STAR-G2). Stars go
           // on accruing regardless, so turning it back on later costs nothing.
           if (context.watch<ChildProvider>().shopEnabled)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Material(
-              color: AppColors.white.withAlpha(200),
-              shape: const CircleBorder(),
-              child: IconButton(
-                onPressed: _openStarShop,
-                icon: Icon(Icons.checkroom_rounded, color: palette.primary),
-                tooltip: 'My Costumes',
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Material(
+                color: AppColors.white.withAlpha(200),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: _openStarShop,
+                  icon: Icon(Icons.checkroom_rounded, color: palette.primary),
+                  tooltip: 'My Costumes',
+                ),
               ),
             ),
-          ),
           Material(
             color: AppColors.white.withAlpha(200),
             shape: const CircleBorder(),
@@ -1232,6 +1249,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   Widget _buildCategoryButtons(GamePalette palette) {
     final path = _learningPath();
+    final pathLocked = context.watch<AssessmentProvider>().nextCycleLocked;
     final buttons = <Widget>[
       // AI-recommended path first — the child's suggested starting point.
       // Keys anchor the guided-start pointing hand.
@@ -1239,13 +1257,13 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
         KeyedSubtree(
           key: _pathButtonKey,
           child: _CategoryButton(
-            label: 'My Path',
-            icon: Icons.route_rounded,
+            label: pathLocked ? 'New Path Locked' : 'My Path',
+            icon: pathLocked ? Icons.lock_rounded : Icons.route_rounded,
             gradient: const [
               Color(0xFFC7B4EC),
               Color(0xFFA9E3CC),
             ], // lavender → mint
-            count: path.length,
+            count: pathLocked ? 0 : path.length,
             // The button wears the world it leads into, so the door reads as
             // stepping through rather than the screen changing.
             backdrop: _lobbyWorldPreview(),
@@ -1370,8 +1388,9 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
         difficulty: difficulty,
         // Watched, not read: coming back from a game refreshes the ledger,
         // and the badge has to appear then rather than on the next restart.
-        starEarnedToday:
-            context.watch<StarsProvider>().hasEarnedStarToday(games[i].id),
+        starEarnedToday: context.watch<StarsProvider>().hasEarnedStarToday(
+          games[i].id,
+        ),
         onTap: () => _launch(games[i].id, difficulty),
       );
       return i == 0 ? KeyedSubtree(key: _guideCardKey, child: card) : card;
@@ -1468,7 +1487,58 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   /// The AI-recommended path: same cards, in recommended order, numbered,
   /// each starting at the difficulty the assessment suggested. Steps unlock
   /// sequentially — the child must finish a game to open the next one.
+  Widget _buildLockedPath() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: AppCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.lock_rounded,
+                size: 48,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Fresh Learning Path Locked',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Ask a parent to subscribe to Premium to unlock a fresh '
+                'personalized path after every assessment.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppPrimaryButton(
+                label: 'Unlock',
+                icon: Icons.star_rounded,
+                onPressed:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PremiumUpgradeScreen(),
+                      ),
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPathRow() {
+    if (context.watch<AssessmentProvider>().nextCycleLocked) {
+      return _buildLockedPath();
+    }
     final path = _learningPath();
     if (path.isEmpty) {
       return Center(
@@ -1830,9 +1900,10 @@ class _GameCard extends StatelessWidget {
         // Appended to the existing single node rather than given its own
         // Semantics wrapper: the card is deliberately one TalkBack stop, and
         // a badge is not worth making it two.
-        label: starEarnedToday
-            ? '${entry.name}, $tier, got today\'s star'
-            : '${entry.name}, $tier',
+        label:
+            starEarnedToday
+                ? '${entry.name}, $tier, got today\'s star'
+                : '${entry.name}, $tier',
         excludeSemantics: true,
         onTap: onTap,
         child: Material(
