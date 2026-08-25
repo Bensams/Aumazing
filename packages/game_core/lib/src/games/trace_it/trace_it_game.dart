@@ -192,6 +192,10 @@ class TraceItGame extends FlameGame
   @visibleForTesting
   List<Vector2> get debugCurrentPath => List.unmodifiable(_currentPath);
 
+  /// Test-only: whether the temporary purple trace is still being kept around.
+  @visibleForTesting
+  bool get debugHasInk => _ink.isNotEmpty;
+
   @override
   Color backgroundColor() => const Color(0x00000000); // Transparent
 
@@ -263,6 +267,10 @@ class TraceItGame extends FlameGame
 
   void _startStroke() {
     _covered = List.filled(_currentPath.length, false);
+    _clearInk();
+  }
+
+  void _clearInk() {
     _ink.clear();
   }
 
@@ -455,6 +463,7 @@ class TraceItGame extends FlameGame
   void _completeStroke() {
     _cancelNoResponseTimer();
     _errorsSinceLastCorrect = 0;
+    _clearInk();
 
     onPlayCorrectSfx?.call();
     onCorrectTrace?.call();
