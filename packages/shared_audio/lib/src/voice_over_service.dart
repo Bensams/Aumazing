@@ -992,6 +992,11 @@ const _kDebounceInterval = Duration(milliseconds: 300);
 /// recording in the library (~2 s) even at the slowest prompt speed.
 const _kClipCompletionBackstop = Duration(seconds: 6);
 
+/// Native player calls can outlive a route transition on Android. A bounded
+/// wait keeps a game from holding its input phase open forever when the plugin
+/// never resolves a stop, prepare, or play request.
+const _kNativeOperationBackstop = Duration(seconds: 4);
+
 /// How long an interrupted clip takes to fade out before it is stopped.
 ///
 /// Cutting a waveform mid-cycle steps the signal straight to zero, and that
@@ -1047,6 +1052,11 @@ double voiceRateForPromptSpeed(double promptSpeed) =>
     0.6 + 0.4 * promptSpeed.clamp(0.0, 1.0);
 
 class VoiceOverService {
+  bool _disposed = false;
+  int _generation = 0;
+  Future<void>? _disposeFuture;
+  Future<void> _languageChange = Future<void>.value();
+
   /// Asset prefix for package-based assets.
   static const String _assetPrefix = 'packages/shared_audio/assets/audio';
 
@@ -1060,6 +1070,11 @@ class VoiceOverService {
 
   /// Pool of players for voice-over playback.
   final List<AudioPlayer> _players = [];
+
+  /// Serialize native calls per pooled player. A stale call may still be
+  /// unwinding after its Dart await is abandoned; queueing prevents a newer
+  /// source/stop/resume from racing that same Android MediaPlayer instance.
+  final Map<AudioPlayer, Future<void>> _playerOperations = {};
 
   /// Index of the player that was most recently used for playback.
   int _activePlayerIndex = 0;
@@ -1168,6 +1183,62 @@ class VoiceOverService {
   /// A phrase is spread across the pool — one word per player — so "is any
   /// player playing?" goes false in the gap between two words and true again a
   /// moment later. Anything waiting for the current line to finish has to wait
+  int get _token => _generation;
+  bool _valid(int token) => !_disposed && token == _generation;
+  bool _holdsFloorFor(int ticket, int token) => _valid(token) &&
+      _myTicket == ticket && ticket == _floorTicket;
+
+  Future<void> _enqueuePlayerOperation(
+    AudioPlayer player,
+    Future<void> Function() operation,
+  ) {
+    final previous = _playerOperations[player] ?? Future<void>.value();
+    final run = previous.then<void>(
+      (_) => operation(),
+      onError: (_, __) => operation(),
+    );
+    _playerOperations[player] = run.catchError((_) {});
+    return run;
+  }
+
+  void _quarantinePlayer(AudioPlayer player) {
+    if (!_players.remove(player)) return;
+    _playerOperations.remove(player);
+    _fadeGeneration.remove(player);
+    final replacement = AudioPlayer()..setAudioContext(_voiceOverAudioContext);
+    replacement.audioCache = AudioCache(prefix: '');
+    _players.add(replacement);
+    unawaited(player.dispose().catchError((_) {}));
+  }
+
+  Future<bool> _awaitNative(
+    AudioPlayer player,
+    Future<void> Function() operation,
+    String operationName,
+    int token, {
+    int? ticket,
+    bool Function()? canRun,
+  }) async {
+    bool allowed() => _valid(token) &&
+        (ticket == null || _holdsFloorFor(ticket, token)) &&
+        (canRun?.call() ?? true);
+    if (!allowed()) return false;
+    final queued = _enqueuePlayerOperation(player, () async {
+      if (!allowed()) return;
+      await operation();
+    });
+    try {
+      await queued.timeout(_kNativeOperationBackstop);
+      return allowed();
+    } on TimeoutException {
+      _quarantinePlayer(player);
+      if (allowed()) {
+        debugPrint(
+            '[VoiceOverService] ⏱ Timed out waiting for $operationName');
+      }
+      return false;
+    }
+  }
   /// for the *phrase*: waiting per clip returned between "purple" and "circle"
   /// and let the next line start on top of the second word.
   Completer<void>? _phrase;
@@ -1250,9 +1321,16 @@ class VoiceOverService {
   ///
   /// [volume] is clamped to the range 0.0 – 1.0.
   void setVolume(double volume) {
+    if (_disposed) return;
     _volume = volume.clamp(0.0, 1.0);
+    final token = _token;
     for (final player in _players) {
-      player.setVolume(_enabled ? _volume : 0.0);
+      unawaited(_awaitNative(
+        player,
+        () => player.setVolume(_enabled ? _volume : 0.0),
+        'set volume',
+        token,
+      ).then<void>((_) {}, onError: (_, __) {}));
     }
   }
 
@@ -1268,34 +1346,48 @@ class VoiceOverService {
   ///
   /// Stops any currently playing cue and updates the pack. [languageCode] is
   /// a [VoicePack.assetFolder] or a language slug — see [resolveVoiceFolder].
-  Future<void> setLanguage(String languageCode) async {
-    final folder = resolveVoiceFolder(languageCode);
-    if (folder != languageCode) {
-      debugPrint(
-          '[VoiceOverService] ⚠ Not a voice pack folder: $languageCode, '
-          'using $folder');
-    }
-    if (_languageCode != folder) {
-      await stop();
-      _languageCode = folder;
-      debugPrint(
-          '[VoiceOverService] 🌐 Language changed to: $_languageCode');
-    }
+  Future<void> setLanguage(String languageCode) {
+    final request = _languageChange.then<void>((_) async {
+      final folder = resolveVoiceFolder(languageCode);
+      if (folder != languageCode) {
+        debugPrint(
+            '[VoiceOverService] ⚠ Not a voice pack folder: $languageCode, '
+            'using $folder');
+      }
+      if (_languageCode != folder) {
+        await stop();
+        if (_disposed) return;
+        _languageCode = folder;
+        debugPrint('[VoiceOverService] 🌐 Language changed to: $_languageCode');
+      }
+    });
+    _languageChange = request.catchError((_) {});
+    return request;
   }
 
   /// Enable or disable voice-over playback globally.
   ///
   /// When disabled, calls to [play] and convenience methods are no-ops.
   void setEnabled(bool enabled) {
+    if (_disposed) return;
     _enabled = enabled;
     if (!enabled) {
-      for (final player in _players) {
-        player.stop();
+      ++_generation;
+      _sequenceCancelled = true;
+      _myTicket = 0;
+      _immediateStartedAt = null;
+      _immediateTicket = 0;
+      _abandonPhrase();
+      for (final player in List<AudioPlayer>.from(_players)) {
+        _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
+        unawaited(_enqueuePlayerOperation(player, () => player.stop()).catchError((_) {}));
       }
     }
   }
 
   // ── Playback ────────────────────────────────────────────────────────
+  /// The volume a clip should play at right now.
+  double get _effectiveVolume => _enabled ? _volume : 0.0;
 
   /// Fade generation per player, bumped every time a fade is started or a
   /// player is claimed for a new clip.
@@ -1307,16 +1399,33 @@ class VoiceOverService {
   /// *next* line down to silence and stop it mid-word.
   final Map<AudioPlayer, int> _fadeGeneration = {};
 
-  /// The volume a clip should play at right now.
-  double get _effectiveVolume => _enabled ? _volume : 0.0;
-
-  /// Invalidate any fade in flight on [player] and hand it back at full volume.
-  ///
-  /// Called wherever a player is claimed, so a clip never inherits a volume
-  /// part-way down someone else's ramp.
-  Future<void> _claimPlayer(AudioPlayer player) async {
-    _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
-    await player.setVolume(_effectiveVolume);
+  Future<bool> _claimPlayer(
+    AudioPlayer player, {
+    required int token,
+    required int ticket,
+  }) async {
+    if (!_holdsFloorFor(ticket, token)) return false;
+    final generation = (_fadeGeneration[player] ?? 0) + 1;
+    _fadeGeneration[player] = generation;
+    try {
+      if (!await _awaitNative(
+        player,
+        () => player.setVolume(_effectiveVolume),
+        'set volume',
+        token,
+        ticket: ticket,
+        canRun: () => _fadeGeneration[player] == generation,
+      )) {
+        return false;
+      }
+    } catch (e) {
+      if (_holdsFloorFor(ticket, token)) {
+        debugPrint('[VoiceOverService] ⚠ Could not set player volume: $e');
+      }
+      return false;
+    }
+    return _holdsFloorFor(ticket, token) &&
+        _fadeGeneration[player] == generation;
   }
 
   /// The volume levels of a fade starting from [from], in order.
@@ -1329,52 +1438,75 @@ class VoiceOverService {
         for (var remaining = _kFadeOutSteps - 1; remaining > 0; remaining--)
           from * remaining / _kFadeOutSteps,
       ];
-
   /// Ramp [player] down over [_kFadeOutDuration], then stop it.
   ///
   /// Deliberately not awaited by callers: the incoming line starts on another
-  /// player straight away, and the outgoing one gets these 150 ms to itself in
-  /// the background. Awaiting it would make every interruption late by exactly
-  /// the fade.
-  ///
-  /// A player that is not actually speaking is stopped outright — there is no
-  /// waveform to click, and a player still preparing must be stopped *now* or
-  /// it surfaces later underneath the new line.
+  /// player while this one is released in the background.
   Future<void> _fadeOutAndStop(AudioPlayer player) async {
-    if (player.state != PlayerState.playing) {
-      await player.stop();
-      return;
-    }
-
-    _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
-    final generation = _fadeGeneration[player];
-    final step = _kFadeOutDuration ~/ _kFadeOutSteps;
-    final from = _effectiveVolume;
+    if (_disposed) return;
+    final token = _token;
+    final generation = (_fadeGeneration[player] ?? 0) + 1;
+    _fadeGeneration[player] = generation;
+    bool current() => _valid(token) && _fadeGeneration[player] == generation;
 
     try {
+      if (player.state != PlayerState.playing) {
+        await _awaitNative(
+          player,
+          () => player.stop(),
+          'stop',
+          token,
+          canRun: current,
+        );
+        return;
+      }
+      final step = _kFadeOutDuration ~/ _kFadeOutSteps;
+      final from = _effectiveVolume;
       for (final level in fadeRamp(from)) {
         await Future<void>.delayed(step);
-        // Reclaimed mid-ramp: this player belongs to another line now, and
-        // touching its volume or stopping it would cut that line off.
-        if (_fadeGeneration[player] != generation) return;
-        await player.setVolume(level);
+        if (!current()) return;
+        if (!await _awaitNative(
+          player,
+          () => player.setVolume(level),
+          'fade volume',
+          token,
+          canRun: current,
+        )) {
+          await _enqueuePlayerOperation(player, () => player.stop()).catchError((_) {});
+          return;
+        }
       }
-      if (_fadeGeneration[player] != generation) return;
-      await player.stop();
+      if (!current()) return;
+      if (!await _awaitNative(
+        player,
+        () => player.stop(),
+        'stop',
+        token,
+        canRun: current,
+      )) {
+        await _enqueuePlayerOperation(player, () => player.stop()).catchError((_) {});
+        return;
+      }
+      if (!current()) return;
+      await _awaitNative(
+        player,
+        () => player.setVolume(_effectiveVolume),
+        'restore volume',
+        token,
+        canRun: current,
+      );
     } catch (e) {
-      // A player that cannot be faded must still be silenced.
+      if (!current()) return;
       debugPrint('[VoiceOverService] ⚠ Fade-out failed, stopping outright: $e');
       try {
-        await player.stop();
+        await _awaitNative(
+          player,
+          () => player.stop(),
+          'stop after fade failure',
+          token,
+          canRun: current,
+        );
       } catch (_) {}
-    } finally {
-      // Leave it ready for reuse rather than silent. Skipped when another line
-      // has claimed it, because that line has already set its own volume.
-      if (_fadeGeneration[player] == generation) {
-        try {
-          await player.setVolume(_effectiveVolume);
-        } catch (_) {}
-      }
     }
   }
 
@@ -1415,9 +1547,8 @@ class VoiceOverService {
     bool awaitCompletion = false,
     bool skipDebounce = false,
   }) async {
-    if (!_enabled) return;
-
-    // Debounce: ignore rapid calls (unless skipped for sequence playback).
+    final token = _token;
+    if (!_valid(token) || !_enabled) return;
     if (!skipDebounce) {
       final now = DateTime.now();
       if (_lastPlayTime != null &&
@@ -1429,52 +1560,63 @@ class VoiceOverService {
       }
       _lastPlayTime = now;
     }
-
     final candidates = assetPathCandidates(cue, _languageCode);
-    if (candidates.isEmpty) {
-      debugPrint('[VoiceOverService] ✖ No asset path for cue: ${cue.name}');
-      return;
-    }
-
+    if (candidates.isEmpty || !_valid(token)) return;
     final ticket = _takeFloor();
-
+    if (!_holdsFloorFor(ticket, token)) return;
     try {
-      // Fade out whatever is speaking (fire-and-forget). The outgoing line
-      // ramps down over the next 150 ms while this one starts on its own
-      // player, so the handover is a brief cross-fade instead of a click.
       for (final player in _players) {
-        if (player.state == PlayerState.playing) {
-          _fadeOutAndStop(player); // intentionally not awaited
-        }
+        if (!_holdsFloorFor(ticket, token)) return;
+        if (player.state == PlayerState.playing) _fadeOutAndStop(player);
       }
-
-      // Pick an available player from the pool.
       final player = _getAvailablePlayer();
-
-      player.setReleaseMode(ReleaseMode.stop);
-      await _claimPlayer(player);
-      await _applySpeed(player);
-      // Someone else claimed the floor while the platform was busy; drop this
-      // cue rather than adding a second voice.
-      if (!_holdsFloor(ticket)) return;
-
-      debugPrint('[VoiceOverService] 🗣 Playing: ${cue.name} '
-          '(pack=$_languageCode, vol=$_volume, speed=$_speed)');
-
+      // Dart state can still be `stopped` while the native player is preparing.
+      // Queue an unconditional stop barrier before reusing the player so a
+      // stale native play cannot overlap the incoming cue.
+      if (!await _awaitNative(
+        player,
+        () => player.stop(),
+        'reuse stop',
+        token,
+        ticket: ticket,
+      )) {
+        return;
+      }
+      if (!await _awaitNative(
+        player,
+        () => player.setReleaseMode(ReleaseMode.stop),
+        'set release mode',
+        token,
+        ticket: ticket,
+      )) {
+        return;
+      }
+      if (!await _claimPlayer(player, token: token, ticket: ticket)) return;
+      if (!await _applySpeed(player, token: token, ticket: ticket)) return;
+      debugPrint(
+          '[VoiceOverService] 🗣 Playing: ${cue.name} (pack=$_languageCode, vol=$_volume, speed=$_speed)');
       for (var i = 0; i < candidates.length; i++) {
-        if (!_holdsFloor(ticket)) return;
+        if (!_holdsFloorFor(ticket, token)) return;
         try {
-          await _playAsset(player, candidates[i],
-              awaitCompletion: awaitCompletion);
+          await _playAsset(
+            player,
+            candidates[i],
+            awaitCompletion: awaitCompletion,
+            token: token,
+            ticket: ticket,
+          );
+          if (!_holdsFloorFor(ticket, token)) return;
           return;
         } catch (e) {
           if (i == candidates.length - 1) rethrow;
-          debugPrint('[VoiceOverService] ↩ "${cue.name}" unavailable in '
-              '$_languageCode, retrying default pack: $e');
+          debugPrint(
+              '[VoiceOverService] ↩ "${cue.name}" unavailable in $_languageCode, retrying default pack: $e');
         }
       }
     } catch (e) {
-      debugPrint('[VoiceOverService] ✖ Error playing "${cue.name}": $e');
+      if (_holdsFloorFor(ticket, token)) {
+        debugPrint('[VoiceOverService] ✖ Error playing "${cue.name}": $e');
+      }
     }
   }
 
@@ -1535,11 +1677,29 @@ class VoiceOverService {
   /// A platform that does not support rate changes must not cost the child the
   /// cue itself, so a failure here is logged and the clip plays at its
   /// recorded pace.
-  Future<void> _applySpeed(AudioPlayer player) async {
+  Future<bool> _applySpeed(
+    AudioPlayer player, {
+    required int token,
+    required int ticket,
+  }) async {
+    if (!_holdsFloorFor(ticket, token)) return false;
     try {
-      await player.setPlaybackRate(_speed);
+      final applied = await _awaitNative(
+        player,
+        () => player.setPlaybackRate(_speed),
+        'playback rate',
+        token,
+        ticket: ticket,
+      );
+      // A timeout leaves an unresolved native operation in the queue. Do not
+      // start another operation on this player behind it.
+      return applied;
     } catch (e) {
-      debugPrint('[VoiceOverService] ⚠ Playback rate $_speed unavailable: $e');
+      if (_holdsFloorFor(ticket, token)) {
+        debugPrint(
+            '[VoiceOverService] ⚠ Playback rate $_speed unavailable: $e');
+      }
+      return _holdsFloorFor(ticket, token);
     }
   }
 
@@ -1548,78 +1708,121 @@ class VoiceOverService {
     AudioPlayer player,
     String assetPath, {
     required bool awaitCompletion,
+    required int token,
+    required int ticket,
   }) async {
+    if (!_holdsFloorFor(ticket, token)) return;
     if (!awaitCompletion) {
-      await player.play(AssetSource(assetPath));
+      await _awaitNative(
+        player,
+        () => player.play(AssetSource(assetPath)),
+        'play',
+        token,
+        ticket: ticket,
+      );
       return;
     }
 
     final completer = Completer<void>();
-    StreamSubscription<void>? subscription;
-    subscription = player.onPlayerComplete.listen((_) {
+    final subscription = player.onPlayerComplete.listen((_) {
       if (!completer.isCompleted) completer.complete();
-      subscription?.cancel();
     });
     try {
-      await player.play(AssetSource(assetPath));
-    } catch (_) {
+      final started = await _awaitNative(
+        player,
+        () => player.play(AssetSource(assetPath)),
+        'play',
+        token,
+        ticket: ticket,
+      );
+      if (!started || !_holdsFloorFor(ticket, token)) return;
+      await completer.future.timeout(
+        _kClipCompletionBackstop,
+        onTimeout: () => debugPrint(
+            '[VoiceOverService] ⏱ No completion reported for $assetPath'),
+      );
+    } finally {
       await subscription.cancel();
-      rethrow;
     }
-    // Backstopped: a caller awaiting this is usually gating what happens next.
-    await completer.future.timeout(
-      _kClipCompletionBackstop,
-      onTimeout: () => debugPrint(
-          '[VoiceOverService] ⏱ No completion reported for $assetPath'),
-    );
-    await subscription.cancel();
   }
 
-  /// Loads [cue] onto [player] and leaves it prepared, ready for `resume()`.
-  ///
-  /// Returns false when no candidate path could be loaded, so the caller can
-  /// skip that word instead of stalling the phrase on it.
-  Future<bool> _prepare(AudioPlayer player, VoiceOverCue cue) async {
+  Future<bool> _prepare(
+    AudioPlayer player,
+    VoiceOverCue cue, {
+    required int token,
+    required int ticket,
+  }) async {
+    if (!_holdsFloorFor(ticket, token)) return false;
     final candidates = assetPathCandidates(cue, _languageCode);
     for (var i = 0; i < candidates.length; i++) {
       try {
-        player.setReleaseMode(ReleaseMode.stop);
-        await _claimPlayer(player);
-        await _applySpeed(player);
-        await player.setSource(AssetSource(candidates[i]));
-        return true;
+        if (!_holdsFloorFor(ticket, token)) return false;
+        if (!await _awaitNative(
+          player,
+          () => player.setReleaseMode(ReleaseMode.stop),
+          'set release mode',
+          token,
+          ticket: ticket,
+        )) {
+          return false;
+        }
+        if (!await _claimPlayer(player, token: token, ticket: ticket)) {
+          return false;
+        }
+        if (!await _applySpeed(player, token: token, ticket: ticket)) {
+          return false;
+        }
+        if (!await _awaitNative(
+          player,
+          () => player.setSource(AssetSource(candidates[i])),
+          'prepare source',
+          token,
+          ticket: ticket,
+        )) {
+          return false;
+        }
+        return _holdsFloorFor(ticket, token);
       } catch (e) {
-        if (i == candidates.length - 1) {
-          debugPrint('[VoiceOverService] ✖ Could not prepare "${cue.name}": $e');
+        if (i == candidates.length - 1 && _holdsFloorFor(ticket, token)) {
+          debugPrint(
+              '[VoiceOverService] ✖ Could not prepare "${cue.name}": $e');
         }
       }
     }
     return false;
   }
 
-  /// Plays an already-prepared [player] and waits for the clip to finish.
-  ///
-  /// The completion listener is attached before `resume()`, so a very short
-  /// clip cannot finish in the window before anyone is listening, and it is
-  /// cancelled in a `finally` so a failed resume does not leak it.
-  Future<void> _playPrepared(AudioPlayer player) async {
+  Future<bool> _playPrepared(
+    AudioPlayer player, {
+    required int token,
+    required int ticket,
+  }) async {
+    if (!_holdsFloorFor(ticket, token)) return false;
     final completer = Completer<void>();
     final subscription = player.onPlayerComplete.listen((_) {
       if (!completer.isCompleted) completer.complete();
     });
     try {
-      await player.resume();
-      // Backstopped: a word whose completion is never reported would otherwise
-      // hold the whole phrase — and everything waiting on it — open forever.
+      final started = await _awaitNative(
+        player,
+        () => player.resume(),
+        'resume',
+        token,
+        ticket: ticket,
+      );
+      if (!started || !_holdsFloorFor(ticket, token)) return false;
       await completer.future.timeout(
         _kClipCompletionBackstop,
-        onTimeout: () =>
-            debugPrint('[VoiceOverService] ⏱ No completion reported for word'),
+        onTimeout: () => debugPrint(
+            '[VoiceOverService] ⏱ No completion reported for word'),
       );
+      return _holdsFloorFor(ticket, token);
     } finally {
       await subscription.cancel();
     }
   }
+
+
 
   /// Plays a sequence of cues as one phrase — "Tap the" · "Yellow" · "Star".
   ///
@@ -1638,61 +1841,86 @@ class VoiceOverService {
   /// [gap] is the deliberate pause between words, on top of the ~90 ms tail and
   /// ~40 ms lead the clips themselves carry. Keep it small: the silence a child
   /// hears is the sum of all three.
+  Future<bool> _stopPlayersForSequence(int token, int ticket) async {
+    if (!_holdsFloorFor(ticket, token)) return false;
+    _sequenceCancelled = true;
+    _abandonPhrase();
+    for (final player in List<AudioPlayer>.from(_players)) {
+      if (!_holdsFloorFor(ticket, token)) return false;
+      _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
+      if (!await _awaitNative(
+        player,
+        () => player.stop(),
+        'stop before sequence',
+        token,
+        ticket: ticket,
+      )) {
+        return false;
+      }
+    }
+    return _holdsFloorFor(ticket, token);
+  }
+
   Future<void> playSequence(
     List<VoiceOverCue> cues, {
     Duration gap = Duration.zero,
   }) async {
-    // Cancel any currently playing sequence or single cue, here and anywhere
-    // else in the app that is speaking.
+    if (!_enabled || _disposed) return;
+    final token = _token;
+    if (!_valid(token)) return;
     final ticket = _takeFloor();
-    await stop();
-    if (!_holdsFloor(ticket)) return;
+    if (!_holdsFloorFor(ticket, token)) return;
+    if (!await _stopPlayersForSequence(token, ticket)) return;
+    if (!_holdsFloorFor(ticket, token)) return;
     _sequenceCancelled = false;
-    if (cues.isEmpty) return;
-
-    // Published before the first word so anything fired in the same breath as
-    // this phrase waits for all of it, not for whichever word it caught.
+    if (cues.isEmpty || _players.isEmpty) return;
     final phrase = beginPhrase();
     try {
-      // One player per word, cycling through the pool.
       AudioPlayer playerFor(int i) => _players[i % _players.length];
       final ready = List<bool>.filled(cues.length, false);
-
       final preload = min(cues.length, _players.length);
       await Future.wait([
         for (var i = 0; i < preload; i++)
-          _prepare(playerFor(i), cues[i]).then((ok) => ready[i] = ok),
+          _prepare(
+            playerFor(i),
+            cues[i],
+            token: token,
+            ticket: ticket,
+          ).then((ok) => ready[i] = ok),
       ]);
-
+      if (!_holdsFloorFor(ticket, token)) return;
       for (var i = 0; i < cues.length; i++) {
-        if (_sequenceCancelled || !_holdsFloor(ticket)) break;
+        if (!_valid(token) || _sequenceCancelled || !_holdsFloorFor(ticket, token)) break;
         final player = playerFor(i);
-
         if (ready[i]) {
           _activePlayerIndex = i % _players.length;
           try {
-            await _playPrepared(player);
+            await _playPrepared(
+              player,
+              token: token,
+              ticket: ticket,
+            );
           } catch (e) {
-            debugPrint(
-                '[VoiceOverService] ✖ Error playing "${cues[i].name}": $e');
+            if (_valid(token)) debugPrint('[VoiceOverService] ✖ Error playing "${cues[i].name}": $e');
           }
         }
-
-        if (_sequenceCancelled) break;
-
-        // This player is free again; load the word that will reuse it. Only
-        // reached for sequences longer than the pool.
+        if (!_valid(token) || _sequenceCancelled) break;
         final next = i + _players.length;
         if (next < cues.length) {
-          ready[next] = await _prepare(playerFor(next), cues[next]);
+          ready[next] = await _prepare(
+            playerFor(next),
+            cues[next],
+            token: token,
+            ticket: ticket,
+          );
+          if (!_holdsFloorFor(ticket, token)) break;
         }
-
         if (i != cues.length - 1) {
-          await Future.delayed(gap);
+          await Future<void>.delayed(gap);
+          if (!_holdsFloorFor(ticket, token)) break;
         }
       }
     } finally {
-      // A newer phrase may have replaced this one; only clear our own.
       if (identical(_phrase, phrase)) _phrase = null;
       if (!phrase.isCompleted) phrase.complete();
     }
@@ -1838,13 +2066,10 @@ class VoiceOverService {
   /// producing words underneath whatever is starting now — the pooled players
   /// mean stopping the current clip does not stop the phrase it belongs to.
   int _takeFloor() {
+    if (_disposed) return _myTicket;
     _sequenceCancelled = true;
     _abandonPhrase();
     _myTicket = ++_floorTicket;
-
-    // Tag this claim's layer. Anything that is not immediate feedback ends the
-    // feedback episode: whatever spoke last is now what the child is hearing,
-    // so a praise line arriving after it is no longer competing with a label.
     if (_claimingImmediate) {
       _claimingImmediate = false;
       _immediateStartedAt = DateTime.now();
@@ -1852,56 +2077,61 @@ class VoiceOverService {
     } else {
       _immediateStartedAt = null;
     }
-
-    for (final other in _live) {
-      if (identical(other, this)) continue;
+    for (final other in List<VoiceOverService>.from(_live)) {
+      if (identical(other, this) || other._disposed) continue;
       other._sequenceCancelled = true;
       other._abandonPhrase();
       other.yieldedCount++;
       for (final player in other._players) {
-        // Unconditionally, not only when `playing`: a player still preparing
-        // is precisely the one that would otherwise surface later. A player
-        // that is not speaking takes the immediate stop inside here.
-        other._fadeOutAndStop(player); // intentionally not awaited
+        other._fadeOutAndStop(player);
       }
     }
     return _myTicket;
   }
 
-  /// Whether [ticket] is still the current claim on the floor.
-  static bool _holdsFloor(int ticket) => ticket == _floorTicket;
 
-  /// Stop the currently playing voice-over cue, if any.
-  /// Also cancels any in-progress [playSequence] call.
-  ///
-  /// Immediate, not faded: callers use this to clear the way before something
-  /// else speaks, or when the service is going away, and neither can afford to
-  /// wait out a ramp. Any fade in flight is invalidated so it cannot come back
-  /// and touch a player that has since been reused.
   Future<void> stop() async {
+    if (_disposed) return;
+    _generation++;
     _sequenceCancelled = true;
     _abandonPhrase();
-    for (final player in _players) {
+    _myTicket = 0;
+    _immediateStartedAt = null;
+    _immediateTicket = 0;
+    for (final player in List<AudioPlayer>.from(_players)) {
       _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
-      await player.stop();
+      try {
+        await _enqueuePlayerOperation(player, () => player.stop());
+      } catch (_) {
+        // A failed stop must not prevent the remaining players from stopping.
+      }
     }
   }
 
-  // ── Lifecycle ───────────────────────────────────────────────────────
-
-  /// Release audio resources. Call when the service is no longer needed.
-  Future<void> dispose() async {
+  Future<void> dispose() {
+    if (_disposeFuture != null) return _disposeFuture!;
+    _disposed = true;
+    _generation++;
+    _myTicket = 0;
+    _immediateStartedAt = null;
+    _immediateTicket = 0;
     _live.remove(this);
     _sequenceCancelled = true;
     _abandonPhrase();
-    for (final player in _players) {
-      // Invalidate first: a fade still looping would otherwise reach for a
-      // player that no longer exists.
-      _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
-      await player.dispose();
-    }
-    _fadeGeneration.clear();
-    _players.clear();
+    final future = () async {
+      for (final player in List<AudioPlayer>.from(_players)) {
+        _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
+        try {
+          await _enqueuePlayerOperation(player, () => player.dispose());
+        } catch (_) {
+          // Continue disposing the rest of the pool.
+        }
+      }
+      _fadeGeneration.clear();
+      _players.clear();
+    }();
+    _disposeFuture = future;
+    return future;
   }
 
   // ── Composite Instruction Helpers ──────────────────────────────────
