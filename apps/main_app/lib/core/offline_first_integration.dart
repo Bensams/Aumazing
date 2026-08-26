@@ -109,7 +109,10 @@ class OfflineFirstIntegration {
           if (auth.isGuestMode) {
             final guestId = auth.currentGuestId;
             if (guestId != null) {
-              syncService.onUserAuthenticated(userId);
+              syncService.onUserAuthenticated(
+                userId,
+                previousGuestUserId: guestId,
+              );
             }
           }
 

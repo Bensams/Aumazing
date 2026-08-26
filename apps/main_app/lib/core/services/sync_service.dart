@@ -968,9 +968,12 @@ class SyncService {
       };
 
   /// Handle user authentication change (backfill guest data)
-  Future<void> onUserAuthenticated(String userId) async {
-    // Backfill any guest-created records
-    await _localDb.backfillGuestData('guest', userId);
+  Future<void> onUserAuthenticated(
+    String userId, {
+    String? previousGuestUserId,
+  }) async {
+    // Backfill records from the guest identity that existed before auth.
+    await _localDb.backfillGuestData(previousGuestUserId ?? 'guest', userId);
 
     // Trigger sync to upload backfilled data
     if (_connectivity.isOnline) {

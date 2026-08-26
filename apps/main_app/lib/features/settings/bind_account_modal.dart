@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
@@ -45,49 +46,24 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
-      // The identity the guest's children — and their saved active-child
-      // selection (AUM-151) — are currently keyed under.
+      // Capture the source before anonymous sign-in can replace the effective
+      // identity. Local records and active-child state still use this ID.
       final previousUserId = widget.authService.effectiveUserId;
-
-      // Ensure we have a valid Supabase session before binding.
-      // If user only has local guest mode (no Supabase session), sign in anonymously first.
       if (widget.authService.currentUser == null) {
         await widget.authService.signInAnonymously();
       }
 
-      // Convert anonymous/guest to permanent account
-      await widget.authService.convertAnonymousToPermanent(
+      final response = await widget.authService.convertAnonymousToPermanent(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-
-      // Clear stored guest session so a new guest account will be created
-      // on the next guest sign-in (this account is now bound).
-      await widget.authService.clearStoredGuestSession();
-
-      // Backfill guest data and sync to Supabase
-      final newUserId = widget.authService.currentUser?.id;
-      if (newUserId != null) {
-        if (previousUserId != null) {
-          await ChildProvider.migrateSavedActiveChild(
-            fromUserId: previousUserId,
-            toUserId: newUserId,
-          );
-        }
-        await syncService.onUserAuthenticated(newUserId);
-      }
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account bound successfully!'),
-            backgroundColor: AppColors.mint,
-          ),
-        );
-      }
+      await _finishBinding(
+        response,
+        previousUserId,
+        'Account bound successfully!',
+      );
     } catch (e) {
-      setState(() => _errorMessage = friendly(e));
+      if (mounted) setState(() => _errorMessage = friendly(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -102,49 +78,67 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
-      // The identity the guest's children — and their saved active-child
-      // selection (AUM-151) — are currently keyed under.
+      // Capture the source before anonymous sign-in can replace the effective
+      // identity. Local records and active-child state still use this ID.
       final previousUserId = widget.authService.effectiveUserId;
-
-      // Ensure we have a valid Supabase session before binding.
-      // If user only has local guest mode (no Supabase session), sign in anonymously first.
       if (widget.authService.currentUser == null) {
         await widget.authService.signInAnonymously();
       }
 
-      await widget.authService.bindAnonymousWithGoogle();
-
-      // Clear stored guest session so a new guest account will be created
-      // on the next guest sign-in (this account is now bound).
-      await widget.authService.clearStoredGuestSession();
-
-      // Backfill guest data and sync to Supabase
-      final newUserId = widget.authService.currentUser?.id;
-      if (newUserId != null) {
-        if (previousUserId != null) {
-          await ChildProvider.migrateSavedActiveChild(
-            fromUserId: previousUserId,
-            toUserId: newUserId,
-          );
-        }
-        await syncService.onUserAuthenticated(newUserId);
-      }
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google account linked successfully!'),
-            backgroundColor: AppColors.mint,
-          ),
-        );
-      }
+      final response = await widget.authService.bindAnonymousWithGoogle();
+      await _finishBinding(
+        response,
+        previousUserId,
+        'Google account linked successfully!',
+      );
     } catch (e) {
-      setState(() => _errorMessage = friendly(e));
+      if (mounted) setState(() => _errorMessage = friendly(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _finishBinding(
+    AuthResponse response,
+    String? previousUserId,
+    String successMessage,
+  ) async {
+    // The binding response is authoritative. Only use the current session as
+    // a fallback when it is already a permanent account, never an anonymous
+    // identity that would leave records under the wrong owner.
+    final newUserId =
+        response.user?.id ??
+        (widget.authService.currentUser?.isAnonymous == true
+            ? null
+            : widget.authService.currentUser?.id);
+
+    // Binding succeeded, so discard both persisted and in-memory guest state.
+    await widget.authService.clearStoredGuestSession();
+    widget.authService.clearGuestMode();
+
+    if (newUserId != null) {
+      if (previousUserId != null) {
+        await ChildProvider.migrateSavedActiveChild(
+          fromUserId: previousUserId,
+          toUserId: newUserId,
+        );
+      }
+      await syncService.onUserAuthenticated(
+        newUserId,
+        previousGuestUserId: previousUserId,
+      );
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage),
+          backgroundColor: AppColors.mint,
+        ),
+      );
     }
   }
 
@@ -291,6 +285,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
                   backgroundColor: AppColors.primaryPurple,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  alignment: Alignment.center,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
