@@ -83,6 +83,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     required this.onDropped,
     this.onMoved,
     this.language = GameLanguage.english,
+    this.dragScale = 1.12,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size) {
@@ -94,6 +95,17 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
 
   /// Language the card's label is printed in.
   final GameLanguage language;
+
+  /// The scale the card takes while it is held.
+  ///
+  /// The default grows the card a little — the right affordance when the drop
+  /// target is a wide bin the card lands in anyway. A game that drags the card
+  /// over a target that must stay visible (Tulong, Kaibigan! hands a card to a
+  /// character) passes a value below 1, so the held card shrinks and the
+  /// character keeps showing. The fingertip-follow mixin adjusts for the
+  /// scale every tick, so [visualCenter] — the point drop hit-testing uses —
+  /// stays exactly where the finger is either way.
+  final double dragScale;
 
   /// Fired when the child lifts the item (drag start).
   final void Function(DraggableItem item) onPickedUp;
@@ -151,7 +163,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     priority = 100; // float above other items + bins while dragging
     startFingertipFollow(event.canvasPosition);
     add(ScaleEffect.to(
-      Vector2.all(1.12),
+      Vector2.all(dragScale),
       EffectController(duration: 0.12, curve: Curves.easeOut),
     ));
     onPickedUp(this);
