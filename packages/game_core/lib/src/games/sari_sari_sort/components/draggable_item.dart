@@ -131,6 +131,18 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   bool isLocked = false;
 
   bool _dragging = false;
+
+  /// True while [onDragCancel] is dispatching the framework's
+  /// `super.onDragCancel(event)`.
+  ///
+  /// Flame implements `DragCallbacks.onDragCancel` as
+  /// `onDragEnd(event.toDragEnd())` (a virtual call), so the required super
+  /// dispatch would otherwise re-enter this component's own [onDragEnd] with
+  /// `_dragging` still true and run the drop path — hit-testing, scoring and
+  /// registering a drop that was actually cancelled. The flag lets the super
+  /// lifecycle run while the drop path stays out.
+  bool _inCancelDispatch = false;
+
   bool _showError = false;
 
   late TextPaint _emojiPaint;
@@ -181,7 +193,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (isLocked || !_dragging) return;
+    if (isLocked || !_dragging || _inCancelDispatch) return;
     // Read the centre before the scale-down starts, so the drop point is the
     // item as the child last saw it.
     final dropCenter = visualCenter;
@@ -195,7 +207,9 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
 
   @override
   void onDragCancel(DragCancelEvent event) {
-    super.onDragCancel(event);
+    _inCancelDispatch = true;
+    super.onDragCancel(event); // dispatches onDragEnd; guarded above
+    _inCancelDispatch = false;
     _dragging = false;
     stopFingertipFollow();
     onMoved?.call(null);

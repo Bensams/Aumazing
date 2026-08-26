@@ -177,7 +177,7 @@ void main() {
       expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
     });
 
-    test('cancelling mid-pickup still ends at full size and home', () {
+    test('cancelling mid-pickup restores full size, home, and never drops', () {
       shrinkSubject.onDragStart(start(Vector2(160, 160)));
       held(0.05); // the 0.12s pickup scale effect is still in flight
 
@@ -192,6 +192,17 @@ void main() {
       expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
       expect(shrinkSubject.position.x, closeTo(100, 0.5));
       expect(shrinkSubject.position.y, closeTo(100, 0.5));
+      expect(droppedAt, isNull,
+          reason:
+              'a cancel must not be scored as a drop — Flame dispatches '
+              'onDragEnd from DragCallbacks.onDragCancel, which must not run '
+              'the component drop path');
+
+      // The drag state is cleared, so a later onDragEnd cannot score the
+      // cancelled drag either.
+      shrinkSubject.onDragEnd(DragEndEvent(1, DragEndDetails()));
+      held(0.5);
+      expect(droppedAt, isNull);
     });
 
     test('releasing mid-pickup restores full size, so the release wins', () {
