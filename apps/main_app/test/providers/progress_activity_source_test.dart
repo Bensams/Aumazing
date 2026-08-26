@@ -89,6 +89,29 @@ void main() {
     expect(db.sessionQueries, ['child-a', 'child-b']);
     expect(provider.recentSessions.single.id, 'b-1');
   });
+  test('resolves a session only within the loaded child scope', () async {
+    final matching = session('child-a', id: 'session-a');
+    final db = _RecordingDb({
+      'child-a': [matching],
+      'child-b': [session('child-b', id: 'session-b')],
+    });
+    final provider = ProgressProvider(localDb: db);
+
+    await provider.loadProgress('child-a');
+
+    expect(
+      provider.sessionFor(childId: 'child-a', sessionId: 'session-a'),
+      same(matching),
+    );
+    expect(
+      provider.sessionFor(childId: 'child-b', sessionId: 'session-a'),
+      isNull,
+    );
+    expect(
+      provider.sessionFor(childId: 'child-a', sessionId: 'missing'),
+      isNull,
+    );
+  });
 
   // ── Live hand-off from play (no reload, no network) ──────────────────
   //
@@ -135,6 +158,27 @@ void main() {
     provider.addSession(played);
 
     expect(provider.recentSessions, hasLength(1));
+  });
+  test('session lookup requires the loaded child and exact session id', () async {
+    final matching = session('child-a', id: 'session-a');
+    final provider = ProgressProvider(
+      localDb: _RecordingDb({'child-a': [matching]}),
+    );
+
+    await provider.loadProgress('child-a');
+
+    expect(
+      provider.sessionFor(childId: 'child-a', sessionId: 'session-a'),
+      same(matching),
+    );
+    expect(
+      provider.sessionFor(childId: 'child-b', sessionId: 'session-a'),
+      isNull,
+    );
+    expect(
+      provider.sessionFor(childId: 'child-a', sessionId: 'deleted'),
+      isNull,
+    );
   });
 }
 
