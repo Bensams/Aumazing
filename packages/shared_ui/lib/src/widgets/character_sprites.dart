@@ -179,6 +179,20 @@ class CharacterSprites {
     }
   }
 
+  /// Loads [character] wearing [costume], falling back to the base character
+  /// when costume sheets are unavailable.
+  static Future<CharacterSprites> costumed(
+    String character,
+    String costume,
+  ) async {
+    if (costume.isEmpty || costume == 'none') return _load(character);
+    try {
+      return await _load('${character}_$costume');
+    } catch (_) {
+      return _load(character);
+    }
+  }
+
   /// Loads every sheet in [layout] for [name]. Sheets are generated offline by
   /// `scripts/generate_sprites.py`; see that script for the grid contract.
   static Future<CharacterSprites> _load(String name) {
