@@ -15,7 +15,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart';
+import 'package:aumazing/features/premium/premium_upgrade_screen.dart';
 final _profile = ChildProfile(
   id: 'child-1',
   userId: 'user-1',
@@ -35,7 +36,11 @@ const _prediction = AiAssessmentResponse(
   supportLevel: 'moderate',
   recommendedModules: ['match_it', 'copy_me'],
   moduleDetails: [
-    ModuleRecommendation(gameId: 'match_it', name: 'Match It', startingLevel: 2),
+    ModuleRecommendation(
+      gameId: 'match_it',
+      name: 'Match It',
+      startingLevel: 2,
+    ),
     ModuleRecommendation(gameId: 'copy_me', name: 'Copy Me', startingLevel: 2),
   ],
   areaLevels: {
@@ -48,7 +53,38 @@ const _prediction = AiAssessmentResponse(
   },
 );
 
+const _completedPathPrediction = AiAssessmentResponse(
+  predictedProfile: 'play_support',
+  confidence: 0.9,
+  summary: 'test',
+  supportLevel: 'moderate',
+  recommendedModules: ['match_it'],
+  moduleDetails: [
+    ModuleRecommendation(
+      gameId: 'match_it',
+      name: 'Match It',
+      startingLevel: 2,
+    ),
+  ],
+  areaLevels: {
+    'play': AreaLevel(
+      level: 'needs_support',
+      levelInt: 0,
+      levelName: 'Needs Support',
+      confidence: 0.9,
+    ),
+  },
+);
+
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'http://localhost:54321',
+      publishableKey: 'test-publishable-key',
+    );
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     PendingPathLaunch.take();
@@ -56,8 +92,9 @@ void main() {
 
   tearDown(PendingPathLaunch.take);
 
-  testWidgets('path Next parks the launch and pops home instead of swapping',
-      (tester) async {
+  testWidgets('path Next parks the launch and pops home instead of swapping', (
+    tester,
+  ) async {
     await tester.pumpWidget(_wrap(const _LobbyWithGame()));
     await tester.pump();
 
@@ -84,6 +121,80 @@ void main() {
       reason: 'the lobby is what launches Copy Me, once the ship docks',
     );
   });
+
+  testWidgets(
+    'locked repeat cycle ignores path milestones and uses registry Next',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const _LobbyWithGame(),
+          nextCycleLocked: true,
+          prediction: _completedPathPrediction,
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('finish'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Copy Me'),
+        findsOneWidget,
+        reason: 'locked paths fall back to the next registry game',
+      );
+      expect(find.text('Path Complete!'), findsNothing);
+      expect(PendingPathLaunch.take(), isNull);
+
+      await tester.tap(find.text('Lobby'));
+      await tester.pumpAndSettle();
+      expect(PendingPathLaunch.take(), isNull);
+    },
+  );
+
+  testWidgets(
+    'locked recommended path advertises Premium without launching a game',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const ChildModeLobbyScreen(openPath: true),
+          nextCycleLocked: true,
+          prediction: _completedPathPrediction,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Fresh Learning Path Locked'), findsOneWidget);
+      expect(
+        find.text(
+          'Ask a parent to subscribe to Premium to unlock a fresh '
+          'personalized path after every assessment.',
+        ),
+        findsOneWidget,
+      );
+
+      // This is the child-facing locked action, not a direct Premium route.
+      await tester.tap(find.text('Unlock'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PremiumUpgradeScreen), findsOneWidget);
+      expect(find.text('Aumazing Premium'), findsOneWidget);
+      expect(find.text('Continuous AI recommendations'), findsOneWidget);
+      expect(
+        find.text('Fresh learning paths after every assessment'),
+        findsOneWidget,
+      );
+      expect(
+        PendingPathLaunch.take(),
+        isNull,
+        reason: 'a locked path must not park or launch a recommended game',
+      );
+      expect(find.text('play'), findsNothing);
+    },
+  );
+
 
   testWidgets('path Lobby pops home without parking a launch', (tester) async {
     await tester.pumpWidget(_wrap(const _LobbyWithGame()));
@@ -114,17 +225,20 @@ class _LobbyWithGame extends StatelessWidget {
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => Scaffold(
-                body: Builder(
-                  builder: (gameContext) => TextButton(
-                    onPressed: () => GameEndChoiceDialog.show(
-                      gameContext,
-                      currentGameId: 'match_it',
+              builder:
+                  (_) => Scaffold(
+                    body: Builder(
+                      builder:
+                          (gameContext) => TextButton(
+                            onPressed:
+                                () => GameEndChoiceDialog.show(
+                                  gameContext,
+                                  currentGameId: 'match_it',
+                                ),
+                            child: const Text('finish'),
+                          ),
                     ),
-                    child: const Text('finish'),
                   ),
-                ),
-              ),
             ),
           );
         },
@@ -134,14 +248,22 @@ class _LobbyWithGame extends StatelessWidget {
   }
 }
 
-Widget _wrap(Widget home) {
+Widget _wrap(
+  Widget home, {
+  bool nextCycleLocked = false,
+  AiAssessmentResponse prediction = _prediction,
+}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>(
         create: (_) => _TestChildProvider(),
       ),
       ChangeNotifierProvider<AssessmentProvider>(
-        create: (_) => _TestAssessmentProvider(),
+        create:
+            (_) => _TestAssessmentProvider(
+              nextCycleLocked: nextCycleLocked,
+              prediction: prediction,
+            ),
       ),
       ChangeNotifierProvider<StarsProvider>(
         create: (_) => _SilentStarsProvider(),
@@ -163,13 +285,12 @@ class _SilentStarsProvider extends StarsProvider {
   Future<StarAwardResult> awardForPlay({
     required String playKey,
     StarReason reason = StarReason.gamePlayed,
-  }) async =>
-      const StarAwardResult(StarAwardOutcome.noChild);
+  }) async => const StarAwardResult(StarAwardOutcome.noChild);
 }
 
 class _TestChildProvider extends ChildProvider {
   _TestChildProvider()
-      : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
+    : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
 
   @override
   ChildProfile? get profile => _profile;
@@ -179,8 +300,18 @@ class _TestChildProvider extends ChildProvider {
 }
 
 class _TestAssessmentProvider extends AssessmentProvider {
+  _TestAssessmentProvider({
+    required this.nextCycleLocked,
+    required this.prediction,
+  });
+
   @override
-  AiAssessmentResponse? get aiPrediction => _prediction;
+  final bool nextCycleLocked;
+
+  final AiAssessmentResponse prediction;
+
+  @override
+  AiAssessmentResponse? get aiPrediction => prediction;
 
   @override
   Set<String> get pathCompletedGameIds => const {'match_it'};

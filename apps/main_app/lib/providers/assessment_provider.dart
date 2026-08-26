@@ -26,6 +26,30 @@ import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
 
+typedef AssessmentPredictionGenerator =
+    Future<AiAssessmentResponse?> Function({
+      required String childId,
+      required List<GameplaySession> sessions,
+    });
+
+// A nullable named argument cannot otherwise distinguish an omitted value
+// from an explicitly supplied null. Keeping the parameter's public type
+// nullable preserves existing overrides while allowing snapshots to opt out
+// of reusing the provider's latest prediction.
+class _OmittedPrediction extends AiAssessmentResponse {
+  const _OmittedPrediction()
+      : super(
+          predictedProfile: '',
+          confidence: 0,
+          summary: '',
+          supportLevel: '',
+          recommendedModules: const [],
+        );
+}
+
+const _omittedPrediction = _OmittedPrediction();
+
+
 /// Manages assessment state: collecting gameplay metrics, storing results,
 /// and providing recommendation data.
 ///
@@ -33,6 +57,9 @@ import '../services/rubric/rubric.dart';
 /// data is written with `sync_status = 'pending'` and automatically synced
 /// to Supabase by the [SyncService].
 class AssessmentProvider extends ChangeNotifier {
+  // Overrides only the model call; persistence and entitlement behavior stay
+  // in this provider so focused tests exercise the real gating path.
+  final AssessmentPredictionGenerator? _predictionGeneratorOverride;
   // Lazily constructed so the provider can be created in widget tests
   // without a live Supabase instance (the defaults touch Supabase).
   AssessmentGateway? _assessmentServiceOverride;
@@ -115,8 +142,10 @@ class AssessmentProvider extends ChangeNotifier {
   AssessmentProvider({
     AssessmentGateway? assessmentService,
     core_db.LocalDbService? localDb,
+    AssessmentPredictionGenerator? predictionGenerator,
   }) : _assessmentServiceOverride = assessmentService,
-       _localDbOverride = localDb;
+       _localDbOverride = localDb,
+       _predictionGeneratorOverride = predictionGenerator;
 
   /// The gameplay context sessions of an assessment run carry.
   static String expectedContextFor(String type) =>
@@ -344,7 +373,7 @@ class AssessmentProvider extends ChangeNotifier {
   Future<AssessmentRunSnapshot> captureRunSnapshot(
     String childId, {
     required String assessmentType,
-    AiAssessmentResponse? prediction,
+    AiAssessmentResponse? prediction = _omittedPrediction,
     SupportProfile? profile,
   }) async {
     final results = assessmentType == 'post' ? _postResults : _preResults;
@@ -355,7 +384,9 @@ class AssessmentProvider extends ChangeNotifier {
       completedAt: DateTime.now(),
       results: List.unmodifiable(results),
       profile: profile ?? _supportProfile,
-      prediction: prediction ?? _aiPrediction,
+      prediction: identical(prediction, _omittedPrediction)
+          ? _aiPrediction
+          : prediction,
     );
 
     if (assessmentType == 'post') {
@@ -1240,27 +1271,32 @@ class AssessmentProvider extends ChangeNotifier {
     final onDevice = OnDeviceAiAssessmentService();
     final service = AiAssessmentService();
     try {
-      // Prefer on-device ONNX inference (works offline); fall back to the
-      // cloud API only if the on-device model isn't available.
+      // Prefer the injected generator in focused tests; production keeps the
+      // on-device, cloud, and rubric fallback chain unchanged.
       var modelSource = 'xgboost_onnx';
       var rubricUsed = false;
-      final prediction = await const AiPredictionFallbackService().predict(
-        onDevice:
-            () => onDevice.predictFromSessions(
+      final prediction = _predictionGeneratorOverride != null
+          ? await _predictionGeneratorOverride(
               childId: childId,
               sessions: runSessionList,
-            ),
-        cloud:
-            () => service.predictFromSessions(
-              childId: childId,
-              sessions: runSessionList,
-            ),
-        rubric: () async {
-          if (_rubricResult == null) return null;
-          rubricUsed = true;
-          return _predictionFromRubric(_rubricResult!);
-        },
-      );
+            )
+          : await const AiPredictionFallbackService().predict(
+              onDevice:
+                  () => onDevice.predictFromSessions(
+                    childId: childId,
+                    sessions: runSessionList,
+                  ),
+              cloud:
+                  () => service.predictFromSessions(
+                    childId: childId,
+                    sessions: runSessionList,
+                  ),
+              rubric: () async {
+                if (_rubricResult == null) return null;
+                rubricUsed = true;
+                return _predictionFromRubric(_rubricResult!);
+              },
+            );
       if (prediction?.onDevice == true) {
         debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
       } else if (prediction != null && !rubricUsed) {
@@ -1277,8 +1313,16 @@ class AssessmentProvider extends ChangeNotifier {
           'prediction from rubric labels',
         );
       }
-      _aiPrediction = prediction;
-      if (prediction != null) {
+
+      // A free repeat-cycle post prediction is still returned for comparison
+      // and result scoring, but it must not become the active next path. The
+      // live entitlement gate is evaluated after post finalization, when
+      // [nextCycleLocked] reflects the completed run.
+      final activatesNextPath = type != 'post' || !nextCycleLocked;
+      if (activatesNextPath) {
+        _aiPrediction = prediction;
+      }
+      if (prediction != null && activatesNextPath) {
         // Persist so the learning path and per-game difficulty survive app
         // restarts (the prediction otherwise only lives in memory).
         await _persistAiPrediction(
@@ -1289,7 +1333,9 @@ class AssessmentProvider extends ChangeNotifier {
         );
         // New assessment → new path → the sequence restarts at step 1.
         await _resetPathProgress(childId);
+      }
 
+      if (prediction != null) {
         // Mark this run's results as AI-assessed so they can be
         // distinguished from rubric-only results. Only the results of the
         // run the prediction came from are touched.
