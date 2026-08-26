@@ -102,6 +102,18 @@ void main() {
         isTrue,
       );
     });
+    test('uses adjusted accuracy when retries exceed scored items', () {
+      final results = [
+        // Retries mean totalItems is 4, but only 4/10 attempts were correct.
+        // Raw score/totalItems would be 1.0; canonical adjusted accuracy is .4.
+        _result('copy_me', score: 4, errorCount: 6, totalItems: 4),
+      ];
+
+      expect(
+        local_scoring.AssessmentScoring.isCriticallyPoor(results),
+        isTrue,
+      );
+    });
 
     test('does not mark exactly 0.50 as critical', () {
       final results = [
