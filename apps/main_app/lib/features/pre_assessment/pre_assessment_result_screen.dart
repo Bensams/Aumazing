@@ -5,6 +5,8 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
+import '../../services/scoring_service.dart' as local_scoring;
+import '../therapy/therapy_center_recommendation_dialog.dart';
 import 'assessment_result_view.dart';
 
 /// The result shown immediately after the child finishes the pre-assessment
@@ -34,12 +36,24 @@ class PreAssessmentResultScreen extends StatefulWidget {
 }
 
 class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
+  bool _therapyCenterPromptShown = false;
+
   @override
   void initState() {
     super.initState();
     // Back to the parent: the child just finished the landscape activities.
     lockParentAdaptive();
+
+    if (local_scoring.AssessmentScoring.isCriticallyPoor(widget.results)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted || _therapyCenterPromptShown) return;
+        _therapyCenterPromptShown = true;
+        await showTherapyCenterRecommendation(context);
+      });
+    }
+
   }
+
 
   @override
   Widget build(BuildContext context) {
