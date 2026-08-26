@@ -15,7 +15,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart';
+import 'package:aumazing/features/premium/premium_upgrade_screen.dart';
 final _profile = ChildProfile(
   id: 'child-1',
   userId: 'user-1',
@@ -76,6 +77,14 @@ const _completedPathPrediction = AiAssessmentResponse(
 );
 
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'http://localhost:54321',
+      publishableKey: 'test-publishable-key',
+    );
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     PendingPathLaunch.take();
@@ -143,6 +152,49 @@ void main() {
       expect(PendingPathLaunch.take(), isNull);
     },
   );
+
+  testWidgets(
+    'locked recommended path advertises Premium without launching a game',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const ChildModeLobbyScreen(openPath: true),
+          nextCycleLocked: true,
+          prediction: _completedPathPrediction,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Fresh Learning Path Locked'), findsOneWidget);
+      expect(
+        find.text(
+          'Ask a parent to subscribe to Premium to unlock a fresh '
+          'personalized path after every assessment.',
+        ),
+        findsOneWidget,
+      );
+
+      // This is the child-facing locked action, not a direct Premium route.
+      await tester.tap(find.text('Unlock'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PremiumUpgradeScreen), findsOneWidget);
+      expect(find.text('Aumazing Premium'), findsOneWidget);
+      expect(find.text('Continuous AI recommendations'), findsOneWidget);
+      expect(
+        find.text('Fresh learning paths after every assessment'),
+        findsOneWidget,
+      );
+      expect(
+        PendingPathLaunch.take(),
+        isNull,
+        reason: 'a locked path must not park or launch a recommended game',
+      );
+      expect(find.text('play'), findsNothing);
+    },
+  );
+
 
   testWidgets('path Lobby pops home without parking a launch', (tester) async {
     await tester.pumpWidget(_wrap(const _LobbyWithGame()));
