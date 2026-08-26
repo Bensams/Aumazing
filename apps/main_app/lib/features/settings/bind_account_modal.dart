@@ -62,11 +62,19 @@ class _BindAccountModalState extends State<BindAccountModal> {
       }
 
       final email = _emailController.text.trim();
-      await widget.authService.convertAnonymousToPermanent(
+      final response = await widget.authService.convertAnonymousToPermanent(
         email: email,
         password: _passwordController.text,
       );
       if (!mounted) return;
+      if (response.user?.isAnonymous == false) {
+        await _finishBinding(
+          response,
+          previousUserId,
+          'Account bound successfully!',
+        );
+        return;
+      }
       setState(() {
         _pendingEmailBinding = _BindAccountState(
           previousUserId: previousUserId,

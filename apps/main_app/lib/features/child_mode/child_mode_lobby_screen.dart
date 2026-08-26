@@ -1521,12 +1521,16 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
               AppPrimaryButton(
                 label: 'Unlock',
                 icon: Icons.star_rounded,
-                onPressed:
-                    () => Navigator.of(context).push(
+                onPressed: () async {
+                  final verified = await ParentVerificationDialog.show(context);
+                  if (verified && mounted) {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const PremiumUpgradeScreen(),
                       ),
-                    ),
+                    );
+                  }
+                },
               ),
             ],
           ),
