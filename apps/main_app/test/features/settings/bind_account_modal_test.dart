@@ -3,6 +3,7 @@ import 'package:aumazing/features/settings/bind_account_modal.dart';
 import '../../support/fake_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,6 +15,9 @@ void main() {
   testWidgets('email binding clears guest state and centers its label', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues(
+      const {'active_child_guest-user': 'child-1'},
+    );
     final auth = _BindingTestAuth();
     auth.initializeGuestMode();
     await _pumpModal(tester, auth);
@@ -42,12 +46,15 @@ void main() {
     expect(auth.emailCalls, 1);
     expect(auth.email, 'parent@example.com');
     expect(auth.password, 'secret');
-    _expectBoundState(auth);
+    await _expectBoundState(auth);
   });
 
   testWidgets('Google binding clears guest state and uses response identity', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues(
+      const {'active_child_guest-user': 'child-1'},
+    );
     final auth = _BindingTestAuth();
     auth.initializeGuestMode();
     await _pumpModal(tester, auth);
@@ -57,8 +64,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(auth.googleCalls, 1);
-    _expectBoundState(auth);
+    await _expectBoundState(auth);
   });
+
 }
 
 Future<void> _pumpModal(WidgetTester tester, AuthService auth) async {
@@ -73,15 +81,27 @@ Future<void> _pumpModal(WidgetTester tester, AuthService auth) async {
   await tester.pumpAndSettle();
 }
 
-void _expectBoundState(_BindingTestAuth auth) {
+Future<SharedPreferences> _prefs() => SharedPreferences.getInstance();
+
+Future<void> _expectBoundState(_BindingTestAuth auth) async {
   expect(auth.isGuestMode, isFalse);
   expect(auth.isBoundAccount, isTrue);
   expect(auth.effectiveUserId, 'bound-user');
   expect(auth.currentUser?.isAnonymous, isFalse);
+  expect(auth.storedSessionCleared, isTrue);
+
+  final prefs = await _prefs();
+  expect(prefs.getString('active_child_guest-user'), isNull);
+  expect(prefs.getString('active_child_bound-user'), 'child-1');
 }
 
 class _BindingTestAuth extends AuthService {
   _BindingTestAuth() : super(supabaseAuth: NoopSupabaseAuthClient());
+  @override
+  String initializeGuestMode() {
+    _effectiveId = 'guest-user';
+    return super.initializeGuestMode();
+  }
 
   static const _boundUser = User(
     id: 'bound-user',
@@ -94,12 +114,18 @@ class _BindingTestAuth extends AuthService {
   );
 
   User? _user;
+  String? _effectiveId;
+  bool storedSessionCleared = false;
   int emailCalls = 0;
   int googleCalls = 0;
   String? email;
   String? password;
+
   @override
   User? get currentUser => _user;
+
+  @override
+  String? get effectiveUserId => _effectiveId ?? super.effectiveUserId;
 
   @override
   bool get isBoundAccount =>
@@ -108,13 +134,14 @@ class _BindingTestAuth extends AuthService {
   @override
   Future<AuthResponse> signInAnonymously() async {
     _user = const User(
-      id: 'guest-user',
+      id: 'anonymous-user',
       appMetadata: {},
       userMetadata: null,
       aud: 'authenticated',
       createdAt: '2026-01-01T00:00:00Z',
       isAnonymous: true,
     );
+    _effectiveId = 'anonymous-user';
     return AuthResponse(user: _user);
   }
 
@@ -126,17 +153,35 @@ class _BindingTestAuth extends AuthService {
     emailCalls += 1;
     this.email = email;
     this.password = password;
-    _user = _boundUser;
+    _user = const User(
+      id: 'current-user',
+      appMetadata: {},
+      userMetadata: null,
+      aud: 'authenticated',
+      createdAt: '2026-01-01T00:00:00Z',
+      isAnonymous: false,
+    );
+    _effectiveId = _boundUser.id;
     return AuthResponse(user: _boundUser);
   }
 
   @override
   Future<AuthResponse> bindAnonymousWithGoogle() async {
     googleCalls += 1;
-    _user = _boundUser;
+    _user = const User(
+      id: 'current-user',
+      appMetadata: {},
+      userMetadata: null,
+      aud: 'authenticated',
+      createdAt: '2026-01-01T00:00:00Z',
+      isAnonymous: false,
+    );
+    _effectiveId = _boundUser.id;
     return AuthResponse(user: _boundUser);
   }
 
   @override
-  Future<void> clearStoredGuestSession() async {}
+  Future<void> clearStoredGuestSession() async {
+    storedSessionCleared = true;
+  }
 }
