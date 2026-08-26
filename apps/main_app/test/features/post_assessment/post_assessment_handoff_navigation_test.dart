@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -27,6 +29,19 @@ import 'package:aumazing/widgets/assessment_handoff.dart';
 /// run computed survive the extra hop intact.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/shared_preferences'),
+      (call) async => <String, Object?>{},
+    );
+    await Supabase.initialize(
+      url: 'http://localhost:54321',
+      publishableKey: 'test-publishable-key',
+    );
+  });
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -57,7 +72,10 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.light,
-          home: const PostAssessmentProgressScreen(skipToFinish: true),
+          home: PostAssessmentProgressScreen(
+            skipToFinish: true,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+          ),
         ),
       );
 
@@ -121,6 +139,48 @@ void main() {
     expect(find.text('I\'m the Parent'), findsOneWidget);
     expect(find.byType(PostAssessmentResultScreen), findsNothing);
   });
+
+  testWidgets('locked cycle skips prediction and carries Premium gate',
+      (tester) async {
+    final provider = _ScriptedAssessmentProvider(
+      improvement: improvement,
+      preLevels: const {'communication': preLevel},
+      postLevels: const {'communication': postLevel},
+      locked: true,
+    );
+    await tester.pumpWidget(app(provider));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(find.byType(PostAssessmentHandoffScreen), findsOneWidget);
+    final handoff = tester.widget<PostAssessmentHandoffScreen>(
+        find.byType(PostAssessmentHandoffScreen));
+    expect(handoff.nextModulePremiumRequired, isTrue);
+    expect(provider.predictionCalls, 0);
+  });
+
+  testWidgets('result explains Premium gating only for locked next modules',
+      (tester) async {
+    Widget result({required bool locked}) => MaterialApp(
+          theme: AppTheme.light,
+          home: PostAssessmentResultScreen(
+            improvement: improvement,
+            preAreaLevels: const {},
+            postAreaLevels: const {},
+            nextModulePremiumRequired: locked,
+          ),
+        );
+
+    await tester.pumpWidget(result(locked: true));
+    expect(find.textContaining('Premium is required'), findsOneWidget);
+
+    await tester.pumpWidget(result(locked: false));
+    expect(find.textContaining('Premium is required'), findsNothing);
+    expect(
+      find.text('A new learning path has been prepared from these results.'),
+      findsOneWidget,
+    );
+  });
 }
 
 /// Stands in for the provider's finalization, which normally writes to SQLite
@@ -130,13 +190,20 @@ class _ScriptedAssessmentProvider extends AssessmentProvider {
     required this.improvement,
     required this.preLevels,
     required this.postLevels,
+    this.locked = false,
   });
 
   final Map<String, dynamic> improvement;
   final Map<String, AreaLevel> preLevels;
   final Map<String, AreaLevel> postLevels;
+  final bool locked;
+  int predictionCalls = 0;
 
   String? _runId;
+
+  @override
+  bool get nextCycleLocked => locked;
+
 
   @override
   Future<String> startAssessmentRun({
@@ -160,13 +227,15 @@ class _ScriptedAssessmentProvider extends AssessmentProvider {
   @override
   Future<Map<String, dynamic>> finalizePostAssessment(String childId) async =>
       improvement;
-
   @override
   Future<AiAssessmentResponse?> predictWithAI(
     String childId, {
     String? assessmentType,
-  }) async =>
-      _prediction(postLevels);
+  }) async {
+    predictionCalls++;
+
+    return _prediction(postLevels);
+  }
 
   @override
   Future<AssessmentRunSnapshot> captureRunSnapshot(
@@ -182,6 +251,21 @@ class _ScriptedAssessmentProvider extends AssessmentProvider {
         results: const [],
         prediction: prediction,
       );
+}
+class _RecordingVoiceOver extends VoiceOverService {
+  _RecordingVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {}
+
+  @override
+  Future<void> dispose() async {
+    await super.dispose();
+  }
 }
 
 
