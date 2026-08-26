@@ -18,6 +18,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Ano'ng Susunod?" (What's Next?).
 ///
@@ -53,7 +54,7 @@ import '../../config/difficulty_profile.dart';
 ///   away from right is not the same as one who is random, and no other game
 ///   in the app can tell those apart.
 class AnongSusunodGame extends FlameGame
-    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   AnongSusunodGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -163,6 +164,7 @@ class AnongSusunodGame extends FlameGame
 
   Timer? _idleTimer;
   Timer? _advanceTimer;
+  bool _completionPending = false;
 
   late final AdaptiveDifficulty _adaptive = AdaptiveDifficulty(profile);
   DifficultyProfile get _tier => _adaptive.effective;
@@ -225,6 +227,7 @@ class AnongSusunodGame extends FlameGame
     // a card changing appearance under them is exactly the unpredictability
     // this app is built to avoid.
     await RoutineArtCache.ensureLoaded();
+    if (!isLifecycleActive) return;
 
     analyticsInitialize(
       gameId: 'anong_susunod',
@@ -418,10 +421,10 @@ class AnongSusunodGame extends FlameGame
 
   @override
   void onTapDown(TapDownEvent event) {
+    if (!isLifecycleActive || _completionPending) return;
     super.onTapDown(event);
     final point = event.localPosition;
 
-    // A card in the tray?
     for (final card in _tray) {
       if (!card.placed && card.containsLocal(point)) {
         _select(card);
@@ -429,7 +432,6 @@ class AnongSusunodGame extends FlameGame
       }
     }
 
-    // A slot?
     for (final slot in _slots) {
       if (slot.containsLocal(point)) {
         _tapSlot(slot);
@@ -437,8 +439,6 @@ class AnongSusunodGame extends FlameGame
       }
     }
 
-    // Empty canvas. Recorded so overall_invalid_touch_count reflects genuinely
-    // undirected taps rather than mis-hits on real targets.
     analyticsRecordTouch(Offset(point.x, point.y), isValid: false);
     analyticsRecordOffTaskAction(actionType: 'tap_empty_canvas');
     _resetIdle();
@@ -764,6 +764,7 @@ class AnongSusunodGame extends FlameGame
     onStepChanged(_currentRound);
 
     if (_currentRound >= totalRounds) {
+      _completionPending = true;
       _advanceTimer = Timer(const Duration(milliseconds: 800), _finish);
       return;
     }
@@ -822,6 +823,8 @@ class AnongSusunodGame extends FlameGame
   // ── Completion ───────────────────────────────────────────────────────
 
   void _finish() {
+    if (!tryBeginCompletion()) return;
+    _completionPending = true;
     _idleTimer?.cancel();
     _advanceTimer?.cancel();
     analyticsMarkCompleted();
@@ -840,7 +843,6 @@ class AnongSusunodGame extends FlameGame
         'hint_count': _hintCount,
         'self_corrections': _selfCorrections,
         'prompted_placements': _promptedPlacements,
-        // Only ever non-zero on the free-placement tier — see the class doc.
         'sequence_distance': _sequenceDistanceTotal,
         'difficulty_level': profile.level,
       },
