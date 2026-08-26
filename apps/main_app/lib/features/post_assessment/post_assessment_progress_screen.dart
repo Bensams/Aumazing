@@ -15,6 +15,7 @@ import '../games/match_it/match_it_screen.dart';
 import '../games/my_turn_your_turn/my_turn_your_turn_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
 import 'post_assessment_handoff_screen.dart';
+import '../../widgets/assessment_handoff.dart';
 import '../../widgets/mascot_host.dart';
 import '../../widgets/resume_assessment_dialog.dart';
 
@@ -27,7 +28,15 @@ import '../../widgets/resume_assessment_dialog.dart';
 /// re-runs the on-device AI so the child's levels and learning path
 /// refresh to their new ability, and shows the pre-vs-post comparison.
 class PostAssessmentProgressScreen extends StatefulWidget {
-  const PostAssessmentProgressScreen({super.key, this.skipToFinish = false});
+  const PostAssessmentProgressScreen({
+    super.key,
+    this.skipToFinish = false,
+    this.voiceOverFactory,
+  });
+
+  /// Test seam: supplies the child hand-off narrator without platform audio.
+  @visibleForTesting
+  final HandoffVoiceOverFactory? voiceOverFactory;
 
   /// Test seam: runs the finish-and-hand-off path as soon as the run exists,
   /// without playing four games first. That path is only reachable after the
@@ -337,13 +346,17 @@ class _PostAssessmentProgressScreenState
         });
         return;
       }
+      // Finalization marks this post run complete, so the live gate now
+      // correctly distinguishes the first free cycle from later ones.
+      final nextModulePremiumRequired = assessProv.nextCycleLocked;
 
       if (!mounted) return;
 
-      // Re-run the on-device AI on the post sessions: new area levels, new
-      // module recommendations, and a fresh learning path (progress resets).
-      final postPrediction =
-          await assessProv.predictWithAI(childId, assessmentType: 'post');
+      // A locked free cycle still records and compares the completed run, but
+      // must not generate or replace the next personalized module.
+      final postPrediction = nextModulePremiumRequired
+          ? null
+          : await assessProv.predictWithAI(childId, assessmentType: 'post');
 
       // Freeze this run alongside the untouched pre snapshot.
       await assessProv.captureRunSnapshot(
@@ -361,6 +374,8 @@ class _PostAssessmentProgressScreenState
             improvement: improvement,
             preAreaLevels: preAreaLevels,
             postAreaLevels: postPrediction?.areaLevels ?? const {},
+            nextModulePremiumRequired: nextModulePremiumRequired,
+            voiceOverFactory: widget.voiceOverFactory,
           ),
         ),
       );
