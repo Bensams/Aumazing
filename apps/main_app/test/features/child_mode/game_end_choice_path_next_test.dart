@@ -87,10 +87,14 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    ParentVerificationDialog.pinDelegate = null;
     PendingPathLaunch.take();
   });
 
-  tearDown(PendingPathLaunch.take);
+  tearDown(() {
+    ParentVerificationDialog.pinDelegate = null;
+    PendingPathLaunch.take();
+  });
 
   testWidgets('path Next parks the launch and pops home instead of swapping', (
     tester,
@@ -154,8 +158,12 @@ void main() {
   );
 
   testWidgets(
-    'locked recommended path advertises Premium without launching a game',
+    'locked recommended path blocks Premium when parent PIN is incorrect',
     (tester) async {
+      ParentVerificationDialog.pinDelegate = const _TestPinDelegate(
+        expectedPin: '4907',
+        result: ParentPinAttempt.incorrect,
+      );
       await tester.pumpWidget(
         _wrap(
           const ChildModeLobbyScreen(openPath: true),
@@ -163,21 +171,57 @@ void main() {
           prediction: _completedPathPrediction,
         ),
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.text('Unlock'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Enter your parent PIN:'), findsOneWidget);
+
+      for (final digit in '4907'.split('')) {
+        await tester.tap(find.byKey(ValueKey('numpad_$digit')));
+        await tester.pump();
+      }
+      await tester.tap(find.byKey(const ValueKey('numpad_submit')));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(PremiumUpgradeScreen), findsNothing);
+      expect(find.text('Incorrect PIN. Try again.'), findsOneWidget);
+      expect(PendingPathLaunch.take(), isNull);
+
+      await tester.tap(find.bySemanticsLabel('Cancel'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(PremiumUpgradeScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'locked recommended path opens Premium after parent PIN verification',
+    (tester) async {
+      ParentVerificationDialog.pinDelegate = const _TestPinDelegate(
+        expectedPin: '4907',
+        result: ParentPinAttempt.correct,
+      );
+      await tester.pumpWidget(
+        _wrap(
+          const ChildModeLobbyScreen(openPath: true),
+          nextCycleLocked: true,
+          prediction: _completedPathPrediction,
+        ),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Fresh Learning Path Locked'), findsOneWidget);
-      expect(
-        find.text(
-          'Ask a parent to subscribe to Premium to unlock a fresh '
-          'personalized path after every assessment.',
-        ),
-        findsOneWidget,
-      );
-
-      // This is the child-facing locked action, not a direct Premium route.
       await tester.tap(find.text('Unlock'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      for (final digit in '4907'.split('')) {
+        await tester.tap(find.byKey(ValueKey('numpad_$digit')));
+        await tester.pump();
+      }
+      await tester.tap(find.byKey(const ValueKey('numpad_submit')));
+      await tester.pump();
+      expect(find.byType(ParentVerificationDialog), findsNothing);
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(PremiumUpgradeScreen), findsOneWidget);
       expect(find.text('Aumazing Premium'), findsOneWidget);
@@ -186,11 +230,7 @@ void main() {
         find.text('Fresh learning paths after every assessment'),
         findsOneWidget,
       );
-      expect(
-        PendingPathLaunch.take(),
-        isNull,
-        reason: 'a locked path must not park or launch a recommended game',
-      );
+      expect(PendingPathLaunch.take(), isNull);
       expect(find.text('play'), findsNothing);
     },
   );
@@ -335,4 +375,26 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
+class _TestPinDelegate implements ParentPinDelegate {
+  const _TestPinDelegate({required this.expectedPin, required this.result});
+
+  final String expectedPin;
+  final ParentPinAttempt result;
+
+  @override
+  bool get hasPin => true;
+
+  @override
+  Future<ParentPinAttempt> verify(String pin) async {
+    if (pin != expectedPin) return ParentPinAttempt.incorrect;
+    return result;
+  }
+
+  @override
+  Duration? get lockoutRemaining => null;
+
+  @override
+  Future<bool> onForgotPin(BuildContext context) async => false;
 }
