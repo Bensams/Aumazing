@@ -18,19 +18,29 @@ class BindAccountModal extends StatefulWidget {
   State<BindAccountModal> createState() => _BindAccountModalState();
 }
 
-enum _BindAccountStep { options, email }
+enum _BindAccountStep { options, email, emailVerification }
+
+class _BindAccountState {
+  const _BindAccountState({required this.previousUserId, required this.email});
+
+  final String? previousUserId;
+  final String email;
+}
 
 class _BindAccountModalState extends State<BindAccountModal> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _verificationCodeController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
   _BindAccountStep _step = _BindAccountStep.options;
+  _BindAccountState? _pendingEmailBinding;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _verificationCodeController.dispose();
     super.dispose();
   }
 
@@ -46,28 +56,28 @@ class _BindAccountModalState extends State<BindAccountModal> {
     });
 
     try {
-      // Capture the source before anonymous sign-in can replace the effective
-      // identity. Local records and active-child state still use this ID.
       final previousUserId = widget.authService.effectiveUserId;
       if (widget.authService.currentUser == null) {
         await widget.authService.signInAnonymously();
       }
 
-      final response = await widget.authService.convertAnonymousToPermanent(
-        email: _emailController.text.trim(),
+      final email = _emailController.text.trim();
+      await widget.authService.convertAnonymousToPermanent(
+        email: email,
         password: _passwordController.text,
       );
-      await _finishBinding(
-        response,
-        previousUserId,
-        'Account bound successfully!',
-      );
+      if (!mounted) return;
+      setState(() {
+        _pendingEmailBinding = _BindAccountState(
+          previousUserId: previousUserId,
+          email: email,
+        );
+        _step = _BindAccountStep.emailVerification;
+      });
     } catch (e) {
       if (mounted) setState(() => _errorMessage = friendly(e));
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -100,21 +110,76 @@ class _BindAccountModalState extends State<BindAccountModal> {
     }
   }
 
+  Future<void> _verifyEmailBinding() async {
+    final pending = _pendingEmailBinding;
+    final code = _verificationCodeController.text.trim();
+    if (pending == null || code.isEmpty) {
+      setState(() => _errorMessage = 'Enter the verification code from your email');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await widget.authService.verifyEmailChange(
+        email: pending.email,
+        token: code,
+      );
+      if (!mounted) return;
+      if (response.session == null || response.user?.isAnonymous == true) {
+        _verificationCodeController.clear();
+        setState(() {
+          _errorMessage =
+              'The first code was accepted. Enter the second code sent to '
+              '${pending.email}.';
+        });
+        return;
+      }
+      await _finishBinding(
+        response,
+        pending.previousUserId,
+        'Account bound successfully!',
+      );
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = friendly(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resendEmailBindingCode() async {
+    final email = _pendingEmailBinding?.email;
+    if (email == null) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await widget.authService.resendEmailChange(email);
+      if (mounted) {
+        setState(() => _errorMessage = 'A new verification code was sent.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = friendly(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _finishBinding(
     AuthResponse response,
     String? previousUserId,
     String successMessage,
   ) async {
-    // The binding response is authoritative. Only use the current session as
-    // a fallback when it is already a permanent account, never an anonymous
-    // identity that would leave records under the wrong owner.
-    final newUserId =
-        response.user?.id ??
-        (widget.authService.currentUser?.isAnonymous == true
-            ? null
-            : widget.authService.currentUser?.id);
+    if (response.user == null || response.user?.isAnonymous == true) {
+      throw AuthException('Binding verification is not complete yet.');
+    }
 
-    // Binding succeeded, so discard both persisted and in-memory guest state.
+    final newUserId = response.user?.id;
+
     await widget.authService.clearStoredGuestSession();
     widget.authService.clearGuestMode();
 
@@ -172,9 +237,11 @@ class _BindAccountModalState extends State<BindAccountModal> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child:
-              _step == _BindAccountStep.options
-                  ? _buildOptionStep(context)
-                  : _buildEmailStep(context),
+          _step == _BindAccountStep.options
+              ? _buildOptionStep(context)
+              : _step == _BindAccountStep.email
+                  ? _buildEmailStep(context)
+                  : _buildEmailVerificationStep(context),
         ),
       ),
     );
@@ -301,6 +368,61 @@ class _BindAccountModalState extends State<BindAccountModal> {
                           ),
                         )
                         : const Text('Bind with Email'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+  Widget _buildEmailVerificationStep(BuildContext context) {
+    final email = _pendingEmailBinding?.email ?? '';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader('Verify your email'),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Enter the verification code sent to $email. Secure email changes '
+          'require two codes; submit the second code after the first is accepted.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_errorMessage != null) ...[
+          _buildErrorBanner(),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        TextField(
+          controller: _verificationCodeController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Verification code',
+            prefixIcon: Icon(Icons.verified_outlined),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: _isLoading ? null : _resendEmailBindingCode,
+                child: const Text('Resend code'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _verifyEmailBinding,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Verify'),
               ),
             ),
           ],
