@@ -6,10 +6,13 @@ import 'package:provider/provider.dart';
 import '../features/child_mode/game_launcher.dart';
 import '../features/post_assessment/post_assessment_handoff_screen.dart';
 import '../features/post_assessment/post_assessment_progress_screen.dart';
+import '../features/pre_assessment/pre_assessment_result_screen.dart';
 import '../features/pre_assessment/pre_assessment_progress_screen.dart';
 import '../features/pre_assessment/sensory/sensory.dart';
 import '../features/pre_assessment/waiting_for_parent_screen.dart';
 import '../providers/assessment_provider.dart';
+import '../model/assessment_result.dart';
+import '../model/support_profile.dart';
 import '../providers/child_provider.dart';
 import '../services/active_games_service.dart';
 import '../services/entitlement_service.dart';
@@ -222,6 +225,16 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
                     : 'Needs an active child profile',
                 enabled: hasChild,
                 onTap: () => _completePreAssessment(childId!, retake: hasPre),
+              ),
+              _actionTile(
+                key: const Key('developerToolsPreviewCritical'),
+                icon: Icons.health_and_safety_outlined,
+                title: 'Preview Critical Pre-Assessment Result',
+                subtitle: hasChild
+                    ? 'Shows the non-clinical Therapy Center support prompt'
+                    : 'Needs an active child profile',
+                enabled: hasChild,
+                onTap: () => _previewCriticalPreAssessment(childId!),
               ),
               _actionTile(
                 key: const Key('developerToolsCompleteModule'),
@@ -524,6 +537,44 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
         results: result.results,
         profile: result.profile,
         aiResponse: result.aiResponse,
+      ),
+    );
+  }
+
+  Future<void> _previewCriticalPreAssessment(String childId) async {
+    if (!DeveloperToolsConfig.isAvailable) return;
+
+    final confirmed = await _confirm(
+      title: 'Preview critical pre-assessment result?',
+      message: 'This opens an in-memory poor-result preview for the active '
+          'child. No assessment, session, or child data will be written.',
+      confirmLabel: 'Preview',
+    );
+    if (!confirmed || !mounted) return;
+
+    final result = AssessmentResult(
+      id: 'developer-critical-preview',
+      childId: childId,
+      type: 'pre',
+      gameId: 'match_it',
+      score: 1,
+      totalItems: 10,
+      errorCount: 9,
+      avgResponseTimeMs: 5000,
+      completedAt: DateTime.utc(2026, 1, 1),
+    );
+    const profile = SupportProfile(
+      communication: 'emerging',
+      socialInteraction: 'emerging',
+      playSkills: 'emerging',
+      attention: 'short attention',
+    );
+
+    _closeAndInstall(
+      message: 'Critical pre-assessment preview opened.',
+      screen: PreAssessmentResultScreen(
+        results: [result],
+        profile: profile,
       ),
     );
   }
