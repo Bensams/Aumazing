@@ -19,6 +19,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Ano'ng Nararamdaman?" (How does he feel?).
 ///
@@ -49,7 +50,7 @@ import '../../config/difficulty_profile.dart';
 ///   "what would you do?" is answerable from the picture without ever
 ///   consulting the feeling. See [ScenePanel].
 class AnongNararamdamanGame extends FlameGame
-    with TapCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   AnongNararamdamanGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -282,6 +283,7 @@ class AnongNararamdamanGame extends FlameGame
 
   @override
   void onRemove() {
+    invalidateLifecycle();
     _cancelTimers();
     super.onRemove();
   }
@@ -295,6 +297,7 @@ class AnongNararamdamanGame extends FlameGame
   /// gone — a timer holding a dead game alive for the rest of the session.
   @override
   void onDispose() {
+    invalidateLifecycle();
     _cancelTimers();
     // A child who leaves mid-game has abandoned the session, and saying so is
     // both the honest record and what stops the analytics mixin's own
@@ -914,6 +917,7 @@ class AnongNararamdamanGame extends FlameGame
   // ── Completion ───────────────────────────────────────────────────────
 
   void _finish() {
+    if (!tryBeginCompletion()) return;
     _idleTimer?.cancel();
     _advanceTimer?.cancel();
     _settleTimer?.cancel();

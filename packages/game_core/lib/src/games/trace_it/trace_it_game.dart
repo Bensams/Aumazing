@@ -14,6 +14,7 @@ import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
 import '../shared/game_layout.dart';
+import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Trace It".
 ///
@@ -23,7 +24,7 @@ import '../shared/game_layout.dart';
 /// neatness are not penalised, matching errorless-learning practice).
 /// Tracks coverage, path deviation, and finger lifts for assessment.
 class TraceItGame extends FlameGame
-    with TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
+    with GameLifecycleGuard, TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   TraceItGame({
     required this.onStepChanged,
     required this.onGameComplete,
@@ -499,6 +500,7 @@ class TraceItGame extends FlameGame
     onStepChanged(_currentRound);
 
     if (_currentRound >= totalRounds) {
+      if (!tryBeginCompletion()) return;
       onPlayGameCompleteSfx?.call();
       onPlayCelebrationVo?.call();
 
@@ -509,7 +511,7 @@ class TraceItGame extends FlameGame
       analyticsAddGameSpecificMetric('hint_count', _hintCount);
       analyticsAddGameSpecificMetric('glyphs_traced', _usedGlyphLabels.length);
 
-      Future.delayed(const Duration(milliseconds: 600), () {
+      guardedDelay(const Duration(milliseconds: 600), () {
         onGameComplete(
           score: _score,
           totalItems: totalRounds,
