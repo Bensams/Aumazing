@@ -19,10 +19,13 @@ import '../shared/game_lifecycle_guard.dart';
 /// The core Flame game for "Trace It".
 ///
 /// Shows a large letter, number, or pre-writing stroke as a faded guide
-/// path; the child traces it with a finger. A stroke completes when enough
-/// of the guide path has been covered (coverage-based — direction and
-/// neatness are not penalised, matching errorless-learning practice).
-/// Tracks coverage, path deviation, and finger lifts for assessment.
+/// path; the child traces it with a finger. A stroke completes when the
+/// trace satisfies the documented recognition policy (see the policy
+/// section before the tolerance getters): the ink must cover the guide
+/// AND stay near it within the tier tolerance — direction, neatness, and
+/// finger lifts are not penalised, matching errorless-learning practice.
+/// Tracks coverage, adherence, path deviation, and finger lifts for
+/// assessment.
 class TraceItGame extends FlameGame
     with GameLifecycleGuard, TapCallbacks, DragCallbacks, EnhancedGameplayAnalyticsMixin {
   TraceItGame({
@@ -113,8 +116,17 @@ class TraceItGame extends FlameGame
 
   bool _dragging = false;
   Vector2 _dragPoint = Vector2.zero();
-  int _dragOnPath = 0;
-  int _dragOffPath = 0;
+
+  // Per-stroke-attempt recognition state (see the policy section below).
+  // Metrics accumulate across finger lifts until the stroke completes or is
+  // cleared for a retry, so a child pausing mid-trace is never counted as
+  // a fresh mistake.
+  int _inkSamples = 0;
+  int _inkOnSamples = 0;
+  bool _startReached = false;
+  bool _endReached = false;
+  List<double> _pathCumulativeLengths = const [];
+  double _pathLength = 0;
 
   // Per-round quality stats (fed to analytics).
   int _liftCount = 0;
@@ -139,6 +151,50 @@ class TraceItGame extends FlameGame
   bool get _hintBudgetLeft =>
       _tier.unlimitedHints || _hintsUsedThisRound < (_tier.hintsPerRound ?? 0);
 
+  // ── Recognition policy ───────────────────────────────────────────────
+  //
+  // The intended path is the resampled guide polyline of the current
+  // stroke (points every 4% of the glyph side). The child's actual path is
+  // the ink collected for that stroke — one attempt spans all finger downs
+  // from `_startStroke` until the stroke completes or is cleared for a
+  // retry. Every value below is the documented tolerance that the tests in
+  // `test/trace_it_recognition_test.dart` assert:
+  //
+  //  * Tolerance radius `t` — how far ink may stray from the guide and
+  //    still count as on it. Tier-scaled (11% of the glyph side on Easy,
+  //    9% on Medium, 7.5% on Hard) so children with weaker motor control
+  //    get a wider band; an adaptive step-down widens it for the rest of
+  //    the round.
+  //  * Guide coverage — fraction of guide points within `t` of some ink
+  //    point: the intended path must be *covered* (path → ink).
+  //  * Ink adherence — fraction of ink samples within `t` of the guide
+  //    polyline: the drawn path must also *stay near* the intended path
+  //    (ink → path). Without it a scribble that happens to cross the whole
+  //    glyph passes coverage alone and is silently accepted. The bar is
+  //    strict (90% on Medium/Hard) because shapes that ride the guide —
+  //    a full circle over a C, an 8 over a 3 — keep 86–87% of their ink
+  //    on it and must not slip through as correct; an honest trace keeps
+  //    97%+.
+  //  * End reach — the ink must approach both ends of the guide: an ink
+  //    sample within `t` whose nearest point on the guide lies in the
+  //    terminal 10% of the path's arc length. Children routinely stop
+  //    short of the end dot or start just past the start dot, so the exact
+  //    end points are not required; a trace cut across the middle is.
+  //  * Completion — coverage, adherence, and end reach must all hold at
+  //    the tier threshold. Evaluated at the finger lift: judging while
+  //    the finger is still down would score only the ink drawn so far, so
+  //    a circle over a C completes before its closing sweep. The short
+  //    delay is imperceptible and keeps praise honest.
+  //  * Wrong attempt — a lift that did not complete is a mistake worth
+  //    retry-and-corrective-feedback exactly when the ink dwells outside
+  //    tolerance (adherence below the bar): a wrong shape riding the guide
+  //    is told to try again, not silently kept. A partial trace whose ink
+  //    stays on tolerance keeps its progress and only the hint timers
+  //    re-arm — young children pause mid-trace all the time, and an early
+  //    stop is not punished while the ink is still in tolerance.
+  //  * Direction is never penalised, and finger lifts never discard
+  //    on-tolerance progress.
+  //
   // ── Layout / tolerance ───────────────────────────────────────────────
 
   /// Side of the centered square the glyph is scaled into.
@@ -178,6 +234,17 @@ class TraceItGame extends FlameGame
     }
   }
 
+  /// Ink adherence required to complete a stroke. Above the coverage bar,
+  /// because sticking to a path is harder than covering it — and strict on
+  /// Medium/Hard (90%) so shapes that ride the guide (86–87% adherence:
+  /// a circle for a C, an 8 for a 3) are rejected while an honest trace
+  /// (97%+) is accepted. Easy stays at 75% for unsteady motor control.
+  double get _adherenceThreshold => _tier.level == 1 ? 0.75 : 0.90;
+
+  /// How far along the path an end may be missed and still count as
+  /// reached (fraction of the stroke's arc length). See the policy above.
+  static const double _endAllowance = 0.10;
+
   static const Color _guideColor = Color(0xFFC9C4D4); // faded guide path
   static const Color _activeGuideColor = Color(0xFF9B82C4); // current stroke
   static const Color _doneColor = Color(0xFF43A047); // completed — true green
@@ -196,6 +263,38 @@ class TraceItGame extends FlameGame
   /// Test-only: whether the temporary purple trace is still being kept around.
   @visibleForTesting
   bool get debugHasInk => _ink.isNotEmpty;
+
+  /// Test-only: reset the current round to a specific labelled glyph
+  /// (letters, numbers, or pre-writing strokes from [TraceGlyphs]) so tests
+  /// can exercise a deterministic intended path — the glyph is normally
+  /// picked at random per round.
+  @visibleForTesting
+  void debugForceGlyph(String label) {
+    final glyph = TraceGlyphs.forLevel(profile.level)
+        .firstWhere((g) => g.label == label);
+    _usedGlyphLabels.add(label);
+    _applyGlyph(glyph);
+  }
+
+  /// Test-only: the current stroke's coverage of the guide (path → ink).
+  @visibleForTesting
+  double get debugGuideCoverage => _strokeCoverage();
+
+  /// Test-only: the current attempt's ink adherence (ink → path).
+  @visibleForTesting
+  double get debugInkAdherence => _inkAdherence;
+
+  /// Test-only: the per-tier tolerance radius in canvas units.
+  @visibleForTesting
+  double get debugTolerance => _tolerance;
+
+  /// Test-only: the glyph box origin, for building offset/parallel paths.
+  @visibleForTesting
+  Vector2 get debugGlyphOrigin => _glyphOrigin;
+
+  /// Test-only: the glyph box side, for building accurate test strokes.
+  @visibleForTesting
+  double get debugGlyphSide => _glyphSide;
 
   @override
   Color backgroundColor() => const Color(0x00000000); // Transparent
@@ -221,11 +320,7 @@ class TraceItGame extends FlameGame
     _cancelNoResponseTimer();
     _removeGuideDot();
 
-    _strokePaths.clear();
     _ink.clear();
-    _strokeIndex = 0;
-    _covered = [];
-    _dragging = false;
     _firstInputRecorded = false;
     _liftCount = 0;
     _deviationSum = 0;
@@ -241,20 +336,8 @@ class TraceItGame extends FlameGame
         pool.where((g) => !_usedGlyphLabels.contains(g.label)).toList();
     final glyph = candidates[math.Random().nextInt(candidates.length)];
     _usedGlyphLabels.add(glyph.label);
-    _glyph = glyph;
 
-    // Scale normalized strokes into the canvas and resample them evenly so
-    // coverage checks are resolution-independent.
-    final origin = _glyphOrigin;
-    final side = _glyphSide;
-    final spacing = side * 0.04;
-    for (final stroke in glyph.strokes) {
-      final scaled = stroke
-          .map((p) => Vector2(origin.x + p.dx * side, origin.y + p.dy * side))
-          .toList();
-      _strokePaths.add(_resample(scaled, spacing));
-    }
-    _startStroke();
+    _applyGlyph(glyph);
 
     _roundStartTime = DateTime.now();
 
@@ -266,9 +349,47 @@ class TraceItGame extends FlameGame
     _startNoResponseTimer();
   }
 
+  /// Scales [glyph]'s normalized strokes into the canvas and resamples them
+  /// evenly so coverage checks are resolution-independent, then resets the
+  /// attempt state to the glyph's first stroke.
+  void _applyGlyph(TraceGlyph glyph) {
+    _glyph = glyph;
+    final origin = _glyphOrigin;
+    final side = _glyphSide;
+    final spacing = side * 0.04;
+    _strokePaths.clear();
+    for (final stroke in glyph.strokes) {
+      final scaled = stroke
+          .map((p) => Vector2(origin.x + p.dx * side, origin.y + p.dy * side))
+          .toList();
+      _strokePaths.add(_resample(scaled, spacing));
+    }
+    _strokeIndex = 0;
+    _dragging = false;
+    _startStroke();
+  }
+
   void _startStroke() {
     _covered = List.filled(_currentPath.length, false);
     _clearInk();
+    _inkSamples = 0;
+    _inkOnSamples = 0;
+    _startReached = false;
+    _endReached = false;
+    _buildPathLengths();
+  }
+
+  /// Cumulative arc length at each guide vertex and the stroke's total
+  /// length — the ruler for the end-reach allowance in the policy above.
+  void _buildPathLengths() {
+    final path = _currentPath;
+    _pathCumulativeLengths = List<double>.filled(path.length, 0);
+    var total = 0.0;
+    for (var i = 1; i < path.length; i++) {
+      total += path[i].distanceTo(path[i - 1]);
+      _pathCumulativeLengths[i] = total;
+    }
+    _pathLength = total;
   }
 
   void _clearInk() {
@@ -306,8 +427,6 @@ class TraceItGame extends FlameGame
     if (_dragging || _strokeIndex >= _strokePaths.length) return;
     _dragging = true;
     _dragPoint = event.canvasPosition.clone();
-    _dragOnPath = 0;
-    _dragOffPath = 0;
 
     _cancelNoResponseTimer();
     _removeGuideDot();
@@ -344,11 +463,8 @@ class TraceItGame extends FlameGame
     // complete. Walk the segment instead, so what is measured is the line the
     // finger drew rather than where it happened to be polled.
     _absorbSegment(previous, _dragPoint);
-
-    if (_strokeCoverage() >= _coverageThreshold && _endpointsCovered()) {
-      _dragging = false;
-      _completeStroke();
-    }
+    // Completion is evaluated at the finger lift (see the policy above):
+    // judging mid-drag would score only the ink drawn so far.
   }
 
   /// Feeds the whole segment [from] → [to] into coverage tracking.
@@ -390,25 +506,34 @@ class TraceItGame extends FlameGame
     );
   }
 
-  /// Feeds one drawn point into coverage + deviation tracking.
+  /// Feeds one drawn point into guide coverage, ink adherence, end reach,
+  /// and deviation tracking.
   void _absorbPoint(Vector2 point) {
     final path = _currentPath;
     if (path.isEmpty) return;
 
     final tolerance = _tolerance;
-    var minDistance = double.infinity;
+
+    // Guide coverage: mark guard points the ink passes within tolerance of.
     for (var i = 0; i < path.length; i++) {
-      final d = path[i].distanceTo(point);
-      if (d < minDistance) minDistance = d;
-      if (d <= tolerance) _covered[i] = true;
+      if (path[i].distanceTo(point) <= tolerance) _covered[i] = true;
     }
 
-    if (minDistance <= tolerance) {
-      _dragOnPath++;
-    } else {
-      _dragOffPath++;
+    // Ink adherence / end reach: the distance to the *polyline* the child
+    // sees (not just its sampled vertices) and where along it the sample
+    // lands.
+    final projection = _nearestPathProjection(point);
+    _inkSamples++;
+    if (projection.distance <= tolerance) {
+      _inkOnSamples++;
+      if (projection.arcPosition <= _pathLength * _endAllowance) {
+        _startReached = true;
+      }
+      if (projection.arcPosition >= _pathLength * (1 - _endAllowance)) {
+        _endReached = true;
+      }
     }
-    _deviationSum += (minDistance / tolerance).clamp(0.0, 3.0);
+    _deviationSum += (projection.distance / tolerance).clamp(0.0, 3.0);
     _deviationSamples++;
   }
 
@@ -418,20 +543,74 @@ class TraceItGame extends FlameGame
     return hit / _covered.length;
   }
 
-  /// Both ends of the stroke must be reached, so a scribble across the
-  /// middle can't complete it.
-  bool _endpointsCovered() =>
-      _covered.isNotEmpty && _covered.first && _covered.last;
+  /// Fraction of ink samples within the tolerance of the guide polyline —
+  /// the reverse of the coverage check: the drawn path must stay near the
+  /// intended path, not merely cross it. See the policy above.
+  double get _inkAdherence =>
+      _inkSamples == 0 ? 0 : _inkOnSamples / _inkSamples;
+
+  /// Whether the ink reached both ends of the guide within the end
+  /// allowance, so a scribble across the middle can't complete the stroke
+  /// — and a trace that stops short of the end dot still can.
+  bool get _attemptEndsReached => _startReached && _endReached;
+
+  /// The documented recognition policy for the current attempt: the guide
+  /// is covered, the ink stays near it, and both ends were reached — each
+  /// at the tier threshold/allowance.
+  bool _attemptQualifies() =>
+      _strokeCoverage() >= _coverageThreshold &&
+      _inkAdherence >= _adherenceThreshold &&
+      _attemptEndsReached;
+
+  /// Nearest point on the guide polyline to [point], as its distance from
+  /// the intended path and its position along it (arc length). Mapping
+  /// every ink sample to exactly one `(distance, arcPosition)` pair is
+  /// what makes adherence and end reach deterministic.
+  ({double distance, double arcPosition}) _nearestPathProjection(
+    Vector2 point,
+  ) {
+    final path = _currentPath;
+    var bestDistance = double.infinity;
+    var bestArcPosition = 0.0;
+    for (var i = 0; i < path.length - 1; i++) {
+      final a = path[i];
+      final ab = path[i + 1] - a;
+      final lengthSquared = ab.x * ab.x + ab.y * ab.y;
+      final t = lengthSquared > 0
+          ? (((point - a).x * ab.x + (point - a).y * ab.y) / lengthSquared)
+              .clamp(0.0, 1.0)
+              .toDouble()
+          : 0.0;
+      final projected = a + ab * t;
+      final distance = projected.distanceTo(point);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestArcPosition = _pathCumulativeLengths[i] + t * ab.length;
+      }
+    }
+    return (distance: bestDistance, arcPosition: bestArcPosition);
+  }
 
   void _onFingerLifted() {
     if (_strokeIndex >= _strokePaths.length) return;
     _liftCount++;
 
-    final samples = _dragOnPath + _dragOffPath;
-    final offRatio = samples == 0 ? 0.0 : _dragOffPath / samples;
+    // A slow, careful trace can satisfy the policy exactly as the finger
+    // leaves; finish it with praise rather than counting it as unfinished.
+    if (_attemptQualifies()) {
+      _completeStroke();
+      return;
+    }
 
-    if (samples >= 6 && offRatio > 0.55) {
-      // Mostly off the path — a genuine wrong attempt, not a wobble.
+    final offRatio =
+        _inkSamples == 0 ? 0.0 : (_inkSamples - _inkOnSamples) / _inkSamples;
+
+    if (_inkSamples >= 6 && _inkAdherence < _adherenceThreshold) {
+      // The ink dwells outside the tolerance — a wrong shape riding the
+      // guide, a scribble, or a stroke drawn far from the intended path:
+      // a genuine wrong attempt, not a wobble. Give the retry feedback it
+      // is due. A partial trace whose ink stays in tolerance keeps its
+      // progress silently instead.
       _errorCount++;
       _errorsSinceLastCorrect++;
       if (_adaptive.recordError()) {
@@ -446,6 +625,7 @@ class TraceItGame extends FlameGame
         'stroke_index': _strokeIndex,
         'off_path_ratio': offRatio,
         'coverage': _strokeCoverage(),
+        'adherence': _inkAdherence,
       });
       analyticsRecordRetry();
 
@@ -456,7 +636,8 @@ class TraceItGame extends FlameGame
         _showTraceDemo(hintType: 'error_trace_demo');
       }
     }
-    // Otherwise: a lift mid-trace — keep the partial progress silently.
+    // Other lifts keep their progress silently — the ink is still within
+    // tolerance.
 
     _startNoResponseTimer();
   }
