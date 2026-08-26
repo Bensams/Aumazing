@@ -22,6 +22,7 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
     required this.improvement,
     required this.preAreaLevels,
     required this.postAreaLevels,
+    this.nextModulePremiumRequired = false,
     this.voiceOverFactory,
   });
 
@@ -33,6 +34,9 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
 
   /// Area levels from the post-assessment prediction just captured.
   final Map<String, AreaLevel> postAreaLevels;
+
+  /// Whether generating the next personalized module requires Premium.
+  final bool nextModulePremiumRequired;
 
   /// Test seam, forwarded to [AssessmentHandoffScreen].
   final HandoffVoiceOverFactory? voiceOverFactory;
@@ -55,6 +59,7 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
           improvement: improvement,
           preAreaLevels: preAreaLevels,
           postAreaLevels: postAreaLevels,
+          nextModulePremiumRequired: nextModulePremiumRequired,
         ),
       ),
     );
