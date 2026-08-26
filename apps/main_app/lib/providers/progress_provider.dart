@@ -57,6 +57,25 @@ class ProgressProvider extends ChangeNotifier {
   GameplaySession? get lastSession =>
       _recentSessions.isNotEmpty ? _recentSessions.first : null;
 
+  /// Resolves a session only when it belongs to the requested child and is
+  /// present in the sessions loaded for that child.
+  ///
+  /// This is intentionally synchronous: activity reports navigate from the
+  /// provider's already-loaded list and must not open a second database path.
+  GameplaySession? sessionFor({
+    required String childId,
+    required String sessionId,
+  }) {
+    if (_loadedChildId != null && _loadedChildId != childId) return null;
+
+    for (final session in recentSessions) {
+      if (session.id == sessionId && session.childId == childId) {
+        return session;
+      }
+    }
+    return null;
+  }
+
   /// Loads all progress data for a child.
   ///
   /// Safe against child switches mid-load (AUM-160): results are only
@@ -89,6 +108,7 @@ class ProgressProvider extends ChangeNotifier {
     } finally {
       // Only the latest load may end the loading state — an older one
       // finishing must not hide the spinner of the load still in flight.
+
       if (generation == _loadGeneration) {
         _isLoading = false;
       }

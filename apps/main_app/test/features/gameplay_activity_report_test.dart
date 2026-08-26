@@ -1,3 +1,5 @@
+import 'package:flutter/semantics.dart';
+
 import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/features/home/gameplay_report_screen.dart';
 import 'package:aumazing/features/home/home_screen.dart';
@@ -67,6 +69,31 @@ void main() {
     expect(find.text('42%'), findsOneWidget);
     expect(find.text('88%'), findsOneWidget);
     expect(find.text('quiet-room'), findsOneWidget);
+  });
+
+  testWidgets('activity rows expose an actionable semantic tap', (tester) async {
+    final session = _session(
+      id: 'semantic-activity',
+      gameId: 'copy_me',
+      score: 8,
+      totalItems: 10,
+    );
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(_homeApp(session));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(milliseconds: 300));
+    final rowSemantics = tester.getSemantics(
+      find.byKey(const ValueKey('recentActivityItem-semantic-activity')),
+    );
+    expect(rowSemantics.label, contains('Copy me'));
+    expect(
+      rowSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
   });
 
   testWidgets('free activity keeps summary and opens Premium upgrade', (
@@ -141,6 +168,32 @@ void main() {
     expect(find.text('66%'), findsOneWidget);
     expect(find.text('blue-lights'), findsOneWidget);
   });
+
+  testWidgets('missing activity session shows a clear empty state', (
+    tester,
+  ) async {
+    final session = _session(
+      id: 'deleted-activity',
+      gameId: 'copy_me',
+      score: 3,
+      totalItems: 5,
+      endedAt: DateTime.now().subtract(const Duration(minutes: 2)),
+    );
+    await tester.pumpWidget(_homeApp(session, missingSession: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final item = find.byKey(
+      const ValueKey('recentActivityItem-deleted-activity'),
+    );
+    expect(item, findsOneWidget);
+    await tester.ensureVisible(item);
+    await tester.tap(item);
+    await tester.pumpAndSettle();
+
+    expect(find.text('This activity is no longer available.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 GameplaySession _session({
@@ -180,12 +233,12 @@ GameplaySession _session({
   );
 }
 
-Widget _homeApp(GameplaySession session) {
+Widget _homeApp(GameplaySession session, {bool missingSession = false}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>.value(value: _ChildFixture()),
       ChangeNotifierProvider<ProgressProvider>.value(
-        value: _ProgressFixture(session),
+        value: _ProgressFixture(session, missingSession: missingSession),
       ),
       ChangeNotifierProvider<AssessmentProvider>.value(
         value: _AssessmentFixture(),
@@ -224,12 +277,23 @@ class _ChildFixture extends ChildProvider {
 }
 
 class _ProgressFixture extends ProgressProvider {
-  _ProgressFixture(this.session);
+  _ProgressFixture(this.session, {this.missingSession = false});
   final GameplaySession session;
+  final bool missingSession;
 
   @override
   List<GameplaySession> get recentSessions => [session];
 
+  @override
+  GameplaySession? sessionFor({
+    required String childId,
+    required String sessionId,
+  }) {
+    if (missingSession || childId != session.childId || sessionId != session.id) {
+      return null;
+    }
+    return session;
+  }
   @override
   int get totalSessions => 1;
 
