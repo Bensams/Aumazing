@@ -76,6 +76,8 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
 
   /// True when the child tapped "My Path" (AI-recommended order).
   bool _viewingPath = false;
+  bool _parentExitApproved = false;
+  bool _parentVerificationOpen = false;
 
   bool get _inView => _selected != null || _viewingAll || _viewingPath;
 
@@ -887,10 +889,15 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
   }
 
   Future<void> _exitToParent() async {
+    if (_parentVerificationOpen) return;
+    _parentVerificationOpen = true;
     final verified = await ParentVerificationDialog.show(context);
-    if (verified && mounted) {
-      Navigator.of(context).pop();
-    }
+    if (!mounted) return;
+    _parentVerificationOpen = false;
+    if (!verified) return;
+    setState(() => _parentExitApproved = true);
+    final route = ModalRoute.of(context);
+    if (route != null) Navigator.of(context).removeRoute(route);
   }
 
   IconData _iconForCategory(SkillCategory cat) {
@@ -945,7 +952,12 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
             context.watch<ChildProvider>().graphicsQuality !=
                 GraphicsQuality.low;
 
-        return Scaffold(
+        return PopScope<void>(
+          canPop: _parentExitApproved,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) unawaited(_exitToParent());
+          },
+          child: Scaffold(
           body: Container(
             decoration:
                 showScene
@@ -1042,6 +1054,7 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
                 ],
               ],
             ),
+          ),
           ),
         );
       },
