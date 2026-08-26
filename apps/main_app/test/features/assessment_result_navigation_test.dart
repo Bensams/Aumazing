@@ -2,6 +2,7 @@ import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/features/pre_assessment/assessment_dashboard_screen.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_intro_screen.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_result_screen.dart';
+import 'package:aumazing/features/post_assessment/post_assessment_result_screen.dart';
 import 'package:aumazing/features/therapy/therapy_directory_screen.dart';
 import 'package:aumazing/model/ai_assessment_response.dart';
 import 'package:aumazing/model/area_level.dart';
@@ -41,20 +42,30 @@ const _finalizedProfile = SupportProfile(
   promptRepetition: 2,
 );
 
-AssessmentResult _result(String gameId) => AssessmentResult(
+AssessmentResult _result(
+  String gameId, {
+  int score = 7,
+  int totalItems = 10,
+  int errorCount = 3,
+}) => AssessmentResult(
   id: 'r-$gameId',
   childId: 'child-1',
   assessmentRunId: 'run-1',
   type: 'pre',
   gameId: gameId,
-  score: 7,
-  totalItems: 10,
-  errorCount: 3,
+  score: score,
+  totalItems: totalItems,
+  errorCount: errorCount,
   avgResponseTimeMs: 1800,
   completedAt: DateTime(2026, 5, 12),
 );
 
 final _results = [_result('copy_me'), _result('match_it')];
+
+final _criticalResults = [
+  _result('copy_me', score: 49, totalItems: 100, errorCount: 51),
+];
+
 
 const _criticalAiResponse = AiAssessmentResponse(
   predictedProfile: 'mixed_support',
@@ -134,13 +145,12 @@ void main() {
 
     final navigator = GlobalKey<NavigatorState>();
     await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
-
     navigator.currentState!.push(
       MaterialPageRoute(
         builder:
             (_) => PreAssessmentResultScreen(
               profile: _finalizedProfile,
-              results: _results,
+              results: _criticalResults,
               aiResponse: _criticalAiResponse,
             ),
       ),
@@ -172,7 +182,7 @@ void main() {
         builder:
             (_) => PreAssessmentResultScreen(
               profile: _finalizedProfile,
-              results: _results,
+              results: _criticalResults,
               aiResponse: _criticalAiResponse,
             ),
       ),
@@ -191,6 +201,127 @@ void main() {
     expect(find.text(AssessmentLabels.title), findsOneWidget);
     expect(find.text(AssessmentLabels.continueToHome), findsOneWidget);
   });
+  testWidgets('post critical results offer Therapy Center support', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder: (_) => const PostAssessmentResultScreen(
+          improvement: {'has_data': true, 'post_accuracy': 0.4},
+          preAreaLevels: {},
+          postAreaLevels: {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Explore Therapy Center support'), findsOneWidget);
+    expect(find.textContaining('not a medical diagnosis'), findsOneWidget);
+    await tester.tap(find.text('Maybe Later'));
+    await tester.pumpAndSettle();
+    expect(find.text('Explore Therapy Center support'), findsNothing);
+  });
+
+  testWidgets('exactly 50% results do not offer Therapy Center support', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder:
+            (_) => PreAssessmentResultScreen(
+              profile: _finalizedProfile,
+              results: [
+                _result('copy_me', score: 5, totalItems: 10, errorCount: 5),
+              ],
+              // Four Needs Support areas would trigger the old area-count
+              // heuristic, so this pins the canonical 0.50 boundary.
+              aiResponse: _criticalAiResponse,
+            ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    expect(find.text('Explore Therapy Center support'), findsNothing);
+  });
+
+  testWidgets('critical therapy navigation preserves the active child', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder:
+            (_) => PreAssessmentResultScreen(
+              profile: _finalizedProfile,
+              results: [
+                _result('copy_me', score: 49, totalItems: 100, errorCount: 51),
+              ],
+              aiResponse: _criticalAiResponse,
+            ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+    expect(find.text('Browse Therapy Centers'), findsOneWidget);
+    expect(find.textContaining('not a medical diagnosis'), findsOneWidget);
+
+    final beforeId =
+        tester.element(find.byType(PreAssessmentResultScreen))
+            .read<ChildProvider>()
+            .profile
+            ?.id;
+    expect(beforeId, 'child-1');
+
+    await tester.tap(find.text('Browse Therapy Centers'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TherapyDirectoryScreen), findsOneWidget);
+    final afterId =
+        tester.element(find.byType(TherapyDirectoryScreen))
+            .read<ChildProvider>()
+            .profile
+            ?.id;
+    expect(afterId, beforeId);
+  });
+
+  testWidgets('zero-total results do not offer Therapy Center support', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(_phonePortrait);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(_app(navigatorKey: navigator, home: const _Home()));
+    navigator.currentState!.push(
+      MaterialPageRoute(
+        builder:
+            (_) => PreAssessmentResultScreen(
+              profile: _finalizedProfile,
+              results: [
+                _result('copy_me', score: 0, totalItems: 0, errorCount: 0),
+              ],
+              aiResponse: _criticalAiResponse,
+            ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    expect(find.text('Explore Therapy Center support'), findsNothing);
+  });
+
 
   testWidgets('review results go back to the dashboard', (tester) async {
     await tester.binding.setSurfaceSize(_phonePortrait);

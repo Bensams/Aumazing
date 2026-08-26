@@ -69,6 +69,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
                 (assessProv.hasPostAssessment ? null : assessProv.aiPrediction),
             progress: progress,
             presentation: AssessmentResultPresentation.review,
+            showTherapyRecommendation: true,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),
             onRetake: () {
