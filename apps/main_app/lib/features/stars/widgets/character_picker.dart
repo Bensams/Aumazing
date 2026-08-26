@@ -87,6 +87,7 @@ class _CharacterCard extends StatelessWidget {
   final ChildCharacter character;
   final bool isSelected;
   final VoidCallback onTap;
+  static const double _borderWidth = 1.5;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +120,7 @@ class _CharacterCard extends StatelessWidget {
               color: isSelected
                   ? theme.colorScheme.primary
                   : theme.dividerColor,
-              width: isSelected ? 3 : 1.5,
+              width: _borderWidth,
             ),
           ),
           child: Column(
