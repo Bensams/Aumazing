@@ -130,6 +130,19 @@ void main() {
       accessToken: null,
     ));
   });
+  test('email binding verification uses email-change OTP semantics', () async {
+    final supabaseAuth = _FakeSupabaseAuthClient();
+    final authService = AuthService(supabaseAuth: supabaseAuth);
+
+    await authService.verifyEmailChange(
+      email: 'parent@example.com',
+      token: '123456',
+    );
+
+    expect(supabaseAuth.lastOtpType, OtpType.emailChange);
+    expect(supabaseAuth.lastOtpEmail, 'parent@example.com');
+  });
+
 }
 
 Map<String, dynamic> _boundUserJson(String id) => {
@@ -193,6 +206,8 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   final UserResponse? updateUserResponse;
   final AuthResponse? linkResponse;
   User? _currentUser;
+  OtpType? lastOtpType;
+  String? lastOtpEmail;
   final signInWithIdTokenCalls =
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
   final linkIdentityWithIdTokenCalls =
@@ -200,7 +215,6 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   late final AuthResponse response =
       linkResponse ?? AuthResponse(user: _currentUser);
-
   @override
   User? get currentUser => _currentUser;
 
@@ -270,6 +284,15 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     _currentUser = bound.user;
     return bound;
   }
+  @override
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ResendResponse> resendEmailChange(String email) =>
+      throw UnimplementedError();
 
   @override
   Future<AuthResponse> verifyOTP({
@@ -280,7 +303,11 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     String? email,
     String? redirectTo,
     String? captchaToken,
-  }) => throw UnimplementedError();
+  }) async {
+    lastOtpType = type;
+    lastOtpEmail = email;
+    return AuthResponse();
+  }
 
   @override
   Future<ResendResponse> resend({

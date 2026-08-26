@@ -151,7 +151,11 @@ abstract class SupabaseAuthClient {
     String? nonce,
     String? captchaToken,
   });
-  Future<UserResponse> updateUser(UserAttributes attributes);
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  });
+  Future<ResendResponse> resendEmailChange(String email);
   Future<AuthResponse> verifyOTP({
     required OtpType type,
     String? token,
@@ -168,6 +172,7 @@ abstract class SupabaseAuthClient {
     String? emailRedirectTo,
     String? captchaToken,
   });
+  Future<UserResponse> updateUser(UserAttributes attributes);
   Future<void> resetPasswordForEmail(
     String email, {
     String? redirectTo,
@@ -253,7 +258,6 @@ class DefaultSupabaseAuthClient implements SupabaseAuthClient {
     nonce: nonce,
     captchaToken: captchaToken,
   );
-
   @override
   Future<AuthResponse> signInWithPassword({
     required String email,
@@ -262,25 +266,6 @@ class DefaultSupabaseAuthClient implements SupabaseAuthClient {
   }) => _auth.signInWithPassword(
     email: email,
     password: password,
-    captchaToken: captchaToken,
-  );
-
-  @override
-  Future<void> signOut({SignOutScope scope = SignOutScope.global}) =>
-      _auth.signOut(scope: scope);
-
-  @override
-  Future<AuthResponse> signUp({
-    required String email,
-    required String password,
-    Map<String, dynamic>? data,
-    String? emailRedirectTo,
-    String? captchaToken,
-  }) => _auth.signUp(
-    email: email,
-    password: password,
-    data: data,
-    emailRedirectTo: emailRedirectTo,
     captchaToken: captchaToken,
   );
 
@@ -305,6 +290,40 @@ class DefaultSupabaseAuthClient implements SupabaseAuthClient {
     email: email,
     redirectTo: redirectTo,
     captchaToken: captchaToken,
+  );
+  @override
+  Future<void> signOut({SignOutScope scope = SignOutScope.global}) =>
+      _auth.signOut(scope: scope);
+
+  @override
+  Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+    Map<String, dynamic>? data,
+    String? emailRedirectTo,
+    String? captchaToken,
+  }) => _auth.signUp(
+    email: email,
+    password: password,
+    data: data,
+    emailRedirectTo: emailRedirectTo,
+    captchaToken: captchaToken,
+  );
+
+  @override
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  }) => _auth.verifyOTP(
+    type: OtpType.emailChange,
+    email: email,
+    token: token,
+  );
+
+  @override
+  Future<ResendResponse> resendEmailChange(String email) => _auth.resend(
+    type: OtpType.emailChange,
+    email: email,
   );
 }
 
@@ -791,6 +810,23 @@ class AuthService {
       token: token,
     );
     return response;
+  }
+  /// Verifies one step of Supabase's secure email-change flow.
+  ///
+  /// The first verification can intentionally return without a session;
+  /// callers must keep the current anonymous session and submit the second
+  /// code before treating the account as bound.
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  }) => _supabaseAuth.verifyOTP(
+    type: OtpType.emailChange,
+    email: email,
+    token: token,
+  );
+
+  Future<void> resendEmailChange(String email) async {
+    await _supabaseAuth.resend(type: OtpType.emailChange, email: email);
   }
 
   Future<void> resendOTP(String email) async {

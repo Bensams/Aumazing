@@ -80,6 +80,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       context: context,
       builder: (_) => BindAccountModal(authService: _authService),
     );
+    if (mounted) setState(() {});
     return _authService.isBoundAccount;
   }
 
