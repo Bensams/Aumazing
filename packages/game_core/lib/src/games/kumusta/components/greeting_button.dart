@@ -49,6 +49,52 @@ class GreetingButton extends PositionComponent {
   /// The centre of the card, for the ghost hand and the pulse.
   Vector2 get centre => position + size / 2;
 
+  /// Idle-motion phase, in seconds. Advanced only for [Greeting.wave] and
+  /// [Greeting.highFive], and only while motion is allowed, so the two
+  /// hardest-to-name gestures each carry a distinct *movement* — a rocking
+  /// swing versus a push-in zoom — that a child recognises without reading a
+  /// label. Exposed read-only so the reduced-motion contract is testable.
+  double _idle = 0;
+  double get idlePhase => _idle;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (GameMotion.reduced) return;
+    if (greeting == Greeting.wave || greeting == Greeting.highFive) {
+      _idle += dt;
+    }
+  }
+
+  /// Transforms [canvas] so the hand rocks (wave) or pushes in and out (high
+  /// five) around [pivot]. Only the painted glyph moves: the card body, its
+  /// generous hit box, and the pulse/reject/confirm effects on the component
+  /// itself are untouched, so tapping, selection and dragging behave exactly
+  /// as before. Under reduced motion nothing is pushed and the hand is still.
+  /// Returns whether a matching [Canvas.restore] is owed.
+  bool _applyIdleMotion(Canvas canvas, Offset pivot) {
+    if (GameMotion.reduced) return false;
+    const twoPi = math.pi * 2;
+    double angle = 0;
+    double scale = 1;
+    switch (greeting) {
+      case Greeting.wave:
+        // ~13 degrees each way at ~1.1 Hz: an unmistakable left-right wave.
+        angle = 0.22 * math.sin(twoPi * 1.1 * _idle);
+      case Greeting.highFive:
+        // The palm eases toward the child and back at ~1 Hz — a high five.
+        scale = 1 + 0.13 * math.sin(twoPi * _idle);
+      default:
+        return false;
+    }
+    canvas.save();
+    canvas.translate(pivot.dx, pivot.dy);
+    if (angle != 0) canvas.rotate(angle);
+    if (scale != 1) canvas.scale(scale);
+    canvas.translate(-pivot.dx, -pivot.dy);
+    return true;
+  }
+
   /// Bounce the card back — the gentle answer to a wrong tap.
   void rejectGently() {
     _rejecting = true;
@@ -125,16 +171,19 @@ class GreetingButton extends PositionComponent {
       borderWidth: _pulsing ? 6.0 : 3.0,
     );
 
+    final glyphBox = Rect.fromCenter(
+      center: rect.center,
+      width: rect.width * 0.66,
+      height: rect.height * 0.66,
+    );
+    final animating = _applyIdleMotion(canvas, glyphBox.center);
     paintGreetingGlyph(
       canvas,
       greeting,
-      Rect.fromCenter(
-        center: rect.center,
-        width: rect.width * 0.66,
-        height: rect.height * 0.66,
-      ),
+      glyphBox,
       skin: _skin,
       ink: _ink,
     );
+    if (animating) canvas.restore();
   }
 }
