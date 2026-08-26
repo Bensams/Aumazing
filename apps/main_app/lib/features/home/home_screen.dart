@@ -23,6 +23,7 @@ import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
 import '../premium/premium_upgrade_screen.dart';
+import 'gameplay_report_screen.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
 import '../post_assessment/post_assessment_progress_screen.dart';
@@ -1964,50 +1965,93 @@ class _HomeScreenState extends State<HomeScreen> {
               ...sessions.take(5).map((session) {
                 final gameName = session.gameId.replaceAll('_', ' ');
                 final time = _formatDuration(session.duration);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.lavenderLight,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.games_rounded,
-                          size: 18,
-                          color: AppColors.textSecondary,
-                        ),
+                final childId =
+                    progressProv.loadedChildId ??
+                    context.read<ChildProvider>().profile?.id ??
+                    '';
+                final rowKey = ValueKey(
+                  'recentActivityItem-${session.id}',
+                );
+                final reportLabel =
+                    '$gameName, ${session.score} of ${session.totalItems} correct, '
+                    'played ${_formatDate(session.endedAt)}';
+                void openReport() {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      settings: RouteSettings(
+                        name: '/gameplay-report/$childId/${session.id}',
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              gameName[0].toUpperCase() + gameName.substring(1),
-                              style: AppTextStyles.labelLarge.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
+                      builder:
+                          (_) => _RecentActivityDestination(
+                            key: ValueKey(
+                              'gameplayReport-$childId-${session.id}',
                             ),
-                            Text(
-                              '${session.score}/${session.totalItems} correct · $time',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                            childId: childId,
+                            sessionId: session.id,
+                            authService: _authService,
+                            palette: context.read<ChildProvider>().activePalette,
+                          ),
+                    ),
+                  );
+                }
+
+                return Semantics(
+                  container: true,
+                  button: true,
+                  label: reportLabel,
+                  hint: 'Open gameplay report',
+                  onTap: openReport,
+                  child: InkWell(
+                    key: rowKey,
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: openReport,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lavenderLight,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ],
-                        ),
+                            child: const Icon(
+                              Icons.games_rounded,
+                              size: 18,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  gameName[0].toUpperCase() +
+                                      gameName.substring(1),
+                                  style: AppTextStyles.labelLarge.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${session.score}/${session.totalItems} correct · $time',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            _formatDate(session.endedAt),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        _formatDate(session.endedAt),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               }),
@@ -2032,6 +2076,95 @@ class _HomeScreenState extends State<HomeScreen> {
     if (diff.inHours < 1) return '${diff.inMinutes}m ago';
     if (diff.inDays < 1) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+}
+
+/// Resolves a recent-activity route by both identities before selecting its
+/// destination. This prevents a stale row from opening another child's report.
+class _RecentActivityDestination extends StatelessWidget {
+  const _RecentActivityDestination({
+    super.key,
+    required this.childId,
+    required this.sessionId,
+    required this.authService,
+    required this.palette,
+  });
+
+  final String childId;
+  final String sessionId;
+  final AuthService authService;
+  final GamePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.read<ProgressProvider>().sessionFor(
+      childId: childId,
+      sessionId: sessionId,
+    );
+    if (session == null) {
+      return _MissingGameplayReportScreen(palette: palette);
+    }
+
+    if (!EntitlementService.instance.isPremium) {
+      return PremiumUpgradeScreen(authService: authService);
+    }
+
+    return GameplayReportScreen(session: session, palette: palette);
+  }
+}
+
+class _MissingGameplayReportScreen extends StatelessWidget {
+  const _MissingGameplayReportScreen({required this.palette});
+
+  final GamePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(gradient: palette.parentBackground),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: AppSpacing.paddingLg,
+              child: AppCard(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.history_toggle_off_rounded,
+                      size: 40,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'This activity is no longer available.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'The gameplay session may have been deleted or is still syncing.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppSecondaryButton(
+                      label: 'Back to activity',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
