@@ -12,14 +12,15 @@ abstract final class AssessmentScoring {
   /// accuracy evidence to interpret. The boundary is intentionally strict:
   /// exactly 0.50 is not critically poor.
   static bool isCriticallyPoor(List<AssessmentResult> results) {
-    var score = 0;
+    var weightedAccuracy = 0.0;
     var totalItems = 0;
     for (final result in results) {
-      score += result.score;
+      if (result.totalItems <= 0) continue;
+      weightedAccuracy += result.adjustedAccuracy * result.totalItems;
       totalItems += result.totalItems;
     }
     return isCriticallyPoorAccuracy(
-      totalItems == 0 ? null : score / totalItems,
+      totalItems == 0 ? null : weightedAccuracy / totalItems,
     );
   }
 
