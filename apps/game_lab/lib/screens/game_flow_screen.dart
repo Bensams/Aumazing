@@ -29,10 +29,13 @@ class GameFlowScreen extends StatefulWidget {
 class _GameFlowScreenState extends State<GameFlowScreen> {
   int _currentGameIndex = 0;
   bool _showingReward = false;
+  int _gameGeneration = 0;
   final _services = GameLabServices.instance;
 
-  List<GameEntry> get _games =>
-      widget.gameIds.map((id) => GameRegistry.find(id)).whereType<GameEntry>().toList();
+  List<GameEntry> get _games => widget.gameIds
+      .map((id) => GameRegistry.find(id))
+      .whereType<GameEntry>()
+      .toList();
 
   GameEntry? get _currentGame =>
       _currentGameIndex < _games.length ? _games[_currentGameIndex] : null;
@@ -58,15 +61,25 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
     super.dispose();
   }
 
-  void _onGameComplete() {
-    // Show reward overlay before moving to next game
+  void _onGameComplete(int generation) {
+    if (!mounted || _showingReward || generation != _gameGeneration) {
+      return;
+    }
+
+    // Show reward overlay before moving to next game. Removing this screen
+    // lets GameWidget invoke the game's onDispose exactly once.
     setState(() => _showingReward = true);
   }
 
   void _onRewardComplete() {
-    setState(() => _showingReward = false);
+    if (!mounted || !_showingReward) return;
+
     if (_currentGameIndex < _games.length - 1) {
-      setState(() => _currentGameIndex++);
+      setState(() {
+        _showingReward = false;
+        _currentGameIndex++;
+        _gameGeneration++;
+      });
     } else {
       // All games complete - return to launcher
       Navigator.of(context).pop();
@@ -87,10 +100,12 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
     }
 
     return _GameTestScreen(
+      key: ValueKey<String>(game.id),
       entry: game,
       config: widget.config,
       currentGame: _currentGameIndex + 1,
       totalGames: _games.length,
+      gameGeneration: _gameGeneration,
       onGameComplete: _onGameComplete,
     );
   }
@@ -417,13 +432,16 @@ class _GameTestScreen extends StatefulWidget {
   final GameConfig config;
   final int currentGame;
   final int totalGames;
-  final VoidCallback onGameComplete;
+  final int gameGeneration;
+  final void Function(int generation) onGameComplete;
 
   const _GameTestScreen({
+    super.key,
     required this.entry,
     required this.config,
     required this.currentGame,
     required this.totalGames,
+    required this.gameGeneration,
     required this.onGameComplete,
   });
 
@@ -441,6 +459,7 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final generation = widget.gameGeneration;
 
     // Create game with all audio callbacks wired via GameLabGameFactory
     _game = GameLabGameFactory.createWithAudio(
@@ -451,6 +470,7 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
         // Star sparkle is triggered on round completion via onStepChanged
       },
       onStepChanged: (step) {
+        if (!mounted) return;
         setState(() {
           _currentStep = step;
           // Show star sparkle when a round is fully completed
@@ -463,7 +483,9 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
         required int errorCount,
         required int totalResponseTimeMs,
       }) {
-        widget.onGameComplete();
+        if (mounted) {
+          widget.onGameComplete(generation);
+        }
       },
     );
   }
@@ -481,6 +503,7 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
         children: [
           Listener(
             onPointerDown: (event) {
+              if (!mounted) return;
               setState(() {
                 _lastTapPosition = event.localPosition;
               });
@@ -492,6 +515,7 @@ class _GameTestScreenState extends State<_GameTestScreen> with WidgetsBindingObs
             ThreeStarSparkle(
               position: _lastTapPosition!,
               onComplete: () {
+                if (!mounted) return;
                 setState(() {
                   _showStarSparkle = false;
                 });
