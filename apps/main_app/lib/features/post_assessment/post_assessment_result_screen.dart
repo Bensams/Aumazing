@@ -17,6 +17,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
     required this.improvement,
     required this.preAreaLevels,
     required this.postAreaLevels,
+    this.nextModulePremiumRequired = false,
   });
 
   /// Output of AssessmentService.compareAssessments.
@@ -27,6 +28,9 @@ class PostAssessmentResultScreen extends StatelessWidget {
 
   /// Area levels from the post-assessment (the new prediction).
   final Map<String, AreaLevel> postAreaLevels;
+
+  /// Whether generating the next personalized module requires Premium.
+  final bool nextModulePremiumRequired;
 
   static const _areaTitles = {
     'communication': 'Communication',
@@ -109,24 +113,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     if (postAreaLevels.isNotEmpty) _buildAreaComparisonCard(),
                     const SizedBox(height: AppSpacing.md),
-                    AppCard(
-                      child: Row(
-                        children: [
-                          const Icon(Icons.route_rounded,
-                              color: AppColors.primaryPurple),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              'A new learning path has been prepared from '
-                              'these results.',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildLearningPathCard(),
                     const SizedBox(height: AppSpacing.lg),
                     AppPrimaryButton(
                       label: 'Continue',
@@ -202,6 +189,34 @@ class PostAssessmentResultScreen extends StatelessWidget {
                   .copyWith(color: AppColors.mutedForeground),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLearningPathCard() {
+    final message = nextModulePremiumRequired
+        ? 'Premium is required to generate the next personalized module. '
+            'Upgrade to keep building a learning path tailored to your child.'
+        : 'A new learning path has been prepared from these results.';
+    return AppCard(
+      child: Row(
+        children: [
+          Icon(
+            nextModulePremiumRequired
+                ? Icons.lock_outline_rounded
+                : Icons.route_rounded,
+            color: AppColors.primaryPurple,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
         ],
       ),
     );
