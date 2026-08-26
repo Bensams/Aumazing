@@ -42,6 +42,46 @@ final _profile = ChildProfile(
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    ParentVerificationDialog.pinDelegate = null;
+  });
+
+  tearDown(() => ParentVerificationDialog.pinDelegate = null);
+
+
+  testWidgets('system back keeps the lobby visible after failed PIN', (
+    tester,
+  ) async {
+    ParentVerificationDialog.pinDelegate = const _TestPinDelegate(
+      expectedPin: '1234',
+      result: ParentPinAttempt.incorrect,
+    );
+    await _pumpLobbyRoute(tester);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Parent Verification'), findsOneWidget);
+
+    await _tapPin(tester, '0000');
+    expect(find.text('Incorrect PIN. Try again.'), findsOneWidget);
+    expect(find.byType(ChildModeLobbyScreen), findsOneWidget);
+    expect(find.text('Parent screen'), findsNothing);
+  });
+
+  testWidgets('system back pops the lobby after successful PIN', (tester) async {
+    ParentVerificationDialog.pinDelegate = const _TestPinDelegate(
+      expectedPin: '1234',
+      result: ParentPinAttempt.correct,
+    );
+    await _pumpLobbyRoute(tester);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 300));
+    await _tapPin(tester, '1234');
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Enter your parent PIN:'), findsNothing);
+
+    expect(find.byType(ChildModeLobbyScreen), findsNothing);
+    expect(find.text('Parent screen'), findsOneWidget);
   });
 
   // The form factor drives the step-2 layout; pin it per test rather than
@@ -387,4 +427,68 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
+Future<void> _pumpLobbyRoute(WidgetTester tester) async {
+  await tester.pumpWidget(_wrap(const _BackStack()));
+  await tester.tap(find.text('Enter child mode'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _tapPin(WidgetTester tester, String pin) async {
+  for (final digit in pin.split('')) {
+    await tester.tap(find.byKey(ValueKey('numpad_$digit')));
+    await tester.pump();
+  }
+  await tester.tap(find.byKey(const ValueKey('numpad_submit')));
+  await tester.pump(const Duration(seconds: 1));
+}
+
+class _BackStack extends StatelessWidget {
+  const _BackStack();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Parent screen'),
+            TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ChildModeLobbyScreen(),
+                ),
+              ),
+              child: const Text('Enter child mode'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TestPinDelegate implements ParentPinDelegate {
+  const _TestPinDelegate({required this.expectedPin, required this.result});
+
+  final String expectedPin;
+  final ParentPinAttempt result;
+
+  @override
+  bool get hasPin => true;
+
+  @override
+  Future<ParentPinAttempt> verify(String pin) async {
+    if (pin != expectedPin) return ParentPinAttempt.incorrect;
+    return result;
+  }
+
+  @override
+  Duration? get lockoutRemaining => null;
+
+  @override
+  Future<bool> onForgotPin(BuildContext context) async => false;
 }
