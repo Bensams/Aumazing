@@ -36,6 +36,45 @@ void main() {
     expect(first.isGuestMode, isFalse);
   });
 
+  test('convertAnonymousToPermanent returns bound response identity', () async {
+    final supabaseAuth = _FakeSupabaseAuthClient(
+      updateUserResponse: UserResponse.fromJson(_boundUserJson('email-user')),
+    );
+    final authService = AuthService(supabaseAuth: supabaseAuth);
+    final guestId = authService.initializeGuestMode();
+
+    final response = await authService.convertAnonymousToPermanent(
+      email: 'bound@example.com',
+      password: 'password123',
+    );
+
+    expect(response.user?.id, 'email-user');
+    expect(response.user?.id, isNot(guestId));
+    expect(authService.isGuestMode, isFalse);
+    expect(authService.isBoundAccount, isTrue);
+    expect(authService.effectiveUserId, 'email-user');
+  });
+
+  test('bindAnonymousWithGoogle returns bound response identity', () async {
+    final googleAuth = _FakeGoogleAuthClient();
+    final supabaseAuth = _FakeSupabaseAuthClient(
+      linkResponse: AuthResponse(user: _boundUser('google-user')),
+    );
+    final authService = AuthService(
+      googleAuth: googleAuth,
+      supabaseAuth: supabaseAuth,
+    );
+    final guestId = authService.initializeGuestMode();
+
+    final response = await authService.bindAnonymousWithGoogle();
+
+    expect(response.user?.id, 'google-user');
+    expect(response.user?.id, isNot(guestId));
+    expect(authService.isGuestMode, isFalse);
+    expect(authService.isBoundAccount, isTrue);
+    expect(authService.effectiveUserId, 'google-user');
+  });
+
   test('bindAnonymousWithGoogle links identity with native tokens', () async {
     final googleAuth = _FakeGoogleAuthClient(
       authenticateResult: const GoogleAuthTokens(
@@ -93,6 +132,18 @@ void main() {
   });
 }
 
+Map<String, dynamic> _boundUserJson(String id) => {
+  'id': id,
+  'app_metadata': <String, dynamic>{},
+  'user_metadata': null,
+  'aud': 'authenticated',
+  'created_at': '2026-04-20T00:00:00Z',
+  'is_anonymous': false,
+};
+
+User _boundUser(String id) => User.fromJson(_boundUserJson(id))!;
+
+
 class _FakeGoogleAuthClient implements GoogleAuthClient {
   _FakeGoogleAuthClient({
     this.authenticateResult = const GoogleAuthTokens(idToken: 'id-token'),
@@ -133,15 +184,25 @@ class _FakeFacebookAuthClient implements FacebookAuthClient {
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {
-  _FakeSupabaseAuthClient({this.currentUser});
+  _FakeSupabaseAuthClient({
+    User? currentUser,
+    this.updateUserResponse,
+    this.linkResponse,
+  }) : _currentUser = currentUser;
 
-  final response = AuthResponse();
+  final UserResponse? updateUserResponse;
+  final AuthResponse? linkResponse;
+  User? _currentUser;
   final signInWithIdTokenCalls =
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
   final linkIdentityWithIdTokenCalls =
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
+
+  late final AuthResponse response =
+      linkResponse ?? AuthResponse(user: _currentUser);
+
   @override
-  final User? currentUser;
+  User? get currentUser => _currentUser;
 
   @override
   Session? get currentSession => null;
@@ -150,9 +211,7 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   Stream<AuthState> get onAuthStateChange => const Stream.empty();
 
   @override
-  Future<AuthResponse> signInAnonymously() {
-    throw UnimplementedError();
-  }
+  Future<AuthResponse> signInAnonymously() async => response;
 
   @override
   Future<AuthResponse> signInWithIdToken({
@@ -183,7 +242,9 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
       idToken: idToken,
       accessToken: accessToken,
     ));
-    return response;
+    final bound = linkResponse ?? response;
+    _currentUser = bound.user;
+    return bound;
   }
 
   @override
@@ -191,9 +252,7 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     required String email,
     required String password,
     String? captchaToken,
-  }) {
-    throw UnimplementedError();
-  }
+  }) => throw UnimplementedError();
 
   @override
   Future<AuthResponse> signUp({
@@ -202,13 +261,14 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     Map<String, dynamic>? data,
     String? emailRedirectTo,
     String? captchaToken,
-  }) {
-    throw UnimplementedError();
-  }
+  }) => throw UnimplementedError();
 
   @override
-  Future<UserResponse> updateUser(UserAttributes attributes) {
-    throw UnimplementedError();
+  Future<UserResponse> updateUser(UserAttributes attributes) async {
+    final bound =
+        updateUserResponse ?? UserResponse.fromJson(_boundUserJson('email-user'));
+    _currentUser = bound.user;
+    return bound;
   }
 
   @override
@@ -220,9 +280,7 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     String? email,
     String? redirectTo,
     String? captchaToken,
-  }) {
-    throw UnimplementedError();
-  }
+  }) => throw UnimplementedError();
 
   @override
   Future<ResendResponse> resend({
@@ -231,23 +289,18 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     String? phone,
     String? emailRedirectTo,
     String? captchaToken,
-  }) {
-    throw UnimplementedError();
-  }
+  }) => throw UnimplementedError();
 
   @override
   Future<void> resetPasswordForEmail(
     String email, {
     String? redirectTo,
     String? captchaToken,
-  }) {
-    throw UnimplementedError();
-  }
+  }) => throw UnimplementedError();
 
   @override
-  Future<AuthResponse> refreshSession([String? refreshToken]) {
-    throw UnimplementedError();
-  }
+  Future<AuthResponse> refreshSession([String? refreshToken]) =>
+      throw UnimplementedError();
 
   @override
   Future<void> signOut({SignOutScope scope = SignOutScope.global}) async {}
