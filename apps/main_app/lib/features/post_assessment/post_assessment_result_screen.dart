@@ -6,6 +6,8 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../model/area_level.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_summary_service.dart';
+import '../../services/scoring_service.dart' as local_scoring;
+import '../therapy/therapy_center_recommendation_dialog.dart';
 
 /// Parent-facing post-assessment results: overall improvement plus a
 /// per-area comparison of the AI levels before and after the learning
@@ -80,6 +82,12 @@ class PostAssessmentResultScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    TherapyCenterRecommendationTrigger(
+                      shouldShow: local_scoring.AssessmentScoring.isCriticallyPoorAccuracy(
+                        (improvement['post_accuracy'] as num?)?.toDouble(),
+                      ),
+                      child: const SizedBox.shrink(),
+                    ),
                     Text('🎓', style: const TextStyle(fontSize: 48), textAlign: TextAlign.center),
                     const SizedBox(height: 8),
                     Text(
