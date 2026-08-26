@@ -141,6 +141,13 @@ class TulongKaibiganGame extends FlameGame
       (profile.unlimitedHints ||
           _hintsThisRound < (profile.hintsPerRound ?? 0));
   TulongRequest get _activeRequest => _requests[_requestIndex];
+  /// The scale a held card shrinks to, so the buddy the child is aiming at
+  /// stays visible instead of being covered by the lifted card.
+  ///
+  /// Sized so a held card is still narrower than the buddy box on every
+  /// supported canvas (two buddies sharing the character column is the
+  /// narrowest case, and the shortest landscape phone the tightest).
+  static const double draggedCardScale = 0.5;
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -399,6 +406,7 @@ class TulongKaibiganGame extends FlameGame
         onPickedUp: _onPickedUp,
         onDropped: _onDropped,
         language: strings.language,
+        dragScale: draggedCardScale,
         position: Vector2(slot.left, slot.top),
         size: Vector2(math.max(slot.width, 1), math.max(slot.height, 1)),
       );

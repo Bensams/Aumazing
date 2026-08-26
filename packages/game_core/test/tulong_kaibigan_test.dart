@@ -199,6 +199,38 @@ void main() {
         }
       }
     });
+    test('$label keeps a held card narrower than the buddy', () {
+      // Two buddies splitting the character column is the narrowest case; the
+      // box keeps the sprite's own 406x490 proportions, so its width is the
+      // character's drawn width (the body fills the box's width exactly).
+      final character = TulongKaibiganGame.characterRegionFor(canvas);
+      final columnWidth = character.width / 2;
+      final gutter = columnWidth * 0.08;
+      final buddy = TulongKaibiganGame.buddyBoxFor(
+        Rect.fromLTWH(
+          character.left,
+          character.top,
+          columnWidth - gutter,
+          character.height,
+        ),
+      );
+
+      for (final count in [2, 3]) {
+        final slots = TulongKaibiganGame.layoutOptionSlots(
+          region: TulongKaibiganGame.optionsRegionFor(canvas),
+          count: count,
+        );
+        for (final slot in slots) {
+          expect(
+            slot.width * TulongKaibiganGame.draggedCardScale,
+            lessThan(buddy.x + 0.01),
+            reason:
+                'a held card ($count options) would fully cover the '
+                'character on $label',
+          );
+        }
+      }
+    });
   });
 
   test('two cards stack when the option column is taller than it is wide', () {
