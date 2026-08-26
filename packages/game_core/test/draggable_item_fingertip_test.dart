@@ -177,21 +177,38 @@ void main() {
       expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
     });
 
-    test('returns to full size and to its home slot when cancelled', () {
+    test('cancelling mid-pickup still ends at full size and home', () {
       shrinkSubject.onDragStart(start(Vector2(160, 160)));
-      held(1);
-      shrinkSubject.onDragUpdate(move(Vector2(400, 300)));
-      held(0.1);
+      held(0.05); // the 0.12s pickup scale effect is still in flight
 
       shrinkSubject.onDragCancel(DragCancelEvent(1));
-
-      // Cancellation restores the size immediately; the return-home move
-      // then animates the card back to its tray slot.
-      expect(shrinkSubject.scale.x, closeTo(1.0, 0.01));
-      expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
+      // Let the restore effect and the return-home move run to completion.
       held(1);
+
+      expect(shrinkSubject.scale.x, closeTo(1.0, 0.01),
+          reason:
+              'the in-flight pickup effect must not keep writing scale after '
+              'a cancel');
+      expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
       expect(shrinkSubject.position.x, closeTo(100, 0.5));
       expect(shrinkSubject.position.y, closeTo(100, 0.5));
+    });
+
+    test('releasing mid-pickup restores full size, so the release wins', () {
+      shrinkSubject.onDragStart(start(Vector2(160, 160)));
+      held(0.05); // the 0.12s pickup scale effect is still in flight
+
+      shrinkSubject.onDragEnd(DragEndEvent(1, DragEndDetails()));
+      held(1);
+
+      // The invariant under test: the release restore must win over the
+      // still-running pickup effect. (The item is deliberately not settled on
+      // the fingertip here — the glide was interrupted mid-pickup — so the
+      // drop-point precision is asserted by the settled test above instead.)
+      expect(shrinkSubject.scale.x, closeTo(1.0, 0.01),
+          reason: 'a quick grab-and-release must not leave the card shrunk');
+      expect(shrinkSubject.scale.y, closeTo(1.0, 0.01));
+      expect(droppedAt, isNotNull);
     });
   });
 }

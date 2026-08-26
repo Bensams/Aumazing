@@ -162,10 +162,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     _dragging = true;
     priority = 100; // float above other items + bins while dragging
     startFingertipFollow(event.canvasPosition);
-    add(ScaleEffect.to(
-      Vector2.all(dragScale),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    _animateScaleTo(dragScale);
     onPickedUp(this);
   }
 
@@ -192,10 +189,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     stopFingertipFollow();
     onMoved?.call(null);
     priority = 0;
-    add(ScaleEffect.to(
-      Vector2.all(1.0),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    _animateScaleTo(1.0);
     onDropped(this, dropCenter);
   }
 
@@ -206,14 +200,18 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     stopFingertipFollow();
     onMoved?.call(null);
     priority = 0;
+    _animateScaleTo(1.0);
     returnHome();
   }
 
   // ── Outcome animations ───────────────────────────────────────────────
 
   /// Animate the item back to its tray slot (wrong / cancelled drop).
+  ///
+  /// Moves only: the scale restore is owned by the release/cancel path's
+  /// [_animateScaleTo] — a synchronous [scale] write here would race the
+  /// in-flight pickup effect that [_animateScaleTo] already detached.
   void returnHome() {
-    scale = Vector2.all(1.0);
     add(MoveToEffect(
       homePosition,
       EffectController(duration: 0.25, curve: Curves.easeInOut),
@@ -244,11 +242,44 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
       target,
       EffectController(duration: 0.3, curve: Curves.easeInOut),
     ));
-    add(ScaleEffect.to(
-      Vector2.all(0.3),
-      EffectController(duration: 0.3, curve: Curves.easeInOut),
+    _animateScaleTo(
+      0.3,
+      duration: 0.3,
+      curve: Curves.easeInOut,
       onComplete: onSettled,
-    ));
+    );
+  }
+
+  /// The scale animation currently owned by this component, if any.
+  ///
+  /// Scale transitions must never overlap: Flame's [ScaleEffect] computes a
+  /// fixed incremental delta at [Effect.onStart], so two effects animating
+  /// the same component compose arithmetically instead of converging on the
+  /// requested target. A quick cancel or release while the 0.12s pickup
+  /// animation is still in flight would otherwise leave the card at an
+  /// arbitrary in-between scale.
+  ScaleEffect? _activeScaleEffect;
+
+  /// Scale the card to [target], first detaching any in-flight scale
+  /// animation so the new phase deterministically wins.
+  ///
+  /// [Component.removeFromParent] cancels the old effect whether it is already
+  /// mounted or merely queued for mounting (removing a pending child cancels
+  /// its queued add), which is why this is reliable where removing by type
+  /// could miss an effect added earlier in the same event cascade.
+  void _animateScaleTo(
+    double target, {
+    double duration = 0.12,
+    Curve curve = Curves.easeOut,
+    VoidCallback? onComplete,
+  }) {
+    _activeScaleEffect?.removeFromParent();
+    _activeScaleEffect = ScaleEffect.to(
+      Vector2.all(target),
+      EffectController(duration: duration, curve: curve),
+      onComplete: onComplete,
+    );
+    add(_activeScaleEffect!);
   }
 
   // ── Rendering ────────────────────────────────────────────────────────
