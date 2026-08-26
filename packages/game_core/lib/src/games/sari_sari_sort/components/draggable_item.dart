@@ -83,6 +83,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     required this.onDropped,
     this.onMoved,
     this.language = GameLanguage.english,
+    this.dragScale = 1.12,
     required Vector2 position,
     required Vector2 size,
   }) : super(position: position, size: size) {
@@ -94,6 +95,17 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
 
   /// Language the card's label is printed in.
   final GameLanguage language;
+
+  /// The scale the card takes while it is held.
+  ///
+  /// The default grows the card a little — the right affordance when the drop
+  /// target is a wide bin the card lands in anyway. A game that drags the card
+  /// over a target that must stay visible (Tulong, Kaibigan! hands a card to a
+  /// character) passes a value below 1, so the held card shrinks and the
+  /// character keeps showing. The fingertip-follow mixin adjusts for the
+  /// scale every tick, so [visualCenter] — the point drop hit-testing uses —
+  /// stays exactly where the finger is either way.
+  final double dragScale;
 
   /// Fired when the child lifts the item (drag start).
   final void Function(DraggableItem item) onPickedUp;
@@ -119,6 +131,18 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   bool isLocked = false;
 
   bool _dragging = false;
+
+  /// True while [onDragCancel] is dispatching the framework's
+  /// `super.onDragCancel(event)`.
+  ///
+  /// Flame implements `DragCallbacks.onDragCancel` as
+  /// `onDragEnd(event.toDragEnd())` (a virtual call), so the required super
+  /// dispatch would otherwise re-enter this component's own [onDragEnd] with
+  /// `_dragging` still true and run the drop path — hit-testing, scoring and
+  /// registering a drop that was actually cancelled. The flag lets the super
+  /// lifecycle run while the drop path stays out.
+  bool _inCancelDispatch = false;
+
   bool _showError = false;
 
   late TextPaint _emojiPaint;
@@ -150,10 +174,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     _dragging = true;
     priority = 100; // float above other items + bins while dragging
     startFingertipFollow(event.canvasPosition);
-    add(ScaleEffect.to(
-      Vector2.all(1.12),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    _animateScaleTo(dragScale);
     onPickedUp(this);
   }
 
@@ -172,7 +193,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (isLocked || !_dragging) return;
+    if (isLocked || !_dragging || _inCancelDispatch) return;
     // Read the centre before the scale-down starts, so the drop point is the
     // item as the child last saw it.
     final dropCenter = visualCenter;
@@ -180,28 +201,31 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
     stopFingertipFollow();
     onMoved?.call(null);
     priority = 0;
-    add(ScaleEffect.to(
-      Vector2.all(1.0),
-      EffectController(duration: 0.12, curve: Curves.easeOut),
-    ));
+    _animateScaleTo(1.0);
     onDropped(this, dropCenter);
   }
 
   @override
   void onDragCancel(DragCancelEvent event) {
-    super.onDragCancel(event);
+    _inCancelDispatch = true;
+    super.onDragCancel(event); // dispatches onDragEnd; guarded above
+    _inCancelDispatch = false;
     _dragging = false;
     stopFingertipFollow();
     onMoved?.call(null);
     priority = 0;
+    _animateScaleTo(1.0);
     returnHome();
   }
 
   // ── Outcome animations ───────────────────────────────────────────────
 
   /// Animate the item back to its tray slot (wrong / cancelled drop).
+  ///
+  /// Moves only: the scale restore is owned by the release/cancel path's
+  /// [_animateScaleTo] — a synchronous [scale] write here would race the
+  /// in-flight pickup effect that [_animateScaleTo] already detached.
   void returnHome() {
-    scale = Vector2.all(1.0);
     add(MoveToEffect(
       homePosition,
       EffectController(duration: 0.25, curve: Curves.easeInOut),
@@ -232,11 +256,44 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
       target,
       EffectController(duration: 0.3, curve: Curves.easeInOut),
     ));
-    add(ScaleEffect.to(
-      Vector2.all(0.3),
-      EffectController(duration: 0.3, curve: Curves.easeInOut),
+    _animateScaleTo(
+      0.3,
+      duration: 0.3,
+      curve: Curves.easeInOut,
       onComplete: onSettled,
-    ));
+    );
+  }
+
+  /// The scale animation currently owned by this component, if any.
+  ///
+  /// Scale transitions must never overlap: Flame's [ScaleEffect] computes a
+  /// fixed incremental delta at [Effect.onStart], so two effects animating
+  /// the same component compose arithmetically instead of converging on the
+  /// requested target. A quick cancel or release while the 0.12s pickup
+  /// animation is still in flight would otherwise leave the card at an
+  /// arbitrary in-between scale.
+  ScaleEffect? _activeScaleEffect;
+
+  /// Scale the card to [target], first detaching any in-flight scale
+  /// animation so the new phase deterministically wins.
+  ///
+  /// [Component.removeFromParent] cancels the old effect whether it is already
+  /// mounted or merely queued for mounting (removing a pending child cancels
+  /// its queued add), which is why this is reliable where removing by type
+  /// could miss an effect added earlier in the same event cascade.
+  void _animateScaleTo(
+    double target, {
+    double duration = 0.12,
+    Curve curve = Curves.easeOut,
+    VoidCallback? onComplete,
+  }) {
+    _activeScaleEffect?.removeFromParent();
+    _activeScaleEffect = ScaleEffect.to(
+      Vector2.all(target),
+      EffectController(duration: duration, curve: curve),
+      onComplete: onComplete,
+    );
+    add(_activeScaleEffect!);
   }
 
   // ── Rendering ────────────────────────────────────────────────────────
