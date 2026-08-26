@@ -44,7 +44,8 @@ void main() {
   DragUpdateEvent move(Vector2 to) =>
       DragUpdateEvent(1, game, DragUpdateDetails(globalPosition: to.toOffset()));
 
-  /// Drags along [path], reporting a pointer event only every [stride] points.
+  /// Drags along [path], reporting a pointer event only every [stride] points
+  /// and releasing the finger — strokes complete at the lift.
   ///
   /// This is what a fast swipe looks like: the finger really does follow the
   /// guide — corners included — but the pointer is polled far less often than
@@ -58,6 +59,7 @@ void main() {
       game.onDragUpdate(move(path[i]));
     }
     game.onDragUpdate(move(path.last));
+    game.onDragEnd(DragEndEvent(1, DragEndDetails()));
   }
 
   test('a fast swipe along the guide still completes the stroke', () async {
