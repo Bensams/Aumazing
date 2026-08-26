@@ -6,6 +6,7 @@ import 'package:aumazing/core/services/auth_service.dart';
 
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/services/assessment_service.dart';
+import 'package:aumazing/services/scoring_service.dart' as local_scoring;
 
 AssessmentResult _result(
   String gameId, {
@@ -87,6 +88,55 @@ void main() {
       );
     });
   });
+  group('critical therapy recommendation threshold', () {
+    test('marks item-weighted accuracy below 0.50 as critical', () {
+      final results = [
+        // 2/20 and 5/5: item-weighted accuracy is 7/25 = 0.28,
+        // while an equal game average would incorrectly be 0.55.
+        _result('copy_me', score: 2, errorCount: 18, totalItems: 20),
+        _result('match_it', score: 5, errorCount: 0, totalItems: 5),
+      ];
+
+      expect(
+        local_scoring.AssessmentScoring.isCriticallyPoor(results),
+        isTrue,
+      );
+    });
+    test('uses adjusted accuracy when retries exceed scored items', () {
+      final results = [
+        // Retries mean totalItems is 4, but only 4/10 attempts were correct.
+        // Raw score/totalItems would be 1.0; canonical adjusted accuracy is .4.
+        _result('copy_me', score: 4, errorCount: 6, totalItems: 4),
+      ];
+
+      expect(
+        local_scoring.AssessmentScoring.isCriticallyPoor(results),
+        isTrue,
+      );
+    });
+
+    test('does not mark exactly 0.50 as critical', () {
+      final results = [
+        _result('copy_me', score: 50, errorCount: 50, totalItems: 100),
+      ];
+
+      expect(
+        local_scoring.AssessmentScoring.isCriticallyPoor(results),
+        isFalse,
+      );
+    });
+
+    test('does not mark empty or zero-total results as critical', () {
+      expect(local_scoring.AssessmentScoring.isCriticallyPoor(const []), isFalse);
+      expect(
+        local_scoring.AssessmentScoring.isCriticallyPoor([
+          _result('copy_me', score: 0, errorCount: 0, totalItems: 0),
+        ]),
+        isFalse,
+      );
+    });
+  });
+
 
   group('compareAssessments', () {
     // The comparison methods are pure; only the constructor needs an auth

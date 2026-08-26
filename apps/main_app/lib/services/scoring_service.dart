@@ -5,6 +5,32 @@ import '../model/support_profile.dart';
 
 /// Analyzes per-game assessment results and generates a [SupportProfile]
 /// with a non-clinical developmental summary and recommendations.
+abstract final class AssessmentScoring {
+  /// Whether aggregate item-weighted accuracy is critically poor.
+  ///
+  /// A result with no scored items is not critical because there is no
+  /// accuracy evidence to interpret. The boundary is intentionally strict:
+  /// exactly 0.50 is not critically poor.
+  static bool isCriticallyPoor(List<AssessmentResult> results) {
+    var weightedAccuracy = 0.0;
+    var totalItems = 0;
+    for (final result in results) {
+      if (result.totalItems <= 0) continue;
+      weightedAccuracy += result.adjustedAccuracy * result.totalItems;
+      totalItems += result.totalItems;
+    }
+    return isCriticallyPoorAccuracy(
+      totalItems == 0 ? null : weightedAccuracy / totalItems,
+    );
+  }
+
+  /// Whether an existing aggregate accuracy is below the critical band.
+  static bool isCriticallyPoorAccuracy(double? accuracy) =>
+      accuracy != null && accuracy.isFinite && accuracy >= 0 && accuracy < 0.50;
+}
+
+/// Analyzes per-game assessment results and generates a [SupportProfile]
+/// with a non-clinical developmental summary and recommendations.
 class ScoringService {
   const ScoringService();
 

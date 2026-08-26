@@ -14,6 +14,8 @@ import '../../model/support_profile.dart';
 import '../../services/active_games_service.dart';
 import '../../services/assessment_result_mapper.dart';
 import '../../services/recommended_settings_applier.dart';
+import '../../services/scoring_service.dart' as local_scoring;
+import '../therapy/therapy_center_recommendation_dialog.dart';
 
 /// Renders a finalized assessment run with the shared result layout.
 ///
@@ -38,31 +40,26 @@ class AssessmentResultView extends StatefulWidget {
     this.onBack,
     this.backLabel = AssessmentLabels.home,
     this.showCelebration = true,
+    this.showTherapyRecommendation = false,
   });
 
   final List<AssessmentResult> results;
-
-  /// The support profile finalized with this run — never recomputed from
-  /// the child's current settings.
   final SupportProfile profile;
-
   final AssessmentResultPresentation presentation;
   final AiAssessmentResponse? aiResponse;
   final String assessmentType;
-
-  /// Before-and-after comparison against an earlier comparable run, when the
-  /// caller has one (AUM-161). Null shows the run on its own, unchanged.
   final ResultProgress? progress;
-
   final VoidCallback? onContinue;
   final VoidCallback? onRetake;
   final VoidCallback? onBack;
   final String backLabel;
   final bool showCelebration;
+  final bool showTherapyRecommendation;
 
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
 }
+
 
 class _AssessmentResultViewState extends State<AssessmentResultView> {
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
@@ -70,8 +67,15 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _awardStars();
+      if (widget.showTherapyRecommendation &&
+          local_scoring.AssessmentScoring.isCriticallyPoor(widget.results) &&
+          mounted) {
+        showTherapyCenterRecommendation(context);
+      }
+    });
     if (_activeGameIds == null) _loadActiveGameIds();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _awardStars());
   }
 
   /// Stars for finishing an assessment (STAR-B6).
