@@ -6,6 +6,7 @@ import 'package:game_core/src/games/kumusta/buddy_art_cache.dart';
 import 'package:game_core/src/games/kumusta/components/greeting_button.dart';
 import 'package:game_core/src/games/kumusta/greetings.dart';
 import 'package:game_core/src/games/kumusta/kumusta_game.dart';
+import 'package:game_core/src/config/game_motion.dart';
 
 /// Kumusta! — the greeting the buddy offers must be the one the child can
 /// answer, and a wrong answer must cost the child nothing but a second look.
@@ -154,5 +155,39 @@ void main() {
     expect((result['extras'] as Map)['unprompted_greetings'], 2,
         reason: 'greeting back without a prompt is the target skill and the '
             'number a clinician reads first');
+  });
+
+  GreetingButton buttonFor(Greeting greeting) => GreetingButton(
+        greeting: greeting,
+        color: const Color(0xFF7EC8E3),
+        position: Vector2.zero(),
+        size: Vector2.all(100),
+      );
+
+  test('only Wave and High Five carry an idle motion', () {
+    GameMotion.reduced = false;
+    addTearDown(() => GameMotion.reduced = false);
+    for (final greeting in Greeting.values) {
+      final button = buttonFor(greeting)..update(0.5);
+      final animates =
+          greeting == Greeting.wave || greeting == Greeting.highFive;
+      expect(
+        button.idlePhase,
+        animates ? greaterThan(0) : 0,
+        reason: animates
+            ? '$greeting must move so a child recognises it without the label'
+            : '$greeting reads on silhouette alone and must stay still',
+      );
+    }
+  });
+
+  test('reduced motion freezes every card', () {
+    GameMotion.reduced = true;
+    addTearDown(() => GameMotion.reduced = false);
+    for (final greeting in Greeting.values) {
+      final button = buttonFor(greeting)..update(1.0);
+      expect(button.idlePhase, 0,
+          reason: '$greeting must not animate under reduced motion');
+    }
   });
 }
