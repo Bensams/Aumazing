@@ -44,10 +44,12 @@ void main() {
     DeveloperToolsConfig.debugAvailableOverride = null;
   });
 
-  Widget app(DeveloperToolsService service, {AssessmentProvider? provider}) =>
+  Widget app(DeveloperToolsService service,
+      {AssessmentProvider? provider, ChildProvider? childProvider}) =>
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<ChildProvider>(create: (_) => _TestChildProvider()),
+          ChangeNotifierProvider<ChildProvider>(
+              create: (_) => childProvider ?? _TestChildProvider()),
           ChangeNotifierProvider<AssessmentProvider>(
               create: (_) => provider ?? AssessmentProvider()),
         ],
@@ -78,7 +80,7 @@ void main() {
   }
 
   Future<void> runAction(WidgetTester tester, Key key,
-      {String confirm = 'Complete'}) async {
+      {String confirm = 'Complete', bool settleAfter = true}) async {
     // The sheet scrolls; the lower actions are below the fold in a small
     // test window.
     await tester.ensureVisible(find.byKey(key));
@@ -86,7 +88,12 @@ void main() {
     await tester.tap(find.byKey(key));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, confirm));
-    await tester.pumpAndSettle();
+    if (settleAfter) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
   }
 
   testWidgets('the DEV button opens exactly one toolbox, however often tapped',
@@ -258,6 +265,53 @@ void main() {
     });
   });
 
+  group('critical pre-assessment preview', () {
+    testWidgets('opens the existing non-clinical Therapy Center prompt and dismisses safely',
+        (tester) async {
+      await tester.pumpWidget(app(_ScriptedService()));
+      await openToolbox(tester);
+
+      await runAction(
+        tester,
+        const Key('developerToolsPreviewCritical'),
+        confirm: 'Preview',
+        settleAfter: false,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Explore Therapy Center support'), findsOneWidget);
+      expect(find.textContaining('not a medical diagnosis'), findsOneWidget);
+      expect(find.text('Browse Therapy Centers'), findsOneWidget);
+      expect(find.byType(PreAssessmentResultScreen), findsOneWidget);
+
+      await tester.tap(find.text('Maybe Later'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(find.text('Explore Therapy Center support'), findsNothing);
+      expect(find.text('Browse Therapy Centers'), findsNothing);
+      expect(find.byType(PreAssessmentResultScreen), findsOneWidget);
+      expect(find.text('Developer Tools'), findsNothing);
+    });
+
+    testWidgets('is disabled without an active child', (tester) async {
+      await tester.pumpWidget(
+        app(_ScriptedService(), childProvider: _EmptyChildProvider()),
+      );
+      await openToolbox(tester);
+
+      final tile = tester.widget<ListTile>(
+        find.byKey(const Key('developerToolsPreviewCritical')),
+      );
+      expect(tile.enabled, isFalse);
+      expect(find.descendant(
+        of: find.byKey(const Key('developerToolsPreviewCritical')),
+        matching: find.text('Needs an active child profile'),
+      ), findsOneWidget);
+    });
+  });
+
+ // ── Doubles ────────────────────────────────────────────────────────────
   group('failures and duplicate taps', () {
     testWidgets('a failed run never navigates to a hand-off', (tester) async {
       await tester.pumpWidget(app(_FailingService()));
@@ -429,6 +483,16 @@ class _TestChildProvider extends ChildProvider {
 
   @override
   ChildProfile? get profile => _childProfile;
+
+  @override
+  Future<void> loadProfile() async {}
+}
+class _EmptyChildProvider extends ChildProvider {
+  _EmptyChildProvider()
+      : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
+
+  @override
+  ChildProfile? get profile => null;
 
   @override
   Future<void> loadProfile() async {}
