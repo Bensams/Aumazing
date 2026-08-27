@@ -2,14 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/config/premium_access_config.dart';
 import '../dev/developer_tools_config.dart';
 
 /// Premium entitlement state (freemium model).
 ///
-/// The source of truth is the `entitlements` table, written ONLY by the
-/// paymongo-webhook Edge Function after server-side signature verification
-/// — the app can never grant itself Premium. The last known state is
-/// cached locally so gating works offline.
+/// In the normal product edition, the source of truth is the `entitlements`
+/// table, written ONLY by the paymongo-webhook Edge Function after server-side
+/// signature verification. A separately built free-distribution edition can
+/// unlock the same gates at compile time through [PremiumAccessConfig] without
+/// enabling developer tools or writing entitlement data. The last known real
+/// entitlement is cached locally so normal gating works offline.
 class EntitlementService extends ChangeNotifier {
   EntitlementService._();
 
@@ -29,8 +32,11 @@ class EntitlementService extends ChangeNotifier {
   /// it is not persisted — a restart drops it.
   bool _developerPremiumOverride = false;
 
-  /// The entitlement every gate in the app reads.
-  bool get isPremium => _developerPremiumOverride || _isPremium;
+  /// The effective entitlement every gate in the app reads.
+  bool get isPremium =>
+      PremiumAccessConfig.unlockedForEveryone ||
+      _developerPremiumOverride ||
+      _isPremium;
 
   /// The genuine entitlement, ignoring any developer override.
   bool get isRealPremium => _isPremium;
@@ -47,8 +53,10 @@ class EntitlementService extends ChangeNotifier {
     if (!DeveloperToolsConfig.isAvailable) return;
     if (_developerPremiumOverride == value) return;
     _developerPremiumOverride = value;
-    debugPrint('[Entitlement] Developer Premium override: $value '
-        '(real entitlement unchanged: $_isPremium)');
+    debugPrint(
+      '[Entitlement] Developer Premium override: $value '
+      '(real entitlement unchanged: $_isPremium)',
+    );
     notifyListeners();
   }
 
@@ -107,11 +115,12 @@ class EntitlementService extends ChangeNotifier {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;
     try {
-      final row = await Supabase.instance.client
-          .from('entitlements')
-          .select('is_premium')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      final row =
+          await Supabase.instance.client
+              .from('entitlements')
+              .select('is_premium')
+              .eq('user_id', user.id)
+              .maybeSingle();
       final premium = row?['is_premium'] == true;
       if (premium != _isPremium || _loadedUserId != user.id) {
         _isPremium = premium;

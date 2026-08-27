@@ -47,6 +47,16 @@
     build is behaving oddly / after switching branches. Slower. If not passed,
     the script asks.
 
+.PARAMETER FreePremium
+    Compile the app with all Premium feature gates unlocked for free testing or
+    distribution. This is independent of the developer toolbox.
+
+.PARAMETER PublishFree
+    Produce a clean, release-signed APK with Premium unlocked and developer
+    tools disabled. Does not require a phone and does not install the APK.
+    Requires android/key.properties so the package cannot silently use the
+    debug signing key.
+
 .PARAMETER NoLaunch
     With -Apk: install only, don't auto-start the app afterwards.
 
@@ -73,7 +83,9 @@ param(
     [switch]$Apk,
     [switch]$Run,
     [switch]$NoLaunch,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$FreePremium,
+    [switch]$PublishFree
 )
 
 $ErrorActionPreference = 'Stop'
@@ -125,7 +137,20 @@ $repoRoot  = Split-Path -Parent $PSScriptRoot
 $appDir    = Join-Path $repoRoot 'apps\main_app'
 $cacheFile = Join-Path $env:LOCALAPPDATA 'aumazing\wifi-device.txt'
 
+if ($PublishFree -and ($Run -or $Apk)) {
+    throw "-PublishFree selects its own package mode; don't combine it with -Run or -Apk."
+}
+if ($PublishFree -and $DevTools) {
+    throw "-PublishFree always disables developer tools; don't combine it with -DevTools."
+}
+if ($PublishFree -and -not (Test-Path (Join-Path $appDir 'android\key.properties'))) {
+    throw "Publish build requires apps/main_app/android/key.properties for release signing."
+}
+
+$requiresDevice = -not $PublishFree
+
 # --- locate adb -------------------------------------------------------------
+if ($requiresDevice) {
 $adb = (Get-Command adb -ErrorAction SilentlyContinue).Source
 if (-not $adb) {
     $candidates = @(
@@ -345,11 +370,13 @@ Set-Content -Path $cacheFile -Value $target -Encoding utf8
 Write-Host ""
 Write-Host "Connected: $target  - the cable can come out now." -ForegroundColor Green
 Write-Host ""
+}
 
 # --- 6. developer tools on or off? ------------------------------------------
 if ($DevTools -and $NoDevTools) { throw "Pick one of -DevTools / -NoDevTools, not both." }
 
-if ($DevTools)        { $enableDevTools = $true }
+if ($PublishFree)     { $enableDevTools = $false }
+elseif ($DevTools)    { $enableDevTools = $true }
 elseif ($NoDevTools)  { $enableDevTools = $false }
 else {
     Write-Host "Developer tools (ENABLE_DEVELOPER_TOOLS)?"
@@ -372,7 +399,8 @@ Write-Host ("Developer tools: {0}" -f $(if ($enableDevTools) { 'ON' } else { 'of
 # --- 7. run or build-apk? ---------------------------------------------------
 if ($Apk -and $Run) { throw "Pick one of -Apk / -Run, not both." }
 
-if ($Apk)      { $mode = 'apk' }
+if ($PublishFree) { $mode = 'package' }
+elseif ($Apk)  { $mode = 'apk' }
 elseif ($Run)  { $mode = 'run' }
 else {
     Write-Host "What do you want to do?"
@@ -400,6 +428,9 @@ if ($EnvFile -and $EnvFile -ne 'none') {
     $defineArgs += "--dart-define-from-file=$envPath"
 }
 $defineArgs += "--dart-define=ENABLE_DEVELOPER_TOOLS=$($enableDevTools.ToString().ToLower())"
+$unlockPremium = [bool]($FreePremium -or $PublishFree)
+$defineArgs += "--dart-define=UNLOCK_PREMIUM_FEATURES=$($unlockPremium.ToString().ToLower())"
+Write-Host ("Premium access: {0}" -f $(if ($unlockPremium) { 'FREE / unlocked' } else { 'entitlement-controlled' })) -ForegroundColor Cyan
 
 # Build provenance: stamp the commit / branch / time being built so that
 # Developer Tools > Build shows exactly what landed on the device, not a guess
@@ -414,7 +445,8 @@ if ($gitBranch) { $defineArgs += "--dart-define=GIT_BRANCH=$($gitBranch.Trim())"
 $defineArgs += "--dart-define=BUILD_TIME=$(Get-Date -Format 'MM-dd HH:mm')"
 
 # clean first?
-if ($Clean)        { $doClean = $true }
+if ($PublishFree)  { $doClean = $true }
+elseif ($Clean)    { $doClean = $true }
 elseif ($NoPause)  { $doClean = $false }
 else {
     do {
@@ -466,13 +498,25 @@ if ($code -ne 0) {
     Exit-Run $code
 }
 
-$apk = Get-ChildItem (Join-Path $appDir 'buildpp\outputslutter-apk') -Filter 'app-release.apk' -ErrorAction SilentlyContinue |
+$apk = Get-ChildItem (Join-Path $appDir 'build\app\outputs\flutter-apk') -Filter 'app-release.apk' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $apk) { throw "Build reported success but no app-release.apk was found." }
 
 $sizeMb = [math]::Round($apk.Length / 1MB, 1)
 Write-Host ""
 Write-Host "Built $($apk.Name) ($sizeMb MB)" -ForegroundColor Green
+
+if ($mode -eq 'package') {
+    $versionMatch = Select-String -LiteralPath (Join-Path $appDir 'pubspec.yaml') -Pattern '^version:\s*(\S+)\s*$' | Select-Object -First 1
+    $version = if ($versionMatch) { $versionMatch.Matches[0].Groups[1].Value } else { Get-Date -Format 'yyyyMMdd-HHmm' }
+    $releaseDir = Join-Path $repoRoot 'output\releases'
+    New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+    $publishApk = Join-Path $releaseDir "aumazing-free-premium-$version.apk"
+    Copy-Item -LiteralPath $apk.FullName -Destination $publishApk -Force
+    Write-Host "Publish package: $publishApk" -ForegroundColor Green
+    Exit-Run 0
+}
+
 Write-Host "Installing on $target ..." -ForegroundColor Cyan
 
 $installOut = Invoke-Adb -s $target install -r "$($apk.FullName)"
@@ -484,7 +528,7 @@ if ($installOut -notmatch 'Success') {
 Write-Host "Installed." -ForegroundColor Green
 
 # work out the applicationId so we can launch it
-$gradle = Get-ChildItem (Join-Path $appDir 'androidpp') -Filter 'build.gradle*' -ErrorAction SilentlyContinue | Select-Object -First 1
+$gradle = Get-ChildItem (Join-Path $appDir 'android\app') -Filter 'build.gradle*' -ErrorAction SilentlyContinue | Select-Object -First 1
 $pkg = $null
 if ($gradle) {
     $txt = Get-Content $gradle.FullName -Raw
