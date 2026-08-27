@@ -18,6 +18,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../../config/round_policy.dart';
 import '../../config/game_motion.dart';
 import '../shared/game_lifecycle_guard.dart';
 
@@ -80,7 +81,7 @@ class SabayTayoGame extends FlameGame
     required this.onStepChanged,
     required this.onGameComplete,
     required this.childId,
-    this.totalRounds = 4,
+    this.totalRounds = GameRoundPolicy.standardRoundCount,
     this.itemsPerRound = 3,
     this.gameVersion,
     this.strings = const AppStrings(GameLanguage.english),

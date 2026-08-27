@@ -112,9 +112,9 @@ class AssessmentRepository {
       randomTouchCount: analytics?.randomTouchCount ?? 0,
       avgResponseTime: analytics?.avgResponseTime ?? 0.0,
       avgValidResponseTime: analytics?.avgValidResponseTime ?? 0.0,
-      offTaskActionCount: analytics?.offTaskActionCount ?? 0,
       improvementScore: analytics?.improvementScore ?? 0.0,
       consistencyScore: analytics?.consistencyScore ?? 0.0,
+      configurationVersion: GameRoundPolicy.configurationVersionForContext(context),
       startedAt: startedAt,
       endedAt: now,
     );

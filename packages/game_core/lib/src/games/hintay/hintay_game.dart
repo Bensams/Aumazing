@@ -12,6 +12,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../../config/round_policy.dart';
 import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Hintay!" (Wait For It).
@@ -42,7 +43,7 @@ class HintayGame extends FlameGame
     required this.onStepChanged,
     required this.onGameComplete,
     required this.childId,
-    this.totalRounds = 4,
+    this.totalRounds = GameRoundPolicy.standardRoundCount,
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectWait,
