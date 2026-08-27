@@ -29,8 +29,9 @@ class LocalRecommendationRules {
   };
 
   /// Games recommended for attention concerns (mirrors the cloud
-  /// recommender's AREA_MODULE_MAP entry in rules.py).
-  static const List<String> attentionGameIds = ['do_what_i_say', 'match_it'];
+  /// recommender's AREA_MODULE_MAP entry in rules.py, including hintay,
+  /// the newest attention game).
+  static const List<String> attentionGameIds = ['hintay', 'do_what_i_say', 'match_it'];
 
   /// Human-readable focus fragments per area (rules.py AREA_SUMMARY).
   static const Map<String, String> areaSummary = {

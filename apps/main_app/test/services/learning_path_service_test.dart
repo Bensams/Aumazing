@@ -120,7 +120,7 @@ void main() {
         'attention': _level(0),
       });
       expect(path.map((e) => e.game.id).toSet(),
-          {'do_what_i_say', 'match_it'});
+          {'hintay', 'do_what_i_say', 'match_it'});
       expect(path.every((e) => e.difficulty == 1), isTrue);
     });
   });
@@ -149,7 +149,7 @@ void main() {
         'attention': _level(1),
       });
       expect(modules.map((m) => m.gameId).toSet(),
-          {'do_what_i_say', 'match_it'});
+          {'hintay', 'do_what_i_say', 'match_it'});
       expect(modules.every((m) => m.startingLevel == 2), isTrue);
     });
 
