@@ -113,16 +113,18 @@ class CompletedModuleRecord {
   /// 'completed'.
   final String status;
 
-  /// 0 for the My Path record.
+  /// 0 for the current My Path record; module_progress rows carry their level.
   final int level;
 
-  /// 0 for the My Path record.
+  /// 0 for the current My Path record; module_progress rows carry their max.
   final int maxLevel;
 
-  /// 'module_progress' | 'my_path'. Only 'my_path' is produced today.
+  /// 'module_progress' | 'my_path': the current derived path completion vs a
+  /// durable module_progress row (an older path a later recommendation
+  /// replaced, or any completed recommendation module).
   final String source;
 
-  /// Path length for the My Path record, else 0.
+  /// Path length for My Path rows (current or module_progress), else 0.
   final int gameCount;
 
   const CompletedModuleRecord({

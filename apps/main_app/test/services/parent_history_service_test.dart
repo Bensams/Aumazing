@@ -5,6 +5,7 @@ import 'package:aumazing/model/area_level.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/assessment_run_record.dart';
 import 'package:aumazing/model/gameplay_session.dart';
+import 'package:aumazing/model/module_progress.dart';
 import 'package:aumazing/services/learning_path_service.dart';
 import 'package:aumazing/services/parent_history_service.dart';
 
@@ -90,7 +91,7 @@ GameplaySession _session({
 void main() {
   group('ParentHistoryService.configLabelFor', () {
     test('maps known configuration versions to flow labels', () {
-      expect(ParentHistoryService.configLabelFor(null), 'Legacy');
+      expect(ParentHistoryService.configLabelFor(null), 'Legacy 4-round');
       expect(
         ParentHistoryService.configLabelFor('three-round-v1'),
         '3-round flow',
@@ -103,8 +104,19 @@ void main() {
         ParentHistoryService.configLabelFor('sensory-three-round-v1'),
         '3-round sensory flow',
       );
-      expect(ParentHistoryService.configLabelFor('some-unknown'), 'Legacy');
+      expect(
+        ParentHistoryService.configLabelFor('some-unknown'),
+        'Legacy 4-round',
+      );
     });
+  });
+
+  test('myPathRowId composes child and signature, so two children cannot '
+      'share a global primary key', () {
+    final a = ParentHistoryService.myPathRowId('child-a', 'sig-1');
+    final b = ParentHistoryService.myPathRowId('child-b', 'sig-1');
+    expect(a, 'my_path_child-a_sig-1');
+    expect(a, isNot(b));
   });
 
   group('ParentHistoryService.aggregateSkills', () {
@@ -251,7 +263,9 @@ void main() {
               errorCount: 1,
               startedAt: DateTime(2026, 8, 1, 9, 0),
             ),
-            // Practice sessions, newest endedAt first below.
+            // Practice sessions, newest endedAt first below. Every path
+            // game gets a practice; the first-game one ends last so the
+            // path completion estimate is 2026-08-03 10:00.
             _session(
               id: 'p-a',
               gameId: pathIds.first,
@@ -261,15 +275,16 @@ void main() {
               startedAt: DateTime(2026, 8, 3, 9),
               endedAt: DateTime(2026, 8, 3, 10),
             ),
-            _session(
-              id: 'p-b',
-              gameId: 'my_turn_your_turn',
-              context: 'practice',
-              score: 10,
-              errorCount: 0,
-              startedAt: DateTime(2026, 8, 2, 9),
-              endedAt: DateTime(2026, 8, 2, 10),
-            ),
+            for (final gameId in pathIds.skip(1))
+              _session(
+                id: 'p-$gameId',
+                gameId: gameId,
+                context: 'practice',
+                score: 10,
+                errorCount: 0,
+                startedAt: DateTime(2026, 8, 1, 9),
+                endedAt: DateTime(2026, 8, 1, 10),
+              ),
           ],
         ),
       ).loadHistory(
@@ -294,7 +309,7 @@ void main() {
       expect(pre.games[1].accuracy, closeTo(5 / 10, 1e-9));
 
       // Config label mapping through loadHistory.
-      expect(pre.games[0].configLabel, 'Legacy');
+      expect(pre.games[0].configLabel, 'Legacy 4-round');
       expect(pre.games[1].configLabel, '3-round flow');
 
       // overallAccuracy = mean of per-game accuracy.
@@ -310,9 +325,8 @@ void main() {
       expect(pre.skills.single.label, 'Strength');
 
       // Practice sessions sorted endedAt DESC.
-      expect(summary.practiceSessions, hasLength(2));
+      expect(summary.practiceSessions, hasLength(path.length));
       expect(summary.practiceSessions[0].id, 'p-a');
-      expect(summary.practiceSessions[1].id, 'p-b');
 
       // My Path completion, single record with correct fields.
       expect(summary.completedModules, hasLength(1));
@@ -612,6 +626,180 @@ void main() {
         expect(run.overallAccuracy, 0.0);
       },
     );
+
+    test(
+      'keeps historical module_progress rows and dedupes the current path',
+      () async {
+        final path = LearningPathService.buildPath(
+          areaLevels: {'communication': _level(0)},
+        );
+        expect(path, isNotEmpty);
+        final pathIds = path.map((e) => e.game.id).toSet();
+        final signature = LearningPathService.signatureFor(path);
+
+        final summary = await ParentHistoryService(
+          localDb: _FakeDb(
+            runs: const [],
+            results: const [],
+            sessions: const [],
+            moduleProgress: [
+              // The row the victory writes today for this child and path.
+              ModuleProgress(
+                id: ParentHistoryService.myPathRowId('child-1', signature),
+                childId: 'child-1',
+                moduleId: 'my_path',
+                moduleName: 'My Path',
+                currentLevel: path.length,
+                maxLevel: path.length,
+                status: 'completed',
+                completedAt: DateTime(2026, 8, 1),
+                updatedAt: DateTime(2026, 8, 1),
+              ),
+              // An older path a later recommendation replaced.
+              ModuleProgress(
+                id: 'my_path_child-1_old-signature',
+                childId: 'child-1',
+                moduleId: 'my_path',
+                moduleName: 'My Path',
+                currentLevel: 3,
+                maxLevel: 3,
+                status: 'completed',
+                completedAt: DateTime(2026, 7, 1),
+                updatedAt: DateTime(2026, 7, 1),
+              ),
+              // A completed recommendation module.
+              ModuleProgress(
+                id: 'mod-emotions',
+                childId: 'child-1',
+                moduleId: 'emotions_module',
+                moduleName: 'Emotions Module',
+                currentLevel: 2,
+                maxLevel: 5,
+                status: 'completed',
+                completedAt: DateTime(2026, 7, 2),
+                updatedAt: DateTime(2026, 7, 2),
+              ),
+            ],
+          ),
+        ).loadHistory(
+          childId: 'child-1',
+          path: path,
+          pathCompletedGameIds: pathIds,
+        );
+
+        // Current path emitted once (deduped), then historical rows
+        // newest-completion first.
+        expect(summary.completedModules, hasLength(3));
+        final current = summary.completedModules[0];
+        expect(current.source, 'my_path');
+        expect(current.completedAt, DateTime(2026, 8, 1));
+        expect(current.gameCount, path.length);
+
+        final module = summary.completedModules[1];
+        expect(module.source, 'module_progress');
+        expect(module.moduleName, 'Emotions Module');
+        expect(module.completedAt, DateTime(2026, 7, 2));
+        expect(module.level, 2);
+        expect(module.maxLevel, 5);
+
+        final oldPath = summary.completedModules[2];
+        expect(oldPath.source, 'module_progress');
+        expect(oldPath.moduleName, 'My Path');
+        expect(oldPath.completedAt, DateTime(2026, 7, 1));
+        expect(oldPath.gameCount, 3);
+      },
+    );
+
+    test('prefers the persisted victory stamp over the practice estimate', () async {
+      final path = LearningPathService.buildPath(
+        areaLevels: {'communication': _level(0)},
+      );
+      expect(path, isNotEmpty);
+      final pathIds = path.map((e) => e.game.id).toSet();
+      final signature = LearningPathService.signatureFor(path);
+
+      // Every path game has an early practice, so the estimate would be
+      // 2026-08-03; the durable victory row must win instead.
+      final sessions = [
+        for (final entry in path)
+          _session(
+            id: 'p-${entry.game.id}',
+            gameId: entry.game.id,
+            context: 'practice',
+            score: 10,
+            errorCount: 0,
+            startedAt: DateTime(2026, 8, 3, 9),
+            endedAt: DateTime(2026, 8, 3, 10),
+          ),
+      ];
+
+      final summary = await ParentHistoryService(
+        localDb: _FakeDb(
+          runs: const [],
+          results: const [],
+          sessions: sessions,
+          moduleProgress: [
+            ModuleProgress(
+              id: ParentHistoryService.myPathRowId('child-1', signature),
+              childId: 'child-1',
+              moduleId: 'my_path',
+              moduleName: 'My Path',
+              currentLevel: path.length,
+              maxLevel: path.length,
+              status: 'completed',
+              completedAt: DateTime(2026, 7, 1),
+              updatedAt: DateTime(2026, 7, 1),
+            ),
+          ],
+        ),
+      ).loadHistory(
+        childId: 'child-1',
+        path: path,
+        pathCompletedGameIds: pathIds,
+      );
+
+      final current = summary.completedModules.single;
+      expect(current.completedAt, DateTime(2026, 7, 1));
+    });
+
+    test('pairs the post with the latest pre that completed before it', () async {
+      final oldPre = _run(
+        id: 'pre-old',
+        status: 'completed',
+        startedAt: DateTime(2026, 8, 1),
+        completedAt: DateTime(2026, 8, 2),
+      );
+      final post = _run(
+        id: 'post',
+        type: 'post',
+        status: 'completed',
+        startedAt: DateTime(2026, 8, 10),
+        completedAt: DateTime(2026, 8, 11),
+      );
+      // A pre run that finished AFTER the post must never be its baseline.
+      final latePre = _run(
+        id: 'pre-late',
+        status: 'completed',
+        startedAt: DateTime(2026, 8, 12),
+        completedAt: DateTime(2026, 8, 13),
+      );
+
+      final summary = await ParentHistoryService(
+        localDb: _FakeDb(
+          runs: [oldPre, post, latePre],
+          results: const [],
+          sessions: const [],
+        ),
+      ).loadHistory(
+        childId: 'child-1',
+        path: const [],
+        pathCompletedGameIds: const {},
+      );
+
+      expect(summary.comparison, isNotNull);
+      expect(summary.comparison!.pre.run.id, 'pre-old');
+      expect(summary.comparison!.post.run.id, 'post');
+    });
   });
 }
 
@@ -620,11 +808,12 @@ class _FakeDb extends LocalDbService {
     this.runs = const [],
     this.results = const [],
     this.sessions = const [],
+    this.moduleProgress = const [],
   });
-
   final List<AssessmentRunRecord> runs;
   final List<AssessmentResult> results;
   final List<GameplaySession> sessions;
+  final List<ModuleProgress> moduleProgress;
 
   @override
   Future<List<AssessmentRunRecord>> getAssessmentRuns({
@@ -645,4 +834,8 @@ class _FakeDb extends LocalDbService {
     String? context,
     bool includeDeleted = false,
   }) async => sessions;
+
+  @override
+  Future<List<ModuleProgress>> getModuleProgress(String childId) async =>
+      moduleProgress.where((p) => p.childId == childId).toList();
 }

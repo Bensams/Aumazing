@@ -198,7 +198,7 @@ void main() {
 
       // Flow config chips from the run games.
       expect(find.text('3-round flow'), findsOneWidget);
-      expect(find.text('Legacy'), findsWidgets);
+      expect(find.text('Legacy 4-round'), findsWidgets);
 
       // Skill chip and recommendation.
       expect(find.text('Communication: Strength'), findsOneWidget);
@@ -310,6 +310,63 @@ void main() {
       await tester.pump();
 
       expect(find.text('-30 points overall'), findsOneWidget);
+    });
+
+    testWidgets('renders completed module cards with dates and levels', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final summary = HistorySummary(
+        runs: const [],
+        completedModules: [
+          CompletedModuleRecord(
+            moduleId: 'my_path',
+            moduleName: 'My Path',
+            completedAt: DateTime(2026, 8, 25, 10),
+            status: 'completed',
+            level: 0,
+            maxLevel: 0,
+            source: 'my_path',
+            gameCount: 3,
+          ),
+          CompletedModuleRecord(
+            moduleId: 'emotions_module',
+            moduleName: 'Emotions Module',
+            completedAt: DateTime(2026, 6, 2, 10),
+            status: 'completed',
+            level: 2,
+            maxLevel: 5,
+            source: 'module_progress',
+            gameCount: 0,
+          ),
+        ],
+        practiceSessions: const [],
+        comparison: null,
+      );
+
+      await tester.pumpWidget(
+        _buildApp(
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: _TestAssessmentProvider(),
+          screen: ParentHistoryScreen(
+            childId: 'child-1',
+            historyService: _FakeHistoryService(summary: summary),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // My Path card: name, completion date, and path length.
+      expect(find.text('My Path'), findsOneWidget);
+      expect(find.text('3 games on the path'), findsOneWidget);
+      expect(find.text('Aug 25, 2026'), findsOneWidget);
+      // Recommendation module card: name, date, and level progress.
+      expect(find.text('Emotions Module'), findsOneWidget);
+      expect(find.text('Level 2 of 5'), findsOneWidget);
+      expect(find.text('Jun 2, 2026'), findsOneWidget);
+      expect(find.text('Completed'), findsNWidgets(2));
     });
   });
 }
@@ -599,7 +656,7 @@ HistorySummary _populatedSummary() {
         score: 5,
         errorCount: 5,
         accuracy: 0.5,
-        configLabel: 'Legacy',
+        configLabel: 'Legacy 4-round',
         endedAt: DateTime(2026, 8, 1, 10, 5),
       ),
     ],
@@ -624,7 +681,7 @@ HistorySummary _populatedSummary() {
         score: 9,
         errorCount: 1,
         accuracy: 0.9,
-        configLabel: 'Legacy',
+        configLabel: 'Legacy 4-round',
         endedAt: DateTime(2026, 8, 10, 9, 5),
       ),
     ],

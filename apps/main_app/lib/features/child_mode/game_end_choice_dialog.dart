@@ -6,11 +6,14 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
+import '../../providers/progress_provider.dart';
 import '../../providers/stars_provider.dart';
+import '../../model/module_progress.dart';
 import '../stars/star_catalogue.dart';
 import '../stars/widgets/star_earned_overlay.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/parent_history_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../widgets/mascot.dart';
 import '../../widgets/milestone_victory_scene.dart';
@@ -194,8 +197,32 @@ class GameEndChoiceDialog {
     final childId = context.read<ChildProvider>().profile?.id;
     if (childId == null) return false;
 
-    // Persist the one-time flag first: this is what makes "exactly once"
-    // structural rather than dependent on the celebration finishing.
+    // Durably record the completed path for the parent history (AUM-308)
+    // BEFORE committing the one-time guard: the row is idempotent (fixed id)
+    // and survives a later recommendation replacing this path, so the parent
+    // keeps seeing the completion even after the provider forgets it. Writing
+    // it first means a failure here leaves the celebration safe to retry,
+    // instead of burning the "exactly once" guard on a lost history row.
+    await context.read<ProgressProvider>().updateModuleProgress(
+      ModuleProgress(
+        // Centralized with the service lookup so child + path compose the
+        // global primary key (same path on two children must not collide).
+        id: ParentHistoryService.myPathRowId(childId, signature),
+        childId: childId,
+        moduleId: 'my_path',
+        moduleName: 'My Path',
+        currentLevel: path.length,
+        maxLevel: path.length,
+        status: 'completed',
+        completedAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    // Persist the one-time flag: this is what makes "exactly once" structural
+    // rather than dependent on the celebration finishing. Committed directly
+    // after the row write with no unmount gap, so a retry can never replay
+    // the celebration while a committed row is only ever written once.
     await assess.markPathVictoryShown(childId, signature);
     if (!context.mounted) return true;
 
