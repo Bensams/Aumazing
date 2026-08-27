@@ -14,6 +14,9 @@ import 'package:shared_audio/shared_audio.dart';
 /// A phrase is held open here with [VoiceOverService.beginPhrase] — the same
 /// call `playSequence` makes — because there is no platform in a unit test to
 /// keep one speaking.
+///
+/// What reached the speaker is witnessed by [VoiceOverService.spokenCues], not
+/// by future completion: a line that is discarded still completes its future.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -77,17 +80,22 @@ void main() {
     expect(spoke, isTrue);
   });
 
-  test('a fresh line taking the floor releases it too', () async {
+  test('a fresh line taking the floor supersedes the waiting one', () async {
     voice.beginPhrase();
 
-    var spoke = false;
-    final transition = voice.playTransition().then((_) => spoke = true);
+    // The round moved on while this line was waiting: the fresh line is what
+    // the child is now hearing, and the round-transition line that never found
+    // its moment is stale. The future still completes when the line is
+    // discarded, so the witness is the spoken-cue transcript, not completion.
+    final transition = voice.playTransition();
     await pumpEventQueue();
-    expect(spoke, isFalse);
+    expect(voice.spokenCues, isEmpty);
 
     await voice.play(VoiceOverCue.tapHere, skipDebounce: true);
 
     await transition.timeout(const Duration(seconds: 5));
-    expect(spoke, isTrue);
+    expect(voice.spokenCues, ['tapHere'],
+        reason: 'the fresh line spoke while the transition waited; the '
+            'transition must not cut it or arrive after its moment');
   });
 }
