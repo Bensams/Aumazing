@@ -1,11 +1,10 @@
 import 'dart:io';
 
-import 'package:audioplayers_platform_interface/audioplayers_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_audio/shared_audio.dart';
 
-import 'fake_audioplayers_platform.dart';
+import 'mock_audio_channels.dart';
 
 /// The correct-answer voice-over owns the narrator; next-round narration must
 /// not cut it, stack on it, or arrive after the moment it belonged to.
@@ -17,21 +16,23 @@ import 'fake_audioplayers_platform.dart';
 /// label and speaks it only if nothing newer took the floor while the label
 /// was still finishing.
 ///
-/// Phrases and sequences run against [FakeAudioplayersPlatform], which reports
-/// native preparation and completion like a real device, so the queue advances
-/// on real timing instead of the service's failure backstops. The witness for
-/// what reached the speaker is [VoiceOverService.spokenCues]: a parked line
-/// that gets discarded completes its future without registering a cue, so
-/// future-completion alone would prove nothing.
+/// Phrases and sequences run against the real [AudioplayersPlatform] adapter
+/// with [MockAudioChannels] standing in for the native side: preparation and
+/// completion flow through the adapter's own event parsing, so the queue
+/// advances on real timing instead of the service's failure backstops. The
+/// witness for what reached the speaker is [VoiceOverService.spokenCues]: a
+/// parked line that gets discarded completes its future without registering a
+/// cue, so future-completion alone would prove nothing.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late VoiceOverService voice;
+  late MockAudioChannels mock;
 
   setUpAll(() {
-    AudioplayersPlatformInterface.instance = FakeAudioplayersPlatform();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    mock = MockAudioChannels(messenger);
     // The service's shared global player (its event bus and reward sounds)
     // still runs on the real method-channel backend, which needs a mock in a
     // headless test so its create call resolves.
@@ -227,9 +228,7 @@ void main() {
   test(
       'a queued line in flight does not let narration cut a fresh label',
       () async {
-    final fake =
-        AudioplayersPlatformInterface.instance as FakeAudioplayersPlatform;
-    fake.eventLog.clear();
+    mock.eventLog.clear();
     final before = transcript();
 
     await voice.playAnswerLabel(color: 'red', shape: 'star');
@@ -239,7 +238,7 @@ void main() {
     // "slow device" window the guard bypass used to cover. The line is on
     // the floor, and anything leaking through the bypass can cut what the
     // child is about to hear.
-    fake.holdNextResume();
+    mock.holdNextResume();
     final deadline = DateTime.now().add(const Duration(seconds: 6));
     while (!transcript().contains('letsBegin') &&
         DateTime.now().isBefore(deadline)) {
@@ -259,8 +258,8 @@ void main() {
     await label.timeout(const Duration(seconds: 5));
     // The label's player is the one that just resumed: the proof below needs
     // its identity before anything else plays.
-    final labelPlayer = fake.lastResumedPlayer;
-    fake.releaseResume();
+    final labelPlayer = mock.lastResumedPlayer;
+    mock.releaseResume();
     await narration.timeout(const Duration(seconds: 15));
     await sequence.timeout(const Duration(seconds: 15));
 
@@ -272,9 +271,9 @@ void main() {
         greaterThan(spoken.indexOf('phraseBlueTriangle')),
         reason: 'ordinary narration parks behind the fresh label instead of '
             'cutting it');
-    final resumeIndex = fake.eventLog.lastIndexOf('resume:$labelPlayer');
-    final completeIndex = fake.eventLog.lastIndexOf('complete:$labelPlayer');
-    final cut = fake.eventLog
+    final resumeIndex = mock.eventLog.lastIndexOf('resume:$labelPlayer');
+    final completeIndex = mock.eventLog.lastIndexOf('complete:$labelPlayer');
+    final cut = mock.eventLog
         .sublist(resumeIndex + 1, completeIndex)
         .any((entry) => entry == 'stop:$labelPlayer');
     expect(cut, isFalse,

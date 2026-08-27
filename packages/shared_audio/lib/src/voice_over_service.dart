@@ -1153,7 +1153,8 @@ class VoiceOverService {
 
   /// Cue names that actually reached the speaker, in order. Test-only: with no
   /// audio device in a unit test, this is the only deterministic witness of
-  /// what a line sequence produced.
+  /// what a line sequence produced. Records only in debug builds: the adds
+  /// sit inside `assert`s so release devices never grow this list.
   @visibleForTesting
   final List<String> spokenCues = [];
 
@@ -1639,7 +1640,10 @@ class VoiceOverService {
       if (!await _applySpeed(player, token: token, ticket: ticket)) return;
       debugPrint(
           '[VoiceOverService] 🗣 Playing: ${cue.name} (pack=$_languageCode, vol=$_volume, speed=$_speed)');
-      spokenCues.add(cue.name);
+      assert(() {
+        spokenCues.add(cue.name);
+        return true;
+      }());
       for (var i = 0; i < candidates.length; i++) {
         if (!_holdsFloorFor(ticket, token)) return;
         try {
@@ -1946,7 +1950,10 @@ class VoiceOverService {
         final player = playerFor(i);
         if (ready[i]) {
           _activePlayerIndex = i % _players.length;
-          spokenCues.add(cues[i].name);
+          assert(() {
+            spokenCues.add(cues[i].name);
+            return true;
+          }());
           try {
             await _playPrepared(
               player,
