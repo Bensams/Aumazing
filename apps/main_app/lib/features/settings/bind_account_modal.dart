@@ -375,7 +375,10 @@ class _BindAccountModalState extends State<BindAccountModal> {
                             color: Colors.white,
                           ),
                         )
-                        : const Text('Bind with Email'),
+                       : const Text(
+                          'Bind with Email',
+                          textAlign: TextAlign.center,
+                        ),
               ),
             ),
           ],
