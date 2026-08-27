@@ -195,8 +195,24 @@ design). Dropping the weakest round does not degrade remaining evidence.
   `dashboard_child_isolation` files whose load breaks on the pre-existing
   `SupabaseAuthClient` abstract-member error in `support/fake_auth.dart`
   (untouched).
-- Standalone `flutter test test/features/pre_assessment`: 15/15 passed
-  (round plan, resume/retry, telemetry).
+- Post-review fixes (branch review found one real regression):
+  `offTaskActionCount` had been silently dropped from both
+  `GameplaySession` constructions (`AssessmentService.recordSession`,
+  `AssessmentRepository.fromGameplay`) when the configurationVersion
+  parameter was inserted — every session recorded after the slice reported
+  0 off-task actions to the local DB, sync, parent report and AI payload.
+  Restored verbatim from base dev; new regression test
+  `test/services/assessment_record_session_test.dart` guards the mapping
+  (3/3 passing) and also asserts `configurationVersionOverride` stamping
+  and policy-default stamping.
+  Cloud→local hydration (`_mapGameSessionToLocal`) now maps
+  `configuration_version` symmetrically with the push mapping, so sessions
+  pulled via `hydrateFromCloud` keep their configuration stamp.
+- Final affected-suite run on the rebased branch (base 62512fb9):
+  102/102 passed across pre-assessment, post-assessment, assessment
+  providers, developer tools, session recording (no-profile),
+  recordSession mapping and rubric thresholds; game_core config tests 5/5;
+  analyses unchanged (6 and 29 issues, all pre-existing).
 - Runtime: widget-level screens and recording path exercised by the above;
   no device-live run in this slice. Prior slice's device smoke evidence
   remains on record for the base implementation commit.
