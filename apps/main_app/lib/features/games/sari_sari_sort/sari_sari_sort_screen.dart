@@ -89,12 +89,12 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       childId: childId,
       language: childProvider.language,
     );
-    _totalRounds = config.totalRounds;
+    _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
 
     GameMotion.reduced = childProvider.reducedMotion;
     GameObjectStyle.current = childProvider.objectStyle;
     _game = SariSariSortGame(
-      totalRounds: config.totalRounds,
+      totalRounds: _totalRounds,
       itemsPerRound: config.itemsPerRound,
       childId: childId,
       strings: config.strings,

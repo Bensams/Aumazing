@@ -62,7 +62,7 @@ be able to tell the difference.
 
 ### Round structure
 
-4 rounds (fixed — do not change), `config.itemsPerRound` trials per round.
+3 rounds (standard), `config.itemsPerRound` trials per round.
 
 ### Difficulty tiers
 

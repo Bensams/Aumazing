@@ -28,6 +28,7 @@ class _RecordingGateway implements AssessmentGateway {
     required DateTime startedAt,
     String? assessmentRunId,
     GameSessionMetrics? analytics,
+    String? configurationVersionOverride,
     bool bgMusicEnabled = true,
     bool hapticFeedbackEnabled = true,
     bool applySessionSensoryDefaults = true,

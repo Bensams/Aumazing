@@ -29,7 +29,7 @@ end-to-end first — game logic in `packages/game_core`, screen wrapper in
   The emotion set is deliberately small and unambiguous: **happy, sad, scared,
   surprised, angry**. Do not add subtle states (proud, embarrassed, confused);
   they are a later target and they make the distractor set unfair.
-- **Round structure**: 4 rounds (fixed — keep it), `config.itemsPerRound`
+- **Round structure**: 3 rounds (standard), `config.itemsPerRound`
   scenes per round.
 - **Difficulty tiers 1–3**:
   - tier 1: 2 face cards, and the two emotions are maximally distinct
