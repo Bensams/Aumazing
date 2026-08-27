@@ -5,6 +5,7 @@ import 'package:game_core/game_core.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:uuid/uuid.dart';
+import '../../model/assessment_run_record.dart';
 
 import '../sync/sync_status.dart';
 import '../../model/child_profile.dart';
@@ -94,7 +95,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 18; // v18: gameplay_sessions.configuration_version
+  static const _dbVersion = 19; // v19: module_progress table
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -182,6 +183,7 @@ class LocalDbService {
     ''');
 
     await _createStarTables(db);
+    await _createModuleProgressTable(db);
 
     // Assessment runs (assessment sessions)
     await db.execute('''
@@ -595,8 +597,41 @@ class LocalDbService {
     ''');
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+  /// Completed recommendation modules (e.g. a finished My Path). Shared by
+  /// `_onCreate` and the v19 upgrade so fresh installs and migrated ones
+  /// cannot drift apart.
+  ///
+  /// Local-only: the cloud has no module_progress table (AUM-308), so these
+  /// rows carry the standard sync columns but are never queued for upload.
+  Future<void> _createModuleProgressTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${LocalTables.moduleProgress} (
+        id TEXT PRIMARY KEY,
+        child_id TEXT NOT NULL,
+        module_id TEXT NOT NULL,
+        module_name TEXT NOT NULL,
+        current_level INTEGER NOT NULL DEFAULT 1,
+        max_level INTEGER NOT NULL DEFAULT 5,
+        status TEXT NOT NULL DEFAULT 'not_started',
+        started_at TEXT,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL,
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        sync_error TEXT,
+        sync_attempts INTEGER NOT NULL DEFAULT 0,
+        last_synced_at TEXT,
+        deleted_at TEXT,
+        local_created_at TEXT NOT NULL,
+        owner_id TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_module_progress_child
+        ON ${LocalTables.moduleProgress}(child_id)
+    ''');
+  }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Migration from v1 to v2: Add sync columns to existing tables
       // Note: In production, you'd migrate existing data carefully
@@ -1034,6 +1069,10 @@ class LocalDbService {
       }
       debugPrint('[LocalDbService] v18: configuration_version column');
     }
+    if (oldVersion < 19) {
+      await _createModuleProgressTable(db);
+      debugPrint('[LocalDbService] v19: module_progress table');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
@@ -1469,6 +1508,7 @@ class LocalDbService {
     LocalTables.sensoryConsent,
     LocalTables.sensoryRoundMetrics,
     LocalTables.sensoryPreferences,
+    LocalTables.moduleProgress,
   ];
 
   /// Removes the local gameplay, assessment and recommendation rows of a
@@ -1702,6 +1742,26 @@ class LocalDbService {
     return rows.map((r) => AssessmentResult.fromMap(r)).toList();
   }
 
+  /// Assessment runs for a child, newest first.
+  Future<List<AssessmentRunRecord>> getAssessmentRuns({
+    required String childId,
+    bool includeDeleted = false,
+  }) async {
+    final db = await database;
+    final conditions = ['child_id = ?'];
+    final args = <Object?>[childId];
+    if (!includeDeleted) {
+      conditions.add('deleted_at IS NULL');
+    }
+    final rows = await db.query(
+      LocalTables.assessmentRuns,
+      where: conditions.join(' AND '),
+      whereArgs: args,
+      orderBy: 'started_at DESC',
+    );
+    return rows.map((r) => AssessmentRunRecord.fromMap(r)).toList();
+  }
+
   // ─── Module Progress ──────────────────────────────────────────────────
 
   Future<void> upsertModuleProgress(
@@ -1719,7 +1779,7 @@ class LocalDbService {
         markPending ? SyncStatus.pending.value : SyncStatus.synced.value;
 
     await db.insert(
-      'module_progress',
+      LocalTables.moduleProgress,
       map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -1728,7 +1788,7 @@ class LocalDbService {
   Future<List<ModuleProgress>> getModuleProgress(String childId) async {
     final db = await database;
     final rows = await db.query(
-      'module_progress',
+      LocalTables.moduleProgress,
       where: 'child_id = ?',
       whereArgs: [childId],
       orderBy: 'updated_at DESC',
@@ -2142,6 +2202,8 @@ class LocalDbService {
       await txn.delete(LocalTables.modulePathsCache);
       await txn.delete(LocalTables.modulePathItemsCache);
       await txn.delete(LocalTables.syncQueue);
+      // Local-only parent-history rows are not in the sync dependency order.
+      await txn.delete(LocalTables.moduleProgress);
     });
     debugPrint('[LocalDbService] All tables cleared');
   }
