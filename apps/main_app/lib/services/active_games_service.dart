@@ -25,7 +25,10 @@ class ActiveGamesService {
   /// The AI API uses snake_case game IDs (e.g. `copy_me`) while the
   /// Supabase `learning_modules` table stores human-readable titles
   /// (e.g. `Copy Me`). This map bridges the two.
-  static const Map<String, String> _titleToGameId = {
+  ///
+  /// Exposed publicly so the recommendation coverage test can assert the
+  /// title → game-id join keys for every registered game.
+  static const Map<String, String> titleToGameId = {
     'Copy Me': 'copy_me',
     'Do What I Say': 'do_what_i_say',
     'My Turn, Your Turn': 'my_turn_your_turn',
@@ -63,7 +66,7 @@ class ActiveGamesService {
       for (final row in titles) {
         final title = row['title'] as String?;
         if (title == null) continue;
-        final gameId = _titleToGameId[title];
+        final gameId = titleToGameId[title];
         if (gameId != null) {
           ids.add(gameId);
         } else {
@@ -75,6 +78,12 @@ class ActiveGamesService {
         }
       }
 
+      // An empty active set is a legitimate state: the catalog may be
+      // partially seeded or the admin may have disabled every module.
+      // Do NOT fail open here — the coverage test
+      // (test/services/recommendation_coverage_test.dart) guards
+      // registration instead.
+
       _cache = ids;
       debugPrint('[ActiveGamesService] Active game IDs loaded: $_cache');
       return _cache!;
@@ -83,7 +92,7 @@ class ActiveGamesService {
           'Falling back to all-active.');
       // Fail-open: treat every game as active so we never hide valid
       // recommendations just because of a transient network issue.
-      _cache = _titleToGameId.values.toSet();
+      _cache = titleToGameId.values.toSet();
       return _cache!;
     }
   }
