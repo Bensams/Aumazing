@@ -120,7 +120,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('You earned 3 stars!'), findsOneWidget);
-      expect(find.text('⭐⭐⭐'), findsOneWidget);
+      expect(find.text('⭐'), findsNWidgets(3));
       expect(tester.takeException(), isNull);
       await _letItLeave(tester);
     });
