@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/core/services/sync_service.dart';
 import 'package:aumazing/features/home/home_screen.dart' show HomeScreen;
+import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart'
+    show ChildModeLobbyScreen;
+import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart'
+    show ChildProfileSetupScreen;
 import 'package:aumazing/features/settings/bind_account_modal.dart';
 import 'package:aumazing/features/settings/settings_screen.dart';
 import 'package:aumazing/model/child_profile.dart';
@@ -371,6 +375,95 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 700));
   });
+
+  group('returning users open in child mode (AUM-306)', () {
+    testWidgets('openChildMode pushes the child lobby over the dashboard', (
+      tester,
+    ) async {
+      // Tour already seen: a returning parent, so the dashboard must not
+      // try to run onboarding on top of the auto-launched lobby.
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v1': true,
+      });
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          openChildMode: true,
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.byType(ChildModeLobbyScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      // Let the dashboard's music check begin, then dispose the whole tree.
+      // The drain clears its follow-up and the lobby voice-over timeout.
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets(
+      'openChildMode keeps a future-dated active profile in setup',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'parent_dashboard_tour_seen_v1': true,
+        });
+        TourService.instance.resetCache();
+
+        await tester.binding.setSurfaceSize(const Size(960, 540));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          _buildTestApp(
+            authService: AuthService(
+              supabaseAuth: _FakeSupabaseAuthClient(),
+            ),
+            childProvider: _TestChildProvider(
+              initialProfile: _profile.copyWith(birthDate: DateTime(2100)),
+            ),
+            openChildMode: true,
+          ),
+        );
+        await _settleUi(tester);
+
+        expect(find.byType(ChildProfileSetupScreen), findsOneWidget);
+        expect(find.byType(ChildModeLobbyScreen), findsNothing);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(seconds: 1));
+      },
+    );
+
+    testWidgets('the default (first login) stays on the parent dashboard', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.byType(ChildModeLobbyScreen), findsNothing);
+      expect(find.text('Enter Child Mode'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
 }
 
 Future<void> _settleUi(WidgetTester tester) async {
@@ -405,6 +498,7 @@ Widget _buildTestApp({
   required ChildProvider childProvider,
   ProgressProvider? progressProvider,
   Stream<SyncState>? syncStates,
+  bool openChildMode = false,
 }) {
   return MultiProvider(
     providers: [
@@ -418,10 +512,15 @@ Widget _buildTestApp({
       ChangeNotifierProvider<ProgressProvider>.value(
         value: progressProvider ?? _TestProgressProvider(),
       ),
+      Provider<AudioService>(create: (_) => _FakeAudioService()),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: HomeScreen(authService: authService, syncStates: syncStates),
+      home: HomeScreen(
+        authService: authService,
+        syncStates: syncStates,
+        openChildMode: openChildMode,
+      ),
     ),
   );
 }

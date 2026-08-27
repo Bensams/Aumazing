@@ -38,7 +38,12 @@ import '../splash/auth/login_screen.dart';
 /// Shows child summary, assessment status, progress, and action buttons
 /// for starting pre-assessment or entering child mode.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.authService, this.syncStates});
+  const HomeScreen({
+    super.key,
+    this.authService,
+    this.syncStates,
+    this.openChildMode = false,
+  });
 
   final AuthService? authService;
 
@@ -46,6 +51,13 @@ class HomeScreen extends StatefulWidget {
   /// [syncService]; injectable so a test can land a synced pass without a
   /// database or a network.
   final Stream<SyncState>? syncStates;
+
+  /// Returning authenticated users land directly in child/game mode
+  /// (AUM-306): the dashboard stays mounted underneath as the PIN-protected
+  /// parent base, and the child lobby is pushed on top on first frame. First
+  /// login / onboarding leaves this false so the parent sees the dashboard
+  /// (and the guided tour) once.
+  final bool openChildMode;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -93,12 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
     lockParentAdaptive();
     _listenForSyncedRows();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted) {
-        await _loadData();
-        if (mounted) {
-          await _verifyMusicPlaying();
-        }
-      }
+      if (!mounted) return;
+      final usableProfileLoaded = await _loadData();
+      if (!mounted) return;
+      // Returning users open straight into the child lobby, mounted over the
+      // dashboard so the existing PIN-gated "Exit Child Mode" reveals the
+      // parent again and _pushChildFacing re-locks parent orientation on the
+      // way back.
+      if (widget.openChildMode && usableProfileLoaded) _enterChildMode();
+      await _verifyMusicPlaying();
     });
   }
 
@@ -182,11 +197,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<bool> _loadData() async {
     final childProvider = context.read<ChildProvider>();
     await childProvider.loadProfile();
 
-    if (!mounted) return;
+    if (!mounted) return false;
 
     // Sync AudioConfig from the child's persisted settings so that
     // lifecycle callbacks (pause/resume) and playMusic() respect them.
@@ -229,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         (_) => false,
       );
-      return;
+      return false;
     }
 
     final childId = profile.id;
@@ -238,6 +253,8 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<ProgressProvider>().loadProgress(childId);
 
     await _maybeStartTour();
+    if (!mounted) return false;
+    return true;
   }
 
   // ── Guided tour ─────────────────────────────────────────────────────
