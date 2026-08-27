@@ -200,6 +200,18 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   }) {
     throw UnimplementedError();
   }
+  @override
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ResendResponse> resendEmailChange(String email) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<AuthResponse> signInWithPassword({

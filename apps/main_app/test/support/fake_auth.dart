@@ -104,6 +104,15 @@ class NoopSupabaseAuthClient implements SupabaseAuthClient {
     String? nonce,
     String? captchaToken,
   }) => throw UnimplementedError();
+  @override
+  Future<AuthResponse> verifyEmailChange({
+    required String email,
+    required String token,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ResendResponse> resendEmailChange(String email) =>
+      throw UnimplementedError();
 
   @override
   Future<UserResponse> updateUser(UserAttributes attributes) =>
