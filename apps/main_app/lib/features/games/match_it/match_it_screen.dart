@@ -30,6 +30,8 @@ class MatchItScreen extends StatefulWidget {
     this.onComplete,
     this.sensoryController,
     this.difficulty,
+    this.roundsOverride,
+    this.configurationVersionOverride,
   });
 
   /// 'pre_assessment', 'post_assessment', or 'practice'
@@ -38,6 +40,11 @@ class MatchItScreen extends StatefulWidget {
   /// Optional difficulty (1–3) derived from the child's level. When null,
   /// the default round count is used (preserves assessment behaviour).
   final int? difficulty;
+  /// Optional per-game override of the round count; null uses the policy default.
+  final int? roundsOverride;
+
+  /// Optional override of the stamped configuration_version; null uses the policy default.
+  final String? configurationVersionOverride;
   final void Function(
     int score,
     int totalItems,
@@ -53,7 +60,7 @@ class MatchItScreen extends StatefulWidget {
 }
 
 class _MatchItScreenState extends State<MatchItScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+  late final int _totalRounds = widget.roundsOverride ?? GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
@@ -218,6 +225,7 @@ class _MatchItScreenState extends State<MatchItScreen> {
       bgMusicEnabled: childProvider.musicEnabled,
       hapticFeedbackEnabled: childProvider.vibrationEnabled,
       applySessionSensoryDefaults: widget.sensoryController == null,
+      configurationVersionOverride: widget.configurationVersionOverride,
     );
     if (!mounted) return;
 
