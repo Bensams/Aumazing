@@ -388,8 +388,7 @@ class SyncService {
       'off_task_action_count': local['off_task_action_count'] ?? 0,
       'improvement_score': local['improvement_score'] ?? 0.0,
       'consistency_score': local['consistency_score'] ?? 0.0,
-      'bg_music_enabled': (local['bg_music_enabled'] ?? 1) == 1,
-      'haptic_feedback_enabled': (local['haptic_feedback_enabled'] ?? 1) == 1,
+      'configuration_version': local['configuration_version'],
       // Rubric telemetry fields
       if (local['task_completion_rate'] != null)
         'task_completion_rate': local['task_completion_rate'],
@@ -818,6 +817,7 @@ class SyncService {
         'time_to_first_valid_action': r['time_to_first_valid_action'],
         'time_to_completion': r['time_to_completion'],
         'sensory_condition': r['sensory_condition'],
+        'configuration_version': r['configuration_version'],
         'started_at': r['started_at'] ?? _nowIso(),
         'ended_at': r['ended_at'] ?? r['started_at'] ?? _nowIso(),
         'settings_snapshot': _asJsonText(r['settings_snapshot']),

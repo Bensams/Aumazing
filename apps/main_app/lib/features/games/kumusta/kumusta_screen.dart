@@ -55,11 +55,8 @@ class KumustaScreen extends StatefulWidget {
   State<KumustaScreen> createState() => _KumustaScreenState();
 }
 
-/// All games use a fixed 4 rounds to keep sessions short for young children.
-int _roundsForDifficulty(int? difficulty) => 4;
-
 class _KumustaScreenState extends State<KumustaScreen> {
-  late final int _totalRounds = _roundsForDifficulty(widget.difficulty);
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;

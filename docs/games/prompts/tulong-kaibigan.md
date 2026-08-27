@@ -30,7 +30,7 @@ it is the direct ancestor of this game — then `anong_susunod`. Game logic in
   *person* — which is the whole point. Sorting into a basket is a play skill;
   giving to someone who asked is a social one, and the difference the child
   experiences is that the target reacts.
-- **Round structure**: 4 rounds (fixed — keep it), `config.itemsPerRound`
+- **Round structure**: 3 rounds (standard), `config.itemsPerRound`
   requests per round.
 - **Difficulty tiers 1–3**:
   - tier 1: one item on the tray, no distractors — errorless. The buddy's bubble

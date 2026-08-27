@@ -115,6 +115,7 @@ class AssessmentRepository {
       offTaskActionCount: analytics?.offTaskActionCount ?? 0,
       improvementScore: analytics?.improvementScore ?? 0.0,
       consistencyScore: analytics?.consistencyScore ?? 0.0,
+      configurationVersion: GameRoundPolicy.configurationVersionForContext(context),
       startedAt: startedAt,
       endedAt: now,
     );
