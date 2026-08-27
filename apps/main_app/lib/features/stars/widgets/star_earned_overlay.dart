@@ -139,6 +139,10 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
           // the difference between "noticed" and "startled".
           scale: Tween<double>(begin: 0.96, end: 1).animate(_controller),
           child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.9,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+            ),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.xl,
               vertical: AppSpacing.lg,
@@ -151,9 +155,19 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget._isEarning)
-                  Text(
-                    '⭐' * widget.granted,
-                    style: const TextStyle(fontSize: 44),
+                  // One Text per star instead of one emoji string: a string of
+                  // emojis can render a yellow baseline/underline artifact on
+                  // some Android devices, and height 1.0 strips the extra line
+                  // padding each star would otherwise carry.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      widget.granted,
+                      (index) => const Text(
+                        '⭐',
+                        style: TextStyle(fontSize: 44, height: 1.0),
+                      ),
+                    ),
                   )
                 else
                   // One star with a tick, matching the lobby card's badge for
@@ -162,7 +176,7 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
                   const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('⭐', style: TextStyle(fontSize: 44)),
+                      Text('⭐', style: TextStyle(fontSize: 44, height: 1.0)),
                       SizedBox(width: AppSpacing.xs),
                       Icon(
                         Icons.check_rounded,
