@@ -9,6 +9,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../../config/round_policy.dart';
 import '../shared/game_layout.dart';
 import '../shared/ghost_hand.dart';
 import 'buddy_art_cache.dart';
@@ -43,7 +44,7 @@ class KumustaGame extends FlameGame
     required this.onGameComplete,
     required this.childId,
     this.character = 'bps',
-    this.totalRounds = 4,
+    this.totalRounds = GameRoundPolicy.standardRoundCount,
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
     this.onCorrectGreeting,

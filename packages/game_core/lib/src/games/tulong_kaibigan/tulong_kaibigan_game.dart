@@ -12,6 +12,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/difficulty_profile.dart';
 import '../../config/game_motion.dart';
+import '../../config/round_policy.dart';
 import '../sari_sari_sort/components/draggable_item.dart';
 import '../sari_sari_sort/sari_sari_sort_game.dart';
 import '../shared/answer_label.dart';
@@ -65,7 +66,7 @@ class TulongKaibiganGame extends FlameGame
     required this.onStepChanged,
     required this.onGameComplete,
     required this.childId,
-    this.totalRounds = 4,
+    this.totalRounds = GameRoundPolicy.standardRoundCount,
     this.itemsPerRound = 3,
     this.gameVersion,
     this.strings = const AppStrings(GameLanguage.english),

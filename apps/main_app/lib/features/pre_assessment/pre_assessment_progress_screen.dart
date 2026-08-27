@@ -21,6 +21,7 @@ import '../../widgets/mascot_host.dart';
 import '../../widgets/resume_assessment_dialog.dart';
 
 import 'sensory/sensory.dart';
+import 'sensory/pre_assessment_round_plan.dart';
 import 'waiting_for_parent_screen.dart';
 
 /// Orchestrates the sequential pre-assessment game flow.
@@ -702,18 +703,24 @@ class _PreAssessmentProgressScreenState
       case 'copy_me':
         screen = CopyMeScreen(
           sensoryController: _sensoryController,
+          roundsOverride: PreAssessmentRoundPlan.roundsForGame(_currentGameIndex),
+          configurationVersionOverride: PreAssessmentRoundPlan.configurationVersionForGame(_currentGameIndex),
           onComplete: (score, total, errors, time) =>
               _onGameComplete(gameId, score, total, errors, time),
         );
       case 'do_what_i_say':
         screen = DoWhatISayScreen(
           sensoryController: _sensoryController,
+          roundsOverride: PreAssessmentRoundPlan.roundsForGame(_currentGameIndex),
+          configurationVersionOverride: PreAssessmentRoundPlan.configurationVersionForGame(_currentGameIndex),
           onComplete: (score, total, errors, time, extras) =>
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
       case 'my_turn_your_turn':
         screen = MyTurnYourTurnScreen(
           sensoryController: _sensoryController,
+          roundsOverride: PreAssessmentRoundPlan.roundsForGame(_currentGameIndex),
+          configurationVersionOverride: PreAssessmentRoundPlan.configurationVersionForGame(_currentGameIndex),
           onComplete: (score, total, errors, time, extras) =>
               _onGameComplete(gameId, score, total, errors, time, extras),
         );
@@ -727,6 +734,8 @@ class _PreAssessmentProgressScreenState
               child: MatchItScreen(
                 assessmentContext: 'pre_assessment',
                 sensoryController: _sensoryController,
+                roundsOverride: PreAssessmentRoundPlan.roundsForGame(_currentGameIndex),
+                configurationVersionOverride: PreAssessmentRoundPlan.configurationVersionForGame(_currentGameIndex),
                 onComplete: (score, total, errors, time) {
                   // Call _onGameComplete to handle reward and advancement
                   _onGameComplete(gameId, score, total, errors, time);
