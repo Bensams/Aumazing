@@ -308,6 +308,7 @@ class AssessmentService implements AssessmentGateway {
       randomTouchCount: analytics?.randomTouchCount ?? 0,
       avgResponseTime: analytics?.avgResponseTime ?? 0.0,
       avgValidResponseTime: analytics?.avgValidResponseTime ?? 0.0,
+      offTaskActionCount: analytics?.offTaskActionCount ?? 0,
       improvementScore: analytics?.improvementScore ?? 0.0,
       consistencyScore: analytics?.consistencyScore ?? 0.0,
       configurationVersion: configurationVersionOverride ?? GameRoundPolicy.configurationVersionForContext(context),
