@@ -35,7 +35,10 @@ class RecommendationFilter {
   ///
   /// Used to filter [AiAssessmentResponse.recommendedModules] which contains
   /// display names like `'Copy Me'` rather than IDs like `'copy_me'`.
-  static const Map<String, String> _nameToGameId = {
+  ///
+  /// Exposed publicly so the recommendation coverage test can assert every
+  /// registered game name maps to a known game ID.
+  static const Map<String, String> nameToGameId = {
     'Copy Me': 'copy_me',
     'Do What I Say': 'do_what_i_say',
     'My Turn, Your Turn': 'my_turn_your_turn',
@@ -73,7 +76,7 @@ class RecommendationFilter {
     // ── Filter recommendedModules (string names) ───────────────────────
     final filteredModules = <String>[];
     for (final name in response.recommendedModules) {
-      final gameId = _nameToGameId[name] ??
+      final gameId = nameToGameId[name] ??
           name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
       if (activeGameIds.contains(gameId)) {
         filteredModules.add(name);
