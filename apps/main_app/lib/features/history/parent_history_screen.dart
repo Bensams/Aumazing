@@ -43,6 +43,10 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
   bool _loading = true;
   String? _error;
   HistorySummary? _summary;
+  /// Set when the load ran while the assessment provider was still hydrating
+  /// this child (AUM-308); the screen rebuilds once hydration lands so the
+  /// My Path section is not stuck empty.
+  bool _reloadQueued = false;
 
   @override
   void initState() {
@@ -51,6 +55,9 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
   }
 
   Future<void> _load() async {
+    // If the provider is still hydrating, the My Path section below can be
+    // empty; queue a reload once hydration finishes (checked in build).
+    _reloadQueued = context.read<AssessmentProvider>().isLoading;
     try {
       // The path filter needs the active-game set. Read the cache first and
       // only hit the network when it has never been fetched, exactly like
@@ -100,6 +107,13 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final assessLoading = context.watch<AssessmentProvider>().isLoading;
+    if (_reloadQueued && !assessLoading && !_loading && _error == null) {
+      _reloadQueued = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_loading) _load();
+      });
+    }
     final children = context.watch<ChildProvider>().children;
     final authorized = children.any((c) => c.id == widget.childId);
 

@@ -150,6 +150,9 @@ class LocalTables {
   static const String assessmentResults = 'assessment_results_local';
   static const String moduleRecommendations = 'module_recommendations_local';
   static const String assessmentComparisons = 'assessment_comparisons_local';
+  /// Completed recommendation modules (e.g. a finished My Path). Local-only:
+  /// no cloud table exists, so rows are never queued for sync.
+  static const String moduleProgress = 'module_progress';
   static const String sensoryConsent = 'sensory_consent_local';
   static const String sensoryRoundMetrics = 'sensory_round_metrics_local';
   static const String sensoryPreferences = 'sensory_preferences_local';
