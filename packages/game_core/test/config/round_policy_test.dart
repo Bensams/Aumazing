@@ -10,7 +10,10 @@ void main() {
       }
     });
 
-    test('pre-assessment keeps four rounds for the combined sensory round', () {
+    test('pre-assessment keeps four rounds for the evidence game', () {
+      // The first pre-assessment game plays the four-condition evidence round
+      // (music/haptic/baseline/combined) so the sensory label can read its
+      // first combined metric; games 2-4 play three rounds.
       expect(GameRoundPolicy.roundsForContext('pre_assessment'), 4);
     });
 
@@ -21,6 +24,11 @@ void main() {
           GameRoundPolicy.standardConfigurationVersion);
       expect(GameRoundPolicy.configurationVersionForContext('pre_assessment'),
           GameRoundPolicy.sensoryConfigurationVersion);
+    });
+
+    test('sensory three-round config version is defined', () {
+      expect(GameRoundPolicy.sensoryThreeRoundConfigurationVersion,
+          'sensory-three-round-v1');
     });
 
     test('standard games default to the policy round count', () {

@@ -25,6 +25,8 @@ class MyTurnYourTurnScreen extends StatefulWidget {
     this.onComplete,
     this.sensoryController,
     this.difficulty,
+    this.roundsOverride,
+    this.configurationVersionOverride,
   });
 
   final String assessmentContext;
@@ -42,13 +44,18 @@ class MyTurnYourTurnScreen extends StatefulWidget {
 
   /// Optional difficulty (1–3) from the child's level; null keeps the default.
   final int? difficulty;
+  /// Optional per-game override of the round count; null uses the policy default.
+  final int? roundsOverride;
+
+  /// Optional override of the stamped configuration_version; null uses the policy default.
+  final String? configurationVersionOverride;
 
   @override
   State<MyTurnYourTurnScreen> createState() => _MyTurnYourTurnScreenState();
 }
 
 class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+  late final int _totalRounds = widget.roundsOverride ?? GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _gameComplete = false;
 
@@ -206,6 +213,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
           bgMusicEnabled: childProvider.musicEnabled,
           hapticFeedbackEnabled: childProvider.vibrationEnabled,
           applySessionSensoryDefaults: widget.sensoryController == null,
+          configurationVersionOverride: widget.configurationVersionOverride,
         );
         if (!mounted) return;
 

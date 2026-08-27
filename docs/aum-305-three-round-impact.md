@@ -17,14 +17,20 @@ A single central policy now owns round counts instead of per-screen hard-coded
 - All game screens (pre/post assessment, practice, My Path, game_lab) and all
   `packages/game_core` game engines now derive round count from the policy;
   engine defaults moved from `4` to `GameRoundPolicy.standardRoundCount`.
-- Every recorded session stamps `configuration_version`:
-  - Local DB migration v18 adds `configuration_version TEXT` to
-    `game_sessions` (additive; legacy rows keep NULL).
-  - Identical additive migration applied to live Supabase
-    (`20260827_add_configuration_version_to_game_sessions.sql`) — verified the
-    live column exists before wiring the upload.
-  - Sync upload mapper now sends `configuration_version` so the stamp reaches
-    analytics.
+- Pre-assessment is no longer uniformly four rounds. A per-game plan
+  (`apps/main_app/lib/features/pre_assessment/sensory/pre_assessment_round_plan.dart`,
+  `PreAssessmentRoundPlan`) splits the phase: game 1 (`copy_me`) keeps the
+  full four-round evidence cycle (music / haptic / baseline / combined);
+  games 2–4 (`do_what_i_say`, `my_turn_your_turn`, `match_it`) play three
+  rounds (music / haptic / baseline). This is the maximal reduction that is
+  provably label- and recommendation-identical to the legacy flow — see §2.2.
+- Per-row stamps are truthful per game:
+  - Game 1 rows: `sensory-four-round-v1` (it genuinely plays four rounds).
+  - Games 2–4 rows: `sensory-three-round-v1` (new constant in
+    `GameRoundPolicy`).
+- The four pre-assessment game screens accept optional `roundsOverride` /
+  `configurationVersionOverride` (used only by `PreAssessmentProgressScreen`);
+  every other caller keeps the shared policy default.
 
 No scoring, AI, sensory, mastery, or recommendation thresholds were changed.
 
@@ -57,13 +63,18 @@ quality decline.** Remaining risk is statistical only: improvement/consistency
 metrics are estimated from 3 points instead of 4; variance of the
 improvement score will be slightly higher at small n.
 
-### 2.2 Sensory-preference calculations
+**The label path is byte-identical to legacy.** The live recommendation input
+is `SensoryLabelAnalyzer` (used by `assessmentProvider.finalizePreAssessment`);
+it picks the **first** metric per sensory purpose (`_findByPurpose`), then
+compares music/haptic/combined deltas against the first baseline. Legacy
+first matches all come from game 1: music = game 1 round 1, haptic = game 1
+round 2, baseline = game 1 round 3, combined = game 1 round 4. Keeping game 1
+on four rounds reproduces exactly that evidence set; games 2–4's rounds are
+never consulted by the label analyzer (first-match), so dropping their
+combined round changes **no** label outcome. Proof of the cutover's two live
+paths:
 
-Unaffected. Pre-assessment deliberately keeps 4 rounds (the product-owner-gated
-exception); `SensoryRoundConfig` rounds 1–4 (musicOnly / hapticOnly / baseline
-/ combined) all still occur, so the composite sensory model sees every
-condition it already sees. The analyzer attributes metrics by round purpose,
-not by round count. Practice and My Path modes play no sensory rounds.
+documented for the stored-result consumers.
 
 ### 2.3 Scoring, normalization, thresholds, mastery, completion
 
@@ -83,8 +94,16 @@ structural change.
 
 ### 2.5 Progress, rewards, analytics, reports, historical comparison
 
-- Sessions now carry `configuration_version`: `three-round-v1` (all modes
-  except pre-assessment) or `sensory-four-round-v1` (pre-assessment).
+- Sessions now carry `configuration_version`, stamped per game at record
+  time:
+  - `three-round-v1` — every mode except pre-assessment (post-assessment,
+    Practice, My Path/game_lab, game_flow).
+  - `sensory-four-round-v1` — pre-assessment game 1 (`copy_me`), which
+    genuinely plays the four-round evidence cycle.
+  - `sensory-three-round-v1` — pre-assessment games 2–4.
+- Analytics therefore record the round-count/configuration version per row,
+  which lets dashboards/cohorts split legacy (NULL), four-round evidence-game,
+  and three-round rows.
 - Progress bars/step counters render `currentStep/totalRounds` from the
   live flow — no hard-coded "of 4" copy anywhere (verified by search).
 - Rewards (stars, unlocks) key on completion and day, not round count.
@@ -108,10 +127,16 @@ No partial-session resume exists: `game_sessions` rows are written when a game
 completes, and in-game retry (`_retryGame`) / "Again" push a fresh screen that
 restarts under the current policy. Consequences:
 
-- A retry/replay of a legacy 4-round session starts a new 3-round session
-  (correct: it is a new run).
+- A retry/replay of a legacy 4-round session starts a new session under
+  the current policy (correct: it is a new run).
 - Legacy completed rows are never re-derived; they remain readable with their
   stored round sequence and NULL configuration version, labeled legacy.
+- Resuming a pre-assessment run mid-phase applies `PreAssessmentRoundPlan`
+  per game as the phase progresses: games 2–4 that were never started in the
+  legacy run now play three rounds, while the evidence game is never
+  re-entered (`_completedGames`), so a resumed phase is internally
+  consistent. The configuration version recorded matches what each game
+  actually played.
 
 ### 2.8 Historical four-round vs three-round comparison
 
@@ -135,14 +160,48 @@ design). Dropping the weakest round does not degrade remaining evidence.
    follow-up options are (a) more rounds only for the practice modes that feed
    mastery, or (b) widen the improvement-score window — both need product-owner
    approval before implementation.
-4. **Product-owner gate still open:** reducing the pre-assessment sensory phase
-   from 4 to 3 rounds remains NOT implemented because round 4 carries the
-   unique `combined` sensory evidence; a change would need the product owner to
-   accept a shortened sensory comparison or a different evidence rule.
+4. **Product-owner gate item (not implemented; needs explicit approval):** the
+   maximal reduction shipped by this branch is the per-game split (game 1
+   keeps four rounds; games 2–4 play three) — provably label- and
+   recommendation-identical via the first-match proof in §2.2. The remaining
+   option — game 1 also playing three rounds — is NOT implemented because
+   removing game 1's round-4 `combined` sample changes the first-match
+   evidence set: the first combined sample would come from game 2's round 4,
+   flipping `musicAndHapticHelp` to `noSensorySupportNeeded` for the cohort
+   where game 1's combined round passed the ±0.10 threshold but game 2's did
+   not. If the product owner accepts that outcome, the proposed mechanism is
+   a conservative adaptive-evidence rule (keep `combined` as an extra fourth
+   round only when a trigger fires), with any new thresholds needing
+   product-owner approval first. Until then, game 1 keeps four rounds.
 
 ## 4. Verification
 
-- `flutter analyze` (main_app + game_core): clean.
-- Existing game-engine and sensory tests: passing (round count parametrized).
+- `flutter analyze` apps/main_app: 6 issues, all pre-existing on base dev
+  (3× `SupabaseAuthClient` abstract-member errors in untouched test files,
+  `_isBuddyTurn` unused-field warning, 2× info-level deprecations). Zero
+  issues from this change.
+- `flutter analyze` packages/game_core: 29 issues, all pre-existing and
+  identical on base dev (deprecations in `match_it_game.dart` /
+  `shape_painter_3d.dart`, `ObjectEmphasis` compile error in untouched
+  `object_emphasis_test.dart` + test-level infos). Zero issues from this
+  change.
+- `flutter test` packages/game_core (full): 230 passed, 6 failed. The same 6
+  failures (object_emphasis load + 5 shape_emphasis contour assertions) were
+  re-run on pristine base dev in a temporary worktree and reproduce
+  identically (`+1 -6`) — pre-existing, unrelated to round counts.
+- `flutter test` apps/main_app (targeted: providers/, features/pre_assessment,
+  rubric_threshold, session_recording_no_profile, developer_tools_service):
+  97 passed, 4 failed-to-load — the 4 are `child_provider*` /
+  `dashboard_child_isolation` files whose load breaks on the pre-existing
+  `SupabaseAuthClient` abstract-member error in `support/fake_auth.dart`
+  (untouched).
+- Standalone `flutter test test/features/pre_assessment`: 15/15 passed
+  (round plan, resume/retry, telemetry).
+- Runtime: widget-level screens and recording path exercised by the above;
+  no device-live run in this slice. Prior slice's device smoke evidence
+  remains on record for the base implementation commit.
 - Migration applied to live Supabase (additive, `IF NOT EXISTS`), column
   verified present; local v18 migration matches it byte-for-byte in effect.
+- The 4 test fakes implementing `AssessmentGateway` were updated for the new
+  optional `configurationVersionOverride` parameter — that was the only
+  compile break the interface change introduced, caught by analyze and fixed.
