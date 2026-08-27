@@ -2022,11 +2022,13 @@ class VoiceOverService {
   /// Play a random celebration cue from
   /// [VoiceOverCategory.rewardAndCelebration].
   ///
-  /// Yields to immediate feedback — see [_playPraise]. When it does play it is
-  /// **never dropped and never interrupts**: it is exempt from the debounce and
-  /// waits for anything mid-word to finish, because a game fires it in the same
-  /// synchronous breath as the round's last line rather than in response to a
-  /// fresh tap.
+  /// Yields to immediate feedback — see [_playPraise] — and never interrupts:
+  /// when it plays it is exempt from the debounce and waits for anything
+  /// mid-word to finish, because a game fires it in the same synchronous breath
+  /// as the round's last line rather than in response to a fresh tap. A line
+  /// is still dropped when immediate feedback owns the floor, and a line that
+  /// got past that yield parks as pending narration, so it can be discarded as
+  /// stale before it speaks if the floor moves to something newer.
   Future<void> playRewardCelebration() =>
       _playPraise(VoiceOverCategory.rewardAndCelebration);
 
