@@ -14,9 +14,54 @@ import '../../core/services/connectivity_service.dart';
 import '../../core/services/local_db_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../providers/child_provider.dart';
+import '../../services/tour_service.dart';
 import '../home/home_screen.dart';
 import 'auth/child_profile_setup_screen.dart';
 import 'auth/login_screen.dart';
+
+/// Where a completed launch (splash → asset preload → bootstrap) should land.
+enum AppLaunchTarget {
+  /// Authentication / the mandatory Data Privacy Notice.
+  login,
+
+  /// First-run child profile creation.
+  childProfileSetup,
+
+  /// The parent dashboard, shown on top (first login / onboarding).
+  parentHome,
+
+  /// A returning authenticated user, dropped into child/game mode with the
+  /// dashboard mounted underneath as the PIN-protected parent base.
+  childMode,
+}
+
+/// Pure launch-routing decision, split out from navigation so every session
+/// and account edge (restore, restart, expiry, logout/login, multi-account)
+/// is unit-testable without pumping the loading screen.
+///
+/// [sessionExpired] and a missing privacy consent both fail closed to
+/// [AppLaunchTarget.login]. Only a fully set-up account ([BootstrapDestination.home])
+/// that has already seen the parent dashboard tour — i.e. is past first-time
+/// registration/login — opens directly in child mode; everyone else keeps
+/// their existing destination so onboarding and first login are preserved.
+AppLaunchTarget resolveLaunchTarget({
+  required BootstrapDestination destination,
+  required bool sessionExpired,
+  required bool hasConsent,
+  required bool hasSeenParentTour,
+}) {
+  if (sessionExpired || !hasConsent) return AppLaunchTarget.login;
+  switch (destination) {
+    case BootstrapDestination.login:
+      return AppLaunchTarget.login;
+    case BootstrapDestination.childProfileSetup:
+      return AppLaunchTarget.childProfileSetup;
+    case BootstrapDestination.home:
+      return hasSeenParentTour
+          ? AppLaunchTarget.childMode
+          : AppLaunchTarget.parentHome;
+  }
+}
 
 /// Loading screen with video background and real assets loading progress.
 ///
@@ -225,13 +270,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
     // Never route into the app with a token that has already expired. Supabase
     // normally refreshes sessions, but a stale/offline restore must fail
     // closed and return the parent to authentication.
-    if (_authService.isSessionExpired) {
+    final sessionExpired = _authService.isSessionExpired;
+    if (sessionExpired) {
       try {
         await _authService.signOut();
       } catch (e) {
         debugPrint('[LoadingScreen] expired-session cleanup failed: $e');
       }
-      result = const BootstrapResult(destination: BootstrapDestination.login);
     }
 
     // First open / fresh install: until the Data Privacy Notice is accepted,
@@ -244,18 +289,27 @@ class _LoadingScreenState extends State<LoadingScreen> {
     } catch (_) {}
     if (!mounted) return;
 
-    final Widget destination;
-    if (!hasConsent) {
-      destination = const LoginScreen();
-    } else {
-      destination = switch (result.destination) {
-        BootstrapDestination.login => const LoginScreen(),
-        BootstrapDestination.childProfileSetup => ChildProfileSetupScreen(
-            initialErrorMessage: result.errorMessage,
-          ),
-        BootstrapDestination.home => const HomeScreen(),
-      };
-    }
+    // A returning parent has already been walked through the dashboard once;
+    // that is the signal that first-time registration/login is behind them,
+    // so their next open drops straight into child/game mode (AUM-306).
+    final hasSeenParentTour = await TourService.instance.hasSeenParentTour();
+    if (!mounted) return;
+
+    final target = resolveLaunchTarget(
+      destination: result.destination,
+      sessionExpired: sessionExpired,
+      hasConsent: hasConsent,
+      hasSeenParentTour: hasSeenParentTour,
+    );
+
+    final Widget destination = switch (target) {
+      AppLaunchTarget.login => const LoginScreen(),
+      AppLaunchTarget.childProfileSetup => ChildProfileSetupScreen(
+        initialErrorMessage: result.errorMessage,
+      ),
+      AppLaunchTarget.parentHome => const HomeScreen(),
+      AppLaunchTarget.childMode => const HomeScreen(openChildMode: true),
+    };
 
     // Use fade transition to avoid audio/video interruptions
     Navigator.of(context).pushReplacement(
