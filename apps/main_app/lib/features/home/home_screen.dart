@@ -23,6 +23,7 @@ import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
 import '../premium/premium_upgrade_screen.dart';
+import '../history/parent_history_screen.dart';
 import 'gameplay_report_screen.dart';
 import '../settings/settings_screen.dart';
 import '../child_mode/child_mode_lobby_screen.dart';
@@ -89,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _scoresKey = GlobalKey();
   final _screenTimeKey = GlobalKey();
   final _recentActivityKey = GlobalKey();
+  final _historyKey = GlobalKey();
 
   /// Re-queries the dashboard when a sync pass lands rows.
   ///
@@ -581,6 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const SyncStatusBanner(),
       _buildActionButtons(),
       _buildPremiumBanner(),
+      KeyedSubtree(key: _historyKey, child: _buildHistoryEntry()),
       _buildScreenTimeStatus(),
       const SizedBox(height: AppSpacing.md),
       KeyedSubtree(key: _assessmentStatusKey, child: _buildAssessmentStatus()),
@@ -1159,6 +1162,37 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  /// History & Progress card: opens the parent history screen for the
+  /// active child. Hidden until a child profile exists.
+  Widget _buildHistoryEntry() {
+    return Consumer<ChildProvider>(
+      builder: (context, childProv, _) {
+        final profile = childProv.profile;
+        if (profile == null) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: _ActionCard(
+            key: const ValueKey('historyActionCard'),
+            icon: Icons.history_rounded,
+            label: 'History & Progress',
+            subtitle: 'Assessment, My Path, and practice history',
+            color: AppColors.skyBlue,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ParentHistoryScreen(
+                  childId: profile.id,
+                  childName: profile.displayName,
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

@@ -5,6 +5,7 @@ import 'package:game_core/game_core.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:uuid/uuid.dart';
+import '../../model/assessment_run_record.dart';
 
 import '../sync/sync_status.dart';
 import '../../model/child_profile.dart';
@@ -1700,6 +1701,26 @@ class LocalDbService {
     );
 
     return rows.map((r) => AssessmentResult.fromMap(r)).toList();
+  }
+
+  /// Assessment runs for a child, newest first.
+  Future<List<AssessmentRunRecord>> getAssessmentRuns({
+    required String childId,
+    bool includeDeleted = false,
+  }) async {
+    final db = await database;
+    final conditions = ['child_id = ?'];
+    final args = <Object?>[childId];
+    if (!includeDeleted) {
+      conditions.add('deleted_at IS NULL');
+    }
+    final rows = await db.query(
+      LocalTables.assessmentRuns,
+      where: conditions.join(' AND '),
+      whereArgs: args,
+      orderBy: 'started_at DESC',
+    );
+    return rows.map((r) => AssessmentRunRecord.fromMap(r)).toList();
   }
 
   // ─── Module Progress ──────────────────────────────────────────────────
