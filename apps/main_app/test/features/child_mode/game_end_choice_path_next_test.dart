@@ -7,9 +7,12 @@ import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/module_recommendation.dart';
 import 'package:aumazing/model/star_ledger_entry.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
+import 'package:aumazing/model/module_progress.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/stars_provider.dart';
+import 'package:aumazing/providers/progress_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,6 +81,18 @@ const _completedPathPrediction = AiAssessmentResponse(
 
 void main() {
   setUpAll(() async {
+    // The milestone celebration plays through the shared_audio audio-player
+    // pool; without platform handlers the real players fail asynchronously and
+    // leave service timers pending past teardown.
+    for (final name in const [
+      'xyz.luan/audioplayers',
+      'xyz.luan/audioplayers.global',
+    ]) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(MethodChannel(name), (call) async {
+        return call.method == 'create' ? null : 1;
+      });
+    }
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'http://localhost:54321',
@@ -251,6 +266,57 @@ void main() {
     expect(find.text('play'), findsOneWidget);
     expect(PendingPathLaunch.take(), isNull);
   });
+
+  testWidgets(
+    'finishing the last path game stamps the My Path history row and '
+    'shows the victory',
+    (tester) async {
+      final progress = _TestProgressProvider();
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _wrap(
+          const _LobbyWithGame(),
+          prediction: _completedPathPrediction,
+          progressProvider: progress,
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('finish'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      // The durable parent-history stamp is written exactly once, with the
+      // deterministic child+path id and the completed path length.
+      final stamped = progress.lastUpdate!;
+      expect(stamped.id, startsWith('my_path_child-1_'));
+
+      // The milestone celebration for the completed path.
+      expect(
+        find.text('You finished every activity on your path!'),
+        findsOneWidget,
+      );
+      expect(stamped.id, startsWith('my_path_child-1_'));
+      expect(stamped.moduleId, 'my_path');
+      expect(stamped.moduleName, 'My Path');
+      expect(stamped.childId, 'child-1');
+      expect(stamped.status, 'completed');
+      expect(stamped.currentLevel, 1);
+      expect(stamped.maxLevel, 1);
+      expect(stamped.completedAt, isNotNull);
+
+      // Dismiss the celebration so its hold timers are cancelled before the
+      // test tears the tree down. The safety valve reveals the continue
+      // control by eight seconds regardless of the staged intro state.
+      await tester.pump(const Duration(seconds: 9));
+      await tester.tap(find.byIcon(Icons.arrow_forward_rounded),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+      semantics.dispose();
+    },
+  );
 }
 
 /// A stand-in for the child-mode stack: a lobby route with a game pushed
@@ -292,6 +358,7 @@ Widget _wrap(
   Widget home, {
   bool nextCycleLocked = false,
   AiAssessmentResponse prediction = _prediction,
+  ProgressProvider? progressProvider,
 }) {
   return MultiProvider(
     providers: [
@@ -308,6 +375,8 @@ Widget _wrap(
       ChangeNotifierProvider<StarsProvider>(
         create: (_) => _SilentStarsProvider(),
       ),
+      if (progressProvider != null)
+        ChangeNotifierProvider<ProgressProvider>.value(value: progressProvider),
     ],
     child: MaterialApp(theme: AppTheme.light, home: home),
   );
@@ -375,6 +444,16 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
+/// Captures the last module-progress write without touching a database.
+class _TestProgressProvider extends ProgressProvider {
+  ModuleProgress? lastUpdate;
+
+  @override
+  Future<void> updateModuleProgress(ModuleProgress progress) async {
+    lastUpdate = progress;
+  }
 }
 
 class _TestPinDelegate implements ParentPinDelegate {
