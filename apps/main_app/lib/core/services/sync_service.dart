@@ -817,6 +817,7 @@ class SyncService {
         'time_to_first_valid_action': r['time_to_first_valid_action'],
         'time_to_completion': r['time_to_completion'],
         'sensory_condition': r['sensory_condition'],
+        'configuration_version': r['configuration_version'],
         'started_at': r['started_at'] ?? _nowIso(),
         'ended_at': r['ended_at'] ?? r['started_at'] ?? _nowIso(),
         'settings_snapshot': _asJsonText(r['settings_snapshot']),
