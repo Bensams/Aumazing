@@ -13,6 +13,7 @@ export 'src/config/adaptive_difficulty.dart';
 export 'src/config/difficulty_profile.dart';
 export 'src/config/game_config.dart';
 export 'src/config/game_motion.dart';
+export 'src/config/round_policy.dart';
 
 // Shared game components
 export 'src/games/shared/answer_label.dart';

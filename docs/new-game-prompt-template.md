@@ -28,7 +28,7 @@ first — game logic in `packages/game_core`, screen wrapper in `main_app`).
 - **One-line description**: `<shown on the game card / DB catalog>`
 - **Skill categories**: `<playSkills | communication | socialInteraction>` (one or more)
 - **Core mechanic**: <what the child sees, does, and what counts as correct>
-- **Round structure**: 4 rounds (all games are fixed at 4 — keep it)
+- **Round structure**: 3 rounds (standard; pre-assessment keeps 4 for the sensory phase)
 - **Difficulty tiers 1–3**: <what changes per tier: item count, distractors, speed>
 - **Correctness rule**: <be explicit — errorless-learning friendly, tolerant of
   wobble/imprecision, never punishes>

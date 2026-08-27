@@ -94,7 +94,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 17; // v17: Star Shop — ledger, unlocks, character
+  static const _dbVersion = 18; // v18: gameplay_sessions.configuration_version
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -237,6 +237,7 @@ class LocalDbService {
         time_to_first_valid_action REAL,
         time_to_completion REAL,
         sensory_condition TEXT,
+        configuration_version TEXT,
         started_at TEXT NOT NULL,
         ended_at TEXT NOT NULL,
         settings_snapshot TEXT,
@@ -1021,6 +1022,17 @@ class LocalDbService {
       // the kind of surprise this feature is meant to avoid; the parent picks
       // deliberately from Settings instead (STAR-A2).
       debugPrint('[LocalDbService] v17: star ledger, unlocks, character');
+    }
+    if (oldVersion < 18) {
+      try {
+        await db.execute(
+          'ALTER TABLE ${LocalTables.gameSessions} '
+          'ADD COLUMN configuration_version TEXT',
+        );
+      } catch (_) {
+        // Column already present — safe to skip.
+      }
+      debugPrint('[LocalDbService] v18: configuration_version column');
     }
   }
 

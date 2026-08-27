@@ -45,13 +45,9 @@ class CopyMeScreen extends StatefulWidget {
   State<CopyMeScreen> createState() => _CopyMeScreenState();
 }
 
-/// All games use a fixed 4 rounds to keep sessions short for young children.
-/// (Difficulty is reserved for future per-game tuning.)
-int _roundsForDifficulty(int? difficulty) => 4;
-
 class _CopyMeScreenState extends State<CopyMeScreen>
     with SingleTickerProviderStateMixin {
-  late final int _totalRounds = _roundsForDifficulty(widget.difficulty);
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _gameComplete = false;
 

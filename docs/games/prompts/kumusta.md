@@ -25,7 +25,7 @@ end-to-end first — game logic in `packages/game_core`, screen wrapper in
   the wave is returned — which is the reinforcement, not the score.
   The skill is *responding to a social bid*, so the buddy always initiates and
   always waits: there is no time pressure and the buddy never gives up.
-- **Round structure**: 4 rounds (fixed — keep it), `config.itemsPerRound`
+- **Round structure**: 3 rounds (standard), `config.itemsPerRound`
   greetings per round.
 - **Difficulty tiers 1–3**:
   - tier 1: one greeting, 2 icon choices, buddy holds the gesture indefinitely.

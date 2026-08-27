@@ -85,6 +85,11 @@ class GameplaySession {
   /// Sensory condition active during the session.
   final String? sensoryCondition;
 
+  /// Analytics configuration version ('three-round-v1', or
+  /// 'sensory-four-round-v1' for the product-owner-gated pre-assessment
+  /// sensory exception). Null for legacy sessions recorded before the stamp.
+  final String? configurationVersion;
+
   final DateTime startedAt;
   final DateTime endedAt;
 
@@ -122,6 +127,7 @@ class GameplaySession {
     this.timeToFirstValidAction,
     this.timeToCompletion,
     this.sensoryCondition,
+    this.configurationVersion,
     required this.startedAt,
     required this.endedAt,
     this.synced = false,
@@ -163,6 +169,7 @@ class GameplaySession {
         timeToFirstValidAction: timeToFirstValidAction,
         timeToCompletion: timeToCompletion,
         sensoryCondition: sensoryCondition,
+        configurationVersion: configurationVersion,
         startedAt: startedAt,
         endedAt: endedAt,
         synced: true,
@@ -199,6 +206,7 @@ class GameplaySession {
         'time_to_first_valid_action': timeToFirstValidAction,
         'time_to_completion': timeToCompletion,
         'sensory_condition': sensoryCondition,
+        'configuration_version': configurationVersion,
         'started_at': startedAt.toIso8601String(),
         'ended_at': endedAt.toIso8601String(),
         'synced': synced ? 1 : 0,
@@ -235,6 +243,7 @@ class GameplaySession {
         timeToFirstValidAction: (map['time_to_first_valid_action'] as num?)?.toDouble(),
         timeToCompletion: (map['time_to_completion'] as num?)?.toDouble(),
         sensoryCondition: map['sensory_condition'] as String?,
+        configurationVersion: map['configuration_version'] as String?,
         startedAt: DateTime.parse(map['started_at'] as String),
         endedAt: DateTime.parse(map['ended_at'] as String),
         synced: (map['synced'] ?? 0) == 1,
@@ -271,6 +280,7 @@ class GameplaySession {
         'time_to_first_valid_action': timeToFirstValidAction,
         'time_to_completion': timeToCompletion,
         'sensory_condition': sensoryCondition,
+        'configuration_version': configurationVersion,
         'started_at': startedAt.toIso8601String(),
         'ended_at': endedAt.toIso8601String(),
       };
@@ -319,6 +329,7 @@ class GameplaySession {
         timeToCompletion:
             (map['time_to_completion'] as num?)?.toDouble(),
         sensoryCondition: map['sensory_condition'] as String?,
+        configurationVersion: map['configuration_version'] as String?,
         startedAt: DateTime.parse(map['started_at'] as String),
         endedAt: DateTime.parse(map['ended_at'] as String),
       );

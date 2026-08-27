@@ -1,4 +1,5 @@
 import 'package:shared_ui/shared_ui.dart';
+import 'round_policy.dart';
 
 /// Shared game configuration used by all Aumazing mini-games.
 ///
@@ -70,9 +71,9 @@ class GameConfig {
     );
   }
 
-  /// Number of rounds per game — fixed at 4 to keep sessions short so young
-  /// children aren't overwhelmed (applies to assessment and practice alike).
-  int get totalRounds => 4;
+  /// Number of rounds per game — standard three-round format (Card AUM-305).
+  /// Pre-assessment adds a sensory round; see [GameRoundPolicy].
+  int get totalRounds => GameRoundPolicy.standardRoundCount;
 
   /// Number of items per round based on difficulty.
   int get itemsPerRound {

@@ -68,12 +68,12 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
       childId: child.profile?.id ?? 'unknown',
       language: child.language,
     );
-    _totalRounds = config.totalRounds;
+    _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
     GameMotion.reduced = child.reducedMotion;
     GameObjectStyle.current = child.objectStyle;
     final audio = context.read<AudioService>();
     _game = TulongKaibiganGame(
-      totalRounds: config.totalRounds,
+      totalRounds: _totalRounds,
       itemsPerRound: config.itemsPerRound,
       childId: config.childId,
       strings: config.strings,

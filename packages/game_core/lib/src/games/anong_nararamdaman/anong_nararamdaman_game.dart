@@ -19,6 +19,7 @@ import '../../analytics/enhanced_analytics_mixin.dart';
 import '../../analytics/models/models.dart';
 import '../../config/adaptive_difficulty.dart';
 import '../../config/difficulty_profile.dart';
+import '../../config/round_policy.dart';
 import '../shared/game_lifecycle_guard.dart';
 
 /// The core Flame game for "Ano'ng Nararamdaman?" (How does he feel?).
@@ -56,7 +57,7 @@ class AnongNararamdamanGame extends FlameGame
     required this.onGameComplete,
     required this.childId,
     this.character = 'bps',
-    this.totalRounds = 4,
+    this.totalRounds = GameRoundPolicy.standardRoundCount,
     this.itemsPerRound = 3,
     this.gameVersion,
     this.profile = DifficultyProfile.medium,
