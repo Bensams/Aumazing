@@ -1151,6 +1151,13 @@ class VoiceOverService {
   @visibleForTesting
   int praiseSuppressedCount = 0;
 
+  /// Cue names that actually reached the speaker, in order. Test-only: with no
+  /// audio device in a unit test, this is the only deterministic witness of
+  /// what a line sequence produced. Records only in debug builds: the adds
+  /// sit inside `assert`s so release devices never grow this list.
+  @visibleForTesting
+  final List<String> spokenCues = [];
+
   /// When the current immediate-feedback line claimed the floor, or null when
   /// the last claim was something else.
   DateTime? _immediateStartedAt;
@@ -1162,6 +1169,27 @@ class VoiceOverService {
   /// [_takeFloor] can tag the ticket it is about to hand out as immediate
   /// feedback. Consumed there.
   bool _claimingImmediate = false;
+
+  /// The single pending-narration slot.
+  ///
+  /// A non-immediate line that arrives while immediate feedback owns the
+  /// narrator — the round-transition line, the next round's instruction, a
+  /// retry prompt — is not allowed to cut the label, so it parks here instead.
+  /// Newest-wins: a newer line replaces whatever is parked, so two lines queued
+  /// behind one label never both speak (that was the doubled voice).
+  ///
+  /// The slot is discarded when the service stops, is disabled, or is disposed,
+  /// and when the floor moves while the label is still finishing: something
+  /// newer spoke first, so this narration is stale.
+  Future<void> Function()? _queuedNarration;
+
+  /// Monotonic id for [_runQueuedNarration] ordering: a newer queued line
+  /// invalidates an older one still waiting to speak.
+  int _queuedNarrationId = 0;
+
+  /// Set for the moment a queued line fires, so the very immediate-feedback
+  /// hold window that parked it does not re-queue it into the same slot.
+  bool _suppressNarrationGuard = false;
 
   /// How long an immediate-feedback line keeps praise off the air after it
   /// starts.
@@ -1378,6 +1406,8 @@ class VoiceOverService {
       _immediateStartedAt = null;
       _immediateTicket = 0;
       _abandonPhrase();
+      _queuedNarration = null;
+      _queuedNarrationId++;
       for (final player in List<AudioPlayer>.from(_players)) {
         _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
         unawaited(_enqueuePlayerOperation(player, () => player.stop()).catchError((_) {}));
@@ -1549,6 +1579,21 @@ class VoiceOverService {
   }) async {
     final token = _token;
     if (!_valid(token) || !_enabled) return;
+    // Immediate feedback owns the narrator: the child is hearing what they
+    // just got right. Do not cut it — park this line as the pending narration
+    // and let it speak when the label finishes, if it is still relevant then.
+    // Lines called to take the floor ([skipDebounce]), the label itself
+    // ([_claimingImmediate]) and the queued line firing are exempt from the
+    // park.
+    if (!skipDebounce &&
+        !_claimingImmediate &&
+        !_suppressNarrationGuard &&
+        isImmediateFeedbackActive) {
+      return _enqueueNarration(
+        () => play(cue,
+            awaitCompletion: awaitCompletion, skipDebounce: true),
+      );
+    }
     if (!skipDebounce) {
       final now = DateTime.now();
       if (_lastPlayTime != null &&
@@ -1595,6 +1640,10 @@ class VoiceOverService {
       if (!await _applySpeed(player, token: token, ticket: ticket)) return;
       debugPrint(
           '[VoiceOverService] 🗣 Playing: ${cue.name} (pack=$_languageCode, vol=$_volume, speed=$_speed)');
+      assert(() {
+        spokenCues.add(cue.name);
+        return true;
+      }());
       for (var i = 0; i < candidates.length; i++) {
         if (!_holdsFloorFor(ticket, token)) return;
         try {
@@ -1868,6 +1917,13 @@ class VoiceOverService {
     if (!_enabled || _disposed) return;
     final token = _token;
     if (!_valid(token)) return;
+    // Same arbitration as [play]: a sequence arriving while immediate
+    // feedback owns the narrator parks behind it instead of cutting it.
+    if (!_claimingImmediate &&
+        !_suppressNarrationGuard &&
+        isImmediateFeedbackActive) {
+      return _enqueueNarration(() => playSequence(cues, gap: gap));
+    }
     final ticket = _takeFloor();
     if (!_holdsFloorFor(ticket, token)) return;
     if (!await _stopPlayersForSequence(token, ticket)) return;
@@ -1894,6 +1950,10 @@ class VoiceOverService {
         final player = playerFor(i);
         if (ready[i]) {
           _activePlayerIndex = i % _players.length;
+          assert(() {
+            spokenCues.add(cues[i].name);
+            return true;
+          }());
           try {
             await _playPrepared(
               player,
@@ -1962,11 +2022,13 @@ class VoiceOverService {
   /// Play a random celebration cue from
   /// [VoiceOverCategory.rewardAndCelebration].
   ///
-  /// Yields to immediate feedback — see [_playPraise]. When it does play it is
-  /// **never dropped and never interrupts**: it is exempt from the debounce and
-  /// waits for anything mid-word to finish, because a game fires it in the same
-  /// synchronous breath as the round's last line rather than in response to a
-  /// fresh tap.
+  /// Yields to immediate feedback — see [_playPraise] — and never interrupts:
+  /// when it plays it is exempt from the debounce and waits for anything
+  /// mid-word to finish, because a game fires it in the same synchronous breath
+  /// as the round's last line rather than in response to a fresh tap. A line
+  /// is still dropped when immediate feedback owns the floor, and a line that
+  /// got past that yield parks as pending narration, so it can be discarded as
+  /// stale before it speaks if the floor moves to something newer.
   Future<void> playRewardCelebration() =>
       _playPraise(VoiceOverCategory.rewardAndCelebration);
 
@@ -2006,19 +2068,98 @@ class VoiceOverService {
     return DateTime.now().difference(startedAt) < _kImmediateFeedbackHold;
   }
 
+  /// Park [speak] as the pending narration, or let it run when nothing has to
+  /// finish first.
+  ///
+  /// One slot: a newer line displaces the older, so a child answering rapidly
+  /// or a round advancing past one transition can never stack two lines.
+  ///
+  /// Returns the settlement of the parked line: it completes when the line has
+  /// either spoken or been discarded as stale, so a caller awaiting its
+  /// playback is never left believing a line is playing that will never be
+  /// heard.
+  Future<void> _enqueueNarration(Future<void> Function() speak) {
+    final floor = _floorTicket;
+    final id = ++_queuedNarrationId;
+    _queuedNarration = speak;
+    return _runQueuedNarration(id, floor);
+  }
+
+  /// Wait for the current line to finish, then decide whether the queued
+  /// narration is still worth speaking.
+  ///
+  /// Discard, do not play, when the service stopped/disabled/disposed, when a
+  /// newer narration replaced this one, or when the floor moved — anything new
+  /// that spoke while the label was finishing is now the child's current
+  /// context, and this line would arrive late twice over.
+  Future<void> _runQueuedNarration(int id, int floor) async {
+    await _awaitCurrentSpeech();
+    if (!_enabled) return;
+    if (id != _queuedNarrationId) return;
+    // The label can own the episode while no player reports playing: a
+    // single-cue label has no phrase, and its native preparation window
+    // reports nothing. Waiting only on speech state would cut the label in
+    // precisely that window — the overlap this queue exists to prevent. Wait
+    // the immediate-feedback episode out instead: the hold covers
+    // preparation and the last word's tail, and a line outliving the hold
+    // (slow prompt speed, slow device) is waited on directly once its last
+    // word is audible.
+    if (isImmediateFeedbackActive) {
+      if (isPlaying) await _awaitCurrentSpeech();
+      final startedAt = _immediateStartedAt;
+      if (startedAt != null) {
+        final remaining =
+            _kImmediateFeedbackHold - DateTime.now().difference(startedAt);
+        if (remaining > Duration.zero) {
+          await Future.delayed(remaining);
+        }
+      }
+      if (isPlaying) await _awaitCurrentSpeech();
+    }
+    if (!_enabled) return;
+    if (id != _queuedNarrationId) return;
+    if (floor != _floorTicket) return;
+    final speak = _queuedNarration;
+    _queuedNarration = null;
+    if (speak == null) return;
+    // The bypass covers only the synchronous re-entry into [speak]: the
+    // queued line must not re-park itself into the slot it just vacated. It
+    // must not outlive that re-entry either - a queued line takes the floor
+    // and can sit in native preparation or clip playback for a while, and a
+    // bypass held across all of it would let any genuinely new line skip the
+    // immediate-feedback guard and cut a fresh label.
+    _suppressNarrationGuard = true;
+    final Future<void> spoke;
+    try {
+      spoke = speak();
+    } finally {
+      _suppressNarrationGuard = false;
+    }
+    await spoke;
+  }
+
   /// Play a random cue from [category] once anything speaking has finished,
-  /// exempt from the debounce.
   ///
   /// For lines a game fires as a *consequence* of the answer it just narrated,
   /// rather than in response to a fresh tap. The debounce exists to stop a
   /// child's rapid tapping from stacking up speech; these are not taps, and
-  /// dropping them loses the line entirely.
+  /// dropping them loses the line entirely. They must not cut immediate
+  /// feedback either: a line parked behind the label speaks after it, and only
+  /// if nothing newer superseded it while the label was still speaking.
   Future<void> _playRandomAfterCurrent(VoiceOverCategory category) async {
     if (!_enabled) return;
     final cues = _cuesByCategory[category];
     if (cues == null || cues.isEmpty) return;
     final cue = cues[_random.nextInt(cues.length)];
+    if (isImmediateFeedbackActive) {
+      return _enqueueNarration(() => play(cue, skipDebounce: true));
+    }
+    final floor = _floorTicket;
     await _awaitCurrentSpeech();
+    // Anything that took the floor while we waited is now what the child is
+    // hearing; this line would either cut it or arrive after the moment it
+    // belonged to, so it is stale and is discarded.
+    if (!_enabled || floor != _floorTicket) return;
     debugPrint('[VoiceOverService] ▶ ${category.name}: ${cue.name}');
     await play(cue, skipDebounce: true);
   }
@@ -2034,6 +2175,10 @@ class VoiceOverService {
     // the per-player wait below would return in the silence between two of
     // them — which is precisely where a second voice used to come in. The
     // backstop scales with the pool because a phrase is that many words long.
+    //
+    // A phrase completes when its last word *starts*, so the players are
+    // still checked afterwards: that last word is audible and the caller
+    // must not begin on top of it.
     final phrase = _phrase;
     if (phrase != null) {
       try {
@@ -2041,7 +2186,6 @@ class VoiceOverService {
       } on TimeoutException {
         debugPrint('[VoiceOverService] ⏱ Gave up waiting for current phrase');
       }
-      return;
     }
     for (final player in _players) {
       if (player.state == PlayerState.playing) {
@@ -2098,6 +2242,9 @@ class VoiceOverService {
     _myTicket = 0;
     _immediateStartedAt = null;
     _immediateTicket = 0;
+    // A stashed narration belongs to the moment that just ended.
+    _queuedNarration = null;
+    _queuedNarrationId++;
     for (final player in List<AudioPlayer>.from(_players)) {
       _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
       try {
@@ -2118,6 +2265,8 @@ class VoiceOverService {
     _live.remove(this);
     _sequenceCancelled = true;
     _abandonPhrase();
+    _queuedNarration = null;
+    _queuedNarrationId++;
     final future = () async {
       for (final player in List<AudioPlayer>.from(_players)) {
         _fadeGeneration[player] = (_fadeGeneration[player] ?? 0) + 1;
