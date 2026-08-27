@@ -79,6 +79,8 @@ avp_out/
 # Agent / editor local state
 .claude/
 .obsidian/
+.kilo/
+.omp/
 
 # Local scratch + generated output
 debug/
@@ -96,3 +98,12 @@ nul
 
 # A separate project that was cloned inside this repo by accident
 /tulong-kaibigan-dev/
+
+
+# For now
+
+output/
+packages/assets/audio/SFX/SoundFX/
+swarm.yaml
+tmp/
+tools/build_technical_document.py
