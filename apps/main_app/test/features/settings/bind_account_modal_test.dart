@@ -2,6 +2,7 @@ import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/features/settings/bind_account_modal.dart';
 import '../../support/fake_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
@@ -67,6 +68,53 @@ void main() {
     await _expectBoundState(auth);
   });
 
+  testWidgets('Bind with Email label is centered when wrapped on a narrow phone', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(
+      const {'active_child_guest-user': 'child-1'},
+    );
+    final auth = _BindingTestAuth();
+    auth.initializeGuestMode();
+
+    // Narrow phone surface so the label wraps to multiple lines.
+    await tester.binding.setSurfaceSize(const Size(320, 690));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: BindAccountModal(authService: auth)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Bind with Email'));
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(ElevatedButton, 'Bind with Email');
+    final label = find.descendant(
+      of: button,
+      matching: find.text('Bind with Email'),
+    );
+    expect(button, findsOneWidget);
+    expect(label, findsOneWidget);
+
+    // The label must actually wrap, otherwise this test would not exercise
+    // the centering of wrapped lines.
+    final paragraph = tester.renderObject<RenderParagraph>(label);
+    expect(paragraph.textAlign, TextAlign.center,
+        reason: 'wrapped label lines must be centered via TextAlign');
+
+    // Geometric proof: the first line must start inset from the paragraph's
+    // left edge (i.e. centered), not flush against it.
+    final firstLineLeft =
+        paragraph
+            .getOffsetForCaret(const TextPosition(offset: 0), Rect.zero)
+            .dx;
+    expect(firstLineLeft, greaterThan(0),
+        reason:
+            'first wrapped line must start inset from the paragraph left edge');
+  });
 }
 
 Future<void> _pumpModal(WidgetTester tester, AuthService auth) async {
