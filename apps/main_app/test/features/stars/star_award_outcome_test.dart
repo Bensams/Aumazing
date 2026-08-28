@@ -125,6 +125,45 @@ void main() {
       await _letItLeave(tester);
     });
   });
+
+  group('AUM-312 — no yellow underline without a Material ancestor', () {
+    testWidgets('a buggy fallback is neutralized for star row, headline, note', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ChildProvider>(
+          create: (_) => _NoProfileChild(),
+          child: MaterialApp(
+            home: DefaultTextStyle(
+              style: const TextStyle(
+                decoration: TextDecoration.underline,
+                decorationColor: Colors.yellow,
+              ),
+              child: const StarEarnedOverlay(
+                granted: 3,
+                headline: 'You earned 3 stars!',
+                note: 'Check the lobby for more.',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // The star row, the headline and the note each resolve to no decoration
+      // even though a buggy ancestor sets a yellow underline.
+      for (final text in ['You earned 3 stars!', '⭐', 'Check the lobby for more.']) {
+        final style = _resolved(tester, text);
+        expect(style.decoration, TextDecoration.none,
+            reason: 'Text "$text" must not be underlined');
+        expect(style.decorationColor, isNot(Colors.yellow),
+            reason: 'Text "$text" must not be yellow-underlined');
+      }
+
+      expect(tester.takeException(), isNull);
+      await _letItLeave(tester);
+    });
+  });
 }
 
 /// The moment dismisses itself after 1.8s. Pumping past that drains the timer,
@@ -139,6 +178,16 @@ Widget _wrap(Widget child) => ChangeNotifierProvider<ChildProvider>(
       create: (_) => _NoProfileChild(),
       child: MaterialApp(home: child),
     );
+
+/// The style a [Text] actually renders with — the inherited [DefaultTextStyle]
+/// merged over the widget's own [Text.style]. Used to prove the AUM-312
+/// wrapper kills an inherited yellow underline.
+TextStyle _resolved(WidgetTester tester, String text) {
+  final finder = find.text(text).first;
+  final context = tester.element(finder);
+  final own = tester.widget<Text>(finder).style;
+  return DefaultTextStyle.of(context).style.merge(own);
+}
 
 class _NoProfileChild extends ChildProvider {
   _NoProfileChild()
