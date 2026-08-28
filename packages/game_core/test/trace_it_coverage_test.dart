@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/src/config/difficulty_profile.dart';
+import 'package:game_core/src/games/shared/answer_label.dart';
 import 'package:game_core/src/games/trace_it/trace_it_game.dart';
 import 'package:game_core/src/games/trace_it/trace_glyphs.dart';
 
@@ -15,9 +16,11 @@ import 'package:game_core/src/games/trace_it/trace_glyphs.dart';
 void main() {
   late TraceItGame game;
   var completedRounds = 0;
+  AnswerLabel? spokenLabel;
 
   Future<void> startGame() async {
     completedRounds = 0;
+    spokenLabel = null;
     game = TraceItGame(
       childId: 'test-child',
       totalRounds: 4,
@@ -25,6 +28,7 @@ void main() {
       // glyph and the assertions stay about coverage rather than stroke order.
       profile: DifficultyProfile.forLevel(1),
       onStepChanged: (step) => completedRounds = step,
+      onPlayCorrectVo: (label) => spokenLabel = label,
       onGameComplete: ({
         required score,
         required totalItems,
@@ -85,6 +89,18 @@ void main() {
 
     expect(completedRounds, 1);
     expect(game.debugHasInk, isFalse);
+  });
+
+  test('a completed shape is named through the existing feedback callback',
+      () async {
+    await startGame();
+    game.debugForceGlyph('square');
+
+    swipe(game.debugCurrentPath, stride: 1);
+
+    expect(completedRounds, 1);
+    expect(spokenLabel?.shape, 'square');
+    expect(spokenLabel?.letter, isNull);
   });
 
   test('a swipe nowhere near the guide does not complete it', () async {

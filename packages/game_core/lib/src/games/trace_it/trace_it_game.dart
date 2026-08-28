@@ -75,9 +75,9 @@ class TraceItGame extends FlameGame
   final VoidCallback? onPlayTapSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
-  /// Immediate feedback on a finished glyph: the letter or numeral the child
-  /// just traced, so the app can name it back ("A", "three"). Praise waits for
-  /// the end of the game.
+  /// Immediate feedback on a finished glyph: the letter, numeral, or shape the
+  /// child just traced, so the app can name it back ("A", "three", "circle").
+  /// Praise waits for the end of the game.
   final AnswerLabelCallback? onPlayCorrectVo;
   final VoidCallback? onPlayWrongVo;
   final VoidCallback? onPlayInstructionVo;
@@ -90,8 +90,9 @@ class TraceItGame extends FlameGame
 
   /// Hint/guidance policy for the selected difficulty tier (ABA prompt
   /// hierarchy — see [DifficultyProfile]). Also selects the glyph pool:
-  /// Easy = pre-writing strokes, Medium = single-stroke letters/numbers,
-  /// Hard = multi-stroke letters/numbers.
+  /// Easy = simple pre-writing strokes/shapes, Medium = angular shapes and
+  /// single-stroke letters/numbers, Hard = complex shapes and multi-stroke
+  /// letters/numbers.
   final DifficultyProfile profile;
 
   // ── Game state ───────────────────────────────────────────────────────
@@ -855,13 +856,25 @@ class TraceItGame extends FlameGame
   ///
   /// The glyph table mixes single characters ('A', '3') with named strokes
   /// ('circle', 'line across'). Only the first kind has a recorded name, and
-  /// 'circle' happens to be a shape the library already says — anything else
-  /// resolves to nothing and the app stays quiet rather than inventing praise.
+  /// Pre-writing lines intentionally stay silent because they have no matching
+  /// naming cue. Geometric shapes use the same naming feedback as the shape
+  /// games, while letters and numerals keep their existing glyph cues.
   AnswerLabel _glyphAnswerLabel() {
     final label = _glyph?.label;
     if (label == null) return AnswerLabel.none;
     if (label.length == 1) return AnswerLabel(letter: label);
-    if (label.toLowerCase() == 'circle') return const AnswerLabel(shape: 'circle');
+    final normalized = label.toLowerCase();
+    const spokenShapes = {
+      'circle',
+      'square',
+      'triangle',
+      'star',
+      'heart',
+      'diamond',
+    };
+    if (spokenShapes.contains(normalized)) {
+      return AnswerLabel(shape: normalized);
+    }
     return AnswerLabel.none;
   }
 }
