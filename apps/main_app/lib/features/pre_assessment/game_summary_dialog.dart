@@ -95,10 +95,7 @@ class GameSummaryDialog extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFF8F6FF),
-                Color(0xFFFFFFFF),
-              ],
+              colors: [Color(0xFFF8F6FF), Color(0xFFFFFFFF)],
             ),
           ),
           child: SafeArea(
@@ -125,8 +122,10 @@ class GameSummaryDialog extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_performanceEmoji(),
-                              style: const TextStyle(fontSize: 18)),
+                          Text(
+                            _performanceEmoji(),
+                            style: const TextStyle(fontSize: 18),
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             _performanceLabel(),
@@ -203,6 +202,7 @@ class GameSummaryDialog extends StatelessWidget {
               '✅',
               'Correct\nTaps',
               '$_totalCorrect',
+              AssessmentLabels.correctTapsInfo,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -211,6 +211,7 @@ class GameSummaryDialog extends StatelessWidget {
               '❌',
               'Error\nTaps',
               '$_totalErrors',
+              AssessmentLabels.errorTapsInfo,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -219,6 +220,7 @@ class GameSummaryDialog extends StatelessWidget {
               '⚠️',
               'Off-Target\nTaps',
               '$_totalRandomTouches',
+              AssessmentLabels.offTargetTapsInfo,
             ),
           ),
         ],
@@ -226,26 +228,45 @@ class GameSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildTapStat(String emoji, String label, String value) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildTapStat(
+    String emoji,
+    String label,
+    String value,
+    String explanation,
+  ) {
+    return Stack(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTextStyles.titleMedium.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-        Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 11,
+        // Parent-friendly explanation (AUM-319): corner affordance so the
+        // fold on a 360×640dp screen is not pushed down by the icon.
+        Positioned(
+          top: 0,
+          right: 0,
+          child: MetricInfoIcon(
+            title: label.replaceAll('\n', ' '),
+            explanations: [(label.replaceAll('\n', ' '), explanation)],
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -294,7 +315,11 @@ class GameSummaryDialog extends StatelessWidget {
   }
 
   Widget _buildMiniStat(
-      IconData icon, String label, String value, Color color) {
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -335,11 +360,13 @@ class GameSummaryDialog extends StatelessWidget {
             children: [
               const Text('🎮', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 6),
-              Text('Game Results',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  )),
+              Text(
+                'Game Results',
+                style: AppTextStyles.labelLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -367,11 +394,13 @@ class GameSummaryDialog extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    )),
+                Text(
+                  name,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 Text(
                   '✅ ${r.score}  ❌ ${r.errorCount}  ⚠️ ${r.randomTouchCount}',
                   style: AppTextStyles.bodySmall.copyWith(

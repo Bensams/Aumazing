@@ -84,6 +84,31 @@ abstract final class AssessmentLabels {
   static const home = 'Home';
   static const tryAgain = 'Try Again';
 
+  /// Parent-friendly explanations for the tap-count metrics (AUM-319).
+  /// Shown when a parent taps the info affordance next to a metric; the
+  /// wording is identical on every surface that shows the counts.
+  static const metricInfoTooltip = 'What does this mean?';
+  static const correctTapsInfo =
+      'Correct taps count the times your child tapped the right thing when '
+      'asked — a good sign they understood the instruction.';
+  static const errorTapsInfo =
+      'Error taps count the times your child tapped the wrong thing — the '
+      'wrong item, tapping too early, or tapping after the prompt had '
+      'closed.';
+  static const offTargetTapsInfo =
+      'Off-target taps are touches on empty or non-interactive areas. They '
+      'are not wrong answers — just unfocused touches while your child '
+      'explores.';
+
+  /// Distinct from [offTargetTapsInfo]: off-task actions on the gameplay
+  /// report are deliberate moves away from the task, not stray touches.
+  static const offTaskActionsInfo =
+      'Off-task actions are deliberate moves away from the current task, '
+      'like playing with things outside the activity instead of following '
+      'the prompt.';
+
+  static const randomTouchesInfo = offTargetTapsInfo;
+
   /// Shown when a run could not be started, saved or finalized.
   static const couldNotStart =
       'We could not start the assessment. Please check your connection and '

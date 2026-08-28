@@ -95,33 +95,46 @@ void main() {
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets(
-    'renders full screen with all three sections and no Dialog',
-    (tester) async {
-      await tester.pumpWidget(_summary());
+  testWidgets('renders full screen with all three sections and no Dialog', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_summary());
 
-      // No longer a modal dialog: no Dialog widget in the tree.
-      expect(find.byType(Dialog), findsNothing);
-      expect(find.byType(Scaffold), findsOneWidget);
-      expect(find.text('Pre-Assessment Summary'), findsOneWidget);
+    // No longer a modal dialog: no Dialog widget in the tree.
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.text('Pre-Assessment Summary'), findsOneWidget);
 
-      // Tap stats zone.
-      expect(find.text('Correct\nTaps'), findsOneWidget);
-      expect(find.text('Error\nTaps'), findsOneWidget);
-      expect(find.text('Off-Target\nTaps'), findsOneWidget);
+    // Tap stats zone.
+    expect(find.text('Correct\nTaps'), findsOneWidget);
+    expect(find.text('Error\nTaps'), findsOneWidget);
+    expect(find.text('Off-Target\nTaps'), findsOneWidget);
 
-      // Overall stats zone.
-      expect(find.text('Total Time'), findsOneWidget);
-      expect(find.text('Total Taps'), findsOneWidget);
-      expect(find.text('Games'), findsOneWidget);
+    // Overall stats zone.
+    expect(find.text('Total Time'), findsOneWidget);
+    expect(find.text('Total Taps'), findsOneWidget);
+    expect(find.text('Games'), findsOneWidget);
 
-      // Per-game breakdown zone.
-      expect(find.text('Game Results'), findsOneWidget);
-      expect(find.text('Copy Me'), findsOneWidget);
-      expect(find.text('Match It'), findsOneWidget);
-      expect(find.byType(StatusPillBadge), findsWidgets);
-    },
-  );
+    // Per-game breakdown zone.
+    expect(find.text('Game Results'), findsOneWidget);
+    expect(find.text('Copy Me'), findsOneWidget);
+    expect(find.text('Match It'), findsOneWidget);
+    expect(find.byType(StatusPillBadge), findsWidgets);
+
+    // AUM-319: one info affordance per tap-stat cell.
+    expect(find.byType(MetricInfoIcon), findsNWidgets(3));
+  });
+
+  testWidgets('tapping a tap-stat info icon reveals its explanation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_summary());
+
+    await tester.tap(find.byType(MetricInfoIcon).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text(AssessmentLabels.correctTapsInfo), findsOneWidget);
+  });
 
   testWidgets('system back does not leave the summary', (tester) async {
     await tester.pumpWidget(_summary());
@@ -141,15 +154,17 @@ void main() {
   ) async {
     await tester.pumpWidget(
       _summary(
-        onContinue: () => _navKey.currentState!.pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => PreAssessmentResultScreen(
-              profile: _profile,
-              results: _results,
-              aiResponse: null,
+        onContinue:
+            () => _navKey.currentState!.pushReplacement(
+              MaterialPageRoute(
+                builder:
+                    (_) => PreAssessmentResultScreen(
+                      profile: _profile,
+                      results: _results,
+                      aiResponse: null,
+                    ),
+              ),
             ),
-          ),
-        ),
       ),
     );
 
