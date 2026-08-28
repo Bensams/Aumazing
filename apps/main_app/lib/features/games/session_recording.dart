@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:game_core/game_core.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../home/home_screen.dart';
 
 /// Persists a finished game before the flow moves on.
 ///
@@ -143,5 +145,81 @@ abstract final class GameSessionRecording {
           ),
     );
     return retry ?? false;
+  }
+}
+
+/// Every game screen latches its completion so the engine firing
+/// `onGameComplete` twice can't run the route-popping completion flow twice.
+/// If that flow then stalls — the session write hangs, or the reward hands off
+/// to a choice/time-up dialog that is never pushed — the child is left staring
+/// at the finished frame with no way forward. This guard arms a deadline when
+/// the completion latches, cancels it once a real next surface appears
+/// ([GameEndChoiceDialog.show]'s `onShown`, or the host taking over navigation
+/// / unmount), and otherwise ferries the child back to the lobby.
+///
+/// [`beginCompletion`] returns `true` only on the first latch, so it replaces
+/// the usual `if (_completionHandled) return; _completionHandled = true;`
+/// guard.
+mixin GameCompletionGuard<T extends StatefulWidget> on State<T> {
+  /// How long the child may wait for a real next surface after completion
+  /// latches before the guard ferries them to the lobby.
+  static const Duration _completionWatchdogTimeout = Duration(seconds: 15);
+
+  bool _completionLatched = false;
+  Timer? _completionWatchdog;
+
+  /// Latches completion and arms the escape watchdog. Returns `true` on the
+  /// first call; any later call returns `false` and must abort the flow.
+  @protected
+  bool beginCompletion() {
+    if (_completionLatched) return false;
+    _completionLatched = true;
+    _armCompletionWatchdog();
+    return true;
+  }
+
+  /// Stands the watchdog down once a real next surface (reward/choice/time-up/
+  /// victory, or the host/unmount taking the child elsewhere) is in place.
+  @protected
+  void cancelCompletionWatchdog() {
+    _completionWatchdog?.cancel();
+    _completionWatchdog = null;
+  }
+
+  /// Resets the watchdog's 15s window at the moment a real next surface (the
+  /// reward/choice dialog) actually begins to appear, so a slow session write
+  /// that pushed past the first window does not cut the reward/choice short
+  /// (AUM-317). Without this, a `record` taking more than ~5s plus the 10s
+  /// reward would let the guard fire mid-reward.
+  @protected
+  void armCompletionWatchdog() {
+    if (!_completionLatched) return;
+    _armCompletionWatchdog();
+  }
+
+  void _armCompletionWatchdog() {
+    _completionWatchdog?.cancel();
+    _completionWatchdog = Timer(_completionWatchdogTimeout, () {
+      if (!mounted || !_completionLatched) return;
+      _completionWatchdog = null;
+      // Hard escape: a stuck dialog or a never-shown choice must never be a
+      // dead end for the child (AUM-317). Clear everything and land on lobby.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => completionFallbackSurface()),
+        (_) => false,
+      );
+    });
+  }
+
+  /// The surface a timed-out completion falls back to. Defaults to the lobby
+  /// ([HomeScreen]); a test host overrides this so the worst-case escape does
+  /// not need the whole lobby provider stack to render.
+  @protected
+  Widget completionFallbackSurface() => const HomeScreen();
+
+  @override
+  void dispose() {
+    cancelCompletionWatchdog();
+    super.dispose();
   }
 }

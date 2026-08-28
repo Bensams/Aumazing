@@ -42,7 +42,8 @@ class HintayScreen extends StatefulWidget {
     int totalItems,
     int errorCount,
     int totalResponseTimeMs,
-  )? onComplete;
+  )?
+  onComplete;
 
   /// Optional sensory controller for per-round music/haptic during pre-assessment.
   final SensoryRoundController? sensoryController;
@@ -51,15 +52,14 @@ class HintayScreen extends StatefulWidget {
   State<HintayScreen> createState() => _HintayScreenState();
 }
 
-class _HintayScreenState extends State<HintayScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+class _HintayScreenState extends State<HintayScreen> with GameCompletionGuard {
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(
+    widget.assessmentContext,
+  );
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   bool _showStarSparkle = false;
   late final HintayGame _game;
   late final DateTime _sessionStartTime;
@@ -88,9 +88,10 @@ class _HintayScreenState extends State<HintayScreen> {
     _game = HintayGame(
       totalRounds: _totalRounds,
       childId: childId,
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectWait: _onCorrectWait,
@@ -113,8 +114,8 @@ class _HintayScreenState extends State<HintayScreen> {
       // actually did right, which in this game is the waiting and not the tap.
       onPlayCorrectVo: () => _voiceOverService.play(VoiceOverCue.goodWaiting),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
-      onPlayInstructionVo: () =>
-          _voiceOverService.play(VoiceOverCue.waitForTheStar),
+      onPlayInstructionVo:
+          () => _voiceOverService.play(VoiceOverCue.waitForTheStar),
       onPlayHintVo: () => _voiceOverService.play(VoiceOverCue.tapTheStar),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
@@ -159,8 +160,7 @@ class _HintayScreenState extends State<HintayScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
 
@@ -173,30 +173,41 @@ class _HintayScreenState extends State<HintayScreen> {
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id;
 
-    // The write must land before the flow advances, so a completed game is
-    // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: childId,
-      gameId: 'hintay',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: childProvider.musicEnabled,
-      hapticFeedbackEnabled: childProvider.vibrationEnabled,
-    );
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: childId,
+        gameId: 'hintay',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: childProvider.musicEnabled,
+        hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      );
+    } catch (e) {
+      debugPrint('[Hintay] session recording failed: $e');
+    }
     if (!mounted) return;
 
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
 
     if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
       _showRewardThenCompletion(score, totalItems, errorCount);
     }
   }
@@ -208,22 +219,31 @@ class _HintayScreenState extends State<HintayScreen> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              GameEndChoiceDialog.show(context, currentGameId: 'hintay');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'hintay',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -233,13 +253,14 @@ class _HintayScreenState extends State<HintayScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => MascotHost(
-          child: HintayScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-            difficulty: widget.difficulty,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              child: HintayScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
     );
   }
@@ -264,10 +285,11 @@ class _HintayScreenState extends State<HintayScreen> {
           // Flame: Game area (full screen)
           Container(
             decoration: BoxDecoration(
-                gradient: context
-                    .watch<ChildProvider>()
-                    .activePalette
-                    .gameBackgroundFor('hintay')),
+              gradient: context
+                  .watch<ChildProvider>()
+                  .activePalette
+                  .gameBackgroundFor('hintay'),
+            ),
             child: GameWidget(game: _game),
           ),
 
@@ -290,11 +312,11 @@ class _HintayScreenState extends State<HintayScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)
@@ -303,9 +325,10 @@ class _HintayScreenState extends State<HintayScreen> {
             left: AppSpacing.md,
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
-              text: _gameComplete
-                  ? strings.hintayComplete
-                  : strings.hintayInstruction,
+              text:
+                  _gameComplete
+                      ? strings.hintayComplete
+                      : strings.hintayInstruction,
               isVisible: _showPrompt || _gameComplete,
             ),
           ),
