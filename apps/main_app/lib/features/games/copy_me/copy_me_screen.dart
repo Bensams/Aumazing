@@ -42,6 +42,7 @@ class CopyMeScreen extends StatefulWidget {
 
   /// Optional difficulty (1–3) from the child's level; null keeps the default.
   final int? difficulty;
+
   /// Optional per-game override of the round count; null uses the policy default.
   final int? roundsOverride;
 
@@ -53,14 +54,13 @@ class CopyMeScreen extends StatefulWidget {
 }
 
 class _CopyMeScreenState extends State<CopyMeScreen>
-    with SingleTickerProviderStateMixin {
-  late final int _totalRounds = widget.roundsOverride ?? GameRoundPolicy.roundsForContext(widget.assessmentContext);
+    with SingleTickerProviderStateMixin, GameCompletionGuard {
+  late final int _totalRounds =
+      widget.roundsOverride ??
+      GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   bool _isDemoPhase = true;
   bool _showCelebration = false;
   Offset? _lastTapPosition;
@@ -82,13 +82,12 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _celebrationFadeAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _celebrationFadeController,
-      curve: Curves.easeOut,
-    ));
+    _celebrationFadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _celebrationFadeController,
+        curve: Curves.easeOut,
+      ),
+    );
     // Apply sensory config for round 1 at game initialization (pre-assessment only)
     widget.sensoryController?.applyRoundConfig(1);
 
@@ -106,9 +105,10 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       // Hint policy per difficulty tier (Easy: unlimited + guided demo,
       // Medium: small budget, Hard: no answer hints). Assessment keeps the
       // fixed legacy behaviour so its telemetry stays comparable.
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       // Audio SFX callbacks
       onPlayCorrectSfx: () => audioService.playCorrectSfx(),
       onPlayWrongSfx: () => audioService.playWrongSfx(),
@@ -118,12 +118,13 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       // Voice-over callbacks
       // Immediate feedback names what was just answered ("red circle");
       // praise is saved for the end-of-game reward.
-      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
-        color: label.color,
-        shape: label.shape,
-        letter: label.letter,
-        item: label.item,
-      ),
+      onPlayCorrectVo:
+          (label) => _voiceOverService.playAnswerLabel(
+            color: label.color,
+            shape: label.shape,
+            letter: label.letter,
+            item: label.item,
+          ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.copyMe),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
@@ -131,11 +132,15 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       // Game-specific voice-overs
       // Awaited by the game: the demo starts when this line ends, whatever
       // pack, language or prompt speed decides how long that is.
-      onPlayMyTurnVo: () => _voiceOverService.play(VoiceOverCue.watchMeFirst,
-          awaitCompletion: true),
+      onPlayMyTurnVo:
+          () => _voiceOverService.play(
+            VoiceOverCue.watchMeFirst,
+            awaitCompletion: true,
+          ),
       onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.nowYouTry),
       // Sequence highlight shimmer SFX
-      onPlaySequenceHighlightSfx: (position) => audioService.playSequenceShimmerSfx(position),
+      onPlaySequenceHighlightSfx:
+          (position) => audioService.playSequenceShimmerSfx(position),
       onCorrectMatch: () {
         // Trigger haptic on each correct tap (but NOT star sparkle):
         // - Pre-assessment: use sensory controller's per-round config
@@ -169,8 +174,7 @@ class _CopyMeScreenState extends State<CopyMeScreen>
       }) async {
         // The engine can fire this more than once on a fast finish; the
         // flow past this point pops routes, so run it exactly once.
-        if (_completionHandled) return;
-        _completionHandled = true;
+        if (!beginCompletion()) return;
         // Stop any developer automation from acting on a finished game.
         _devSession?.markComplete();
 
@@ -194,36 +198,59 @@ class _CopyMeScreenState extends State<CopyMeScreen>
 
         // The write must land before the flow advances — otherwise an
         // assessment can be finalized without this game in it.
-        await GameSessionRecording.record(
-          context,
-          childId: childId,
-          gameId: 'copy_me',
-          assessmentContext: widget.assessmentContext,
-          score: score,
-          totalItems: totalItems,
-          errorCount: errorCount,
-          totalResponseTimeMs: totalResponseTimeMs,
-          startedAt: _sessionStartTime,
-          analytics: analytics,
-          bgMusicEnabled: childProvider.musicEnabled,
-          hapticFeedbackEnabled: childProvider.vibrationEnabled,
-          applySessionSensoryDefaults: widget.sensoryController == null,
-          configurationVersionOverride: widget.configurationVersionOverride,
-        );
+        //
+        // A failed write must never strand the child on the finished frame.
+        // The record call handles its own retry dialog and no-profile warning;
+        // this catch is a last-resort net for anything that escapes it (a
+        // deactivated context, an unexpected throw). Either way the reward/
+        // choice still runs.
+        try {
+          await GameSessionRecording.record(
+            context,
+            childId: childId,
+            gameId: 'copy_me',
+            assessmentContext: widget.assessmentContext,
+            score: score,
+            totalItems: totalItems,
+            errorCount: errorCount,
+            totalResponseTimeMs: totalResponseTimeMs,
+            startedAt: _sessionStartTime,
+            analytics: analytics,
+            bgMusicEnabled: childProvider.musicEnabled,
+            hapticFeedbackEnabled: childProvider.vibrationEnabled,
+            applySessionSensoryDefaults: widget.sensoryController == null,
+            configurationVersionOverride: widget.configurationVersionOverride,
+          );
+        } catch (e) {
+          debugPrint('[CopyMe] session recording failed: $e');
+        }
         if (!mounted) return;
 
         // If onComplete is provided (pre-assessment mode), show celebration then call it
         // If onComplete is null (practice mode), show celebration then show built-in reward
-        if (widget.assessmentContext == 'practice' && widget.onComplete == null) {
-          // Practice mode: Show celebration then built-in reward
+        if (widget.assessmentContext == 'practice' &&
+            widget.onComplete == null) {
+          // Practice mode: Show celebration then built-in reward. The reward
+          // hands off to the choice dialog; re-arm the watchdog so a slow
+          // session write can't cut the reward/choice short.
+          armCompletionWatchdog();
           _fadeOutCelebrationThenShowReward();
         } else if (widget.onComplete != null) {
-          // Pre-assessment mode: Show celebration then call onComplete (pre-assessment handles reward)
-          _fadeOutCelebrationThenCallOnComplete(score, totalItems, errorCount, totalResponseTimeMs);
+          // Pre-assessment mode: the host takes over navigation once
+          // onComplete is invoked, so the watchdog stands down.
+          cancelCompletionWatchdog();
+          _fadeOutCelebrationThenCallOnComplete(
+            score,
+            totalItems,
+            errorCount,
+            totalResponseTimeMs,
+          );
         } else {
-          // Assessment mode without onComplete: Just delay then pop
+          // Assessment mode without onComplete: Just delay then pop.
           Future.delayed(const Duration(milliseconds: 2500), () {
-            if (mounted) Navigator.of(context).pop();
+            if (!mounted) return;
+            cancelCompletionWatchdog();
+            Navigator.of(context).pop();
           });
         }
       },
@@ -273,31 +300,39 @@ class _CopyMeScreenState extends State<CopyMeScreen>
 
   void _showRewardThenPop() {
     final childProvider = context.read<ChildProvider>();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          // Longer reward so children enjoy popping it (engagement);
-          // the text "Great Job" dialog has been removed.
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              // Post-reward choice: play the next game or back to the lobby.
-              GameEndChoiceDialog.show(context,
-                  currentGameId: 'copy_me');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              // Longer reward so children enjoy popping it (engagement);
+              // the text "Great Job" dialog has been removed.
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  // Post-reward choice: play the next game or back to the lobby.
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'copy_me',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // The screen pops immediately; disarm the watchdog so it can't
+                  // fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -307,12 +342,13 @@ class _CopyMeScreenState extends State<CopyMeScreen>
         // A pushed route leaves the old host behind, so the replacement
         // screen carries its own — without it the mascot is simply absent
         // for the whole retry, reactions included.
-        builder: (_) => MascotHost(
-          child: CopyMeScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              child: CopyMeScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+              ),
+            ),
       ),
     );
   }
@@ -349,10 +385,11 @@ class _CopyMeScreenState extends State<CopyMeScreen>
             },
             child: Container(
               decoration: BoxDecoration(
-                  gradient: context
-                      .watch<ChildProvider>()
-                      .activePalette
-                      .gameBackgroundFor('copy_me')),
+                gradient: context
+                    .watch<ChildProvider>()
+                    .activePalette
+                    .gameBackgroundFor('copy_me'),
+              ),
               child: GameWidget(game: _game),
             ),
           ),
@@ -377,11 +414,11 @@ class _CopyMeScreenState extends State<CopyMeScreen>
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)

@@ -44,6 +44,7 @@ class MyTurnYourTurnScreen extends StatefulWidget {
 
   /// Optional difficulty (1–3) from the child's level; null keeps the default.
   final int? difficulty;
+
   /// Optional per-game override of the round count; null uses the policy default.
   final int? roundsOverride;
 
@@ -54,14 +55,14 @@ class MyTurnYourTurnScreen extends StatefulWidget {
   State<MyTurnYourTurnScreen> createState() => _MyTurnYourTurnScreenState();
 }
 
-class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
-  late final int _totalRounds = widget.roundsOverride ?? GameRoundPolicy.roundsForContext(widget.assessmentContext);
+class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
+    with GameCompletionGuard {
+  late final int _totalRounds =
+      widget.roundsOverride ??
+      GameRoundPolicy.roundsForContext(widget.assessmentContext);
   int _currentStep = 0;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
   String _voiceOverText = 'Wait for Buddy… 🐻';
@@ -94,9 +95,10 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       // Hint policy per difficulty tier (Easy: unlimited + guided demo,
       // Medium: small budget, Hard: no answer hints). Assessment keeps the
       // fixed legacy behaviour so its telemetry stays comparable.
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       // Child pieces + filled slots use the child's chosen avatar.
       avatar: context.read<ChildProvider>().profile?.avatarEmoji ?? '⭐',
       // Audio SFX callbacks
@@ -110,14 +112,16 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       // Voice-over callbacks
       // Immediate feedback names what was just answered ("red circle");
       // praise is saved for the end-of-game reward.
-      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
-        color: label.color,
-        shape: label.shape,
-        letter: label.letter,
-        item: label.item,
-      ),
+      onPlayCorrectVo:
+          (label) => _voiceOverService.playAnswerLabel(
+            color: label.color,
+            shape: label.shape,
+            letter: label.letter,
+            item: label.item,
+          ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
-      onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.letsTakeTurns),
+      onPlayInstructionVo:
+          () => _voiceOverService.play(VoiceOverCue.letsTakeTurns),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
       // Game-specific voice-overs
@@ -152,9 +156,8 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         if (mounted) {
           setState(() {
             // Update voice over text based on whose turn it is
-            _voiceOverText = isBuddy 
-                ? 'Wait for Buddy… 🐻' 
-                : 'Your turn! Tap a spot! ⭐';
+            _voiceOverText =
+                isBuddy ? 'Wait for Buddy… 🐻' : 'Your turn! Tap a spot! ⭐';
           });
         }
       },
@@ -170,8 +173,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       }) async {
         // The engine can fire this more than once on a fast finish; the
         // flow past this point pops routes, so run it exactly once.
-        if (_completionHandled) return;
-        _completionHandled = true;
+        if (!beginCompletion()) return;
         // Stop any developer automation from acting on a finished game.
         _devSession?.markComplete();
 
@@ -197,22 +199,32 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
 
         // The write must land before the flow advances — otherwise an
         // assessment can be finalized without this game in it.
-        await GameSessionRecording.record(
-          context,
-          childId: childId,
-          gameId: 'my_turn_your_turn',
-          assessmentContext: widget.assessmentContext,
-          score: score,
-          totalItems: totalItems,
-          errorCount: errorCount,
-          totalResponseTimeMs: totalResponseTimeMs,
-          startedAt: _sessionStartTime,
-          analytics: analytics,
-          bgMusicEnabled: childProvider.musicEnabled,
-          hapticFeedbackEnabled: childProvider.vibrationEnabled,
-          applySessionSensoryDefaults: widget.sensoryController == null,
-          configurationVersionOverride: widget.configurationVersionOverride,
-        );
+        //
+        // A failed write must never strand the child on the finished frame.
+        // The record call handles its own retry dialog and no-profile warning;
+        // this catch is a last-resort net for anything that escapes it (a
+        // deactivated context, an unexpected throw). Either way the reward/
+        // choice still runs.
+        try {
+          await GameSessionRecording.record(
+            context,
+            childId: childId,
+            gameId: 'my_turn_your_turn',
+            assessmentContext: widget.assessmentContext,
+            score: score,
+            totalItems: totalItems,
+            errorCount: errorCount,
+            totalResponseTimeMs: totalResponseTimeMs,
+            startedAt: _sessionStartTime,
+            analytics: analytics,
+            bgMusicEnabled: childProvider.musicEnabled,
+            hapticFeedbackEnabled: childProvider.vibrationEnabled,
+            applySessionSensoryDefaults: widget.sensoryController == null,
+            configurationVersionOverride: widget.configurationVersionOverride,
+          );
+        } catch (e) {
+          debugPrint('[MyTurnYourTurn] session recording failed: $e');
+        }
         if (!mounted) return;
 
         // Include randomTouchCount in extras so pre-assessment summary can display it
@@ -224,16 +236,29 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         // If onComplete is provided (pre-assessment mode), call it directly
         // Reward overlay will show on top of this game screen
         if (widget.onComplete != null) {
-          widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs, enrichedExtras);
+          // The host takes over navigation; the watchdog no longer applies.
+          cancelCompletionWatchdog();
+          widget.onComplete!(
+            score,
+            totalItems,
+            errorCount,
+            totalResponseTimeMs,
+            enrichedExtras,
+          );
           return;
         }
-        
-        // Normal mode: Show reward for practice mode, just delay for assessment
+
+        // Normal mode: Show reward for practice mode, just delay for assessment.
         if (widget.assessmentContext == 'practice') {
+          // The reward hands off to the choice dialog; re-arm the watchdog so
+          // a slow session write can't cut the reward/choice short.
+          armCompletionWatchdog();
           _showRewardThenPop();
         } else {
           Future.delayed(const Duration(milliseconds: 2500), () {
-            if (mounted) Navigator.of(context).pop();
+            if (!mounted) return;
+            cancelCompletionWatchdog();
+            Navigator.of(context).pop();
           });
         }
       },
@@ -248,31 +273,39 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
 
   void _showRewardThenPop() {
     final childProvider = context.read<ChildProvider>();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          // Longer reward so children enjoy popping it (engagement);
-          // the text "Great Job" dialog has been removed.
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              // Post-reward choice: play the next game or back to the lobby.
-              GameEndChoiceDialog.show(context,
-                  currentGameId: 'my_turn_your_turn');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              // Longer reward so children enjoy popping it (engagement);
+              // the text "Great Job" dialog has been removed.
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  // Post-reward choice: play the next game or back to the lobby.
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'my_turn_your_turn',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // The screen pops immediately; disarm the watchdog so it can't
+                  // fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -282,13 +315,14 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
         // A pushed route leaves the old host behind, so the replacement
         // screen carries its own — without it the mascot is simply absent
         // for the whole retry, reactions included.
-        builder: (_) => MascotHost(
-          showMascot: false, // My Turn Your Turn draws its own buddy.
-          child: MyTurnYourTurnScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              showMascot: false, // My Turn Your Turn draws its own buddy.
+              child: MyTurnYourTurnScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+              ),
+            ),
       ),
     );
   }
@@ -353,11 +387,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt with dynamic text based on turn (overlay)

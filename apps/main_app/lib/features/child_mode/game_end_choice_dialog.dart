@@ -47,6 +47,13 @@ class GameEndChoiceDialog {
   static Future<void> show(
     BuildContext context, {
     required String currentGameId,
+
+    /// Invoked once a terminal next surface is on screen — the time-up dialog,
+    /// a path-victory celebration, or the choice dialog itself. A completion
+    /// watchdog (AUM-317) uses this to stand down; it must NOT cancel earlier,
+    /// or a reward that appears but hands off to a dialog that never shows
+    /// still strands the child on the finished frame.
+    void Function()? onShown,
   }) async {
     // Stars are awarded here rather than inside each game screen: this is the
     // one place all ten of them converge, and it runs AFTER the reward overlay
@@ -67,6 +74,7 @@ class GameEndChoiceDialog {
     // still earned this game's stars. Withholding them because the session
     // ended would turn the timer into a punishment.
     if (ScreenTimeService.instance.isExhausted) {
+      onShown?.call();
       await TimeUpDialog.show(context);
       return;
     }
@@ -89,7 +97,10 @@ class GameEndChoiceDialog {
     // child's current recommended path. Celebrate it — once — instead of
     // offering a misleading "Next", then return them to the path map so the
     // fully-completed path is visible.
-    if (await _maybeShowPathVictory(context, path, currentGameId)) return;
+    if (await _maybeShowPathVictory(context, path, currentGameId)) {
+      onShown?.call();
+      return;
+    }
     if (!context.mounted) return;
 
     var pathNext = LearningPathService.nextOnPath(path, currentGameId);
@@ -108,20 +119,28 @@ class GameEndChoiceDialog {
     final current = GameRegistry.find(currentGameId);
     final palette = context.read<ChildProvider>().activePalette;
 
-    final choice = await showDialog<_EndChoice>(
+    final choiceFuture = showDialog<_EndChoice>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black26,
       builder:
-          (_) => _GameEndChoiceContent(
-            palette: palette,
-            currentGameIcon: current?.icon,
-            currentGameLogo: current?.logoAsset,
-            nextGameIcon: next?.icon,
-            nextGameLogo: next?.logoAsset,
-            nextGameName: next?.name,
+          (_) => PopScope(
+            canPop: false,
+            child: _GameEndChoiceContent(
+              palette: palette,
+              currentGameIcon: current?.icon,
+              currentGameLogo: current?.logoAsset,
+              nextGameIcon: next?.icon,
+              nextGameLogo: next?.logoAsset,
+              nextGameName: next?.name,
+            ),
           ),
     );
+    // The choice-dialog route is now pushed — a completion watchdog (AUM-317)
+    // stands down here, not when the reward appeared, so a reward that hands
+    // off to a dialog that never shows still gets the watchdog's escape.
+    onShown?.call();
+    final choice = await choiceFuture;
     if (!context.mounted) return;
 
     // Which game to launch, if any — the same one again, or the next one.
