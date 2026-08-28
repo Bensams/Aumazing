@@ -34,11 +34,20 @@ void main() {
       find.text(AssessmentLabels.gameResults.toUpperCase()),
       findsOneWidget,
     );
-    expect(find.byType(MetricInfoIcon), findsOneWidget);
+    // The affordance belongs to the Game Results card itself, not some
+    // other surface on the screen.
+    final cardIcon = find.descendant(
+      of: find.ancestor(
+        of: find.text(AssessmentLabels.gameResults.toUpperCase()),
+        matching: find.byType(AssessmentSectionCard),
+      ),
+      matching: find.byType(MetricInfoIcon),
+    );
+    expect(cardIcon, findsOneWidget);
 
     // Tapping it explains all three count terms — this pins the card's
     // wiring, not just the widget's own defaults.
-    await tester.tap(find.byType(MetricInfoIcon));
+    await tester.tap(cardIcon);
     await tester.pumpAndSettle();
     expect(find.text(AssessmentLabels.correctTapsInfo), findsOneWidget);
     expect(find.text(AssessmentLabels.errorTapsInfo), findsOneWidget);
