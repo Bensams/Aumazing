@@ -54,6 +54,8 @@ class _RewardTesterScreenState extends State<RewardTesterScreen> {
           onComplete: () {},
           onAllCollected: () {},
         );
+      case 'stars':
+        return StarReward(reducedMotion: false, effectScale: 1.0);
       default:
         return const SizedBox.shrink();
     }
@@ -63,7 +65,9 @@ class _RewardTesterScreenState extends State<RewardTesterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.parentLavenderMint),
+        decoration: const BoxDecoration(
+          gradient: AppGradients.parentLavenderMint,
+        ),
         child: SafeArea(
           child: Column(
             children: [
@@ -109,15 +113,22 @@ class _RewardTesterScreenState extends State<RewardTesterScreen> {
                             _buildRewardChip('fireworks', '🎆 Fireworks'),
                             _buildRewardChip('bubbles', '🫧 Bubbles'),
                             _buildRewardChip('candy', '🍬 Candy'),
+                            _buildRewardChip('stars', '⭐ Star Pop'),
                           ],
                         ),
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: _showingReward ? _hideReward : _showReward,
-                            icon: Icon(_showingReward ? Icons.stop : Icons.play_arrow),
-                            label: Text(_showingReward ? 'Stop Reward' : 'Show Reward'),
+                            onPressed: _showingReward
+                                ? _hideReward
+                                : _showReward,
+                            icon: Icon(
+                              _showingReward ? Icons.stop : Icons.play_arrow,
+                            ),
+                            label: Text(
+                              _showingReward ? 'Stop Reward' : 'Show Reward',
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9B82C4),
                               foregroundColor: Colors.white,
@@ -231,6 +242,8 @@ class _RewardTesterScreenState extends State<RewardTesterScreen> {
         return '🫧 Tap bubbles to pop them!';
       case 'candy':
         return '🍬 Tap candy to collect them!';
+      case 'stars':
+        return '⭐ Tap or swipe stars to pop them!';
       default:
         return '';
     }
