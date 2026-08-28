@@ -5,6 +5,79 @@ import '../../theme/app_text_styles.dart';
 import '../assessment_result_data.dart';
 import 'assessment_section_card.dart';
 
+/// Run-wide accuracy and response-time change between pre and post runs.
+class AssessmentOverallProgressCard extends StatelessWidget {
+  const AssessmentOverallProgressCard({
+    super.key,
+    required this.progress,
+    this.dense = false,
+  });
+
+  final ResultOverallProgress progress;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final accuracyPct = (progress.accuracyDelta * 100).round();
+    final improved = accuracyPct > 0;
+    final steady = accuracyPct == 0;
+    final timeDelta = progress.responseTimeDeltaMs;
+
+    return AssessmentSectionCard(
+      label: AssessmentLabels.overallProgress,
+      emoji: '📊',
+      dense: dense,
+      children: [
+        Row(
+          children: [
+            Icon(
+              improved
+                  ? Icons.trending_up_rounded
+                  : steady
+                  ? Icons.trending_flat_rounded
+                  : Icons.trending_down_rounded,
+              color:
+                  improved || steady
+                      ? AppColors.statusSuccessDark
+                      : AppColors.mutedForeground,
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                improved
+                    ? 'Accuracy improved by $accuracyPct percentage points '
+                        'since the pre-assessment.'
+                    : steady
+                    ? 'Accuracy held steady since the pre-assessment.'
+                    : 'Accuracy changed by $accuracyPct percentage points — '
+                        'every child progresses at their own pace.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (timeDelta.abs() >= 100)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              timeDelta > 0
+                  ? 'Responses are ${(timeDelta / 1000).toStringAsFixed(1)}s '
+                      'faster on average.'
+                  : 'Responses take a little longer — often a sign of more '
+                      'careful choices.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Progress Since the First Assessment — a before-and-after view of each
 /// developmental area across two comparable runs (AUM-161).
 ///

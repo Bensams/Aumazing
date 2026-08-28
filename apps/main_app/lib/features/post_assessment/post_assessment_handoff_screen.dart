@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../model/area_level.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import 'post_assessment_result_screen.dart';
@@ -20,20 +19,12 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
   const PostAssessmentHandoffScreen({
     super.key,
     required this.improvement,
-    required this.preAreaLevels,
-    required this.postAreaLevels,
     this.nextModulePremiumRequired = false,
     this.voiceOverFactory,
   });
 
   /// Output of AssessmentService.compareAssessments for the completed run.
   final Map<String, dynamic> improvement;
-
-  /// Area levels from the pre-assessment (the frozen baseline).
-  final Map<String, AreaLevel> preAreaLevels;
-
-  /// Area levels from the post-assessment prediction just captured.
-  final Map<String, AreaLevel> postAreaLevels;
 
   /// Whether generating the next personalized module requires Premium.
   final bool nextModulePremiumRequired;
@@ -57,8 +48,6 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => PostAssessmentResultScreen(
           improvement: improvement,
-          preAreaLevels: preAreaLevels,
-          postAreaLevels: postAreaLevels,
           nextModulePremiumRequired: nextModulePremiumRequired,
         ),
       ),

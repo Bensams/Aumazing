@@ -19,6 +19,7 @@ class AssessmentRunSnapshot {
     required this.results,
     this.assessmentRunId,
     this.profile,
+    this.profileIsRunSpecific = true,
     this.prediction,
   });
 
@@ -38,6 +39,12 @@ class AssessmentRunSnapshot {
   /// The support profile built from this run.
   final SupportProfile? profile;
 
+  /// Whether [profile] was explicitly finalized for this run.
+  ///
+  /// Legacy post snapshots lack this provenance and may contain the earlier
+  /// pre-assessment profile. Legacy pre snapshots remain trusted.
+  final bool profileIsRunSpecific;
+
   /// The prediction made from *this* run's sessions.
   final AiAssessmentResponse? prediction;
 
@@ -50,6 +57,7 @@ class AssessmentRunSnapshot {
     'completed_at': completedAt.toIso8601String(),
     'results': results.map((r) => r.toSupabase()).toList(),
     'profile': profile?.toMap(),
+    'profile_is_run_specific': profileIsRunSpecific,
     'prediction': prediction?.toJson(),
   };
 
@@ -71,6 +79,9 @@ class AssessmentRunSnapshot {
                 : SupportProfile.fromMap(
                   Map<String, dynamic>.from(json['profile'] as Map),
                 ),
+        profileIsRunSpecific:
+            json['profile_is_run_specific'] as bool? ??
+            (json['assessment_type'] as String?) != 'post',
         prediction:
             json['prediction'] == null
                 ? null
