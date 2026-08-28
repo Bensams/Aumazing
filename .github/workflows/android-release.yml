@@ -1,0 +1,51 @@
+name: Android Release Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'apps/main_app/**'
+      - 'packages/**'
+      - '.github/workflows/android-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/main_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze application
+        # Infos are deprecation/style notices, not correctness issues, and
+        # accumulate naturally as Flutter/packages evolve; only warnings and
+        # errors should fail the build.
+        run: flutter analyze --no-fatal-infos
+      - name: Run Flutter tests
+        # Several widget tests trigger a 4s native-audio backstop timer
+        # (VoiceOverService/AudioService); flutter test's default parallel
+        # isolate concurrency races those timers against test teardown,
+        # failing a different, nondeterministic set of tests each run.
+        run: flutter test --concurrency=1
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Build release app bundle
+        run: flutter build appbundle --release
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aumazing-android-release-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            apps/main_app/build/app/outputs/flutter-apk/app-release.apk
+            apps/main_app/build/app/outputs/bundle/release/app-release.aab

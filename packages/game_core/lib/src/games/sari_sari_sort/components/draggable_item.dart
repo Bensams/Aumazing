@@ -1,0 +1,359 @@
+import 'dart:ui' hide TextStyle, FontWeight;
+
+import 'package:flame/components.dart';
+import 'package:flame/effects.dart';
+import 'package:flame/events.dart';
+import 'package:flutter/animation.dart';
+import 'package:flutter/painting.dart' show TextStyle, FontWeight;
+import 'package:shared_ui/shared_ui.dart' show GameLanguage;
+
+import '../../shared/fingertip_drag.dart';
+import '../../shared/shape_painter_3d.dart';
+import '../sari_sari_sort_game.dart' show StoreCategory;
+import '../seed_art_cache.dart';
+
+/// Data describing a single sari-sari store item (Filipino context).
+class StoreItemData {
+  /// Filipino name, e.g. 'Tinapay'. Also the item's stable identifier: it is
+  /// the analytics slug and the key the audio layer maps to a recording, so it
+  /// stays put even when the printed label is translated.
+  final String name;
+
+  /// English display label, e.g. 'Bread'. Shown when the parent has chosen
+  /// English — a child in an English-language session should read the word
+  /// they are being taught, not the Filipino one.
+  final String en;
+
+  /// Emoji glyph used as the item's visual.
+  ///
+  /// Retained as the fallback even when [card] is set: if the drawn card fails
+  /// to decode the item still shows something identifiable rather than a blank.
+  final String emoji;
+
+  /// Full asset path of the drawn "seed" picture card for this item, or null to
+  /// use the [emoji] glyph. Lives in the shared seed bank
+  /// (`packages/shared_ui/assets/seed_cards/…`); loaded by [SeedArtCache].
+  final String? card;
+
+  /// The category this item belongs to (the correct bin).
+  final StoreCategory category;
+
+  /// The item's own natural/realistic color (e.g. banana = yellow), used to
+  /// tint its card. Decoupled from [category] so color is not a sort shortcut.
+  final Color color;
+
+  const StoreItemData({
+    required this.name,
+    required this.en,
+    required this.emoji,
+    required this.category,
+    required this.color,
+    this.card,
+  });
+
+  /// The printed label for [language].
+  ///
+  /// Tagalog and Cebuano share [name]: these are sari-sari staples, and the
+  /// everyday word for each one (tinapay, saging, sabon, sipilyo …) is the same
+  /// in both. Only English needs its own column.
+  String label(GameLanguage language) {
+    switch (language) {
+      case GameLanguage.english:
+        return en;
+      case GameLanguage.tagalog:
+      case GameLanguage.cebuano:
+        return name;
+    }
+  }
+}
+
+/// A large, ASD-friendly draggable store item for the Sari-Sari Store Sorting
+/// game.
+///
+/// Renders a colored rounded-rect card with an emoji glyph and the item's
+/// label in the session's [language]. The child picks it up and drops it into a [CategoryBin]. The owning
+/// game decides whether the drop was correct via [onDropped]; this component
+/// only handles movement, lift/return animations, and the locked (sorted)
+/// state.
+class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag {
+  DraggableItem({
+    required this.data,
+    required this.color,
+    required this.onPickedUp,
+    required this.onDropped,
+    this.onMoved,
+    this.language = GameLanguage.english,
+    this.dragScale = 1.12,
+    required Vector2 position,
+    required Vector2 size,
+  }) : super(position: position, size: size) {
+    homePosition = position.clone();
+  }
+
+  final StoreItemData data;
+  final Color color;
+
+  /// Language the card's label is printed in.
+  final GameLanguage language;
+
+  /// The scale the card takes while it is held.
+  ///
+  /// The default grows the card a little — the right affordance when the drop
+  /// target is a wide bin the card lands in anyway. A game that drags the card
+  /// over a target that must stay visible (Tulong, Kaibigan! hands a card to a
+  /// character) passes a value below 1, so the held card shrinks and the
+  /// character keeps showing. The fingertip-follow mixin adjusts for the
+  /// scale every tick, so [visualCenter] — the point drop hit-testing uses —
+  /// stays exactly where the finger is either way.
+  final double dragScale;
+
+  /// Fired when the child lifts the item (drag start).
+  final void Function(DraggableItem item) onPickedUp;
+
+  /// Fired when the child releases the item. [dropCenter] is the item's center
+  /// in the game's coordinate space, used for bin hit-testing.
+  final void Function(DraggableItem item, Vector2 dropCenter) onDropped;
+
+  /// Fired every tick while the item is held, with its centre in game space,
+  /// and once with null when it is let go.
+  ///
+  /// Ticks rather than drag events on purpose: this drives the mascot's gaze,
+  /// and Flame only reports a drag when the finger actually moves. Driven off
+  /// drag events alone the character's head would stall a frame or two behind
+  /// whenever a child paused mid-drag — which is most of the time.
+  final void Function(Vector2? center)? onMoved;
+
+  /// Where the item rests in its tray. Used to snap back after a wrong drop.
+  late Vector2 homePosition;
+
+  /// Set once the item is correctly sorted into a bin. Locked items no longer
+  /// respond to dragging.
+  bool isLocked = false;
+
+  bool _dragging = false;
+
+  /// True while [onDragCancel] is dispatching the framework's
+  /// `super.onDragCancel(event)`.
+  ///
+  /// Flame implements `DragCallbacks.onDragCancel` as
+  /// `onDragEnd(event.toDragEnd())` (a virtual call), so the required super
+  /// dispatch would otherwise re-enter this component's own [onDragEnd] with
+  /// `_dragging` still true and run the drop path — hit-testing, scoring and
+  /// registering a drop that was actually cancelled. The flag lets the super
+  /// lifecycle run while the drop path stays out.
+  bool _inCancelDispatch = false;
+
+  bool _showError = false;
+
+  late TextPaint _emojiPaint;
+  late TextPaint _labelPaint;
+
+  static const double _cornerRadius = 22.0;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    _emojiPaint = TextPaint(
+      style: TextStyle(fontSize: size.y * 0.42),
+    );
+    _labelPaint = TextPaint(
+      style: TextStyle(
+        fontSize: size.y * 0.16,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF4A4458),
+      ),
+    );
+  }
+
+  // ── Drag handling ────────────────────────────────────────────────────
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    if (isLocked) return;
+    _dragging = true;
+    priority = 100; // float above other items + bins while dragging
+    startFingertipFollow(event.canvasPosition);
+    _animateScaleTo(dragScale);
+    onPickedUp(this);
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    if (isLocked || !_dragging) return;
+    moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (followFingertip(dt)) onMoved?.call(visualCenter);
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    if (isLocked || !_dragging || _inCancelDispatch) return;
+    // Read the centre before the scale-down starts, so the drop point is the
+    // item as the child last saw it.
+    final dropCenter = visualCenter;
+    _dragging = false;
+    stopFingertipFollow();
+    onMoved?.call(null);
+    priority = 0;
+    _animateScaleTo(1.0);
+    onDropped(this, dropCenter);
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    _inCancelDispatch = true;
+    super.onDragCancel(event); // dispatches onDragEnd; guarded above
+    _inCancelDispatch = false;
+    _dragging = false;
+    stopFingertipFollow();
+    onMoved?.call(null);
+    priority = 0;
+    _animateScaleTo(1.0);
+    returnHome();
+  }
+
+  // ── Outcome animations ───────────────────────────────────────────────
+
+  /// Animate the item back to its tray slot (wrong / cancelled drop).
+  ///
+  /// Moves only: the scale restore is owned by the release/cancel path's
+  /// [_animateScaleTo] — a synchronous [scale] write here would race the
+  /// in-flight pickup effect that [_animateScaleTo] already detached.
+  void returnHome() {
+    add(MoveToEffect(
+      homePosition,
+      EffectController(duration: 0.25, curve: Curves.easeInOut),
+    ));
+  }
+
+  /// Brief red shake to signal a wrong bin.
+  void showError() {
+    _showError = true;
+    add(SequenceEffect([
+      MoveEffect.by(Vector2(6, 0), EffectController(duration: 0.05)),
+      MoveEffect.by(Vector2(-12, 0), EffectController(duration: 0.1)),
+      MoveEffect.by(Vector2(12, 0), EffectController(duration: 0.1)),
+      MoveEffect.by(Vector2(-6, 0), EffectController(duration: 0.05)),
+    ]));
+    Future.delayed(const Duration(milliseconds: 400), () {
+      _showError = false;
+    });
+  }
+
+  /// Lock the item into [binCenter], shrinking it as it settles in the bin.
+  void lockInto(Vector2 binCenter, {VoidCallback? onSettled}) {
+    isLocked = true;
+    _dragging = false;
+    priority = 0;
+    final target = binCenter - (size * 0.3) / 2; // shrink to 30% near bin center
+    add(MoveToEffect(
+      target,
+      EffectController(duration: 0.3, curve: Curves.easeInOut),
+    ));
+    _animateScaleTo(
+      0.3,
+      duration: 0.3,
+      curve: Curves.easeInOut,
+      onComplete: onSettled,
+    );
+  }
+
+  /// The scale animation currently owned by this component, if any.
+  ///
+  /// Scale transitions must never overlap: Flame's [ScaleEffect] computes a
+  /// fixed incremental delta at [Effect.onStart], so two effects animating
+  /// the same component compose arithmetically instead of converging on the
+  /// requested target. A quick cancel or release while the 0.12s pickup
+  /// animation is still in flight would otherwise leave the card at an
+  /// arbitrary in-between scale.
+  ScaleEffect? _activeScaleEffect;
+
+  /// Scale the card to [target], first detaching any in-flight scale
+  /// animation so the new phase deterministically wins.
+  ///
+  /// [Component.removeFromParent] cancels the old effect whether it is already
+  /// mounted or merely queued for mounting (removing a pending child cancels
+  /// its queued add), which is why this is reliable where removing by type
+  /// could miss an effect added earlier in the same event cascade.
+  void _animateScaleTo(
+    double target, {
+    double duration = 0.12,
+    Curve curve = Curves.easeOut,
+    VoidCallback? onComplete,
+  }) {
+    _activeScaleEffect?.removeFromParent();
+    _activeScaleEffect = ScaleEffect.to(
+      Vector2.all(target),
+      EffectController(duration: duration, curve: curve),
+      onComplete: onComplete,
+    );
+    add(_activeScaleEffect!);
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────────
+
+  @override
+  void render(Canvas canvas) {
+    final rect = Rect.fromLTWH(0, 0, size.x, size.y);
+
+    // Only the wrong-bin state draws its own border; at rest the item takes
+    // the parent's standing outline like every other object. It used to wear
+    // a white one always, which on a board of items is indistinguishable from
+    // a "this is the one" cue.
+    ShapePainter3D.drawCard3D(
+      canvas,
+      rect,
+      color: color,
+      cornerRadius: _cornerRadius,
+      alpha: 255, // bold, fully-saturated natural color
+      showBorder: _showError,
+      borderColor: _showError ? const Color(0xFFE88888) : null,
+      borderWidth: 3.0,
+    );
+
+    // Prefer the drawn seed card; fall back to the emoji glyph if it hasn't
+    // decoded (or the item has none). The card is square and pre-trimmed, so it
+    // drops straight into a square box with no letterboxing arithmetic.
+    final cardImage = SeedArtCache.of(data.card);
+    if (cardImage != null) {
+      final boxSide = size.y * 0.58;
+      final left = (size.x - boxSide) / 2;
+      final top = size.y * 0.06;
+      canvas.drawImageRect(
+        cardImage,
+        Rect.fromLTWH(
+            0, 0, cardImage.width.toDouble(), cardImage.height.toDouble()),
+        Rect.fromLTWH(left, top, boxSide, boxSide),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    } else {
+      _emojiPaint.render(
+        canvas,
+        data.emoji,
+        Vector2(size.x / 2, size.y * 0.40),
+        anchor: Anchor.center,
+      );
+    }
+
+    // White backing pill so the label stays legible on any item color.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.x * 0.08, size.y * 0.68, size.x * 0.84, size.y * 0.24),
+        Radius.circular(size.y * 0.12),
+      ),
+      Paint()..color = const Color(0xFFFFFFFF).withAlpha(220),
+    );
+    _labelPaint.render(
+      canvas,
+      data.label(language),
+      Vector2(size.x / 2, size.y * 0.80),
+      anchor: Anchor.center,
+    );
+  }
+}

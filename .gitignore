@@ -18,9 +18,7 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code
 #.vscode/
 
 # Flutter/Dart/Pub related
@@ -31,7 +29,8 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+**/build/
+pubspec.lock
 
 # Symbolication related
 app.*.symbols
@@ -39,7 +38,72 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Android Studio build artifacts
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+
+# Gemini
+.gemini/
+
+# Hermes orchestrator
+tools/hermes/.env
+
+# AI Assessment (Python)
+ai_assessment/.env
+ai_assessment/__pycache__/
+ai_assessment/app/__pycache__/
+ai_assessment/training/__pycache__/
+ai_assessment/.venv/
+
+# Credentials / service-account keys — never commit
+docs/aumazing-*.json
+*-service-account*.json
+**/service-account*.json
+
+# Build-time env config (dart-define-from-file) — real values never commit
+apps/main_app/env/dev.json
+
+# Generated sprite clips + extracted frames (scripts/generate_sprites.py)
+.sprite_cache/
+
+# Raw routine-card generations (scripts/generate_routine_cards.py)
+.card_cache/
+
+# Discarded sprite takes kept for inspection, not shipped or versioned
+packages/shared_ui/assets/characters/Archive/
+
+# AVP presenter footage (scripts/generate_avp.py) — video, regenerable, not app assets
+avp_out/
+
+# Agent / editor local state
+.claude/
+.obsidian/
+.kilo/
+.omp/
+
+# Local scratch + generated output
+debug/
+graphify-out/
+
+# Backup of a corrupted .git directory — kept on disk, never versioned
+.git.corrupt-backup/
+
+# Windows artifact from a stray `> nul` redirect
+nul
+
+# Coursework deliverables live in Downloads, not in the repo
+/proposal/
+/*.docx
+
+# A separate project that was cloned inside this repo by accident
+/tulong-kaibigan-dev/
+
+
+# For now
+
+output/
+packages/assets/audio/SFX/SoundFX/
+swarm.yaml
+tmp/
+tools/build_technical_document.py

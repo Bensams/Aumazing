@@ -1,0 +1,11 @@
+path,text,carrier,exaggeration,cfg_weight
+s1_intro.wav,"Hi po! We're Ruel Mendio and Benedict Paul Samson from Assumption College of Davao. This is Aumazing — a gamified learning app for children with Autism Spectrum Disorder, built around each child's own skill level rather than their age.",no,0.6,0.4
+s1_chars.wav,These are BPS and Reiz. They guide the child through every activity in the app — and they'll walk you through this presentation too.,no,0.6,0.4
+s2_cost.wav,"In Davao City, one therapy session costs seven to eight hundred pesos. A child who needs three hours a day can cost a family over forty thousand pesos a month.",no,0.6,0.4
+s2_capacity.wav,"The city's public intervention center offers therapy for free — but it serves around one thousand one hundred sixty clients, so many families end up waiting.",no,0.6,0.4
+s2_gap.wav,"And early intervention only works with daily repetition. Between clinic visits, that falls on the parents — usually the mother. Without proper tools, she's guessing which activity to do today.",no,0.6,0.4
+s2_solution.wav,"Aumazing replaces that guesswork. The child plays a short gamified pre-assessment, and an AI model turns how they play — accuracy, response time, retries — into a skill level for communication, social, and play.",no,0.6,0.4
+s2_cycle.wav,"From that, it recommends which modules to do next. A post-assessment then shows the parent what actually changed. No worksheets. No guessing.",no,0.6,0.4
+s5_status.wav,"Aumazing works today — the games, the assessment, the dashboard, and offline mode all run on a real device.",no,0.6,0.4
+s5_next.wav,"Next we're testing with parents and children here in Davao, and coordinating with therapy centers so the directory reflects what's really available.",no,0.6,0.4
+s5_cta.wav,"If you're a parent, a therapist, or a center, we'd like your feedback. Ang goal namin is simple: that a parent at home knows exactly what to do next with their child. Thank you po for watching.",no,0.6,0.4

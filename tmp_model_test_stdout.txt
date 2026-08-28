@@ -1,0 +1,5 @@
+00:00 +0: loading C:/Users/bened/.config/superpowers/worktrees/aumazing/child-birth-date-offline-first/apps/main_app/test/model/child_profile_test.dart
+00:00 +0: fromMap keeps legacy child rows readable without a birth date
+00:00 +1: age getter derives years for canonical birth-date records
+00:00 +2: fromSupabase decodes a minimal public.children row with local defaults
+00:00 +3: All tests passed!
