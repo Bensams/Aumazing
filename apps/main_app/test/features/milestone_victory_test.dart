@@ -280,6 +280,108 @@ void main() {
       expect(trophyPops, 1, reason: 'never replays');
     });
 
+    // ── The trophy is a reward the child can pop ──────────────────────
+
+    /// Stars still waiting to be popped, so a test can clear the whole stage.
+    Finder liveStars() => find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint &&
+          widget.painter.runtimeType.toString() == '_StarPainter',
+    );
+
+    testWidgets('tapping the trophy pops it: SFX, a burst, and off the stage', (
+      tester,
+    ) async {
+      var trophyPops = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: false,
+            ),
+          ),
+          profile: profileWith(),
+          onTrophyPop: () => trophyPops++,
+        ),
+      );
+      // Past the arrival pop, so the count below is the child's own.
+      await tester.pump(const Duration(milliseconds: 900));
+      expect(trophyPops, 1);
+
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+
+      expect(trophyPops, 2, reason: 'the pop the child made is its own event');
+      expect(find.byKey(kMilestoneTrophyKey), findsNothing);
+      expect(
+        find.byKey(kMilestoneTrophyPopKey),
+        findsOneWidget,
+        reason: 'it bursts where it stood',
+      );
+
+      // The burst clears itself off the stage rather than lingering.
+      await tester.pump(kMilestoneTrophyPopDuration);
+      expect(find.byKey(kMilestoneTrophyPopKey), findsNothing);
+
+      // And a popped trophy stays popped — tapping the empty spot is inert.
+      await tester.tapAt(tester.getCenter(find.byType(MilestoneVictoryScene)));
+      await tester.pump();
+      expect(find.byKey(kMilestoneTrophyKey), findsNothing);
+    });
+
+    testWidgets('onAllRewardsPopped waits for the trophy AND every star', (
+      tester,
+    ) async {
+      var allPopped = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: false,
+              onAllRewardsPopped: () => allPopped++,
+            ),
+          ),
+          profile: profileWith(),
+        ),
+      );
+      // Let the whole star field spawn (800ms + 19 * 60ms) and rise into view;
+      // a star still climbing is partly off screen and cannot be tapped.
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(kStarRiseDuration);
+
+      // The trophy goes first — it sits above the star field, so a star behind
+      // it is out of reach until it is gone.
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      expect(
+        allPopped,
+        0,
+        reason: 'a popped trophy alone is not a cleared stage',
+      );
+
+      // Then the stars, one at a time — silent until the very last one.
+      var guard = 0;
+      while (liveStars().evaluate().isNotEmpty && guard++ < 40) {
+        expect(
+          allPopped,
+          0,
+          reason: '${liveStars().evaluate().length} star(s) still to collect',
+        );
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+
+      expect(liveStars(), findsNothing);
+      expect(allPopped, 1, reason: 'the stage is finally clear');
+
+      await tester.pump(kMilestoneTrophyPopDuration);
+      expect(allPopped, 1, reason: 'announced exactly once');
+    });
+
     testWidgets('no provider present: the scene plays without a crash', (
       tester,
     ) async {
