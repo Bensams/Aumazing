@@ -80,6 +80,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
             assessmentType: snapshot?.assessmentType ?? 'pre',
             progress: progress,
             presentation: AssessmentResultPresentation.review,
+            childDisplayName: childProv.profile?.displayName ?? 'Your child',
             showTherapyRecommendation: true,
             nextModulePremiumRequired: hasPost && assessProv.nextCycleLocked,
             backLabel: AssessmentLabels.home,
