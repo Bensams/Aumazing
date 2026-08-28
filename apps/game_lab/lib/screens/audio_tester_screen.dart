@@ -127,6 +127,12 @@ class _AudioTesterScreenState extends State<AudioTesterScreen> {
         return '🔢 Numbers';
       case VoiceOverCategory.items:
         return '🛒 Items';
+      case VoiceOverCategory.routines:
+        return '🗓 Routines';
+      case VoiceOverCategory.emotions:
+        return '🙂 Emotions';
+      case VoiceOverCategory.milestone:
+        return '🏆 Milestone';
     }
   }
 
