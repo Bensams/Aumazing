@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
+import '../../providers/child_provider.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../therapy/therapy_center_recommendation_dialog.dart';
 import 'assessment_result_view.dart';
@@ -51,17 +53,24 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
         await showTherapyCenterRecommendation(context);
       });
     }
-
   }
-
 
   @override
   Widget build(BuildContext context) {
+    final childId =
+        widget.results.isEmpty ? null : widget.results.first.childId;
+    final children = context.watch<ChildProvider>().children;
+    final childName =
+        children
+            .where((child) => child.id == childId)
+            .map((child) => child.displayName)
+            .firstOrNull;
     return AssessmentResultView(
       results: widget.results,
       profile: widget.profile,
       aiResponse: widget.aiResponse,
       presentation: AssessmentResultPresentation.completion,
+      childDisplayName: childName ?? 'Your child',
       onContinue: () {
         Navigator.of(context).popUntil((route) => route.isFirst);
       },

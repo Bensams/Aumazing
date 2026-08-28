@@ -10,6 +10,7 @@ import '../../providers/child_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/learning_path_service.dart';
 import '../../services/parent_history_service.dart';
+import '../../services/report_pdf_service.dart';
 import 'history_models.dart';
 
 /// Parent-facing history of a single child: every assessment run (pre and
@@ -26,6 +27,7 @@ class ParentHistoryScreen extends StatefulWidget {
     required this.childId,
     this.childName,
     this.historyService,
+    this.reportPdfSharer,
   });
 
   final String childId;
@@ -34,6 +36,7 @@ class ParentHistoryScreen extends StatefulWidget {
   /// Injectable so a widget test can land a canned summary without a
   /// database. Defaults to a real [ParentHistoryService].
   final ParentHistoryService? historyService;
+  final ReportPdfSharer? reportPdfSharer;
 
   @override
   State<ParentHistoryScreen> createState() => _ParentHistoryScreenState();
@@ -43,10 +46,12 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
   bool _loading = true;
   String? _error;
   HistorySummary? _summary;
+
   /// Set when the load ran while the assessment provider was still hydrating
   /// this child (AUM-308); the screen rebuilds once hydration lands so the
   /// My Path section is not stuck empty.
   bool _reloadQueued = false;
+  bool _sharingReport = false;
 
   @override
   void initState() {
@@ -105,6 +110,33 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
     _load();
   }
 
+  Future<void> _shareReport({
+    required HistorySummary summary,
+    required String childDisplayName,
+  }) async {
+    if (_sharingReport) return;
+    setState(() => _sharingReport = true);
+    try {
+      await (widget.reportPdfSharer ?? ReportPdfService()).shareHistoryReport(
+        summary: summary,
+        childDisplayName: childDisplayName,
+      );
+    } catch (error) {
+      debugPrint('[ParentHistoryScreen] report share failed: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'We couldn\u2019t create or share the PDF. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharingReport = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final assessLoading = context.watch<AssessmentProvider>().isLoading;
@@ -115,7 +147,11 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
       });
     }
     final children = context.watch<ChildProvider>().children;
-    final authorized = children.any((c) => c.id == widget.childId);
+    final matchingChildren = children.where((c) => c.id == widget.childId);
+    final authorized = matchingChildren.isNotEmpty;
+    final childName =
+        widget.childName ??
+        (authorized ? matchingChildren.first.displayName : 'Your child');
 
     return ParentAdaptiveOrientation(
       child: Scaffold(
@@ -132,7 +168,14 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildHeader(),
+                      _buildHeader(
+                        childName: childName,
+                        shareEnabled:
+                            authorized &&
+                            _summary != null &&
+                            !_loading &&
+                            _error == null,
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       if (!authorized)
                         _buildUnauthorized()
@@ -154,8 +197,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
   }
 
   /// Back navigation, title, and the child's name (when supplied).
-  Widget _buildHeader() {
-    final childName = widget.childName;
+  Widget _buildHeader({required String childName, required bool shareEnabled}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -182,17 +224,41 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
                   color: AppColors.primaryPurple,
                 ),
               ),
-              if (childName != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  childName,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                childName,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
                 ),
-              ],
+              ),
             ],
           ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child:
+              _sharingReport
+                  ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : IconButton(
+                    key: const ValueKey('share-history-pdf'),
+                    tooltip: 'Share as PDF',
+                    onPressed:
+                        shareEnabled
+                            ? () => _shareReport(
+                              summary: _summary!,
+                              childDisplayName: childName,
+                            )
+                            : null,
+                    icon: const Icon(
+                      Icons.picture_as_pdf_rounded,
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
         ),
       ],
     );
