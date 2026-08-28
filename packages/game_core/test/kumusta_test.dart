@@ -36,6 +36,7 @@ void main() {
     DifficultyProfile profile = DifficultyProfile.easy,
     int totalRounds = 4,
     VoidCallback? onWrong,
+    VoidCallback? onInstructionVo,
   }) async {
     final offered = <Greeting>[];
     final completions = <Map<String, dynamic>>[];
@@ -46,6 +47,7 @@ void main() {
       onStepChanged: (_) {},
       onBuddyGreets: offered.add,
       onWrongAnswer: onWrong,
+      onPlayInstructionVo: onInstructionVo,
       onGameComplete: ({
         required score,
         required totalItems,
@@ -93,6 +95,43 @@ void main() {
       contains(offered.last),
       reason: 'an offer with no matching card is an unanswerable round — the '
           'child would sit through every prompt for a card that is not there',
+    );
+  });
+
+  testWidgets('hard re-orients instead of going silent', (tester) async {
+    // Hard grants no answer hints, so the hint budget is spent from the first
+    // frame. That branch used to return without arming any timer at all: a
+    // child who looked away was left with a motionless screen indefinitely,
+    // in the one game that promises the buddy never gives up.
+    var instructionVos = 0;
+    final (game, offered, _) = await boot(
+      tester,
+      profile: DifficultyProfile.hard,
+      onInstructionVo: () => instructionVos++,
+    );
+    await untilOffered(tester, offered);
+
+    final atOffer = instructionVos;
+    // Hard's reorientDelay is 20s; go past it.
+    await tester.pump(const Duration(seconds: 21));
+
+    expect(
+      instructionVos,
+      greaterThan(atOffer),
+      reason: 'after reorientDelay the instruction must play again — silence '
+          'is the failure this branch exists to prevent',
+    );
+    // Not asserted via `offered`: onBuddyGreets announces a NEW bid, and a
+    // re-orientation deliberately does not raise one — the round, its target
+    // and its latency clock all continue. Prompt rung 1 re-offers the same
+    // way and is likewise invisible there.
+    // The point of a separate rung: re-showing what the child has already been
+    // shown reveals nothing, so it must not report them as having been helped.
+    expect(
+      game.children.whereType<GreetingButton>().any((b) => b.isPulsing),
+      isFalse,
+      reason: 'a re-orientation must never highlight the answer — that is '
+          'rung 2, and Hard has no hint budget to spend on it',
     );
   });
 
