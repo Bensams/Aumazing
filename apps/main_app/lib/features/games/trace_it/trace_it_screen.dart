@@ -42,7 +42,8 @@ class TraceItScreen extends StatefulWidget {
     int totalItems,
     int errorCount,
     int totalResponseTimeMs,
-  )? onComplete;
+  )?
+  onComplete;
 
   /// Optional sensory controller for per-round music/haptic during pre-assessment.
   final SensoryRoundController? sensoryController;
@@ -51,15 +52,15 @@ class TraceItScreen extends StatefulWidget {
   State<TraceItScreen> createState() => _TraceItScreenState();
 }
 
-class _TraceItScreenState extends State<TraceItScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+class _TraceItScreenState extends State<TraceItScreen>
+    with GameCompletionGuard {
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(
+    widget.assessmentContext,
+  );
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   bool _showStarSparkle = false;
   late final TraceItGame _game;
   late final DateTime _sessionStartTime;
@@ -88,9 +89,10 @@ class _TraceItScreenState extends State<TraceItScreen> {
     _game = TraceItGame(
       totalRounds: _totalRounds,
       childId: childId,
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectTrace: _onCorrectTrace,
@@ -106,12 +108,13 @@ class _TraceItScreenState extends State<TraceItScreen> {
       // Voice-over callbacks
       // Immediate feedback names what was just answered ("red circle");
       // praise is saved for the end-of-game reward.
-      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
-        color: label.color,
-        shape: label.shape,
-        letter: label.letter,
-        item: label.item,
-      ),
+      onPlayCorrectVo:
+          (label) => _voiceOverService.playAnswerLabel(
+            color: label.color,
+            shape: label.shape,
+            letter: label.letter,
+            item: label.item,
+          ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.play(VoiceOverCue.followMe),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
@@ -157,8 +160,7 @@ class _TraceItScreenState extends State<TraceItScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
 
@@ -173,30 +175,43 @@ class _TraceItScreenState extends State<TraceItScreen> {
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id;
 
-    // The write must land before the flow advances, so a completed game is
-    // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: childId,
-      gameId: 'trace_it',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: childProvider.musicEnabled,
-      hapticFeedbackEnabled: childProvider.vibrationEnabled,
-    );
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: childId,
+        gameId: 'trace_it',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: childProvider.musicEnabled,
+        hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      );
+    } catch (e) {
+      debugPrint('[TraceIt] session recording failed: $e');
+    }
     if (!mounted) return;
 
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
 
     if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
+      // The reward overlay is about to appear; the watchdog stays armed until
+      // the choice (or non-practice pop) is actually on screen.
       _showRewardThenCompletion(score, totalItems, errorCount);
     }
   }
@@ -208,23 +223,32 @@ class _TraceItScreenState extends State<TraceItScreen> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              // Post-reward choice: play the next game or back to the lobby.
-              GameEndChoiceDialog.show(context, currentGameId: 'trace_it');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  // Post-reward choice: play the next game or back to the lobby.
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'trace_it',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -237,13 +261,14 @@ class _TraceItScreenState extends State<TraceItScreen> {
       MaterialPageRoute(
         // A pushed route leaves the old host behind, so the replacement
         // screen carries its own.
-        builder: (_) => MascotHost(
-          child: TraceItScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-            difficulty: widget.difficulty,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              child: TraceItScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
     );
   }
@@ -266,10 +291,11 @@ class _TraceItScreenState extends State<TraceItScreen> {
           // Flame: Game area (full screen)
           Container(
             decoration: BoxDecoration(
-                gradient: context
-                    .watch<ChildProvider>()
-                    .activePalette
-                    .gameBackgroundFor('trace_it')),
+              gradient: context
+                  .watch<ChildProvider>()
+                  .activePalette
+                  .gameBackgroundFor('trace_it'),
+            ),
             child: GameWidget(game: _game),
           ),
 
@@ -292,11 +318,11 @@ class _TraceItScreenState extends State<TraceItScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)
@@ -306,9 +332,10 @@ class _TraceItScreenState extends State<TraceItScreen> {
             left: AppSpacing.md,
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
-              text: _gameComplete
-                  ? 'Well done! You finished the game!'
-                  : 'Trace the letter with your finger!',
+              text:
+                  _gameComplete
+                      ? 'Well done! You finished the game!'
+                      : 'Trace the letter with your finger!',
               isVisible: _showPrompt || _gameComplete,
             ),
           ),
