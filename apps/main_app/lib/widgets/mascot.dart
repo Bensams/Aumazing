@@ -457,15 +457,13 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
       // rather than rotating on the spot like a dial.
       alignment: Alignment.bottomCenter,
       transform: Matrix4.identity()
-        ..translateByDouble(
+        ..translate(
           side * widget.height * _leanShift,
           // Down only. Rising to follow something high would lift the
           // character off the floor it is standing on; sinking to follow
           // something low reads as crouching to look, which is what a person
           // would actually do.
           vertical > 0 ? vertical * widget.height * _crouchShift : 0,
-          0,
-          1,
         )
         ..rotateZ(side * _leanRadians),
       child: child,
