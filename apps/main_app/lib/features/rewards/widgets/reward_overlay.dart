@@ -187,97 +187,105 @@ class _RewardOverlayState extends State<RewardOverlay>
     final size = MediaQuery.of(context).size;
     final isSmallScreen = size.width < 360 || size.height < 600;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {},
-      child: Container(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Dialogue card (shown first for 2 seconds)
-              if (_showDialogue)
-                FadeTransition(
-                  opacity: _dialogueFadeAnimation,
-                  child: _buildDialogueCard(),
-                ),
-
-              // Reward effect layer (shown after dialogue fades)
-              if (_showReward)
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SizedBox.expand(
-                    child: _buildRewardEffect(),
+    // Shown via showDialog with no Material ancestor, so Text inherits the
+    // fallback DefaultTextStyle — which carries a yellow underline. Neutralize
+    // the inherited decoration here so the hints and dialogue text are never
+    // underlined, whatever way this overlay happens to be mounted.
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationColor: Colors.transparent,
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Container(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Dialogue card (shown first for 2 seconds)
+                if (_showDialogue)
+                  FadeTransition(
+                    opacity: _dialogueFadeAnimation,
+                    child: _buildDialogueCard(),
                   ),
-                ),
 
-              // Continue button overlay
-              if (_showReward && widget.showContinueButton)
-                Positioned(
-                  bottom: 40,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: AnimatedOpacity(
-                      opacity: _canContinue ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 300),
-                      child: ElevatedButton.icon(
-                        onPressed: _canContinue ? _onContinue : null,
-                        icon: const Icon(Icons.arrow_forward, size: 20),
-                        label: Text(
-                          widget.continueButtonText ?? 'Continue',
+                // Reward effect layer (shown after dialogue fades)
+                if (_showReward)
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SizedBox.expand(child: _buildRewardEffect()),
+                  ),
+
+                // Continue button overlay
+                if (_showReward && widget.showContinueButton)
+                  Positioned(
+                    bottom: 40,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        opacity: _canContinue ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: ElevatedButton.icon(
+                          onPressed: _canContinue ? _onContinue : null,
+                          icon: const Icon(Icons.arrow_forward, size: 20),
+                          label: Text(
+                            widget.continueButtonText ?? 'Continue',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withAlpha(230),
+                            foregroundColor: const Color(0xFF9B82C4),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isSmallScreen ? 20 : 28,
+                              vertical: isSmallScreen ? 10 : 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            elevation: 4,
+                            shadowColor: Colors.black.withAlpha(50),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Hint text
+                if (_showReward)
+                  Positioned(
+                    top: 60,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 12 : 16,
+                          vertical: isSmallScreen ? 6 : 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(200),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          _getHintText(),
                           style: TextStyle(
                             fontSize: isSmallScreen ? 14 : 16,
                             fontWeight: FontWeight.w600,
+                            color: const Color(0xFF9B82C4),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white.withAlpha(230),
-                          foregroundColor: const Color(0xFF9B82C4),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isSmallScreen ? 20 : 28,
-                            vertical: isSmallScreen ? 10 : 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          elevation: 4,
-                          shadowColor: Colors.black.withAlpha(50),
                         ),
                       ),
                     ),
                   ),
-                ),
-
-              // Hint text
-              if (_showReward)
-                Positioned(
-                  top: 60,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isSmallScreen ? 12 : 16,
-                        vertical: isSmallScreen ? 6 : 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        _getHintText(),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 16,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF9B82C4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -290,19 +298,14 @@ class _RewardOverlayState extends State<RewardOverlay>
 
     return Center(
       child: Container(
-        margin: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 20 : 40,
-        ),
+        margin: EdgeInsets.symmetric(horizontal: isSmallScreen ? 20 : 40),
         padding: EdgeInsets.symmetric(
           horizontal: isSmallScreen ? 24 : 40,
           vertical: isSmallScreen ? 30 : 48,
         ),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [
-              Color(0xFFE8DEFA),
-              Color(0xFFD4F4E8),
-            ],
+            colors: [Color(0xFFE8DEFA), Color(0xFFD4F4E8)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),

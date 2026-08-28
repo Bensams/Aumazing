@@ -131,78 +131,90 @@ class _StarEarnedOverlayState extends State<StarEarnedOverlay>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Center(
-      child: FadeTransition(
-        opacity: _controller,
-        child: ScaleTransition(
-          // A small settle from 96% — not a pop from zero. The difference is
-          // the difference between "noticed" and "startled".
-          scale: Tween<double>(begin: 0.96, end: 1).animate(_controller),
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * 0.9,
-              maxHeight: MediaQuery.sizeOf(context).height * 0.8,
-            ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.lg,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: AppRadius.extraLargeBorder,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget._isEarning)
-                  // One Text per star instead of one emoji string: a string of
-                  // emojis can render a yellow baseline/underline artifact on
-                  // some Android devices, and height 1.0 strips the extra line
-                  // padding each star would otherwise carry.
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                      widget.granted,
-                      (index) => const Text(
-                        '⭐',
-                        style: TextStyle(fontSize: 44, height: 1.0),
+    // Shown from showDialog with no Material ancestor, so Text inherits the
+    // fallback DefaultTextStyle — which carries a yellow underline. Neutralize
+    // the inherited decoration here so nothing in this overlay is underlined,
+    // whatever way it happens to be mounted.
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationColor: Colors.transparent,
+      ),
+      child: Center(
+        child: FadeTransition(
+          opacity: _controller,
+          child: ScaleTransition(
+            // A small settle from 96% — not a pop from zero. The difference is
+            // the difference between "noticed" and "startled".
+            scale: Tween<double>(begin: 0.96, end: 1).animate(_controller),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.9,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.lg,
+              ),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: AppRadius.extraLargeBorder,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget._isEarning)
+                    // One Text per star (not one emoji string) so each can carry
+                    // height: 1.0 and drop the extra line padding an emoji glyph
+                    // adds — a layout choice only. The yellow underline is NOT
+                    // from the emojis: this overlay can be shown with no Material
+                    // ancestor, so Text inherits the fallback DefaultTextStyle's
+                    // decoration, neutralized by the DefaultTextStyle.merge above.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(
+                        widget.granted,
+                        (index) => const Text(
+                          '⭐',
+                          style: TextStyle(fontSize: 44, height: 1.0),
+                        ),
                       ),
+                    )
+                  else
+                    // One star with a tick, matching the lobby card's badge for
+                    // the same state (AUM-285) — a child meets one symbol for
+                    // "already got this one", not two.
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('⭐', style: TextStyle(fontSize: 44, height: 1.0)),
+                        SizedBox(width: AppSpacing.xs),
+                        Icon(
+                          Icons.check_rounded,
+                          size: 36,
+                          color: Color(0xFF6FAE97),
+                        ),
+                      ],
                     ),
-                  )
-                else
-                  // One star with a tick, matching the lobby card's badge for
-                  // the same state (AUM-285) — a child meets one symbol for
-                  // "already got this one", not two.
-                  const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('⭐', style: TextStyle(fontSize: 44, height: 1.0)),
-                      SizedBox(width: AppSpacing.xs),
-                      Icon(
-                        Icons.check_rounded,
-                        size: 36,
-                        color: Color(0xFF6FAE97),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  widget.headline ??
-                      (widget.granted == 1
-                          ? 'You earned 1 star!'
-                          : 'You earned ${widget.granted} stars!'),
-                  style: theme.textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                if (widget.note != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: AppSpacing.sm),
                   Text(
-                    widget.note!,
-                    style: theme.textTheme.bodyMedium,
+                    widget.headline ??
+                        (widget.granted == 1
+                            ? 'You earned 1 star!'
+                            : 'You earned ${widget.granted} stars!'),
+                    style: theme.textTheme.titleLarge,
                     textAlign: TextAlign.center,
                   ),
+                  if (widget.note != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      widget.note!,
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
