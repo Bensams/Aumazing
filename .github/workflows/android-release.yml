@@ -32,7 +32,11 @@ jobs:
         # errors should fail the build.
         run: flutter analyze --no-fatal-infos
       - name: Run Flutter tests
-        run: flutter test
+        # Several widget tests trigger a 4s native-audio backstop timer
+        # (VoiceOverService/AudioService); flutter test's default parallel
+        # isolate concurrency races those timers against test teardown,
+        # failing a different, nondeterministic set of tests each run.
+        run: flutter test --concurrency=1
       - name: Build release APK
         run: flutter build apk --release
       - name: Build release app bundle
