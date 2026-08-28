@@ -61,6 +61,10 @@ class _ScreenTimeLockScreen extends StatelessWidget {
   const _ScreenTimeLockScreen();
 
   Future<void> _onParentLockTap(BuildContext context) async {
+    // Read before the PIN dialog, from a context that is under the app's
+    // providers: the alert below is built by the root navigator and must not
+    // depend on where in the tree the lock was raised from.
+    final profile = mascotProfileOf(context, watch: false);
     final verified = await ParentVerificationDialog.show(context);
     if (!verified || !context.mounted) return;
 
@@ -84,11 +88,17 @@ class _ScreenTimeLockScreen extends StatelessWidget {
                 // A sleepy mascot says "we're winding down" before the child has
                 // parsed the sentence — this dialog is the one moment play stops,
                 // so the character softens it rather than the text carrying it all.
-                const Mascot(
+                // It is the child's own character in their own costume: the one
+                // who has been with them all session is the one who gets sleepy.
+                Mascot(
+                  character: MascotCharacter.fromId(profile?.characterId),
+                  costumeId: profile?.equippedCostume,
                   height: 120,
                   pose: MascotPose.sleepy,
                   greetOnAppear: false,
-                  semanticLabel: 'BPS the mascot is sleepy',
+                  semanticLabel:
+                      '${profile?.character.displayName ?? 'BPS'} the mascot '
+                      'is sleepy',
                 ),
                 const SizedBox(height: 12),
                 Text(

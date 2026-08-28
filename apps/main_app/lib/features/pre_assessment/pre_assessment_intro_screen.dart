@@ -54,7 +54,7 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _buildWelcome(),
+                          _buildWelcome(context),
                           const SizedBox(height: 24),
                           _buildSteps(context, prefsAlreadySet),
                         ],
@@ -70,7 +70,7 @@ class PreAssessmentIntroScreen extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Expanded(child: Center(child: _buildWelcome())),
+                      Expanded(child: Center(child: _buildWelcome(context))),
                       const SizedBox(width: 32),
                       Expanded(
                         child: Center(
@@ -89,15 +89,22 @@ class PreAssessmentIntroScreen extends StatelessWidget {
   }
 
   /// Mascot, greeting and the "this is not a diagnosis" note.
-  static Widget _buildWelcome() {
+  static Widget _buildWelcome(BuildContext context) {
+    // The child's own character, in their own costume, greets them — this is
+    // the first screen of the assessment, and meeting a stranger here would
+    // undo the choice the parent just made in setup.
+    final profile = mascotProfileOf(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // BPS greets the child with a wave, then breathes.
-        const Mascot(
+        // The character greets the child with a wave, then breathes.
+        Mascot(
+          character: MascotCharacter.fromId(profile?.characterId),
+          costumeId: profile?.equippedCostume,
           height: 110,
-          fallback: Text('🌟', style: TextStyle(fontSize: 52)),
-          semanticLabel: 'BPS the mascot says hello',
+          fallback: const Text('🌟', style: TextStyle(fontSize: 52)),
+          semanticLabel:
+              '${profile?.character.displayName ?? 'BPS'} the mascot says hello',
         ),
         const SizedBox(height: 8),
         Text(
