@@ -39,29 +39,28 @@ class WaitingForParentScreen extends StatelessWidget {
       subtitle: MilestoneKind.preAssessment.subtitle,
       milestoneVoiceCue: MilestoneKind.preAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
-      onParentVerified: _showSummaryDialog,
+      onParentVerified: _showSummary,
     );
   }
 
-  void _showSummaryDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => GameSummaryDialog(
-        results: results,
-        aiResponse: aiResponse,
-        onContinue: () {
-          Navigator.of(dialogContext).pop();
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => PreAssessmentResultScreen(
-                profile: profile,
-                results: results,
-                aiResponse: aiResponse,
+  void _showSummary(BuildContext context) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (summaryContext) => GameSummaryDialog(
+          results: results,
+          aiResponse: aiResponse,
+          onContinue: () {
+            Navigator.of(summaryContext).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => PreAssessmentResultScreen(
+                  profile: profile,
+                  results: results,
+                  aiResponse: aiResponse,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
