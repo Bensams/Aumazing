@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:shared_audio/shared_audio.dart';
+
 import '../../model/child_profile.dart';
 
 /// Reward type options for celebration effects.
@@ -35,6 +37,27 @@ enum RewardType {
         return '🫧';
       case RewardType.candy:
         return '🍬';
+    }
+  }
+
+  /// The spoken instruction for this reward — "Pop the balloons!", "Tap the
+  /// rockets!", "Pop the bubbles!", "Collect the candy!".
+  ///
+  /// The reward used to carry the same words as a text banner across the top.
+  /// A child who cannot read got nothing from it, and it sat over the effect
+  /// they were meant to be playing with, so the line is spoken instead and the
+  /// screen is left clear. Every pack falls back to "Tap here." if it predates
+  /// these recordings, so the reward is never silent about what to do.
+  VoiceOverCue get hintCue {
+    switch (this) {
+      case RewardType.balloons:
+        return VoiceOverCue.rewardHintBalloons;
+      case RewardType.fireworks:
+        return VoiceOverCue.rewardHintFireworks;
+      case RewardType.bubbles:
+        return VoiceOverCue.rewardHintBubbles;
+      case RewardType.candy:
+        return VoiceOverCue.rewardHintCandy;
     }
   }
 }
