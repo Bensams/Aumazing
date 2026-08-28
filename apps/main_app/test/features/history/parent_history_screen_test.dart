@@ -11,6 +11,7 @@ import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/services/active_games_service.dart';
 import 'package:aumazing/services/learning_path_service.dart';
 import 'package:aumazing/services/parent_history_service.dart';
+import 'package:aumazing/services/report_pdf_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -368,6 +369,88 @@ void main() {
       expect(find.text('Jun 2, 2026'), findsOneWidget);
       expect(find.text('Completed'), findsNWidgets(2));
     });
+
+    testWidgets(
+      'shares the loaded snapshot once, shows busy, and does not reload',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(960, 540));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final summary = _populatedSummary();
+        final history = _FakeHistoryService(summary: summary);
+        final gate = Completer<void>();
+        final reports = _FakeReportSharer(gate: gate);
+        await tester.pumpWidget(
+          _buildApp(
+            childProvider: _TestChildProvider(initialProfile: _profile),
+            assessmentProvider: _TestAssessmentProvider(),
+            screen: ParentHistoryScreen(
+              childId: 'child-1',
+              childName: 'Test',
+              historyService: history,
+              reportPdfSharer: reports,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        final button = tester.widget<IconButton>(
+          find.byKey(const ValueKey('share-history-pdf')),
+        );
+        button.onPressed!();
+        button.onPressed!();
+        await tester.pump();
+
+        expect(reports.historyCalls, 1);
+        expect(identical(reports.summary, summary), isTrue);
+        expect(reports.childName, 'Test');
+        expect(history.loadCalls, 1);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        gate.complete();
+        await tester.pump();
+        expect(find.byKey(const ValueKey('share-history-pdf')), findsOneWidget);
+        expect(history.loadCalls, 1);
+      },
+    );
+
+    testWidgets('share failure is friendly and restores the action', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final reports = _FakeReportSharer(fail: true);
+      await tester.pumpWidget(
+        _buildApp(
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: _TestAssessmentProvider(),
+          screen: ParentHistoryScreen(
+            childId: 'child-1',
+            historyService: _FakeHistoryService(summary: _emptySummary()),
+            reportPdfSharer: reports,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('share-history-pdf')));
+      await tester.pump();
+
+      expect(
+        find.text(
+          'We couldn\u2019t create or share the PDF. Please try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('share-history-pdf')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('share-history-pdf')));
+      await tester.pump();
+      expect(reports.historyCalls, 2);
+    });
   });
 }
 
@@ -463,6 +546,34 @@ class _FakeHistoryService extends ParentHistoryService {
     }
     return summary ?? _emptySummary();
   }
+}
+
+class _FakeReportSharer implements ReportPdfSharer {
+  _FakeReportSharer({this.gate, this.fail = false});
+
+  final Completer<void>? gate;
+  final bool fail;
+  int historyCalls = 0;
+  HistorySummary? summary;
+  String? childName;
+
+  @override
+  Future<void> shareHistoryReport({
+    required HistorySummary summary,
+    required String childDisplayName,
+  }) async {
+    historyCalls += 1;
+    this.summary = summary;
+    childName = childDisplayName;
+    if (fail) throw StateError('simulated share failure');
+    await gate?.future;
+  }
+
+  @override
+  Future<void> shareAssessmentReport({
+    required AssessmentResultViewModel model,
+    required String childDisplayName,
+  }) => throw UnimplementedError();
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {

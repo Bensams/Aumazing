@@ -99,6 +99,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
             progress: progress,
             overallProgress: overallProgress,
             presentation: AssessmentResultPresentation.completion,
+            childDisplayName: childProv.profile?.displayName ?? 'Your child',
             showTherapyRecommendation: true,
             nextModulePremiumRequired: nextModulePremiumRequired,
             onContinue:
