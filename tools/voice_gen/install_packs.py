@@ -34,6 +34,7 @@ ASSET_ROOT = os.path.join(REPO, 'packages', 'shared_audio', 'assets', 'audio',
 # on disk without ever reaching the bundle.
 CATEGORIES = ['assessment_style', 'attention_and_regulation', 'core_praise',
               'gently_retry', 'instruction', 'reward_and_celebration',
+              'milestone',
               'transition', 'turn_taking', 'dynamic', 'colors', 'shapes',
               'letters', 'numbers', 'items', 'phrases', 'routines',
               'emotions', 'emotions/scenes']
