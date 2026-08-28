@@ -356,10 +356,18 @@ ACTIONS = {
                   "front of the curled fingers. The rounded knuckles face the "
                   "viewer. It is a compact closed ball of a hand with NO "
                   "fingers extended and NO gaps. "
-                  "The hand is NOT open, NOT flat, NOT a palm, NOT cupped, "
-                  "NOT waving, and the thumb is NOT raised, NOT pointing up "
-                  "and NOT sticking out to the side — this is NOT a "
-                  "thumbs-up and NOT a high-five. "
+                  # Take 2 landed 8/12, and THREE of the four failures came
+                  # back as a thumbs-up — while this clause was busy saying
+                  # "NOT a thumbs-up" twice. Naming a gesture in a negation
+                  # still puts it in the prompt, and the model reached for it.
+                  # The thumb is now described only by where it physically
+                  # lies, with the forbidden gestures left unnamed.
+                  "The thumb lies flat along the OUTSIDE of the curled index "
+                  "and middle fingers, pressed down against them, and does "
+                  "not stand away from the hand in any direction. Every "
+                  "digit is curled or folded; none stands up, out or apart. "
+                  "The hand is NOT open, NOT flat, NOT a palm and NOT "
+                  "cupped, and it is not holding or lifting any object. "
                   # Every failure mode `celebrate` would have supplied, named.
                   "The fist is NOT raised above the shoulder, NOT held over "
                   "the head, NOT punching, NOT swinging, and the character "
