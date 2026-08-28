@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 // shared_ui exports its own AnimatedBuilder, which would shadow Flutter's.
 import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 
+import '../model/child_profile.dart';
 import '../providers/child_provider.dart';
 
 /// Which character is on screen.
@@ -43,6 +44,26 @@ enum MascotCharacter {
   /// and would catch it before a child ever did.
   Future<CharacterSprites> loadCostumed(String? costumeId) =>
       CharacterSprites.costumed(name, costumeId ?? 'none');
+}
+
+/// The active child's profile, for widgets that draw a mascot themselves.
+///
+/// Null where there is no [ChildProvider] above [context] — widget tests, and
+/// any preview that shows the character outside a signed-in session. Callers
+/// fall back to the default character with no costume rather than crashing;
+/// the mascot is decoration in those places.
+///
+/// Watched by default, because equipping a costume must repaint the character
+/// without the screen being rebuilt from above. Pass `watch: false` from a
+/// callback or anywhere outside a build.
+ChildProfile? mascotProfileOf(BuildContext context, {bool watch = true}) {
+  try {
+    final provider =
+        watch ? context.watch<ChildProvider>() : context.read<ChildProvider>();
+    return provider.profile;
+  } on ProviderNotFoundException {
+    return null;
+  }
 }
 
 /// The pose the mascot *rests* on between gestures. Each maps to a
