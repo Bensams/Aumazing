@@ -359,7 +359,9 @@ Future<void> _pumpLobby(
 /// dead state, where it returns early.
 Future<void> _disposeLobby(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox());
-  await tester.pump(const Duration(seconds: 1));
+  // Past VoiceOverService's 4s native-operation backstop, so a category
+  // open (which speaks the choice) leaves no pending timer behind.
+  await tester.pump(const Duration(seconds: 5));
 }
 
 Widget _wrap(Widget screen, {Set<String> starsEarnedToday = const {}}) {

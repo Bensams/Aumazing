@@ -102,6 +102,9 @@ void main() {
     expect(find.text('Bea is now the active profile.'), findsOneWidget);
     // The badge moved with the selection rather than being duplicated.
     expect(find.text('Active'), findsOneWidget);
+    // Past AudioService's 4s native-operation backstop from the child
+    // switch's updateConfig, so no pending timer is left behind.
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('deleting asks for parent verification before anything happens',

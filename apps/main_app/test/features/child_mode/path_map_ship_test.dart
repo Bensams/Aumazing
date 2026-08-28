@@ -259,5 +259,8 @@ void main() {
     await tester.pump(); // post-frame notify
     expect(docked, 1, reason: 'a parked Next must not wait on a flight that '
         'will never start');
+    // Past VoiceOverService's 4s native-operation backstop for the dock
+    // announcement, so no pending timer is left when the tree disposes.
+    await tester.pump(const Duration(seconds: 5));
   });
 }
