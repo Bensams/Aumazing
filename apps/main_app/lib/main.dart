@@ -42,8 +42,10 @@ Future<void> main() async {
   // instead of an unhandled-exception dump; let real errors through.
   PlatformDispatcher.instance.onError = (error, stack) {
     if (_isTransientNetworkError(error)) {
-      debugPrint('[Offline] Suppressed transient network error: '
-          '${error.runtimeType}');
+      debugPrint(
+        '[Offline] Suppressed transient network error: '
+        '${error.runtimeType}',
+      );
       return true; // handled
     }
     return false; // let the default handler report it
@@ -162,6 +164,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onBubblePop: _audioService.playBubblePopSfx,
               onFireworkPop: _audioService.playFireworkPopSfx,
               onCandyPop: _audioService.playCandyPopSfx,
+              onStarPop: _audioService.playStarPopSfx,
+              onTrophyPop: _audioService.playTrophyPopSfx,
               child: MaterialApp(
                 title: 'Aumazing',
                 debugShowCheckedModeBanner: false,
