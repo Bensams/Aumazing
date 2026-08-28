@@ -2022,9 +2022,15 @@ class VoiceOverService {
             ticket: ticket,
           ).then((ok) => ready[i] = ok),
       ]);
-      if (!_holdsFloorFor(ticket, token)) return;
+      var resumeFrom = -1;
       for (var i = 0; i < cues.length; i++) {
-        if (!_valid(token) || _sequenceCancelled || !_holdsFloorFor(ticket, token)) break;
+        if (!_valid(token) || _sequenceCancelled) break;
+        if (!_holdsFloorFor(ticket, token)) {
+          // The floor was claimed before cue i could speak; everything from i
+          // on is unspoken.
+          resumeFrom = i;
+          break;
+        }
         final player = playerFor(i);
         if (ready[i]) {
           _activePlayerIndex = i % _players.length;
@@ -2051,17 +2057,66 @@ class VoiceOverService {
             token: token,
             ticket: ticket,
           );
-          if (!_holdsFloorFor(ticket, token)) break;
+          if (!_holdsFloorFor(ticket, token)) {
+            resumeFrom = i + 1;
+            break;
+          }
         }
         if (i != cues.length - 1) {
           await Future<void>.delayed(gap);
-          if (!_holdsFloorFor(ticket, token)) break;
+          if (!_holdsFloorFor(ticket, token)) {
+            resumeFrom = i + 1;
+            break;
+          }
         }
+      }
+      if (resumeFrom >= 0) {
+        return _resurrectSequenceTail(cues, resumeFrom, gap: gap,
+            token: token);
       }
     } finally {
       if (identical(_phrase, phrase)) _phrase = null;
       if (!phrase.isCompleted) phrase.complete();
     }
+  }
+
+  /// Re-queues the unspoken tail of an interrupted [playSequence] behind the
+  /// immediate-feedback line that grabbed the floor mid-sequence (AUM-316).
+  ///
+  /// In Anong Nararamdaman the sequence tail is the "How is he feeling?"
+  /// instruction that follows every scene caption; a fast tap's correct/wrong
+  /// label used to swallow it. The tail parks in the single narration slot —
+  /// it waits the feedback episode out and speaks after it, unless a newer
+  /// line supersedes it: the usual last-wins rule from the instant of the
+  /// re-queue. A floor claim by a full narration is NOT healed — that line is
+  /// the child's current context and the tail is stale by design, exactly
+  /// like a parked sequence displaced in the slot.
+  ///
+  /// The guard is CLAIM-based, not [isImmediateFeedbackActive]: the windowed
+  /// getter also requires the label to still be speaking or inside its
+  /// three-second hold, but the interrupted sequence only notices the floor
+  /// change when its player await settles — a label's fade-out never
+  /// completes the caption's player, so the clip-completion backstop does,
+  /// typically past the hold. What matters is that the floor was claimed AS
+  /// feedback and no newer claim superseded it; the slot then yields behind
+  /// whatever episode is live.
+  Future<void> _resurrectSequenceTail(
+    List<VoiceOverCue> cues,
+    int from, {
+    required Duration gap,
+    required int token,
+  }) {
+    final feedbackOwnsFloor = _immediateStartedAt != null &&
+        _immediateTicket == _floorTicket &&
+        _valid(token);
+    if (from >= cues.length ||
+        !_enabled ||
+        _disposed ||
+        _sequenceCancelled ||
+        !feedbackOwnsFloor) {
+      return Future<void>.value();
+    }
+    return _enqueueNarration(() => playSequence(cues.sublist(from), gap: gap));
   }
 
   /// Play a random voice-over cue from the given [category].
@@ -2289,7 +2344,14 @@ class VoiceOverService {
   /// mean stopping the current clip does not stop the phrase it belongs to.
   int _takeFloor() {
     if (_disposed) return _myTicket;
-    _sequenceCancelled = true;
+    // AUM-316: an immediate-feedback label does not CANCEL a running
+    // sequence — it takes the floor, and the sequence's own floor checks
+    // notice and re-queue the unspoken tail behind the label. Cancelling
+    // here would drop that tail (the "How is he feeling?" question) as if a
+    // newer narration had superseded it, which is not what a tap label is.
+    // A full narration claim (label not claiming) supersedes: the sequence
+    // is cancelled outright, as before.
+    if (!_claimingImmediate) _sequenceCancelled = true;
     _abandonPhrase();
     _myTicket = ++_floorTicket;
     if (_claimingImmediate) {
