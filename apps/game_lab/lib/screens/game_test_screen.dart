@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../services/game_factory.dart' show GameLabGameFactory;
@@ -238,10 +239,18 @@ class _GameTestScreenState extends State<GameTestScreen>
   }
 
   /// Pause music when the app goes to background, resume when it returns.
+  ///
+  /// Blurring the app also mutes every live narrator through
+  /// [VoiceOverService.stopAll]: voice-over instances are per-screen and not
+  /// lifecycle-observed. Narration is contextual, so it stops rather than
+  /// pauses and never auto-resumes.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
       _services.audioService.pauseMusic();
+      VoiceOverService.stopAll();
     } else if (state == AppLifecycleState.resumed) {
       _services.audioService.resumeMusic();
     }
