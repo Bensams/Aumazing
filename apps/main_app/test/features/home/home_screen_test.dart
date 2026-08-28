@@ -398,9 +398,16 @@ void main() {
         ),
       );
       await _settleUi(tester);
+      // Run the push transition out. Once it lands, the dashboard sits
+      // offstage under the opaque lobby route — still on the navigator
+      // stack, which is what "over, not instead of" means. Asserting
+      // mid-transition (while it is briefly still onstage) is what made
+      // this flaky: how far the transition had got by the last pump
+      // depended on when the async profile load resolved.
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byType(ChildModeLobbyScreen), findsOneWidget);
-      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(HomeScreen, skipOffstage: false), findsOneWidget);
 
       // Let the dashboard's music check begin, then dispose the whole tree.
       // The drain clears its follow-up and the lobby voice-over timeout.
