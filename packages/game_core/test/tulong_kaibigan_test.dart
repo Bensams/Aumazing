@@ -221,12 +221,24 @@ void main() {
           count: count,
         );
         for (final slot in slots) {
+          final scale = TulongKaibiganGame.draggedCardScaleFor(
+            cardSide: slot.width,
+            buddyWidth: buddy.x,
+          );
           expect(
-            slot.width * TulongKaibiganGame.draggedCardScale,
+            slot.width * scale,
             lessThan(buddy.x + 0.01),
             reason:
                 'a held card ($count options) would fully cover the '
                 'character on $label',
+          );
+          expect(
+            scale,
+            inInclusiveRange(
+              TulongKaibiganGame.minDraggedCardScale,
+              TulongKaibiganGame.maxDraggedCardScale,
+            ),
+            reason: 'held card scale out of range on $label',
           );
         }
       }
@@ -287,5 +299,73 @@ void main() {
 
     expect(item.visualCenter.x, closeTo(520, 0.5));
     expect(item.visualCenter.y, closeTo(430, 0.5));
+  });
+
+  group('buddy drop targets', () {
+    // Without loaded art the drawn body falls back to the body box: the full
+    // component width, starting below the request bubble.
+    BuddyComponent buddyAt(double left) => BuddyComponent(
+      kind: BuddyKind.bps,
+      position: Vector2(left, 0),
+      size: Vector2(200, 400),
+    );
+    const bodyTop = 400 * 0.30 * 0.70;
+    const bodyHeight = 400 - bodyTop;
+
+    test('a drop anywhere on the drawn body is accepted', () {
+      final buddy = buddyAt(0);
+      // Left and right edges of the body, and its full vertical span from the
+      // shoulders to the feet — all of it is "handing it to the buddy".
+      for (final point in [
+        Vector2(1, bodyTop + bodyHeight * 0.25),
+        Vector2(199, bodyTop + bodyHeight * 0.25),
+        Vector2(100, bodyTop + bodyHeight * 0.22),
+        Vector2(100, bodyTop + bodyHeight * 0.99),
+        Vector2(1, bodyTop + bodyHeight * 0.95),
+      ]) {
+        expect(
+          buddy.accepts(point),
+          isTrue,
+          reason: '$point is on the buddy but was read as a motor miss',
+        );
+      }
+    });
+
+    test('a drop well clear of the buddy is still a miss', () {
+      final buddy = buddyAt(0);
+      expect(buddy.accepts(Vector2(600, 200)), isFalse);
+      expect(buddy.accepts(Vector2(100, -200)), isFalse);
+    });
+
+    test('the accept zone reaches past the drawn body', () {
+      final buddy = buddyAt(0);
+      // 16% of the longer side (400) is 64px of slack on every edge.
+      expect(buddy.accepts(Vector2(-40, bodyTop + bodyHeight * 0.60)), isTrue);
+      expect(buddy.accepts(Vector2(240, bodyTop + bodyHeight * 0.60)), isTrue);
+    });
+
+    test('an overlapping drop goes to the nearer buddy', () {
+      // Tier 3: two buddies side by side, close enough that the tolerance makes
+      // their zones overlap in the gutter between them.
+      final left = buddyAt(0);
+      final right = buddyAt(210);
+      final gutter = Vector2(206, bodyTop + bodyHeight * 0.60);
+      expect(left.accepts(gutter), isTrue);
+      expect(right.accepts(gutter), isTrue);
+      expect(
+        right.distanceTo(gutter)!,
+        lessThan(left.distanceTo(gutter)!),
+        reason: 'a drop in the gutter belongs to the buddy it landed nearest',
+      );
+    });
+
+    test('distanceTo is null exactly when the drop misses', () {
+      final buddy = buddyAt(0);
+      expect(buddy.distanceTo(Vector2(600, 200)), isNull);
+      expect(
+        buddy.distanceTo(Vector2(100, bodyTop + bodyHeight * 0.60)),
+        closeTo(0, 0.01),
+      );
+    });
   });
 }
