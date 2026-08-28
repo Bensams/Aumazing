@@ -20,31 +20,29 @@ enum MilestoneKind {
 
   /// Big line, read aloud in spirit by the celebration itself.
   String get title => switch (this) {
-        MilestoneKind.preAssessment => 'Pre-Assessment Complete!',
-        MilestoneKind.learningPath => 'You Completed Your Learning Path!',
-        MilestoneKind.postAssessment => 'Post-Assessment Complete!',
-      };
+    MilestoneKind.preAssessment => 'Pre-Assessment Complete!',
+    MilestoneKind.learningPath => 'You Completed Your Learning Path!',
+    MilestoneKind.postAssessment => 'Post-Assessment Complete!',
+  };
 
   /// Smaller line under the title. Short, positive, understandable to a
   /// pre-reader hearing it described.
   String get subtitle => switch (this) {
-        MilestoneKind.preAssessment => 'You finished all the activities!',
-        MilestoneKind.learningPath => 'You finished every activity on your path!',
-        MilestoneKind.postAssessment => 'You finished all the activities!',
-      };
+    MilestoneKind.preAssessment => 'You finished all the activities!',
+    MilestoneKind.learningPath => 'You finished every activity on your path!',
+    MilestoneKind.postAssessment => 'You finished all the activities!',
+  };
 
   /// The voice-over line that *speaks* the milestone. The written [title] is
   /// not drawn on the scene — it overflows and a pre-reader cannot use it — so
   /// this narrated line carries the headline instead. Falls back to
   /// "You finished it!" in any pack that lacks its own recording.
   VoiceOverCue get voiceCue => switch (this) {
-        MilestoneKind.preAssessment =>
-          VoiceOverCue.milestonePreAssessmentComplete,
-        MilestoneKind.learningPath =>
-          VoiceOverCue.milestoneLearningPathComplete,
-        MilestoneKind.postAssessment =>
-          VoiceOverCue.milestonePostAssessmentComplete,
-      };
+    MilestoneKind.preAssessment => VoiceOverCue.milestonePreAssessmentComplete,
+    MilestoneKind.learningPath => VoiceOverCue.milestoneLearningPathComplete,
+    MilestoneKind.postAssessment =>
+      VoiceOverCue.milestonePostAssessmentComplete,
+  };
 }
 
 /// Identifies the drawn trophy in the scene, so a test can prove it is a real
@@ -151,6 +149,7 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
   Timer? _climbTimer;
 
   bool _firedArrived = false;
+  bool _trophySfxPlayed = false;
 
   bool _resolveReducedMotion() {
     if (widget.reducedMotion != null) return widget.reducedMotion!;
@@ -163,6 +162,17 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     // Flutter's platform "disable animations" accessibility signal counts too.
     if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) reduced = true;
     return reduced;
+  }
+
+  /// The reward-effect multiplier from the game's [GraphicsQuality] tier,
+  /// used to scale the popping-star count. Falls back to full quality when no
+  /// [ChildProvider] is present (isolated previews/tests).
+  double _resolveEffectScale() {
+    try {
+      return context.read<ChildProvider>().graphicsQuality.effectScale;
+    } catch (_) {
+      return GraphicsQuality.high.effectScale;
+    }
   }
 
   @override
@@ -202,6 +212,8 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
       _trophy.value = 1;
       _climb.value = 1;
       _message.value = 1;
+      // Sound is never gated by reduced motion: the trophy pop still plays.
+      _maybePlayTrophyPop();
       _fireArrived();
       return;
     }
@@ -209,7 +221,9 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     _stage.forward();
     // Trophy settles in just behind the stage.
     _trophyTimer = Timer(const Duration(milliseconds: 250), () {
-      if (mounted) _trophy.forward();
+      if (!mounted) return;
+      _maybePlayTrophyPop();
+      _trophy.forward();
     });
     _sparkle.repeat();
     // Companion sets off up the podium once the stage has appeared, and the
@@ -225,6 +239,13 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     if (_firedArrived) return;
     _firedArrived = true;
     widget.onArrived?.call();
+  }
+
+  /// Plays the trophy-pop SFX exactly once, no matter which path started it.
+  void _maybePlayTrophyPop() {
+    if (_trophySfxPlayed) return;
+    _trophySfxPlayed = true;
+    RewardSfxProvider.playTrophyPop(context);
   }
 
   @override
@@ -284,10 +305,8 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
         ),
         child: SafeArea(
           child: LayoutBuilder(
-            builder: (context, constraints) => _buildStage(
-              constraints.biggest,
-              reduced,
-            ),
+            builder: (context, constraints) =>
+                _buildStage(constraints.biggest, reduced),
           ),
         ),
       ),
@@ -306,8 +325,13 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     const trophySize = 132.0;
 
     return AnimatedBuilder(
-      animation: Listenable.merge(
-          [_stage, _trophy, _climb, _sparkle, _message]),
+      animation: Listenable.merge([
+        _stage,
+        _trophy,
+        _climb,
+        _sparkle,
+        _message,
+      ]),
       builder: (context, _) {
         final stage = Curves.easeOut.transform(_stage.value);
         return Stack(
@@ -340,8 +364,7 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
 
             // Restrained sparkles/stars around the finished pose. Skipped
             // whole under reduced motion.
-            if (!reduced)
-              ..._buildSparkles(size, trophyCenter, podiumWidth),
+            if (!reduced) ..._buildSparkles(size, trophyCenter, podiumWidth),
 
             // The podium/staircase.
             Positioned(
@@ -366,6 +389,16 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
 
             // The companion, climbing to rest on the top step beside the cup.
             _buildCompanion(size, trophyCenter, podiumTop, reduced),
+            // Interactive popping stars — layered above the podium, trophy
+            // and companion, and below the milestone message. Purely additive
+            // to the scene; the scene owns its lifecycle and quality/motion.
+            StarReward(
+              reducedMotion: reduced,
+              effectScale: _resolveEffectScale(),
+              appearDelay: reduced
+                  ? Duration.zero
+                  : const Duration(milliseconds: 800),
+            ),
 
             // The milestone message.
             Positioned(
@@ -409,10 +442,7 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
               ),
             ],
           ),
-          child: CustomPaint(
-            size: Size(size, size),
-            painter: _TrophyPainter(),
-          ),
+          child: CustomPaint(size: Size(size, size), painter: _TrophyPainter()),
         ),
       ),
     );
@@ -445,8 +475,7 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
           height: widget.mascotHeight,
           // Walk in (walk frames) when motion is allowed; already-there under
           // reduced motion. Either way it greets with a celebration on arrival.
-          entrance:
-              reduced ? MascotEntrance.none : MascotEntrance.fromLeft,
+          entrance: reduced ? MascotEntrance.none : MascotEntrance.fromLeft,
           gesture: MascotGesture.celebrate,
           greetOnAppear: true,
           greetDelay: reduced
@@ -506,17 +535,19 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
       final drift = math.sin(phase * math.pi * 2) * 6;
       final fontSize = 16.0 + (i % 3) * 6.0;
 
-      widgets.add(Positioned(
-        left: base.dx - fontSize / 2,
-        top: base.dy - fontSize / 2 + drift,
-        child: Opacity(
-          opacity: twinkle.clamp(0.0, 1.0) * 0.85,
-          child: Text(
-            glyphs[i % glyphs.length],
-            style: TextStyle(fontSize: fontSize),
+      widgets.add(
+        Positioned(
+          left: base.dx - fontSize / 2,
+          top: base.dy - fontSize / 2 + drift,
+          child: Opacity(
+            opacity: twinkle.clamp(0.0, 1.0) * 0.85,
+            child: Text(
+              glyphs[i % glyphs.length],
+              style: TextStyle(fontSize: fontSize),
+            ),
           ),
         ),
-      ));
+      );
     }
     return widgets;
   }
@@ -554,10 +585,7 @@ class _PodiumPainter extends CustomPainter {
           ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              color,
-              Color.lerp(color, Colors.black, 0.12)!,
-            ],
+            colors: [color, Color.lerp(color, Colors.black, 0.12)!],
           ).createShader(rect.outerRect),
       );
       // A soft highlight lip along the front edge of each tread.
@@ -606,9 +634,12 @@ class _TrophyPainter extends CustomPainter {
       final path = Path()
         ..moveTo(cx + sign * w * 0.20, h * 0.20)
         ..cubicTo(
-          cx + sign * w * 0.42, h * 0.18,
-          cx + sign * w * 0.42, h * 0.42,
-          cx + sign * w * 0.22, h * 0.42,
+          cx + sign * w * 0.42,
+          h * 0.18,
+          cx + sign * w * 0.42,
+          h * 0.42,
+          cx + sign * w * 0.22,
+          h * 0.42,
         );
       canvas.drawPath(path, handleStroke);
     }
@@ -617,15 +648,14 @@ class _TrophyPainter extends CustomPainter {
     final bowl = Path()
       ..moveTo(cx - w * 0.24, h * 0.16)
       ..lineTo(cx + w * 0.24, h * 0.16)
+      ..cubicTo(cx + w * 0.24, h * 0.44, cx + w * 0.14, h * 0.54, cx, h * 0.54)
       ..cubicTo(
-        cx + w * 0.24, h * 0.44,
-        cx + w * 0.14, h * 0.54,
-        cx, h * 0.54,
-      )
-      ..cubicTo(
-        cx - w * 0.14, h * 0.54,
-        cx - w * 0.24, h * 0.44,
-        cx - w * 0.24, h * 0.16,
+        cx - w * 0.14,
+        h * 0.54,
+        cx - w * 0.24,
+        h * 0.44,
+        cx - w * 0.24,
+        h * 0.16,
       )
       ..close();
     canvas.drawPath(bowl, gold);
