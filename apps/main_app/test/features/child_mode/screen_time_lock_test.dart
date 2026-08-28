@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import 'package:aumazing/features/child_mode/time_up_dialog.dart';
+import 'package:aumazing/model/child_profile.dart';
+import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/services/screen_time_service.dart';
+import 'package:aumazing/widgets/mascot.dart';
+
+import '../../support/fake_auth.dart';
 
 /// Widget-level evidence for the AUM-162 rest screen: that reaching either
 /// limit produces a lock the child cannot dismiss, that only a *successful*
@@ -70,12 +76,32 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Wraps [app] in a [ChildProvider] reporting [profile], or leaves it bare
+  /// when there is none.
+  Widget maybeProvide(ChildProfile? profile, Widget app) =>
+      profile == null
+          ? app
+          : ChangeNotifierProvider<ChildProvider>.value(
+            value: _FixedChildProvider(profile),
+            child: app,
+          );
+
   /// A stand-in for the child-mode lobby: one screen that raises the lock,
   /// with a first route beneath it so "Exit Child Mode" has somewhere to pop
   /// back to (the dashboard, in the real app).
-  Future<void> pumpLockedChildMode(WidgetTester tester) async {
+  ///
+  /// [profile] mounts a [ChildProvider] above the lock, the way the real app
+  /// does. Left null the tree has no provider at all — which is itself worth
+  /// exercising, since the mascot must still draw its default rather than
+  /// crash the one screen a parent reaches when play has stopped.
+  Future<void> pumpLockedChildMode(
+    WidgetTester tester, {
+    ChildProfile? profile,
+  }) async {
     await tester.pumpWidget(
-      MaterialApp(
+      maybeProvide(
+        profile,
+        MaterialApp(
         home: Builder(
           builder:
               (context) => Scaffold(
@@ -105,6 +131,7 @@ void main() {
                   ),
                 ),
               ),
+        ),
         ),
       ),
     );
@@ -260,5 +287,58 @@ void main() {
       expect(find.text('enter child mode'), findsOneWidget);
       expect(find.text('lock'), findsNothing);
     });
+
+    testWidgets('the sleepy mascot is the character the child has been '
+        'playing with, in their costume', (tester) async {
+      // Winding down is the moment the character has to be recognisably the
+      // one who was there all session. The alert is built by the root
+      // navigator, so this also pins that the profile is read from a context
+      // under the app providers rather than from the dialog's own.
+      await exhaust(dailyMinutes: 60, sessionMinutes: 5);
+      await pumpLockedChildMode(
+        tester,
+        profile: _profileWith(characterId: 'lexianne', costume: 'panda'),
+      );
+
+      await tester.tap(find.byIcon(Icons.lock_rounded));
+      await tester.pumpAndSettle();
+      await tapDigits(tester, shownCode(tester));
+
+      final mascot = tester.widget<Mascot>(find.byType(Mascot));
+      expect(mascot.character, MascotCharacter.lexianne);
+      expect(mascot.costumeId, 'panda');
+      expect(mascot.pose, MascotPose.sleepy);
+      expect(mascot.semanticLabel, contains('Lexianne'));
+    });
   });
+}
+
+ChildProfile _profileWith({
+  required String characterId,
+  required String costume,
+}) => ChildProfile(
+  id: 'child-a',
+  userId: 'user-1',
+  displayName: 'Test',
+  birthDate: DateTime(2022, 4, 20),
+  avatar: 'avatar_1',
+  characterId: characterId,
+  equippedCostume: costume,
+  createdAt: DateTime(2024),
+  updatedAt: DateTime(2024),
+);
+
+/// A [ChildProvider] that reports one fixed profile and never touches a
+/// database.
+class _FixedChildProvider extends ChildProvider {
+  _FixedChildProvider(this._profile)
+    : super(authService: FakeAuthService.boundAccount());
+
+  final ChildProfile _profile;
+
+  @override
+  ChildProfile? get profile => _profile;
+
+  @override
+  Future<void> loadProfile() async {}
 }

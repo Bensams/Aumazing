@@ -2,10 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../model/child_profile.dart';
-import '../providers/child_provider.dart';
 import 'mascot.dart';
 
 /// Drives the mascot owned by a [MascotHost] above it in the tree.
@@ -245,18 +242,9 @@ class _MascotHostState extends State<MascotHost> {
   @override
   Widget build(BuildContext context) {
     // Watched, not read: equipping a costume must change the mascot without
-    // needing the screen to be rebuilt from above.
-    //
-    // Guarded because the mascot is also mounted in places that have no
-    // ChildProvider above them — widget tests, and any preview that shows the
-    // character outside a signed-in session. Those get the default character
-    // and no costume rather than a crash; the mascot is decoration there.
-    ChildProfile? profile;
-    try {
-      profile = context.watch<ChildProvider>().profile;
-    } on ProviderNotFoundException {
-      profile = null;
-    }
+    // needing the screen to be rebuilt from above. Null where no ChildProvider
+    // is mounted above this host — see [mascotProfileOf].
+    final profile = mascotProfileOf(context);
     // A game that draws its own character keeps the controller (so its reaction
     // calls stay valid) but hides the corner mascot, so the child sees one
     // character, not two.
