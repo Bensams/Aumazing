@@ -150,7 +150,13 @@ class Buddy extends PositionComponent {
         return 'idle';
       case BuddyState.offering:
       case BuddyState.connecting:
-        return _greeting?.spriteAction ?? 'idle';
+        final greeting = _greeting;
+        if (greeting == null) return 'idle';
+        // Dedicated art where this character has it, the composed near-miss
+        // where it does not. Checked per frame rather than resolved once
+        // because the art cache is per character and a session never swaps.
+        final drawn = (art?.frameCount(greeting.spriteAction) ?? 0) > 0;
+        return drawn ? greeting.spriteAction : greeting.fallbackAction;
     }
   }
 

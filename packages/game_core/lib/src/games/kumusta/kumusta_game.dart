@@ -430,8 +430,45 @@ class KumustaGame extends FlameGame
   /// repeat the gesture larger → highlight the card → point at it and say the
   /// word.
   void _scheduleHint() {
-    if (!_hintBudgetLeft) return;
-    _hintTimer = Timer(_tier.idleHintDelay, _promptOnce);
+    if (_hintBudgetLeft) {
+      _hintTimer = Timer(_tier.idleHintDelay, _promptOnce);
+      return;
+    }
+
+    // No answer hints available — Hard, where the budget is zero from the
+    // first frame, or a spent Medium budget. The child is still not left
+    // alone: after the longer reorientDelay the bid is simply made again.
+    //
+    // This branch used to be a bare `return`, so on Hard no timer was ever
+    // created and a child who looked away got nothing at all, indefinitely —
+    // in the one game whose stated premise is that the buddy always waits and
+    // never gives up. Every other game already falls through to reorientDelay
+    // here; see sari_sari_sort's _startNoResponseTimer.
+    _hintTimer = Timer(_tier.reorientDelay, _reorientOnce);
+  }
+
+  /// Re-play the bid without helping to answer it.
+  ///
+  /// Deliberately NOT counted as a prompt. It escalates nothing and reveals
+  /// nothing — the child sees the same greeting they were already shown — so
+  /// incrementing the hint counters would report a child who answered
+  /// independently as having been helped, and promptLevelUsed is the number a
+  /// therapist reads first. It is recorded under its own name instead.
+  void _reorientOnce() {
+    if (!_awaitingAnswer || isRemoved) return;
+
+    final target = _target;
+    if (target == null) return;
+
+    // Re-offer at normal emphasis: enlarging it is rung 1 of the hierarchy,
+    // and this rung is explicitly below that. Note this does not reset
+    // _offeredAt — greeting latency is measured from the FIRST bid, because
+    // that is when the child was greeted.
+    _buddy?.offer(target);
+    onPlayInstructionVo?.call();
+    analyticsRecordHint(hintType: 'reoriented');
+
+    _scheduleHint();
   }
 
   void _promptOnce() {
