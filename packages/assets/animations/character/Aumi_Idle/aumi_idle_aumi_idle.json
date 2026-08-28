@@ -1,0 +1,1051 @@
+{
+  "meta": {
+    "app": "MAKKO Sprite Studio",
+    "version": "1.0.0",
+    "image": "aumi_idle_aumi_idle.webp",
+    "format": "RGBA8888",
+    "size": {
+      "w": 2674,
+      "h": 4473
+    },
+    "scale": 1,
+    "frameTags": [
+      {
+        "name": "Idle",
+        "from": 0,
+        "to": 47,
+        "direction": "forward"
+      }
+    ],
+    "anchor": {
+      "x": 191,
+      "y": 638,
+      "normalized": {
+        "x": 0.5,
+        "y": 0.9984350547730829
+      },
+      "strategy": "bottom-center"
+    },
+    "referenceAlignment": {
+      "referenceBounds": {
+        "width": 302,
+        "height": 633
+      },
+      "frameBounds": {
+        "width": 382,
+        "height": 639
+      },
+      "normalized": true
+    }
+  },
+  "frames": {
+    "aumi_idle_aumi_idle_000.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_001.png": {
+      "frame": {
+        "x": 382,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_002.png": {
+      "frame": {
+        "x": 764,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_003.png": {
+      "frame": {
+        "x": 1146,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_004.png": {
+      "frame": {
+        "x": 1528,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_005.png": {
+      "frame": {
+        "x": 1910,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_006.png": {
+      "frame": {
+        "x": 2292,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_007.png": {
+      "frame": {
+        "x": 0,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_008.png": {
+      "frame": {
+        "x": 382,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_009.png": {
+      "frame": {
+        "x": 764,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_010.png": {
+      "frame": {
+        "x": 1146,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_011.png": {
+      "frame": {
+        "x": 1528,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_012.png": {
+      "frame": {
+        "x": 1910,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_013.png": {
+      "frame": {
+        "x": 2292,
+        "y": 639,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_014.png": {
+      "frame": {
+        "x": 0,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_015.png": {
+      "frame": {
+        "x": 382,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_016.png": {
+      "frame": {
+        "x": 764,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_017.png": {
+      "frame": {
+        "x": 1146,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_018.png": {
+      "frame": {
+        "x": 1528,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_019.png": {
+      "frame": {
+        "x": 1910,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_020.png": {
+      "frame": {
+        "x": 2292,
+        "y": 1278,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_021.png": {
+      "frame": {
+        "x": 0,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_022.png": {
+      "frame": {
+        "x": 382,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_023.png": {
+      "frame": {
+        "x": 764,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_024.png": {
+      "frame": {
+        "x": 1146,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_025.png": {
+      "frame": {
+        "x": 1528,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_026.png": {
+      "frame": {
+        "x": 1910,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_027.png": {
+      "frame": {
+        "x": 2292,
+        "y": 1917,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_028.png": {
+      "frame": {
+        "x": 0,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_029.png": {
+      "frame": {
+        "x": 382,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_030.png": {
+      "frame": {
+        "x": 764,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_031.png": {
+      "frame": {
+        "x": 1146,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_032.png": {
+      "frame": {
+        "x": 1528,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_033.png": {
+      "frame": {
+        "x": 1910,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_034.png": {
+      "frame": {
+        "x": 2292,
+        "y": 2556,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_035.png": {
+      "frame": {
+        "x": 0,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_036.png": {
+      "frame": {
+        "x": 382,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_037.png": {
+      "frame": {
+        "x": 764,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_038.png": {
+      "frame": {
+        "x": 1146,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_039.png": {
+      "frame": {
+        "x": 1528,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_040.png": {
+      "frame": {
+        "x": 1910,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_041.png": {
+      "frame": {
+        "x": 2292,
+        "y": 3195,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_042.png": {
+      "frame": {
+        "x": 0,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_043.png": {
+      "frame": {
+        "x": 382,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_044.png": {
+      "frame": {
+        "x": 764,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_045.png": {
+      "frame": {
+        "x": 1146,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_046.png": {
+      "frame": {
+        "x": 1528,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    },
+    "aumi_idle_aumi_idle_047.png": {
+      "frame": {
+        "x": 1910,
+        "y": 3834,
+        "w": 382,
+        "h": 639
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 382,
+        "h": 639
+      },
+      "sourceSize": {
+        "w": 382,
+        "h": 639
+      },
+      "duration": 83
+    }
+  }
+}

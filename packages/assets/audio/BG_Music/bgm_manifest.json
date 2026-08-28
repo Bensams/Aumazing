@@ -1,0 +1,529 @@
+{
+  "schemaVersion": 1,
+  "generator": "kie.ai Suno V5_5",
+  "loudnessTargetLufs": -20.0,
+  "categories": [
+    {
+      "key": "soft_relaxing",
+      "label": "Soft & Relaxing",
+      "description": "Lowest-arousal category. Sustained, slow, almost motionless. For children who are easily over-stimulated, or for winding down after a session.",
+      "tracks": [
+        {
+          "slug": "soft_relaxing_01_v1",
+          "title": "Felt Piano Rest 1",
+          "file": "soft_relaxing/soft_relaxing_01_v1.ogg",
+          "durationS": 99.8,
+          "lufs": -19.98,
+          "lraLu": 7.1
+        },
+        {
+          "slug": "soft_relaxing_01_v2",
+          "title": "Felt Piano Rest 2",
+          "file": "soft_relaxing/soft_relaxing_01_v2.ogg",
+          "durationS": 86.12,
+          "lufs": -19.96,
+          "lraLu": 7.7
+        },
+        {
+          "slug": "soft_relaxing_02_v1",
+          "title": "Warm Strings Haze 1",
+          "file": "soft_relaxing/soft_relaxing_02_v1.ogg",
+          "durationS": 98.5,
+          "lufs": -19.99,
+          "lraLu": 6.0
+        },
+        {
+          "slug": "soft_relaxing_02_v2",
+          "title": "Warm Strings Haze 2",
+          "file": "soft_relaxing/soft_relaxing_02_v2.ogg",
+          "durationS": 100.54,
+          "lufs": -19.99,
+          "lraLu": 6.2
+        },
+        {
+          "slug": "soft_relaxing_03_v1",
+          "title": "Soft Harp Drift 1",
+          "file": "soft_relaxing/soft_relaxing_03_v1.ogg",
+          "durationS": 77.7,
+          "lufs": -19.96,
+          "lraLu": 7.7
+        },
+        {
+          "slug": "soft_relaxing_03_v2",
+          "title": "Soft Harp Drift 2",
+          "file": "soft_relaxing/soft_relaxing_03_v2.ogg",
+          "durationS": 76.78,
+          "lufs": -19.97,
+          "lraLu": 5.8
+        },
+        {
+          "slug": "soft_relaxing_04_v1",
+          "title": "Quiet Guitar Room 1",
+          "file": "soft_relaxing/soft_relaxing_04_v1.ogg",
+          "durationS": 77.04,
+          "lufs": -19.97,
+          "lraLu": 4.2
+        },
+        {
+          "slug": "soft_relaxing_04_v2",
+          "title": "Quiet Guitar Room 2",
+          "file": "soft_relaxing/soft_relaxing_04_v2.ogg",
+          "durationS": 93.42,
+          "lufs": -19.97,
+          "lraLu": 4.2
+        },
+        {
+          "slug": "soft_relaxing_05_v1",
+          "title": "Breathing Pad 1",
+          "file": "soft_relaxing/soft_relaxing_05_v1.ogg",
+          "durationS": 75.22,
+          "lufs": -20.01,
+          "lraLu": 4.5
+        },
+        {
+          "slug": "soft_relaxing_05_v2",
+          "title": "Breathing Pad 2",
+          "file": "soft_relaxing/soft_relaxing_05_v2.ogg",
+          "durationS": 82.06,
+          "lufs": -19.99,
+          "lraLu": 5.2
+        }
+      ]
+    },
+    {
+      "key": "nature_ambient",
+      "label": "Nature & Ambient",
+      "description": "Soft tonal music layered with steady natural texture. The constant broadband texture masks unpredictable household noise, which many sound-sensitive children find easier than silence.",
+      "tracks": [
+        {
+          "slug": "nature_ambient_01_v1",
+          "title": "Gentle Rainfall 1",
+          "file": "nature_ambient/nature_ambient_01_v1.ogg",
+          "durationS": 80.5,
+          "lufs": -19.99,
+          "lraLu": 3.6
+        },
+        {
+          "slug": "nature_ambient_01_v2",
+          "title": "Gentle Rainfall 2",
+          "file": "nature_ambient/nature_ambient_01_v2.ogg",
+          "durationS": 84.22,
+          "lufs": -20.0,
+          "lraLu": 8.0
+        },
+        {
+          "slug": "nature_ambient_02_v1",
+          "title": "Morning Garden 1",
+          "file": "nature_ambient/nature_ambient_02_v1.ogg",
+          "durationS": 101.98,
+          "lufs": -19.98,
+          "lraLu": 6.0
+        },
+        {
+          "slug": "nature_ambient_02_v2",
+          "title": "Morning Garden 2",
+          "file": "nature_ambient/nature_ambient_02_v2.ogg",
+          "durationS": 106.6,
+          "lufs": -19.99,
+          "lraLu": 4.8
+        },
+        {
+          "slug": "nature_ambient_03_v1",
+          "title": "Slow Ocean 1",
+          "file": "nature_ambient/nature_ambient_03_v1.ogg",
+          "durationS": 94.72,
+          "lufs": -20.0,
+          "lraLu": 4.7
+        },
+        {
+          "slug": "nature_ambient_03_v2",
+          "title": "Slow Ocean 2",
+          "file": "nature_ambient/nature_ambient_03_v2.ogg",
+          "durationS": 76.92,
+          "lufs": -19.99,
+          "lraLu": 4.1
+        },
+        {
+          "slug": "nature_ambient_04_v1",
+          "title": "Forest Light 1",
+          "file": "nature_ambient/nature_ambient_04_v1.ogg",
+          "durationS": 101.16,
+          "lufs": -19.98,
+          "lraLu": 3.3
+        },
+        {
+          "slug": "nature_ambient_04_v2",
+          "title": "Forest Light 2",
+          "file": "nature_ambient/nature_ambient_04_v2.ogg",
+          "durationS": 97.18,
+          "lufs": -19.98,
+          "lraLu": 3.1
+        },
+        {
+          "slug": "nature_ambient_05_v1",
+          "title": "Small Stream 1",
+          "file": "nature_ambient/nature_ambient_05_v1.ogg",
+          "durationS": 89.72,
+          "lufs": -19.98,
+          "lraLu": 5.6
+        },
+        {
+          "slug": "nature_ambient_05_v2",
+          "title": "Small Stream 2",
+          "file": "nature_ambient/nature_ambient_05_v2.ogg",
+          "durationS": 76.34,
+          "lufs": -19.97,
+          "lraLu": 3.7
+        }
+      ]
+    },
+    {
+      "key": "gentle_playful",
+      "label": "Gentle Playful",
+      "description": "Mildly energising without becoming stimulating. Slightly brighter and more rhythmic, for children who disengage when music is too still. Still no percussive transients.",
+      "tracks": [
+        {
+          "slug": "gentle_playful_01_v1",
+          "title": "Happy Marimba 1",
+          "file": "gentle_playful/gentle_playful_01_v1.ogg",
+          "durationS": 84.56,
+          "lufs": -19.97,
+          "lraLu": 3.2
+        },
+        {
+          "slug": "gentle_playful_01_v2",
+          "title": "Happy Marimba 2",
+          "file": "gentle_playful/gentle_playful_01_v2.ogg",
+          "durationS": 75.3,
+          "lufs": -19.97,
+          "lraLu": 2.6
+        },
+        {
+          "slug": "gentle_playful_02_v1",
+          "title": "Bouncy Pizzicato 1",
+          "file": "gentle_playful/gentle_playful_02_v1.ogg",
+          "durationS": 99.2,
+          "lufs": -19.97,
+          "lraLu": 4.8
+        },
+        {
+          "slug": "gentle_playful_02_v2",
+          "title": "Bouncy Pizzicato 2",
+          "file": "gentle_playful/gentle_playful_02_v2.ogg",
+          "durationS": 84.22,
+          "lufs": -19.98,
+          "lraLu": 3.2
+        },
+        {
+          "slug": "gentle_playful_03_v1",
+          "title": "Sunny Ukulele 1",
+          "file": "gentle_playful/gentle_playful_03_v1.ogg",
+          "durationS": 56.46,
+          "lufs": -19.96,
+          "lraLu": 3.3
+        },
+        {
+          "slug": "gentle_playful_03_v2",
+          "title": "Sunny Ukulele 2",
+          "file": "gentle_playful/gentle_playful_03_v2.ogg",
+          "durationS": 99.22,
+          "lufs": -19.97,
+          "lraLu": 5.0
+        },
+        {
+          "slug": "gentle_playful_04_v1",
+          "title": "Toy Xylophone Walk 1",
+          "file": "gentle_playful/gentle_playful_04_v1.ogg",
+          "durationS": 75.06,
+          "lufs": -19.97,
+          "lraLu": 3.6
+        },
+        {
+          "slug": "gentle_playful_04_v2",
+          "title": "Toy Xylophone Walk 2",
+          "file": "gentle_playful/gentle_playful_04_v2.ogg",
+          "durationS": 96.26,
+          "lufs": -19.97,
+          "lraLu": 4.9
+        },
+        {
+          "slug": "gentle_playful_05_v1",
+          "title": "Little Whistle Tune 1",
+          "file": "gentle_playful/gentle_playful_05_v1.ogg",
+          "durationS": 109.72,
+          "lufs": -19.98,
+          "lraLu": 2.2
+        },
+        {
+          "slug": "gentle_playful_05_v2",
+          "title": "Little Whistle Tune 2",
+          "file": "gentle_playful/gentle_playful_05_v2.ogg",
+          "durationS": 95.22,
+          "lufs": -19.98,
+          "lraLu": 4.0
+        }
+      ]
+    },
+    {
+      "key": "lullaby_music_box",
+      "label": "Lullaby & Music Box",
+      "description": "Familiar, highly predictable nursery timbres. Strongest cue for 'settle down' \u2014 useful for transitions, calm corners and the end of a play session.",
+      "tracks": [
+        {
+          "slug": "lullaby_music_box_01_v1",
+          "title": "Music Box Circle 1",
+          "file": "lullaby_music_box/lullaby_music_box_01_v1.ogg",
+          "durationS": 81.4,
+          "lufs": -19.96,
+          "lraLu": 3.6
+        },
+        {
+          "slug": "lullaby_music_box_01_v2",
+          "title": "Music Box Circle 2",
+          "file": "lullaby_music_box/lullaby_music_box_01_v2.ogg",
+          "durationS": 89.02,
+          "lufs": -19.98,
+          "lraLu": 3.5
+        },
+        {
+          "slug": "lullaby_music_box_02_v1",
+          "title": "Celesta Cradle 1",
+          "file": "lullaby_music_box/lullaby_music_box_02_v1.ogg",
+          "durationS": 80.8,
+          "lufs": -19.97,
+          "lraLu": 3.5
+        },
+        {
+          "slug": "lullaby_music_box_02_v2",
+          "title": "Celesta Cradle 2",
+          "file": "lullaby_music_box/lullaby_music_box_02_v2.ogg",
+          "durationS": 80.24,
+          "lufs": -19.97,
+          "lraLu": 3.4
+        },
+        {
+          "slug": "lullaby_music_box_03_v1",
+          "title": "Kalimba Sleep 1",
+          "file": "lullaby_music_box/lullaby_music_box_03_v1.ogg",
+          "durationS": 79.46,
+          "lufs": -19.96,
+          "lraLu": 2.5
+        },
+        {
+          "slug": "lullaby_music_box_03_v2",
+          "title": "Kalimba Sleep 2",
+          "file": "lullaby_music_box/lullaby_music_box_03_v2.ogg",
+          "durationS": 112.62,
+          "lufs": -19.97,
+          "lraLu": 4.5
+        },
+        {
+          "slug": "lullaby_music_box_04_v1",
+          "title": "Humming Bells 1",
+          "file": "lullaby_music_box/lullaby_music_box_04_v1.ogg",
+          "durationS": 81.0,
+          "lufs": -19.96,
+          "lraLu": 2.9
+        },
+        {
+          "slug": "lullaby_music_box_04_v2",
+          "title": "Humming Bells 2",
+          "file": "lullaby_music_box/lullaby_music_box_04_v2.ogg",
+          "durationS": 85.22,
+          "lufs": -19.97,
+          "lraLu": 3.0
+        },
+        {
+          "slug": "lullaby_music_box_05_v1",
+          "title": "Cradle Piano 1",
+          "file": "lullaby_music_box/lullaby_music_box_05_v1.ogg",
+          "durationS": 78.72,
+          "lufs": -19.97,
+          "lraLu": 7.1
+        },
+        {
+          "slug": "lullaby_music_box_05_v2",
+          "title": "Cradle Piano 2",
+          "file": "lullaby_music_box/lullaby_music_box_05_v2.ogg",
+          "durationS": 114.08,
+          "lufs": -19.96,
+          "lraLu": 4.2
+        }
+      ]
+    },
+    {
+      "key": "focus_minimal",
+      "label": "Focus & Minimal",
+      "description": "Deliberately uneventful. A steady, near-static bed with almost no melodic 'events' to capture attention, so it supports on-task attention during matching, tracing and sorting activities.",
+      "tracks": [
+        {
+          "slug": "focus_minimal_01_v1",
+          "title": "Steady Loop One 1",
+          "file": "focus_minimal/focus_minimal_01_v1.ogg",
+          "durationS": 80.72,
+          "lufs": -19.99,
+          "lraLu": 5.4
+        },
+        {
+          "slug": "focus_minimal_01_v2",
+          "title": "Steady Loop One 2",
+          "file": "focus_minimal/focus_minimal_01_v2.ogg",
+          "durationS": 108.22,
+          "lufs": -19.97,
+          "lraLu": 4.9
+        },
+        {
+          "slug": "focus_minimal_02_v1",
+          "title": "Soft Pulse 1",
+          "file": "focus_minimal/focus_minimal_02_v1.ogg",
+          "durationS": 85.72,
+          "lufs": -19.99,
+          "lraLu": 3.2
+        },
+        {
+          "slug": "focus_minimal_02_v2",
+          "title": "Soft Pulse 2",
+          "file": "focus_minimal/focus_minimal_02_v2.ogg",
+          "durationS": 83.22,
+          "lufs": -19.98,
+          "lraLu": 3.2
+        },
+        {
+          "slug": "focus_minimal_03_v1",
+          "title": "Quiet Ostinato 1",
+          "file": "focus_minimal/focus_minimal_03_v1.ogg",
+          "durationS": 85.78,
+          "lufs": -19.99,
+          "lraLu": 5.6
+        },
+        {
+          "slug": "focus_minimal_03_v2",
+          "title": "Quiet Ostinato 2",
+          "file": "focus_minimal/focus_minimal_03_v2.ogg",
+          "durationS": 104.82,
+          "lufs": -20.0,
+          "lraLu": 7.1
+        },
+        {
+          "slug": "focus_minimal_04_v1",
+          "title": "Even Ground 1",
+          "file": "focus_minimal/focus_minimal_04_v1.ogg",
+          "durationS": 84.64,
+          "lufs": -19.98,
+          "lraLu": 5.6
+        },
+        {
+          "slug": "focus_minimal_04_v2",
+          "title": "Even Ground 2",
+          "file": "focus_minimal/focus_minimal_04_v2.ogg",
+          "durationS": 76.22,
+          "lufs": -19.99,
+          "lraLu": 2.9
+        },
+        {
+          "slug": "focus_minimal_05_v1",
+          "title": "Patient Keys 1",
+          "file": "focus_minimal/focus_minimal_05_v1.ogg",
+          "durationS": 103.4,
+          "lufs": -19.98,
+          "lraLu": 3.8
+        },
+        {
+          "slug": "focus_minimal_05_v2",
+          "title": "Patient Keys 2",
+          "file": "focus_minimal/focus_minimal_05_v2.ogg",
+          "durationS": 92.06,
+          "lufs": -19.99,
+          "lraLu": 3.0
+        }
+      ]
+    },
+    {
+      "key": "filipino_calm",
+      "label": "Filipino Calm",
+      "description": "Culturally familiar tone colours for Filipino families, kept within the same calm envelope as the other categories. Pairs with the app's Tagalog and Cebuano voice-overs.",
+      "tracks": [
+        {
+          "slug": "filipino_calm_01_v1",
+          "title": "Kundiman Hush 1",
+          "file": "filipino_calm/filipino_calm_01_v1.ogg",
+          "durationS": 109.62,
+          "lufs": -19.96,
+          "lraLu": 4.9
+        },
+        {
+          "slug": "filipino_calm_01_v2",
+          "title": "Kundiman Hush 2",
+          "file": "filipino_calm/filipino_calm_01_v2.ogg",
+          "durationS": 97.06,
+          "lufs": -19.97,
+          "lraLu": 4.3
+        },
+        {
+          "slug": "filipino_calm_02_v1",
+          "title": "Soft Rondalla 1",
+          "file": "filipino_calm/filipino_calm_02_v1.ogg",
+          "durationS": 113.78,
+          "lufs": -19.96,
+          "lraLu": 6.2
+        },
+        {
+          "slug": "filipino_calm_02_v2",
+          "title": "Soft Rondalla 2",
+          "file": "filipino_calm/filipino_calm_02_v2.ogg",
+          "durationS": 76.92,
+          "lufs": -19.97,
+          "lraLu": 2.6
+        },
+        {
+          "slug": "filipino_calm_03_v1",
+          "title": "Bamboo Breeze 1",
+          "file": "filipino_calm/filipino_calm_03_v1.ogg",
+          "durationS": 91.26,
+          "lufs": -19.98,
+          "lraLu": 4.5
+        },
+        {
+          "slug": "filipino_calm_03_v2",
+          "title": "Bamboo Breeze 2",
+          "file": "filipino_calm/filipino_calm_03_v2.ogg",
+          "durationS": 91.02,
+          "lufs": -19.96,
+          "lraLu": 5.2
+        },
+        {
+          "slug": "filipino_calm_04_v1",
+          "title": "Kulintang Calm 1",
+          "file": "filipino_calm/filipino_calm_04_v1.ogg",
+          "durationS": 85.36,
+          "lufs": -19.99,
+          "lraLu": 3.1
+        },
+        {
+          "slug": "filipino_calm_04_v2",
+          "title": "Kulintang Calm 2",
+          "file": "filipino_calm/filipino_calm_04_v2.ogg",
+          "durationS": 96.02,
+          "lufs": -19.98,
+          "lraLu": 3.7
+        },
+        {
+          "slug": "filipino_calm_05_v1",
+          "title": "Harana Evening 1",
+          "file": "filipino_calm/filipino_calm_05_v1.ogg",
+          "durationS": 78.6,
+          "lufs": -19.98,
+          "lraLu": 4.1
+        },
+        {
+          "slug": "filipino_calm_05_v2",
+          "title": "Harana Evening 2",
+          "file": "filipino_calm/filipino_calm_05_v2.ogg",
+          "durationS": 75.3,
+          "lufs": -19.97,
+          "lraLu": 3.0
+        }
+      ]
+    }
+  ]
+}

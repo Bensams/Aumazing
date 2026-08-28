@@ -1,0 +1,529 @@
+{
+  "seeds": [
+    {
+      "slug": "dog",
+      "category": "animals",
+      "names": {
+        "en": "Dog",
+        "tl": "Aso",
+        "ceb": "Iro"
+      },
+      "card": "animals/dog.png",
+      "lines": {
+        "en": "audio/en/Dog.wav",
+        "tl": "audio/tl/Dog.wav",
+        "ceb": "audio/ceb/Dog.wav"
+      }
+    },
+    {
+      "slug": "cat",
+      "category": "animals",
+      "names": {
+        "en": "Cat",
+        "tl": "Pusa",
+        "ceb": "Iring"
+      },
+      "card": "animals/cat.png",
+      "lines": {
+        "en": "audio/en/Cat.wav",
+        "tl": "audio/tl/Cat.wav",
+        "ceb": "audio/ceb/Cat.wav"
+      }
+    },
+    {
+      "slug": "bird",
+      "category": "animals",
+      "names": {
+        "en": "Bird",
+        "tl": "Ibon",
+        "ceb": "Langgam"
+      },
+      "card": "animals/bird.png",
+      "lines": {
+        "en": "audio/en/Bird.wav",
+        "tl": "audio/tl/Bird.wav",
+        "ceb": "audio/ceb/Bird.wav"
+      }
+    },
+    {
+      "slug": "fish",
+      "category": "animals",
+      "names": {
+        "en": "Fish",
+        "tl": "Isda",
+        "ceb": "Isda"
+      },
+      "card": "animals/fish.png",
+      "lines": {
+        "en": "audio/en/Fish.wav",
+        "tl": "audio/tl/Fish.wav",
+        "ceb": "audio/ceb/Fish.wav"
+      }
+    },
+    {
+      "slug": "rabbit",
+      "category": "animals",
+      "names": {
+        "en": "Rabbit",
+        "tl": "Kuneho",
+        "ceb": "Koneho"
+      },
+      "card": "animals/rabbit.png",
+      "lines": {
+        "en": "audio/en/Rabbit.wav",
+        "tl": "audio/tl/Rabbit.wav",
+        "ceb": "audio/ceb/Rabbit.wav"
+      }
+    },
+    {
+      "slug": "duck",
+      "category": "animals",
+      "names": {
+        "en": "Duck",
+        "tl": "Pato",
+        "ceb": "Itik"
+      },
+      "card": "animals/duck.png",
+      "lines": {
+        "en": "audio/en/Duck.wav",
+        "tl": "audio/tl/Duck.wav",
+        "ceb": "audio/ceb/Duck.wav"
+      }
+    },
+    {
+      "slug": "cow",
+      "category": "animals",
+      "names": {
+        "en": "Cow",
+        "tl": "Baka",
+        "ceb": "Baka"
+      },
+      "card": "animals/cow.png",
+      "lines": {
+        "en": "audio/en/Cow.wav",
+        "tl": "audio/tl/Cow.wav",
+        "ceb": "audio/ceb/Cow.wav"
+      }
+    },
+    {
+      "slug": "pig",
+      "category": "animals",
+      "names": {
+        "en": "Pig",
+        "tl": "Baboy",
+        "ceb": "Baboy"
+      },
+      "card": "animals/pig.png",
+      "lines": {
+        "en": "audio/en/Pig.wav",
+        "tl": "audio/tl/Pig.wav",
+        "ceb": "audio/ceb/Pig.wav"
+      }
+    },
+    {
+      "slug": "elephant",
+      "category": "animals",
+      "names": {
+        "en": "Elephant",
+        "tl": "Elepante",
+        "ceb": "Elepante"
+      },
+      "card": "animals/elephant.png",
+      "lines": {
+        "en": "audio/en/Elephant.wav",
+        "tl": "audio/tl/Elephant.wav",
+        "ceb": "audio/ceb/Elephant.wav"
+      }
+    },
+    {
+      "slug": "frog",
+      "category": "animals",
+      "names": {
+        "en": "Frog",
+        "tl": "Palaka",
+        "ceb": "Baki"
+      },
+      "card": "animals/frog.png",
+      "lines": {
+        "en": "audio/en/Frog.wav",
+        "tl": "audio/tl/Frog.wav",
+        "ceb": "audio/ceb/Frog.wav"
+      }
+    },
+    {
+      "slug": "apple",
+      "category": "fruits",
+      "names": {
+        "en": "Apple",
+        "tl": "Mansanas",
+        "ceb": "Mansanas"
+      },
+      "card": "fruits/apple.png",
+      "lines": {
+        "en": "audio/en/Apple.wav",
+        "tl": "audio/tl/Apple.wav",
+        "ceb": "audio/ceb/Apple.wav"
+      }
+    },
+    {
+      "slug": "banana",
+      "category": "fruits",
+      "names": {
+        "en": "Banana",
+        "tl": "Saging",
+        "ceb": "Saging"
+      },
+      "card": "fruits/banana.png",
+      "lines": {
+        "en": "audio/en/Banana.wav",
+        "tl": "audio/tl/Banana.wav",
+        "ceb": "audio/ceb/Banana.wav"
+      }
+    },
+    {
+      "slug": "orange",
+      "category": "fruits",
+      "names": {
+        "en": "Orange",
+        "tl": "Kahel",
+        "ceb": "Kahel"
+      },
+      "card": "fruits/orange.png",
+      "lines": {
+        "en": "audio/en/Orange.wav",
+        "tl": "audio/tl/Orange.wav",
+        "ceb": "audio/ceb/Orange.wav"
+      }
+    },
+    {
+      "slug": "grapes",
+      "category": "fruits",
+      "names": {
+        "en": "Grapes",
+        "tl": "Ubas",
+        "ceb": "Ubas"
+      },
+      "card": "fruits/grapes.png",
+      "lines": {
+        "en": "audio/en/Grapes.wav",
+        "tl": "audio/tl/Grapes.wav",
+        "ceb": "audio/ceb/Grapes.wav"
+      }
+    },
+    {
+      "slug": "watermelon",
+      "category": "fruits",
+      "names": {
+        "en": "Watermelon",
+        "tl": "Pakwan",
+        "ceb": "Pakwan"
+      },
+      "card": "fruits/watermelon.png",
+      "lines": {
+        "en": "audio/en/Watermelon.wav",
+        "tl": "audio/tl/Watermelon.wav",
+        "ceb": "audio/ceb/Watermelon.wav"
+      }
+    },
+    {
+      "slug": "strawberry",
+      "category": "fruits",
+      "names": {
+        "en": "Strawberry",
+        "tl": "Strawberry",
+        "ceb": "Strawberry"
+      },
+      "card": "fruits/strawberry.png",
+      "lines": {
+        "en": "audio/en/Strawberry.wav",
+        "tl": "audio/tl/Strawberry.wav",
+        "ceb": "audio/ceb/Strawberry.wav"
+      }
+    },
+    {
+      "slug": "mango",
+      "category": "fruits",
+      "names": {
+        "en": "Mango",
+        "tl": "Mangga",
+        "ceb": "Mangga"
+      },
+      "card": "fruits/mango.png",
+      "lines": {
+        "en": "audio/en/Mango.wav",
+        "tl": "audio/tl/Mango.wav",
+        "ceb": "audio/ceb/Mango.wav"
+      }
+    },
+    {
+      "slug": "pineapple",
+      "category": "fruits",
+      "names": {
+        "en": "Pineapple",
+        "tl": "Pinya",
+        "ceb": "Pinya"
+      },
+      "card": "fruits/pineapple.png",
+      "lines": {
+        "en": "audio/en/Pineapple.wav",
+        "tl": "audio/tl/Pineapple.wav",
+        "ceb": "audio/ceb/Pineapple.wav"
+      }
+    },
+    {
+      "slug": "ball",
+      "category": "toys",
+      "names": {
+        "en": "Ball",
+        "tl": "Bola",
+        "ceb": "Bola"
+      },
+      "card": "toys/ball.png",
+      "lines": {
+        "en": "audio/en/Ball.wav",
+        "tl": "audio/tl/Ball.wav",
+        "ceb": "audio/ceb/Ball.wav"
+      }
+    },
+    {
+      "slug": "doll",
+      "category": "toys",
+      "names": {
+        "en": "Doll",
+        "tl": "Manika",
+        "ceb": "Munyeka"
+      },
+      "card": "toys/doll.png",
+      "lines": {
+        "en": "audio/en/Doll.wav",
+        "tl": "audio/tl/Doll.wav",
+        "ceb": "audio/ceb/Doll.wav"
+      }
+    },
+    {
+      "slug": "car",
+      "category": "toys",
+      "names": {
+        "en": "Car",
+        "tl": "Kotse",
+        "ceb": "Awto"
+      },
+      "card": "toys/car.png",
+      "lines": {
+        "en": "audio/en/Car.wav",
+        "tl": "audio/tl/Car.wav",
+        "ceb": "audio/ceb/Car.wav"
+      }
+    },
+    {
+      "slug": "teddy",
+      "category": "toys",
+      "names": {
+        "en": "Teddy bear",
+        "tl": "Teddy",
+        "ceb": "Teddy"
+      },
+      "card": "toys/teddy.png",
+      "lines": {
+        "en": "audio/en/Teddy.wav",
+        "tl": "audio/tl/Teddy.wav",
+        "ceb": "audio/ceb/Teddy.wav"
+      }
+    },
+    {
+      "slug": "blocks",
+      "category": "toys",
+      "names": {
+        "en": "Blocks",
+        "tl": "Bloke",
+        "ceb": "Bloke"
+      },
+      "card": "toys/blocks.png",
+      "lines": {
+        "en": "audio/en/Blocks.wav",
+        "tl": "audio/tl/Blocks.wav",
+        "ceb": "audio/ceb/Blocks.wav"
+      }
+    },
+    {
+      "slug": "kite",
+      "category": "toys",
+      "names": {
+        "en": "Kite",
+        "tl": "Saranggola",
+        "ceb": "Tabanog"
+      },
+      "card": "toys/kite.png",
+      "lines": {
+        "en": "audio/en/Kite.wav",
+        "tl": "audio/tl/Kite.wav",
+        "ceb": "audio/ceb/Kite.wav"
+      }
+    },
+    {
+      "slug": "bread",
+      "category": "food",
+      "names": {
+        "en": "Bread",
+        "tl": "Tinapay",
+        "ceb": "Tinapay"
+      },
+      "card": "food/bread.png",
+      "lines": {
+        "en": "audio/en/Bread.wav",
+        "tl": "audio/tl/Bread.wav",
+        "ceb": "audio/ceb/Bread.wav"
+      }
+    },
+    {
+      "slug": "milk",
+      "category": "food",
+      "names": {
+        "en": "Milk",
+        "tl": "Gatas",
+        "ceb": "Gatas"
+      },
+      "card": "food/milk.png",
+      "lines": {
+        "en": "audio/en/Milk.wav",
+        "tl": "audio/tl/Milk.wav",
+        "ceb": "audio/ceb/Milk.wav"
+      }
+    },
+    {
+      "slug": "water",
+      "category": "food",
+      "names": {
+        "en": "Water",
+        "tl": "Tubig",
+        "ceb": "Tubig"
+      },
+      "card": "food/water.png",
+      "lines": {
+        "en": "audio/en/Water.wav",
+        "tl": "audio/tl/Water.wav",
+        "ceb": "audio/ceb/Water.wav"
+      }
+    },
+    {
+      "slug": "egg",
+      "category": "food",
+      "names": {
+        "en": "Egg",
+        "tl": "Itlog",
+        "ceb": "Itlog"
+      },
+      "card": "food/egg.png",
+      "lines": {
+        "en": "audio/en/Egg.wav",
+        "tl": "audio/tl/Egg.wav",
+        "ceb": "audio/ceb/Egg.wav"
+      }
+    },
+    {
+      "slug": "rice",
+      "category": "food",
+      "names": {
+        "en": "Rice",
+        "tl": "Kanin",
+        "ceb": "Kan-on"
+      },
+      "card": "food/rice.png",
+      "lines": {
+        "en": "audio/en/Rice.wav",
+        "tl": "audio/tl/Rice.wav",
+        "ceb": "audio/ceb/Rice.wav"
+      }
+    },
+    {
+      "slug": "soap",
+      "category": "essentials",
+      "names": {
+        "en": "Soap",
+        "tl": "Sabon",
+        "ceb": "Sabon"
+      },
+      "card": "essentials/soap.png",
+      "lines": {
+        "en": "audio/en/Soap.wav",
+        "tl": "audio/tl/Soap.wav",
+        "ceb": "audio/ceb/Soap.wav"
+      }
+    },
+    {
+      "slug": "toothbrush",
+      "category": "essentials",
+      "names": {
+        "en": "Toothbrush",
+        "tl": "Sipilyo",
+        "ceb": "Sipilyo"
+      },
+      "card": "essentials/toothbrush.png",
+      "lines": {
+        "en": "audio/en/Toothbrush.wav",
+        "tl": "audio/tl/Toothbrush.wav",
+        "ceb": "audio/ceb/Toothbrush.wav"
+      }
+    },
+    {
+      "slug": "tissue",
+      "category": "essentials",
+      "names": {
+        "en": "Tissue",
+        "tl": "Tisyu",
+        "ceb": "Tisyu"
+      },
+      "card": "essentials/tissue.png",
+      "lines": {
+        "en": "audio/en/Tissue.wav",
+        "tl": "audio/tl/Tissue.wav",
+        "ceb": "audio/ceb/Tissue.wav"
+      }
+    },
+    {
+      "slug": "shampoo",
+      "category": "essentials",
+      "names": {
+        "en": "Shampoo",
+        "tl": "Syampu",
+        "ceb": "Syampu"
+      },
+      "card": "essentials/shampoo.png",
+      "lines": {
+        "en": "audio/en/Shampoo.wav",
+        "tl": "audio/tl/Shampoo.wav",
+        "ceb": "audio/ceb/Shampoo.wav"
+      }
+    },
+    {
+      "slug": "toothpaste",
+      "category": "essentials",
+      "names": {
+        "en": "Toothpaste",
+        "tl": "Toothpaste",
+        "ceb": "Toothpaste"
+      },
+      "card": "essentials/toothpaste.png",
+      "lines": {
+        "en": "audio/en/Toothpaste.wav",
+        "tl": "audio/tl/Toothpaste.wav",
+        "ceb": "audio/ceb/Toothpaste.wav"
+      }
+    },
+    {
+      "slug": "towel",
+      "category": "essentials",
+      "names": {
+        "en": "Towel",
+        "tl": "Tuwalya",
+        "ceb": "Tuwalya"
+      },
+      "card": "essentials/towel.png",
+      "lines": {
+        "en": "audio/en/Towel.wav",
+        "tl": "audio/tl/Towel.wav",
+        "ceb": "audio/ceb/Towel.wav"
+      }
+    }
+  ]
+}

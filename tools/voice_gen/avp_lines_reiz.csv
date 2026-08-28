@@ -1,0 +1,10 @@
+path,text,carrier,exaggeration,cfg_weight
+s3_profile.wav,"First the parent sets up the child's profile and sensory preferences — reduced motion, quieter sound. The app adapts to the child.",no,0.6,0.4
+s3_game.wav,"Every game is one clear instruction, one response, immediate feedback. That structure comes from Applied Behavior Analysis — and it's also how the app collects its data.",no,0.6,0.4
+s3_mascot.wav,"Notice BPS reacting. When the child gets it wrong, he never looks upset — just gently encouraging, then they try again.",no,0.6,0.4
+s3_result.wav,"After the cycle, here's the recommendation — explained in plain language, not scores the parent has to decode.",no,0.6,0.4
+s3_dashboard.wav,"Parents get a dashboard showing progress per domain, plus screen-time limits they control.",no,0.6,0.4
+s3_locator.wav,And the therapy directory. Free users see the centers; Premium ranks them by distance and hands off to your maps app.,no,0.6,0.4
+s3_offline.wav,"And this matters — turn the internet off, and the games keep working. Everything saves locally and syncs when you're back online.",no,0.6,0.4
+s4_stack.wav,"We want to be honest about what we used. Aumazing is built with Flutter and Flame, Supabase for the cloud database, SQLite on the device, XGBoost for the assessment model, PayMongo for payments, and the Google Maps SDK for the locator — all under their published licenses.",no,0.6,0.4
+s4_ai.wav,"We also used AI. BPS and Reiz were drawn as original artwork for this project, and their animations were generated from that artwork through the kie dot ai API. The narration you're hearing is our own voices, cloned from short recordings we made ourselves, using an open-source model called Chatterbox. We used AI coding assistants during development, and reviewed everything before it went in. The research and the manuscript are our own. No real child's data appears in this video.",no,0.6,0.4

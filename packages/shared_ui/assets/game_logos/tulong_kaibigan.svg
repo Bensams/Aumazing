@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <clipPath id="tile"><rect width="240" height="240" rx="48"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD6CC"/>
+      <stop offset="1" stop-color="#BFE8DA"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="240" height="240" rx="48" fill="url(#bg)"/>
+    <circle cx="66" cy="112" r="34" fill="#FFF1DC" stroke="#FFF" stroke-width="6"/>
+    <circle cx="174" cy="112" r="34" fill="#D8AE86" stroke="#FFF" stroke-width="6"/>
+    <g fill="#56566A">
+      <circle cx="56" cy="105" r="4"/><circle cx="76" cy="105" r="4"/>
+      <circle cx="164" cy="105" r="4"/><circle cx="184" cy="105" r="4"/>
+    </g>
+    <g fill="none" stroke="#56566A" stroke-width="5" stroke-linecap="round">
+      <path d="M54 121 Q66 131 78 121"/><path d="M162 121 Q174 131 186 121"/>
+    </g>
+    <path d="M88 165 Q120 139 152 165" fill="none" stroke="#FFF" stroke-width="8" stroke-linecap="round"/>
+    <path d="M143 148 L157 166 L137 172" fill="#FFF"/>
+    <circle cx="120" cy="157" r="22" fill="#F5C84C" stroke="#FFF" stroke-width="5"/>
+    <path d="M43 43 H115 Q127 43 127 55 V84 Q127 96 115 96 H83 L68 109 L71 96 H43 Q31 96 31 84 V55 Q31 43 43 43Z" fill="#FFF"/>
+    <text x="79" y="80" text-anchor="middle" font-size="34">⚽</text>
+  </g>
+</svg>

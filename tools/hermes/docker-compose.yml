@@ -1,0 +1,82 @@
+# Hermes Agent — autonomous operator for the aumazing capstone.
+#
+# Division of labour:
+#   Hermes      — owns the repo when you are away. Reads git history, plans,
+#                 edits the manuscript, drives the kanban board. Reachable
+#                 from your phone over Discord.
+#   Claude Code — runs natively on the host when you ARE at the PC, and holds
+#                 the Supabase + Atlassian (Jira/Confluence) MCP connections.
+#
+# The handoff bus is C:\Users\bened\.hermes — Hermes writes plans there,
+# Claude Code reads them directly off the host filesystem. No extra mount.
+#
+# WRITE ACCESS: the repo is mounted read-write and HERMES_WRITE_SAFE_ROOT
+# lists both /opt/data and /workspace/aumazing (os.pathsep-separated, ':' in
+# the Linux container). That gates the *file* tools; the `terminal` toolset
+# could always shell out. Keep Hermes on its own git branch so anything it
+# does is reviewable before it reaches dev/main.
+#
+# Usage (from E:\Projects\aumazing\tools\hermes):
+#   docker compose up -d
+#   docker compose exec hermes hermes chat       # interactive TUI
+#   docker compose logs -f gateway               # Discord bridge
+#   http://127.0.0.1:9119                        # dashboard
+#
+# Windows Docker Desktop: no network_mode: host, explicit port maps,
+# ${USERPROFILE} for the ~/.hermes volume.
+
+x-hermes-common: &hermes-common
+  image: nousresearch/hermes-agent:latest
+  restart: unless-stopped
+  volumes:
+    # Hermes state: config, sessions, skills, memories, plans, kanban.db.
+    - ${USERPROFILE}/.hermes:/opt/data
+    # The capstone repo, read-write. Hermes operates it while you are away.
+    - E:/Projects/aumazing:/workspace/aumazing
+  environment: &hermes-env
+    HERMES_UID: "1000"
+    HERMES_GID: "1000"
+    HERMES_WRITE_SAFE_ROOT: /opt/data:/workspace/aumazing
+    # Provider credentials. Put real values in .env next to this file.
+    # The primary model comes from ~/.hermes/config.yaml (9router).
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
+services:
+  hermes:
+    <<: *hermes-common
+    container_name: hermes
+    working_dir: /workspace/aumazing
+    stdin_open: true
+    tty: true
+    # Idle supervised container; drive it with `compose exec`.
+    command: ["sleep", "infinity"]
+
+  # Discord/Telegram/etc. bridge. This is the process that lets you talk to
+  # Hermes from your phone. DISCORD_BOT_TOKEN lives in ~/.hermes/.env, which
+  # the container already sees at /opt/data/.env.
+  gateway:
+    <<: *hermes-common
+    container_name: hermes-gateway
+    working_dir: /workspace/aumazing
+    depends_on:
+      - hermes
+    command: ["gateway", "run"]
+
+  dashboard:
+    <<: *hermes-common
+    container_name: hermes-dashboard
+    depends_on:
+      - hermes
+    environment:
+      <<: *hermes-env
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:9119:9119"
+    # NOTE: --insecure is a no-op as of the June 2026 hardening. Binding
+    # 0.0.0.0 (required for Docker port publishing to reach the process)
+    # engages the auth gate, so dashboard.basic_auth.username +
+    # password_hash MUST be set in ~/.hermes/config.yaml or this
+    # container crash-loops with "Refusing to bind dashboard to 0.0.0.0".
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]

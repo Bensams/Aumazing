@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "main_app (dev)",
+      "type": "dart",
+      "request": "launch",
+      "program": "apps/main_app/lib/main.dart",
+      "cwd": "apps/main_app",
+      "toolArgs": ["--dart-define-from-file=env/dev.json"]
+    },
+    {
+      "name": "main_app (release)",
+      "type": "dart",
+      "request": "launch",
+      "flutterMode": "release",
+      "program": "apps/main_app/lib/main.dart",
+      "cwd": "apps/main_app",
+      "toolArgs": ["--dart-define-from-file=env/dev.json"]
+    },
+    {
+      "name": "admin_portal (web)",
+      "type": "dart",
+      "request": "launch",
+      "program": "apps/admin_portal/lib/main.dart",
+      "cwd": "apps/admin_portal",
+      "args": ["-d", "chrome"],
+      "toolArgs": ["--dart-define-from-file=../main_app/env/dev.json"]
+    }
+  ]
+}
