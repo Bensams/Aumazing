@@ -121,7 +121,12 @@ class AnongNararamdamanGame extends FlameGame
   /// given and only the feeling is left to work out. The handler is expected to
   /// ask the question in the same breath, which is why [onPlayInstructionVo] is
   /// not fired for the opening trial when this callback is supplied.
-  final void Function(String sceneId)? onPlaySceneVo;
+  ///
+  /// The returned future, when any, resolves when the whole caption-and-
+  /// question narration has finished (or been dropped). [_startTrial] holds
+  /// that future against [_cardsTappable]: the cards open for answers only
+  /// after the child has heard the instruction (AUM-316).
+  final Future<void> Function(String sceneId)? onPlaySceneVo;
 
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
@@ -184,6 +189,12 @@ class AnongNararamdamanGame extends FlameGame
   int _hintsUsedThisRound = 0;
   bool _inResponseStep = false;
   bool _resolving = false;
+
+  /// Whether the emotion cards accept answers yet. False from [_startTrial]
+  /// until the scene narration ([onPlaySceneVo]) has finished, so the child
+  /// cannot claim the audio floor mid-instruction with a fast tap — the race
+  /// that used to swallow the "How is he feeling?" question (AUM-316).
+  bool _cardsTappable = true;
 
   /// Set once [_finish] has banked the session, so tearing the screen down
   /// afterwards does not report a completed game as an early exit.
@@ -331,6 +342,10 @@ class AnongNararamdamanGame extends FlameGame
 
     _inResponseStep = false;
     _resolving = false;
+    // The cards exist before the narration fires (the scene must be on screen
+    // to be narrated), so the gate — not their absence — is what keeps a fast
+    // tap from claiming the floor mid-instruction (AUM-316).
+    _cardsTappable = false;
     _wrongThisTrial = 0;
     _promptLevelThisTrial = 0;
     onResponseStepChanged?.call(false);
@@ -361,7 +376,16 @@ class AnongNararamdamanGame extends FlameGame
     _buddy.playTransition();
 
     // Narrate what happened, now that there is something on screen to narrate.
-    onPlaySceneVo?.call(scene.id);
+    // The cards stay untappable until the narration's future resolves — the
+    // instruction question rides inside it — so the child hears the question
+    // before the trial can be answered. With no narration wired (Game Lab
+    // registry default) there is nothing to wait for.
+    final sceneVo = onPlaySceneVo?.call(scene.id);
+    if (sceneVo == null) {
+      _cardsTappable = true;
+    } else {
+      unawaited(sceneVo.whenComplete(() => _cardsTappable = true));
+    }
 
     _trialStart = DateTime.now();
     analyticsShowStimulus();
@@ -517,7 +541,7 @@ class AnongNararamdamanGame extends FlameGame
           return;
         }
       }
-    } else {
+    } else if (_cardsTappable) {
       for (final card in _cards) {
         if (card.containsLocal(point)) {
           _answerEmotion(card);
@@ -525,6 +549,9 @@ class AnongNararamdamanGame extends FlameGame
         }
       }
     }
+    // A tap on a card that is not accepting answers yet falls through to the
+    // invalid-touch path below: the trial is still being narrated (AUM-316),
+    // and the metric should reflect that the tap did not answer anything.
 
     // Empty canvas. Recorded so overall_invalid_touch_count reflects genuinely
     // undirected taps rather than mis-hits on real targets — which the inflated

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -277,6 +279,64 @@ void main() {
       // for as long as it is alive, so letting the harness dispose the widget
       // after the body has returned leaves that timer pending and fails the
       // test on an invariant that has nothing to do with what it checks.
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+  });
+  group('scene narration gate', () {
+    testWidgets('cards answer only after the scene narration completes',
+        (tester) async {
+      // Wired exactly like the app screen: the narration future is held by
+      // the test until released, mirroring a caption still speaking. The
+      // gate exists because the cards are added BEFORE the narration fires,
+      // so a fast tap on an existing card used to claim the audio floor and
+      // swallow the "How is he feeling?" question (AUM-316).
+      final narrationDone = Completer<void>();
+      final answers = <int>[];
+      final game = AnongNararamdamanGame(
+        childId: 'test-child',
+        profile: DifficultyProfile.medium,
+        onStepChanged: (_) {},
+        onGameComplete: ({
+          required score,
+          required totalItems,
+          required errorCount,
+          required totalResponseTimeMs,
+          required extras,
+          analytics,
+        }) {},
+        onCorrectAnswer: () => answers.add(answers.length),
+        onPlaySceneVo: (sceneId) => narrationDone.future,
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: GameWidget(game: game))),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      final target = game.currentTarget;
+      expect(target, isNotNull,
+          reason: 'the game did not open a trial on load');
+      final card = game.children
+          .whereType<EmotionCard>()
+          .firstWhere((c) => c.emotion == target);
+
+      await tester.tapAt(Offset(card.position.x, card.position.y));
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(answers, isEmpty,
+          reason: 'a tap during the narration must not answer the trial');
+
+      narrationDone.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.tapAt(Offset(card.position.x, card.position.y));
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(answers, hasLength(1),
+          reason: 'once the narration is over the card answers normally');
+
+      // Tear the tree down inside the test — see the confusion-pairs test:
+      // the idle prompt timer must not outlive the widget tree.
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
