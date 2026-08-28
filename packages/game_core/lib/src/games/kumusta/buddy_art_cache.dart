@@ -51,7 +51,11 @@ class KumustaBuddyArt {
     'wave': _Grid(4, 3, 12),
     'present': _Grid(3, 2, 6),
     'celebrate': _Grid(4, 3, 12),
-    'point': _Grid(3, 2, 6),
+    // Dedicated greeting art. Present for bps only so far; absent sheets load
+    // best-effort and Greeting.fallbackAction covers the gap.
+    'high_five': _Grid(3, 2, 6),
+    'fist_bump': _Grid(3, 2, 6),
+    'encourage': _Grid(1, 1, 1),
     'nod': _Grid(3, 2, 6),
     'walk': _Grid(4, 3, 12),
   };
