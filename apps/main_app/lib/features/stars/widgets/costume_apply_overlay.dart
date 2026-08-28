@@ -121,45 +121,56 @@ class _CostumeApplyOverlayState extends State<CostumeApplyOverlay>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Center(
-      child: FadeTransition(
-        opacity: _controller,
-        child: ScaleTransition(
-          // A small settle from 96% — not a pop from zero. The difference is
-          // the difference between "noticed" and "startled".
-          scale: Tween<double>(begin: 0.96, end: 1).animate(_controller),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.lg,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: AppRadius.extraLargeBorder,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // The outfit being applied, so the wait is about something the
-                // child can see. This still art is already cached from the shop
-                // grid, so it shows at once while the animated sheets warm
-                // behind it.
-                SizedBox(
-                  height: 120,
-                  child: Image.asset(
-                    widget.costume.assetFor(widget.character),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.checkroom_rounded, size: 64),
+    // Shown via showDialog with no Material ancestor, so Text inherits the
+    // fallback DefaultTextStyle — which carries a yellow underline. Neutralize
+    // the inherited decoration here so the costume message is never underlined,
+    // whatever way this overlay happens to be mounted.
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationColor: Colors.transparent,
+      ),
+      child: Center(
+        child: FadeTransition(
+          opacity: _controller,
+          child: ScaleTransition(
+            // A small settle from 96% — not a pop from zero. The difference is
+            // the difference between "noticed" and "startled".
+            scale: Tween<double>(begin: 0.96, end: 1).animate(_controller),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.lg,
+              ),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: AppRadius.extraLargeBorder,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // The outfit being applied, so the wait is about something the
+                  // child can see. This still art is already cached from the shop
+                  // grid, so it shows at once while the animated sheets warm
+                  // behind it.
+                  SizedBox(
+                    height: 120,
+                    child: Image.asset(
+                      widget.costume.assetFor(widget.character),
+                      fit: BoxFit.contain,
+                      errorBuilder:
+                          (_, __, ___) =>
+                              const Icon(Icons.checkroom_rounded, size: 64),
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  _message,
-                  style: theme.textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    _message,
+                    style: theme.textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
