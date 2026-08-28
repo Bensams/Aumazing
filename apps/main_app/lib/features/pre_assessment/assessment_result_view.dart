@@ -1,4 +1,3 @@
-
 import 'package:provider/provider.dart';
 
 import '../../model/star_ledger_entry.dart';
@@ -35,12 +34,14 @@ class AssessmentResultView extends StatefulWidget {
     this.aiResponse,
     this.assessmentType = 'pre',
     this.progress,
+    this.overallProgress,
     this.onContinue,
     this.onRetake,
     this.onBack,
     this.backLabel = AssessmentLabels.home,
     this.showCelebration = true,
     this.showTherapyRecommendation = false,
+    this.nextModulePremiumRequired = false,
   });
 
   final List<AssessmentResult> results;
@@ -49,17 +50,18 @@ class AssessmentResultView extends StatefulWidget {
   final AiAssessmentResponse? aiResponse;
   final String assessmentType;
   final ResultProgress? progress;
+  final ResultOverallProgress? overallProgress;
   final VoidCallback? onContinue;
   final VoidCallback? onRetake;
   final VoidCallback? onBack;
   final String backLabel;
   final bool showCelebration;
   final bool showTherapyRecommendation;
+  final bool nextModulePremiumRequired;
 
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
 }
-
 
 class _AssessmentResultViewState extends State<AssessmentResultView> {
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
@@ -159,6 +161,8 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       activeGameIds: _activeGameIds,
       assessmentType: widget.assessmentType,
       progress: widget.progress,
+      overallProgress: widget.overallProgress,
+      premiumRequired: widget.nextModulePremiumRequired,
     );
 
     return AssessmentResultLayout(

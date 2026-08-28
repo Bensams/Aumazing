@@ -339,7 +339,10 @@ void main() {
         reason: 'the synthetic post run is deliberately the better one',
       );
       expect(result.improvement['response_time_improvement'], greaterThan(0));
-      expect(result.postAreaLevels, isNotEmpty);
+      expect(provider.postSnapshot!.prediction, isNull,
+          reason: 'the locked post run must not compute a prediction');
+      expect(provider.postSnapshot!.profile, isNotNull);
+      expect(result.nextModulePremiumRequired, isTrue);
     });
 
     test('the frozen pre-assessment snapshot survives intact', () async {
@@ -360,9 +363,11 @@ void main() {
       expect(provider.preSnapshot!.prediction!.areaLevels, preLevels);
       expect(provider.preSnapshot!.results.map((r) => r.id), preResultIds);
       expect(provider.preSnapshot!.profile, pre.profile);
-      // The hand-off is given the frozen baseline, not the freshly
-      // overwritten "latest" prediction.
-      expect(post.preAreaLevels, preLevels);
+      // A locked post run keeps the pre snapshot intact while freezing its
+      // own rubric-only profile and no recommendation prediction.
+      expect(provider.postSnapshot!.prediction, isNull);
+      expect(provider.postSnapshot!.profile, isNotNull);
+      expect(post.nextModulePremiumRequired, isTrue);
       expect(provider.postSnapshot!.assessmentRunId, 'run-2');
     });
 

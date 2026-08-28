@@ -605,8 +605,7 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
       message: 'Post-assessment simulated — handing off to the parent.',
       screen: PostAssessmentHandoffScreen(
         improvement: result.improvement,
-        preAreaLevels: result.preAreaLevels,
-        postAreaLevels: result.postAreaLevels,
+        nextModulePremiumRequired: result.nextModulePremiumRequired,
       ),
     );
   }
