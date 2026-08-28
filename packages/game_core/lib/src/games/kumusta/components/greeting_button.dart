@@ -29,6 +29,10 @@ class GreetingButton extends PositionComponent {
   /// Set while the correct-icon pulse (prompt rung 2) is running.
   bool _pulsing = false;
 
+  /// Whether prompt rung 2 is highlighting this card. Exposed so a test
+  /// can assert that a re-orientation did NOT reveal the answer.
+  bool get isPulsing => _pulsing;
+
   /// Set briefly after a wrong tap: the card bounces back rather than being
   /// removed or dimmed, so nothing is ever taken away from the child.
   bool _rejecting = false;
