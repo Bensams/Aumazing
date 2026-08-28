@@ -250,6 +250,31 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
+    test('explicit null prediction builds a rubric-only profile', () async {
+      final provider = _PredictingAssessmentProvider(
+        predictionGenerator: ({required childId, required sessions}) async =>
+            _postPrediction,
+      );
+      provider.resumeAssessmentRun(
+        OpenAssessmentRun(
+          id: 'pre-run',
+          childId: 'child-1',
+          type: 'pre',
+          startedAt: DateTime(2026, 8, 1),
+          sessions: [_assessmentSession('pre-run', type: 'pre')],
+        ),
+      );
+      await provider.predictWithAI('child-1', assessmentType: 'pre');
+
+      final profile = await provider.finalizeSupportProfile(
+        'child-1',
+        aiResponse: null,
+      );
+
+      expect(profile.recommendedDifficulty, 'beginner');
+      expect(profile.promptRepetition, 3);
+    });
+
     test('is built once and persisted for the later review', () async {
       final provider = AssessmentProvider();
       await provider.finalizeSupportProfile('child-1');

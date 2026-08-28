@@ -185,17 +185,22 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
   // ── Sections ─────────────────────────────────────────────────────────
 
   /// Section order, identical in every orientation and column count:
-  /// overview → progress → profile → game results → recommended settings →
-  /// recommended activities.
+  /// overview → overall progress → area progress → profile → game results →
+  /// recommended settings → recommended activities.
   ///
-  /// Progress sits directly under the overview: when a parent has run a
-  /// second assessment, "did this help?" is the question they opened the
+  /// Comparison cards sit directly under the overview: when a parent has run
+  /// a second assessment, "did this help?" is the question they opened the
   /// screen to answer.
   List<Widget> _sections() {
     final model = widget.model;
     final progress = model.progress;
     return [
       AssessmentOverviewCard(model: model, dense: _dense),
+      if (model.overallProgress != null)
+        AssessmentOverallProgressCard(
+          progress: model.overallProgress!,
+          dense: _dense,
+        ),
       if (progress != null && progress.hasAreas)
         AssessmentProgressCard(progress: progress, dense: _dense),
       if (model.hasAreas || model.sensoryObservations.isNotEmpty)
@@ -208,10 +213,13 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
           dense: _dense,
           onApply: widget.onApplyRecommendations,
         ),
-      if (model.hasLearningPath || model.learningPathUnavailable)
+      if (model.hasLearningPath ||
+          model.learningPathUnavailable ||
+          model.premiumRequired)
         AssessmentLearningPathCard(
           modules: model.learningPath,
           unavailable: model.learningPathUnavailable,
+          premiumRequired: model.premiumRequired,
           dense: _dense,
         ),
     ];

@@ -17,6 +17,8 @@ const _sidebarWidth = 320.0;
 AssessmentResultViewModel _model({
   AssessmentAnalysisSource source = AssessmentAnalysisSource.onDeviceAi,
   double? confidence = 0.82,
+  bool premiumRequired = false,
+  ResultOverallProgress? overallProgress,
 }) {
   return AssessmentResultViewModel(
     assessmentType: 'pre',
@@ -30,6 +32,7 @@ AssessmentResultViewModel _model({
         accuracy: 0.5,
         correctCount: 5,
         errorCount: 5,
+        offTargetCount: 2,
         totalItems: 10,
       ),
       ResultGameScore(
@@ -76,6 +79,8 @@ AssessmentResultViewModel _model({
       ResultModule(name: 'Match It', startingLevel: 2),
     ],
     sensoryObservations: const ['Prefers Quiet Play'],
+    premiumRequired: premiumRequired,
+    overallProgress: overallProgress,
   );
 }
 
@@ -187,6 +192,7 @@ void main() {
 
     testWidgets('raw counts are shown as counts, not percentages',
         (tester) async {
+      final semantics = tester.ensureSemantics();
       await tester.binding.setSurfaceSize(_phonePortrait);
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -201,7 +207,89 @@ void main() {
       expect(find.text('13'), findsOneWidget); // correct
       expect(find.text('7'), findsOneWidget); // errors
       expect(find.text('20'), findsOneWidget); // total items
+      expect(
+        find.text(
+          '5 Correct · 5 Errors · 2 Off-Target · 10 Total Items',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('50%'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(
+          'Copy Me, 50 percent, 5 correct, 5 errors, '
+          '2 Off-Target, 10 total items',
+        ),
+        findsOneWidget,
+      );
+      semantics.dispose();
     });
+
+    testWidgets(
+        'premium-required results keep game results and settings visible',
+        (tester) async {
+      await tester.binding.setSurfaceSize(_phonePortrait);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(_layout(
+        AssessmentResultPresentation.review,
+        model: _model(premiumRequired: true),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AssessmentLabels.gameResults.toUpperCase()),
+        findsOneWidget,
+      );
+      expect(
+        find.text(AssessmentLabels.recommendedSettings.toUpperCase()),
+        findsOneWidget,
+      );
+      expect(
+        find.text(AssessmentLabels.recommendedActivities.toUpperCase()),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'Premium is required to generate the next personalized module.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('administrator'), findsNothing);
+    });
+
+    testWidgets('overall progress preserves accuracy and response-time deltas',
+        (tester) async {
+      await tester.binding.setSurfaceSize(_phonePortrait);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_wrap(_layout(
+        AssessmentResultPresentation.completion,
+        model: _model(
+          overallProgress: const ResultOverallProgress(
+            accuracyDelta: 0.12,
+            responseTimeDeltaMs: 1250,
+          ),
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AssessmentLabels.overallProgress.toUpperCase()),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Accuracy improved by 12 percentage points '
+          'since the pre-assessment.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Responses are 1.3s faster on average.'),
+        findsOneWidget,
+      );
+    });
+
   });
 
   group('mode-specific framing', () {

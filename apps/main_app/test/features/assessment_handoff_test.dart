@@ -13,10 +13,11 @@ import 'package:aumazing/features/post_assessment/post_assessment_result_screen.
 import 'package:aumazing/features/pre_assessment/game_summary_dialog.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_result_screen.dart';
 import 'package:aumazing/features/pre_assessment/waiting_for_parent_screen.dart';
-import 'package:aumazing/model/area_level.dart';
+import 'package:aumazing/model/assessment_run_snapshot.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/support_profile.dart';
+import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/widgets/assessment_handoff.dart';
 import 'package:aumazing/widgets/mascot.dart';
@@ -60,8 +61,20 @@ void main() {
 
   late _RecordingVoiceOver narrator;
 
-  Widget host(Widget home) => ChangeNotifierProvider<ChildProvider>(
-        create: (_) => _TestChildProvider(),
+  Widget host(
+    Widget home, {
+    AssessmentProvider? assessmentProvider,
+  }) =>
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ChildProvider>(
+            create: (_) => _TestChildProvider(),
+          ),
+          if (assessmentProvider != null)
+            ChangeNotifierProvider<AssessmentProvider>(
+              create: (_) => assessmentProvider,
+            ),
+        ],
         child: MaterialApp(theme: AppTheme.light, home: home),
       );
 
@@ -283,29 +296,67 @@ void main() {
       'has_data': true,
       'accuracy_improvement': 12.5,
     };
-    const preAreaLevels = {
-      'communication': AreaLevel(
-        level: 'emerging',
-        levelInt: 1,
-        levelName: 'Emerging',
-        confidence: 0.8,
-      ),
-    };
-    const postAreaLevels = {
-      'communication': AreaLevel(
-        level: 'strength',
-        levelInt: 2,
-        levelName: 'Strength',
-        confidence: 0.9,
-      ),
-    };
+    const nextModulePremiumRequired = true;
+    const profile = SupportProfile(
+      communication: 'emerging',
+      socialInteraction: 'developing',
+      playSkills: 'developing',
+      attention: 'developing',
+    );
+    final preSnapshot = AssessmentRunSnapshot(
+      assessmentType: 'pre',
+      childId: 'child-1',
+      assessmentRunId: 'pre-run',
+      completedAt: DateTime(2026, 8, 1),
+      results: [
+        AssessmentResult(
+          id: 'pre-result',
+          childId: 'child-1',
+          assessmentRunId: 'pre-run',
+          type: 'pre',
+          gameId: 'copy_me',
+          score: 3,
+          totalItems: 5,
+          errorCount: 2,
+          avgResponseTimeMs: 1400,
+          completedAt: DateTime(2026, 8, 1),
+        ),
+      ],
+      profile: profile,
+    );
+    final postSnapshot = AssessmentRunSnapshot(
+      assessmentType: 'post',
+      childId: 'child-1',
+      assessmentRunId: 'post-run',
+      completedAt: DateTime(2026, 8, 15),
+      results: [
+        AssessmentResult(
+          id: 'post-result',
+          childId: 'child-1',
+          assessmentRunId: 'post-run',
+          type: 'post',
+          gameId: 'copy_me',
+          score: 4,
+          totalItems: 5,
+          errorCount: 1,
+          avgResponseTimeMs: 1200,
+          completedAt: DateTime(2026, 8, 15),
+        ),
+      ],
+      profile: profile,
+    );
 
-    Widget handoff() => host(PostAssessmentHandoffScreen(
-          improvement: improvement,
-          preAreaLevels: preAreaLevels,
-          postAreaLevels: postAreaLevels,
-          voiceOverFactory: (_) => narrator,
-        ));
+    Widget handoff() => host(
+          PostAssessmentHandoffScreen(
+            improvement: improvement,
+            nextModulePremiumRequired: nextModulePremiumRequired,
+            voiceOverFactory: (_) => narrator,
+          ),
+          assessmentProvider: _SnapshotAssessmentProvider(
+            preSnapshot: preSnapshot,
+            postSnapshot: postSnapshot,
+          ),
+        );
 
     testWidgets('reaches the child hand-off before the result screen',
         (tester) async {
@@ -351,8 +402,11 @@ void main() {
       final screen = tester.widget<PostAssessmentResultScreen>(
           find.byType(PostAssessmentResultScreen));
       expect(screen.improvement, same(improvement));
-      expect(screen.preAreaLevels, preAreaLevels);
-      expect(screen.postAreaLevels, postAreaLevels);
+      expect(
+        screen.nextModulePremiumRequired,
+        same(nextModulePremiumRequired),
+      );
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }
@@ -397,6 +451,23 @@ class _AlwaysCorrectPin implements ParentPinDelegate {
 
   @override
   Future<bool> onForgotPin(BuildContext context) async => false;
+}
+
+class _SnapshotAssessmentProvider extends AssessmentProvider {
+  _SnapshotAssessmentProvider({
+    required AssessmentRunSnapshot preSnapshot,
+    required AssessmentRunSnapshot postSnapshot,
+  })  : _preSnapshot = preSnapshot,
+        _postSnapshot = postSnapshot;
+
+  final AssessmentRunSnapshot _preSnapshot;
+  final AssessmentRunSnapshot _postSnapshot;
+
+  @override
+  AssessmentRunSnapshot get preSnapshot => _preSnapshot;
+
+  @override
+  AssessmentRunSnapshot get postSnapshot => _postSnapshot;
 }
 
 class _TestChildProvider extends ChildProvider {
