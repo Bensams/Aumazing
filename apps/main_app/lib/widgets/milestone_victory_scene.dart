@@ -49,6 +49,17 @@ enum MilestoneKind {
 /// composed trophy rather than a bare emoji.
 const Key kMilestoneTrophyKey = Key('milestone_trophy');
 
+/// Identifies the burst left where the trophy was, once the child has popped
+/// it. Present only after the pop.
+const Key kMilestoneTrophyPopKey = Key('milestone_trophy_popped');
+
+/// How long the trophy's own pop effect plays before it clears off the stage.
+/// Matches [RewardPopBurst]'s own run so the sparkle is never cut mid-flight.
+const Duration kMilestoneTrophyPopDuration = Duration(milliseconds: 600);
+
+/// The trophy's gold — its glow, and the colour its pop bursts in.
+const Color _kTrophyGold = Color(0xFFFFD54F);
+
 /// How long the companion takes to climb the podium toward the trophy.
 ///
 /// Matched to [Mascot]'s own entrance travel so the legs (walk frames, driven
@@ -88,6 +99,7 @@ class MilestoneVictoryScene extends StatefulWidget {
     this.reducedMotion,
     this.climbDuration = kMilestoneClimbDuration,
     this.onArrived,
+    this.onAllRewardsPopped,
     this.mascotHeight = 128,
   });
 
@@ -116,6 +128,11 @@ class MilestoneVictoryScene extends StatefulWidget {
   /// begins (immediately under reduced motion). Lets a container reveal a
   /// continue control only after the child can see they have arrived.
   final VoidCallback? onArrived;
+
+  /// Fired once, when the child has popped every reward on the stage — every
+  /// star *and* the trophy. Lets a container cut a long minimum hold short for
+  /// a child who has already collected everything there is to collect.
+  final VoidCallback? onAllRewardsPopped;
 
   /// Display height of the companion. Kept modest so the trophy stays a
   /// co-focal point rather than being dwarfed.
@@ -150,6 +167,21 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
 
   bool _firedArrived = false;
   bool _trophySfxPlayed = false;
+
+  /// Whether the child has popped the trophy, and whether they have cleared
+  /// every star. The stage counts as collected only when both are true.
+  bool _trophyPopped = false;
+  bool _starsCleared = false;
+
+  /// Guards [MilestoneVictoryScene.onAllRewardsPopped] against a second call.
+  bool _announcedAllPopped = false;
+
+  /// Clears the trophy's spent burst off the stage once it has played out.
+  Timer? _trophyPopTimer;
+
+  /// Whether the trophy's burst is still playing. The trophy itself is already
+  /// gone by then — this is only the sparkle it left behind.
+  bool _trophyPopEffectVisible = false;
 
   bool _resolveReducedMotion() {
     if (widget.reducedMotion != null) return widget.reducedMotion!;
@@ -241,17 +273,53 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     widget.onArrived?.call();
   }
 
-  /// Plays the trophy-pop SFX exactly once, no matter which path started it.
+  /// Plays the trophy-pop SFX exactly once *for the trophy's arrival*, no
+  /// matter which path started it. Popping the trophy later plays it again —
+  /// deliberately, since that is a second, separate event the child caused.
   void _maybePlayTrophyPop() {
     if (_trophySfxPlayed) return;
     _trophySfxPlayed = true;
     RewardSfxProvider.playTrophyPop(context);
   }
 
+  /// The child tapped the trophy: it bursts like a star and leaves the stage.
+  ///
+  /// One-way — a popped trophy cannot come back, so "popped everything" stays
+  /// a state the child reaches rather than one that flickers.
+  void _popTrophy() {
+    if (_trophyPopped) return;
+    RewardSfxProvider.playTrophyPop(context);
+    setState(() {
+      _trophyPopped = true;
+      _trophyPopEffectVisible = true;
+    });
+    _trophyPopTimer = Timer(kMilestoneTrophyPopDuration, () {
+      if (!mounted) return;
+      setState(() => _trophyPopEffectVisible = false);
+    });
+    _maybeAnnounceAllPopped();
+  }
+
+  /// The star field reports an empty stage.
+  void _onStarsCleared() {
+    if (_starsCleared) return;
+    _starsCleared = true;
+    _maybeAnnounceAllPopped();
+  }
+
+  /// Announces the fully collected stage once the trophy *and* every star are
+  /// gone. Order does not matter — whichever finishes last does the telling.
+  void _maybeAnnounceAllPopped() {
+    if (!_trophyPopped || !_starsCleared || _announcedAllPopped) return;
+    _announcedAllPopped = true;
+    widget.onAllRewardsPopped?.call();
+  }
+
   @override
   void dispose() {
     _trophyTimer?.cancel();
     _climbTimer?.cancel();
+    _trophyPopTimer?.cancel();
     _stage.dispose();
     _trophy.dispose();
     _climb.dispose();
@@ -378,26 +446,34 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
               ),
             ),
 
-            // The trophy, with its glow — a gentle bounce as it appears.
-            Positioned(
-              left: trophyCenter.dx - trophySize / 2,
-              top: trophyCenter.dy - trophySize / 2,
-              width: trophySize,
-              height: trophySize,
-              child: _buildTrophy(reduced, trophySize),
-            ),
-
             // The companion, climbing to rest on the top step beside the cup.
             _buildCompanion(size, trophyCenter, podiumTop, reduced),
-            // Interactive popping stars — layered above the podium, trophy
-            // and companion, and below the milestone message. Purely additive
-            // to the scene; the scene owns its lifecycle and quality/motion.
+            // Interactive popping stars — layered above the podium and the
+            // companion, and below the milestone message. Purely additive to
+            // the scene; the scene owns its lifecycle and quality/motion.
             StarReward(
               reducedMotion: reduced,
               effectScale: _resolveEffectScale(),
               appearDelay: reduced
                   ? Duration.zero
                   : const Duration(milliseconds: 800),
+              onAllPopped: _onStarsCleared,
+            ),
+
+            // The trophy, with its glow — a gentle bounce as it appears, and a
+            // burst when the child pops it.
+            //
+            // Sits *above* the star field for one reason: the field's own
+            // Listener is opaque across the whole stage, so anything beneath it
+            // can never be tapped. Being the hero of the scene, the trophy on
+            // top also reads correctly. Once popped it stops taking hits, so
+            // the stars it was covering become reachable again.
+            Positioned(
+              left: trophyCenter.dx - trophySize / 2,
+              top: trophyCenter.dy - trophySize / 2,
+              width: trophySize,
+              height: trophySize,
+              child: _buildTrophy(reduced, trophySize),
             ),
 
             // The milestone message.
@@ -416,7 +492,25 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     );
   }
 
+  /// The trophy the child climbed to — and, like the stars around it, a thing
+  /// they can pop. Popped, it bursts in its own gold and leaves the stage; the
+  /// space it occupied stops taking taps so the stars behind it come back into
+  /// reach.
   Widget _buildTrophy(bool reduced, double size) {
+    if (_trophyPopped) {
+      // Nothing left to hit — the burst is decoration on its way out.
+      return IgnorePointer(
+        child: _trophyPopEffectVisible
+            ? Center(
+                key: kMilestoneTrophyPopKey,
+                child: reduced
+                    ? const SizedBox.shrink()
+                    : RewardPopBurst(size: size, color: _kTrophyGold),
+              )
+            : const SizedBox.shrink(),
+      );
+    }
+
     // Bounce in (elastic) normally; a plain settle under reduced motion.
     final curve = reduced ? Curves.easeOut : Curves.elasticOut;
     final scale = 0.4 + curve.transform(_trophy.value).clamp(0.0, 1.4) * 0.6;
@@ -428,21 +522,32 @@ class _MilestoneVictorySceneState extends State<MilestoneVictoryScene>
     return Semantics(
       key: kMilestoneTrophyKey,
       label: 'Golden trophy',
-      image: true,
-      child: Transform.scale(
-        scale: scale.clamp(0.0, 1.0),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFFD54F).withValues(alpha: glow),
-                blurRadius: 44,
-                spreadRadius: 6,
-              ),
-            ],
+      button: true,
+      hint: 'Pop the trophy',
+      onTap: _popTrophy,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Down, not up: a toddler's tap often drifts, and waiting for a clean
+        // tap-up loses pops the child believes they made.
+        onTapDown: (_) => _popTrophy(),
+        child: Transform.scale(
+          scale: scale.clamp(0.0, 1.0),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _kTrophyGold.withValues(alpha: glow),
+                  blurRadius: 44,
+                  spreadRadius: 6,
+                ),
+              ],
+            ),
+            child: CustomPaint(
+              size: Size(size, size),
+              painter: _TrophyPainter(),
+            ),
           ),
-          child: CustomPaint(size: Size(size, size), painter: _TrophyPainter()),
         ),
       ),
     );
