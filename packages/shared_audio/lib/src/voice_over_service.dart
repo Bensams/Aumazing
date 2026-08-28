@@ -1117,6 +1117,19 @@ class VoiceOverService {
   /// see across that boundary, so the floor is arbitrated here.
   static final Set<VoiceOverService> _live = <VoiceOverService>{};
 
+  /// Stops every live instance's players.
+  ///
+  /// Called from the app lifecycle handler when the app loses focus or goes to
+  /// the background, so narration (which is contextual and per-screen) does not
+  /// keep talking under backgrounded BGM. Instances are per-screen and not
+  /// lifecycle-observed, so instance-level [stop] cannot reach them from the
+  /// BGM pause path. Safe no-op when [_live] is empty.
+  static Future<void> stopAll() async {
+    for (final service in List<VoiceOverService>.from(_live)) {
+      await service.stop();
+    }
+  }
+
   /// Monotonic ticket identifying whoever most recently claimed the floor.
   ///
   /// Stopping other players is not enough on its own. Starting a cue is
