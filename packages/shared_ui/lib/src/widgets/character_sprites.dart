@@ -118,6 +118,16 @@ class CharacterSprites {
     // Open palm rather than `point`'s index finger: an invitation to look at
     // something instead of an instruction. Same side as `point`.
     'present': SheetSpec(cols: 3, rows: 2, frames: 6, optional: true),
+    // A flat palm raised above the head, for Kumusta!'s greeting row.
+    // `present` stood in for it and sits too low to tell apart from an
+    // offered hand. Separated from `wave` by stillness, not by shape.
+    'high_five': SheetSpec(cols: 3, rows: 2, frames: 6, optional: true),
+    // A single fist offered forward and held, for Kumusta!'s greeting row.
+    // `celebrate` stood in for it and is the wrong shape: two closed hands
+    // raised overhead read as "I won", not "meet me". Optional until every
+    // character and costume has the PNG — a missing non-optional sheet takes
+    // the whole mascot off screen.
+    'fist_bump': SheetSpec(cols: 3, rows: 2, frames: 6, optional: true),
     // Mouth-only cycle, and unlike every other sheet the frame ORDER carries
     // no meaning — these are distinct mouth openings to shuffle through while
     // a line plays, not a gesture with a beginning and an end.
