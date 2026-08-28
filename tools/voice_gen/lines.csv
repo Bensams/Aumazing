@@ -141,6 +141,7 @@ reward_and_celebration/YoureAmazing.wav,You're amazing!,no,0.6,0.5,excited
 shapes/Circle.wav,Circle.,yes,0.5,0.5,neutral
 shapes/Diamond.wav,Diamond.,yes,0.5,0.5,neutral
 shapes/Heart.wav,Heart.,yes,0.5,0.5,neutral
+shapes/Square.wav,Square.,yes,0.5,0.5,neutral
 shapes/Star.wav,Star.,yes,0.5,0.5,neutral
 shapes/Triangle.wav,Triangle.,yes,0.5,0.5,neutral
 transition/GetReady.wav,Get ready!,no,0.6,0.5,happy

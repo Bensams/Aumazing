@@ -55,11 +55,11 @@ List<Offset> _join(List<List<Offset>> parts) {
 
 /// Glyph pools per difficulty tier.
 ///
-/// - Level 1 (Easy): pre-writing strokes — lines, circle, simple forms.
+/// - Level 1 (Easy): pre-writing strokes — lines, circle, square, simple forms.
 ///   These come before letterforms developmentally, so children who are
 ///   not yet ready for letters still succeed.
-/// - Level 2 (Medium): single-stroke letters and numbers.
-/// - Level 3 (Hard): multi-stroke letters and numbers.
+/// - Level 2 (Medium): angular shapes, single-stroke letters and numbers.
+/// - Level 3 (Hard): complex shapes, multi-stroke letters and numbers.
 class TraceGlyphs {
   TraceGlyphs._();
 
@@ -74,7 +74,16 @@ class TraceGlyphs {
       [Offset(0.15, 0.85), Offset(0.85, 0.15)],
     ]),
     TraceGlyph(label: 'circle', strokes: [
-      _arc(0.5, 0.5, 0.35, -90, 270, steps: 36),
+      _arc(0.5, 0.5, 0.40, -90, 270, steps: 36),
+    ]),
+    const TraceGlyph(label: 'square', strokes: [
+      [
+        Offset(0.15, 0.15),
+        Offset(0.85, 0.15),
+        Offset(0.85, 0.85),
+        Offset(0.15, 0.85),
+        Offset(0.15, 0.15),
+      ],
     ]),
     const TraceGlyph(label: 'V', strokes: [
       [Offset(0.20, 0.15), Offset(0.50, 0.85), Offset(0.80, 0.15)],
@@ -113,6 +122,23 @@ class TraceGlyphs {
         _arc(0.48, 0.67, 0.17, -90, 140),
       ]),
     ]),
+    const TraceGlyph(label: 'triangle', strokes: [
+      [
+        Offset(0.50, 0.10),
+        Offset(0.90, 0.85),
+        Offset(0.10, 0.85),
+        Offset(0.50, 0.10),
+      ],
+    ]),
+    const TraceGlyph(label: 'diamond', strokes: [
+      [
+        Offset(0.50, 0.10),
+        Offset(0.90, 0.50),
+        Offset(0.50, 0.90),
+        Offset(0.10, 0.50),
+        Offset(0.50, 0.10),
+      ],
+    ]),
   ];
 
   static final List<TraceGlyph> level3 = [
@@ -147,6 +173,24 @@ class TraceGlyphs {
         _arc(0.48, 0.63, 0.20, -135, 120),
       ]),
       const [Offset(0.35, 0.15), Offset(0.70, 0.15)],
+    ]),
+    const TraceGlyph(label: 'star', strokes: [
+      [
+        Offset(0.50, 0.08),
+        Offset(0.88, 0.82),
+        Offset(0.08, 0.33),
+        Offset(0.92, 0.33),
+        Offset(0.12, 0.82),
+        Offset(0.50, 0.08),
+      ],
+    ]),
+    TraceGlyph(label: 'heart', strokes: [
+      _join([
+        [const Offset(0.50, 0.90)],
+        _arc(0.30, 0.32, 0.20, 140, 360, steps: 22),
+        _arc(0.70, 0.32, 0.20, 180, 400, steps: 22),
+        [const Offset(0.50, 0.90)],
+      ]),
     ]),
   ];
 

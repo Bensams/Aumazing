@@ -55,6 +55,25 @@ void main() {
           [VoiceOverCue.numberThree]);
     });
 
+    test('every Trace It shape resolves to its spoken name', () {
+      const expected = {
+        'circle': VoiceOverCue.shapeCircle,
+        'square': VoiceOverCue.shapeSquare,
+        'triangle': VoiceOverCue.shapeTriangle,
+        'star': VoiceOverCue.shapeStar,
+        'heart': VoiceOverCue.shapeHeart,
+        'diamond': VoiceOverCue.shapeDiamond,
+      };
+
+      for (final entry in expected.entries) {
+        expect(
+          VoiceOverService.answerLabelCues(shape: entry.key),
+          [entry.value],
+          reason: '${entry.key} must be named after a completed trace',
+        );
+      }
+    });
+
     test('a sari-sari item resolves to its own cue', () {
       expect(VoiceOverService.answerLabelCues(item: 'Gatas'),
           [VoiceOverCue.itemGatas]);

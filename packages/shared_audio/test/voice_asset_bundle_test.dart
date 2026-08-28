@@ -18,6 +18,7 @@ void main() {
     VoiceOverCue.itemGatas,
     VoiceOverCue.colorGold,
     VoiceOverCue.shapeHeart,
+    VoiceOverCue.shapeSquare,
     // The Sari-Sari toy shelf: these four are the whole `toys` category, so a
     // missing clip is silence on every correct answer in that bin.
     VoiceOverCue.itemBola,

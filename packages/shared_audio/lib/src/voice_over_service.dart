@@ -346,6 +346,7 @@ enum VoiceOverCue {
 
   // ── Shape cues ─────────────────────────────────────────────────────
   shapeCircle,
+  shapeSquare,
   shapeStar,
   shapeTriangle,
   shapeDiamond,
@@ -631,6 +632,7 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
 
   // Shapes
   VoiceOverCue.shapeCircle: VoiceOverCategory.shapes,
+  VoiceOverCue.shapeSquare: VoiceOverCategory.shapes,
   VoiceOverCue.shapeStar: VoiceOverCategory.shapes,
   VoiceOverCue.shapeTriangle: VoiceOverCategory.shapes,
   VoiceOverCue.shapeDiamond: VoiceOverCategory.shapes,
@@ -928,6 +930,7 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
 
   // Shapes
   VoiceOverCue.shapeCircle: 'voice_over/shapes/Circle.wav',
+  VoiceOverCue.shapeSquare: 'voice_over/shapes/Square.wav',
   VoiceOverCue.shapeStar: 'voice_over/shapes/Star.wav',
   VoiceOverCue.shapeTriangle: 'voice_over/shapes/Triangle.wav',
   VoiceOverCue.shapeDiamond: 'voice_over/shapes/Diamond.wav',
@@ -2512,6 +2515,7 @@ class VoiceOverService {
 
   static const _shapeMap = {
     'circle': VoiceOverCue.shapeCircle,
+    'square': VoiceOverCue.shapeSquare,
     'star': VoiceOverCue.shapeStar,
     'triangle': VoiceOverCue.shapeTriangle,
     'diamond': VoiceOverCue.shapeDiamond,
