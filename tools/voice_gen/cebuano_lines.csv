@@ -189,6 +189,10 @@ routines/PutAway,Ihipos ang dulaan.,"warm, clear, friendly kid's voice, calm pac
 instruction/LookWhereImLooking,"Tan-awa kung asa nagtan-aw ang imong higala, dayon tapika kini.","warm, clear, friendly kid's voice, calm pace",calm
 instruction/LookOverThere,Tan-awa didto!,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/SayHelloBack,Pangumusta sab ka!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetWave,Ikaway!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetHighFive,Apir!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetFistBump,Beat!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetThumbsUp,Nindot!,"warm, clear, friendly kid's voice, calm pace",happy
 emotions/HowIsHeFeeling,Unsay iyang gibati?,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Happy,Malipayon.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Sad,Masulub-on.,"warm, clear, friendly kid's voice, calm pace",neutral
