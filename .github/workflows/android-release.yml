@@ -27,7 +27,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       - name: Analyze application
-        run: flutter analyze
+        # Infos are deprecation/style notices, not correctness issues, and
+        # accumulate naturally as Flutter/packages evolve; only warnings and
+        # errors should fail the build.
+        run: flutter analyze --no-fatal-infos
       - name: Run Flutter tests
         run: flutter test
       - name: Build release APK

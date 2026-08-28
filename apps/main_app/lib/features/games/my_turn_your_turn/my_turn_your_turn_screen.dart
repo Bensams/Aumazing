@@ -62,7 +62,6 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
   /// Guards against a duplicate game-complete callback recording the
   /// session (or advancing the flow) twice.
   bool _completionHandled = false;
-  bool _isBuddyTurn = true;
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
   String _voiceOverText = 'Wait for Buddy… 🐻';
@@ -152,7 +151,6 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen> {
       onTurnChanged: (isBuddy) {
         if (mounted) {
           setState(() {
-            _isBuddyTurn = isBuddy;
             // Update voice over text based on whose turn it is
             _voiceOverText = isBuddy 
                 ? 'Wait for Buddy… 🐻' 
