@@ -359,6 +359,9 @@ void main() {
 
       expect(service.preCalls, 1);
       expect(find.byType(WaitingForParentScreen), findsOneWidget);
+      // Past VoiceOverService's 4s native-operation backstop from the
+      // hand-off prompt, so no pending timer is left when the tree disposes.
+      await tester.pump(const Duration(seconds: 5));
     });
   });
 }
