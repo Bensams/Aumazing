@@ -158,29 +158,28 @@ class _KumustaScreenState extends State<KumustaScreen> {
     _voiceOverService.play(_cueFor(greeting));
   }
 
-  /// Maps a greeting to the nearest existing voice cue.
+  /// Names the greeting the buddy is offering.
   ///
-  /// Reused cues rather than four new recordings: every voice pack already
-  /// ships these, in all three languages, and a cue with no clip is silence on
-  /// device. Bespoke lines ("Apir!", "Beat!") would read better and are the
-  /// obvious upgrade — they need a pass through `tools/voice_gen` for every
-  /// pack first, which is why they are not here yet.
+  /// These four cues are dedicated recordings ("Apir!", "Beat!"), generated
+  /// through `tools/voice_gen` for all eighteen packs. They replaced borrowed
+  /// cues that named the wrong thing entirely: fistBump played "Now you try"
+  /// and thumbsUp played "Very good" — praise, spoken before the child had
+  /// done anything, which teaches that the reward arrives regardless of the
+  /// answer. wave played "Here we go", an opener rather than a greeting.
   ///
-  /// ponytail: greeting-specific VO. Add once `tools/voice_gen/lines.csv`
-  /// carries `greetings/Wave`, `HighFive`, `FistBump`, `ThumbsUp` and the
-  /// packs have been regenerated.
+  /// Saying the gesture aloud is also the only route in for a child who cannot
+  /// yet read the hand: the buddy's pose and the card glyph are both visual,
+  /// so without the word there is no non-visual way to answer the bid.
   VoiceOverCue _cueFor(Greeting greeting) {
     switch (greeting) {
       case Greeting.wave:
-        // "Hello" has no cue; "Here we go" is the warmest of the openers that
-        // does, and it reads as an approach rather than an instruction.
-        return VoiceOverCue.hereWeGo;
+        return VoiceOverCue.greetingWave;
       case Greeting.highFive:
-        return VoiceOverCue.bigHighFive;
+        return VoiceOverCue.greetingHighFive;
       case Greeting.fistBump:
-        return VoiceOverCue.nowYouTry;
+        return VoiceOverCue.greetingFistBump;
       case Greeting.thumbsUp:
-        return VoiceOverCue.veryGood;
+        return VoiceOverCue.greetingThumbsUp;
     }
   }
 
