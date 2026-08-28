@@ -11,6 +11,7 @@ export 'assessment/assessment_recommendations_card.dart';
 export 'assessment/assessment_result_actions.dart';
 export 'assessment/assessment_result_header.dart';
 export 'assessment/assessment_section_card.dart';
+export 'assessment/metric_info_icon.dart';
 export 'app_card.dart';
 export 'app_gradient_background.dart';
 export 'app_gradient_card.dart';

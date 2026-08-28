@@ -108,12 +108,11 @@ class GameplayReportScreen extends StatelessWidget {
                               Expanded(
                                 child: _Metric(
                                   label: 'Accuracy',
-                                  value:
-                                      session.totalItems == 0
-                                          ? '0%'
-                                          : _percent(
-                                            session.score / session.totalItems,
-                                          ),
+                                  value: session.totalItems == 0
+                                      ? '0%'
+                                      : _percent(
+                                          session.score / session.totalItems,
+                                        ),
                                   color: palette.primary,
                                 ),
                               ),
@@ -173,6 +172,14 @@ class GameplayReportScreen extends StatelessWidget {
                       title: 'Support and task behaviour',
                       icon: Icons.psychology_rounded,
                       palette: palette,
+                      // AUM-319: these two are easy to conflate —
+                      // off-task actions are deliberate, random touches
+                      // are unfocused. Each gets its own explanation.
+                      explanations: const {
+                        'Off-task actions': AssessmentLabels.offTaskActionsInfo,
+                        'Random touches': AssessmentLabels.randomTouchesInfo,
+                        'Errors': AssessmentLabels.errorTapsInfo,
+                      },
                       metrics: [
                         ('Errors', '${session.errorCount}'),
                         ('Retries', '${session.retryCount}'),
@@ -283,12 +290,18 @@ class _ReportSection extends StatelessWidget {
     required this.icon,
     required this.palette,
     required this.metrics,
+    this.explanations = const {},
   });
 
   final String title;
   final IconData icon;
   final GamePalette palette;
   final List<(String, String)> metrics;
+
+  /// Optional per-metric parent-friendly explanations (AUM-319), keyed by
+  /// the metric label. Metrics present here get a small info affordance
+  /// that opens the explanation in a bottom sheet.
+  final Map<String, String> explanations;
 
   @override
   Widget build(BuildContext context) {
@@ -325,6 +338,13 @@ class _ReportSection extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (explanations[label] != null) ...[
+                    const SizedBox(width: 4),
+                    MetricInfoIcon(
+                      title: label,
+                      explanations: [(label, explanations[label]!)],
+                    ),
+                  ],
                   const SizedBox(width: AppSpacing.sm),
                   Flexible(
                     child: Text(
