@@ -7,6 +7,7 @@ import 'package:aumazing/features/therapy/therapy_directory_screen.dart';
 import 'package:aumazing/model/ai_assessment_response.dart';
 import 'package:aumazing/model/area_level.dart';
 import 'package:aumazing/model/assessment_result.dart';
+import 'package:aumazing/model/assessment_run_snapshot.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/support_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
@@ -47,17 +48,20 @@ AssessmentResult _result(
   int score = 7,
   int totalItems = 10,
   int errorCount = 3,
+  String type = 'pre',
+  String assessmentRunId = 'run-1',
+  DateTime? completedAt,
 }) => AssessmentResult(
   id: 'r-$gameId',
   childId: 'child-1',
-  assessmentRunId: 'run-1',
-  type: 'pre',
+  assessmentRunId: assessmentRunId,
+  type: type,
   gameId: gameId,
   score: score,
   totalItems: totalItems,
   errorCount: errorCount,
   avgResponseTimeMs: 1800,
-  completedAt: DateTime(2026, 5, 12),
+  completedAt: completedAt ?? DateTime(2026, 5, 12),
 );
 
 final _results = [_result('copy_me'), _result('match_it')];
@@ -212,8 +216,6 @@ void main() {
       MaterialPageRoute(
         builder: (_) => const PostAssessmentResultScreen(
           improvement: {'has_data': true, 'post_accuracy': 0.4},
-          preAreaLevels: {},
-          postAreaLevels: {},
         ),
       ),
     );
@@ -223,6 +225,7 @@ void main() {
     await tester.tap(find.text('Maybe Later'));
     await tester.pumpAndSettle();
     expect(find.text('Explore Therapy Center support'), findsNothing);
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('exactly 50% results do not offer Therapy Center support', (
@@ -430,6 +433,17 @@ class _TestAssessmentProvider extends AssessmentProvider {
 
   @override
   SupportProfile? get supportProfile => _finalizedProfile;
+
+  @override
+  AssessmentRunSnapshot get postSnapshot => AssessmentRunSnapshot(
+        assessmentType: 'post',
+        childId: 'child-1',
+        assessmentRunId: 'post-run',
+        completedAt: DateTime(2026, 8, 15),
+        results: _criticalResults,
+        profile: _finalizedProfile,
+        prediction: _criticalAiResponse,
+      );
 
   @override
   Future<void> loadAssessments(String childId) async {}

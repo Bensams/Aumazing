@@ -13,13 +13,16 @@ import 'pre_assessment_intro_screen.dart';
 /// Assessment Summary — shown when the parent taps "Assessment" on the home
 /// screen after the child has completed the pre-assessment.
 ///
-/// Review mode of the shared result presentation: the same sections and the
-/// same values as the completion screen, laid out more densely, with the
-/// completion date and the "Retake Assessment" action.
+/// When a post-assessment has been completed, shows the post snapshot as the
+/// primary view so the parent sees their child's latest results, recommended
+/// settings, and recommended activities. The pre-assessment baseline remains
+/// viewable through the pre→post comparison card (AUM-161).
 ///
-/// The profile and recommendations come from the run as it was finalized
-/// (see [AssessmentProvider.supportProfile]) — reopening this screen after
-/// changing the child's sensory settings must not rewrite a past result.
+/// When only the pre-assessment exists, shows the pre snapshot as before.
+///
+/// The profile and recommendations come from the run as it was finalized —
+/// reopening this screen after changing the child's sensory settings must not
+/// rewrite a past result.
 class AssessmentDashboardScreen extends StatelessWidget {
   const AssessmentDashboardScreen({super.key});
 
@@ -27,12 +30,16 @@ class AssessmentDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<AssessmentProvider, ChildProvider>(
       builder: (context, assessProv, childProv, _) {
-        // Always the finalized PRE-assessment: its own results, its own
-        // profile and the prediction made from its own sessions. Reading
-        // `aiPrediction` here would show the post-assessment's levels under
-        // the pre-assessment's scores once a post-assessment has been run.
-        final snapshot = assessProv.preSnapshot;
-        final results = snapshot?.results ?? assessProv.preResults;
+        // Select the most recent completed run as the primary display.
+        // When a post-assessment exists and has a coherent snapshot, show
+        // that; otherwise show the pre-assessment snapshot.
+        final hasPost =
+            assessProv.hasPostAssessment && assessProv.postSnapshot != null;
+        final snapshot =
+            hasPost ? assessProv.postSnapshot : assessProv.preSnapshot;
+        final results =
+            snapshot?.results ??
+            (hasPost ? assessProv.postResults : assessProv.preResults);
 
         if (results.isEmpty) {
           return const Scaffold(
@@ -40,21 +47,26 @@ class AssessmentDashboardScreen extends StatelessWidget {
           );
         }
 
-        // Assessments finalized before profiles were persisted have nothing
-        // stored; those fall back to the rubric scorer so an existing child
-        // still sees a complete summary.
+        // Historical snapshots own their nullable profile and prediction.
+        // Never fill a missing frozen value from mutable provider state,
+        // which may already describe a different run. Legacy post snapshots
+        // did not finalize their own profile, so rebuild those from post data.
+        final snapshotProfile =
+            snapshot?.profileIsRunSpecific == true ? snapshot?.profile : null;
         final profile =
-            snapshot?.profile ??
-            assessProv.supportProfile ??
+            snapshotProfile ??
+            (snapshot == null ? assessProv.supportProfile : null) ??
             const ScoringService().generateProfile(
               results: results,
               sensorySettings: childProv.sensorySettingsMap,
             );
+        final prediction =
+            snapshot == null ? assessProv.aiPrediction : snapshot.prediction;
 
         // Once a post-assessment exists, the parent's first question is
-        // whether anything moved — so the baseline summary carries a
+        // whether anything moved — so the primary summary carries a
         // before/after card alongside it (AUM-161). Null whenever the two
-        // runs are not comparable, which shows the baseline on its own.
+        // runs are not comparable, which shows the primary on its own.
         final progress = AssessmentProgressService.compare(
           before: assessProv.preSnapshot,
           after: assessProv.postSnapshot,
@@ -64,12 +76,12 @@ class AssessmentDashboardScreen extends StatelessWidget {
           child: AssessmentResultView(
             results: results,
             profile: profile,
-            aiResponse:
-                snapshot?.prediction ??
-                (assessProv.hasPostAssessment ? null : assessProv.aiPrediction),
+            aiResponse: prediction,
+            assessmentType: snapshot?.assessmentType ?? 'pre',
             progress: progress,
             presentation: AssessmentResultPresentation.review,
             showTherapyRecommendation: true,
+            nextModulePremiumRequired: hasPost && assessProv.nextCycleLocked,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),
             onRetake: () {

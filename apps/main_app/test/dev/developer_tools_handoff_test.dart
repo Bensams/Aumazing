@@ -175,6 +175,7 @@ void main() {
           reason: 'the child is still holding the device');
       expect(find.text('Developer Tools'), findsNothing,
           reason: 'the toolbox closes before the hand-off is installed');
+      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('carries this run\'s real finalized values through',
@@ -190,6 +191,7 @@ void main() {
       expect(screen.results, service.preResult.results);
       expect(screen.profile, service.preResult.profile);
       expect(screen.aiResponse, service.preResult.aiResponse);
+      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('the results stay behind the parent verification gate',
@@ -223,8 +225,10 @@ void main() {
       final screen = tester.widget<PostAssessmentHandoffScreen>(
           find.byType(PostAssessmentHandoffScreen));
       expect(screen.improvement, service.postResult.improvement);
-      expect(screen.preAreaLevels, service.postResult.preAreaLevels);
-      expect(screen.postAreaLevels, service.postResult.postAreaLevels);
+      expect(
+        screen.nextModulePremiumRequired,
+        service.postResult.nextModulePremiumRequired,
+      );
       expect(find.byType(PostAssessmentResultScreen), findsNothing);
     });
 
@@ -393,8 +397,7 @@ class _ScriptedService extends DeveloperToolsService {
 
   final postResult = SimulatedPostAssessment(
     improvement: const {'has_data': true, 'accuracy_improvement': 0.2},
-    preAreaLevels: const {'communication': _emerging},
-    postAreaLevels: const {'communication': _strength},
+    nextModulePremiumRequired: true,
   );
 
   @override
@@ -446,13 +449,6 @@ const _emerging = AreaLevel(
   levelInt: 1,
   levelName: 'Emerging',
   confidence: 0.7,
-);
-
-const _strength = AreaLevel(
-  level: 'strength',
-  levelInt: 2,
-  levelName: 'Strength',
-  confidence: 0.9,
 );
 
 const _profile = SupportProfile(

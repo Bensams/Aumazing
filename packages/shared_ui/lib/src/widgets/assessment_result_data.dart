@@ -50,6 +50,7 @@ enum AssessmentAnalysisSource {
 abstract final class AssessmentLabels {
   static const title = 'Assessment Summary';
   static const overallPerformance = 'Overall Performance';
+  static const overallProgress = 'Overall Progress';
   static const gameResults = 'Game Results';
   static const developmentalProfile = 'Developmental Profile';
   static const recommendedSettings = 'Recommended Settings';
@@ -68,6 +69,7 @@ abstract final class AssessmentLabels {
 
   static const correct = 'Correct';
   static const errors = 'Errors';
+  static const offTarget = 'Off-Target';
   static const totalItems = 'Total Items';
   static const confidence = 'Confidence';
   static const sensory = 'Sensory';
@@ -123,6 +125,7 @@ class ResultGameScore {
     required this.accuracy,
     this.correctCount = 0,
     this.errorCount = 0,
+    this.offTargetCount = 0,
     this.totalItems = 0,
   });
 
@@ -139,6 +142,7 @@ class ResultGameScore {
   /// Raw counts, displayed separately from [accuracy].
   final int correctCount;
   final int errorCount;
+  final int offTargetCount;
   final int totalItems;
 }
 
@@ -160,6 +164,21 @@ class ResultModule {
   /// never a claim about the child themselves, and never diagnostic: the
   /// assessment reports skills observed in a game, not a condition.
   final String? reason;
+}
+
+/// Overall performance change between two comparable assessment runs.
+///
+/// Accuracy is a ratio delta (`post - pre`), while response time is a
+/// millisecond improvement (`pre - post`), so positive values mean faster.
+@immutable
+class ResultOverallProgress {
+  const ResultOverallProgress({
+    required this.accuracyDelta,
+    required this.responseTimeDeltaMs,
+  });
+
+  final double accuracyDelta;
+  final double responseTimeDeltaMs;
 }
 
 /// How one developmental area moved between two assessment runs (AUM-161).
@@ -323,6 +342,8 @@ class AssessmentResultViewModel {
     this.learningPath = const [],
     this.sensoryObservations = const [],
     this.learningPathUnavailable = false,
+    this.premiumRequired = false,
+    this.overallProgress,
     this.progress,
   }) : correctCount = AssessmentScoring.correctCount(games),
        errorCount = AssessmentScoring.errorCount(games),
@@ -359,6 +380,9 @@ class AssessmentResultViewModel {
   /// are not comparable.
   final ResultProgress? progress;
 
+  /// Run-wide accuracy and response-time change, when comparison data exists.
+  final ResultOverallProgress? overallProgress;
+
   bool get hasProgress => progress?.hasAreas ?? false;
 
   /// Recommended settings as finalized with the run.
@@ -386,6 +410,10 @@ class AssessmentResultViewModel {
 
   /// True when every recommendation was filtered out (no active games).
   final bool learningPathUnavailable;
+
+  /// True when Premium is required for the next personalized module.
+  /// Distinct from [learningPathUnavailable] (no active games).
+  final bool premiumRequired;
 
   /// Overall performance as a whole percent.
   int get overallPercent => AssessmentScoring.percent(overallAdjustedAccuracy);

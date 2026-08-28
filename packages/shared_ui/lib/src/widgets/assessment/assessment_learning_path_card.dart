@@ -12,6 +12,7 @@ class AssessmentLearningPathCard extends StatelessWidget {
     super.key,
     required this.modules,
     this.unavailable = false,
+    this.premiumRequired = false,
     this.dense = false,
   });
 
@@ -19,6 +20,10 @@ class AssessmentLearningPathCard extends StatelessWidget {
 
   /// True when every recommendation was filtered out (no active games).
   final bool unavailable;
+
+  /// True when a Premium subscription is required to generate the next
+  /// personalized module. Distinct from [unavailable] (admin/game issue).
+  final bool premiumRequired;
 
   final bool dense;
 
@@ -29,7 +34,33 @@ class AssessmentLearningPathCard extends StatelessWidget {
       emoji: '⭐',
       dense: dense,
       children:
-          unavailable
+          premiumRequired
+              ? [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        color: AppColors.primaryPurple,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Premium is required to generate the next '
+                          'personalized module. Upgrade to keep building a '
+                          'learning path tailored to your child.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ]
+              : unavailable
               ? [
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
