@@ -178,6 +178,23 @@ enum VoiceOverCue {
   /// turn to return it — the word "back" is doing the work, and nothing else
   /// in the library says it.
   sayHelloBack,
+  /// The four Kumusta! greetings, named aloud as the buddy offers each one.
+  ///
+  /// Kept in `instruction/` rather than a `greetings/` folder of their own.
+  /// A new folder has to be declared in pubspec.yaml for all eighteen packs,
+  /// and a folder that is missing there fails only on device, as silence —
+  /// which is what voice_asset_bundle_test exists to catch. `instruction/` is
+  /// already declared everywhere and already holds [sayHelloBack], so the
+  /// failure mode simply cannot happen.
+  ///
+  /// These replaced four borrowed cues that named the wrong thing: fistBump
+  /// played "Now you try" and thumbsUp played "Very good" — praise, spoken
+  /// before the child had done anything. Naming the gesture is also what makes
+  /// the bid answerable for a child who cannot yet read the hand.
+  greetingWave,
+  greetingHighFive,
+  greetingFistBump,
+  greetingThumbsUp,
   touchThePicture,
   watchCarefully,
   yourTurnInstruction,
@@ -506,6 +523,10 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.lookWhereImLooking: VoiceOverCategory.instruction,
   VoiceOverCue.lookOverThere: VoiceOverCategory.instruction,
   VoiceOverCue.sayHelloBack: VoiceOverCategory.instruction,
+  VoiceOverCue.greetingWave: VoiceOverCategory.instruction,
+  VoiceOverCue.greetingHighFive: VoiceOverCategory.instruction,
+  VoiceOverCue.greetingFistBump: VoiceOverCategory.instruction,
+  VoiceOverCue.greetingThumbsUp: VoiceOverCategory.instruction,
   VoiceOverCue.touchThePicture: VoiceOverCategory.instruction,
   VoiceOverCue.watchCarefully: VoiceOverCategory.instruction,
   VoiceOverCue.yourTurnInstruction: VoiceOverCategory.instruction,
@@ -786,6 +807,10 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
       'voice_over/instruction/LookWhereImLooking.wav',
   VoiceOverCue.lookOverThere: 'voice_over/instruction/LookOverThere.wav',
   VoiceOverCue.sayHelloBack: 'voice_over/instruction/SayHelloBack.wav',
+  VoiceOverCue.greetingWave: 'voice_over/instruction/GreetWave.wav',
+  VoiceOverCue.greetingHighFive: 'voice_over/instruction/GreetHighFive.wav',
+  VoiceOverCue.greetingFistBump: 'voice_over/instruction/GreetFistBump.wav',
+  VoiceOverCue.greetingThumbsUp: 'voice_over/instruction/GreetThumbsUp.wav',
   VoiceOverCue.touchThePicture: 'voice_over/instruction/TouchThePicture.wav',
   VoiceOverCue.watchCarefully: 'voice_over/instruction/WatchCarefully.wav',
   VoiceOverCue.yourTurnInstruction: 'voice_over/instruction/YourTurn.wav',

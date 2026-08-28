@@ -34,6 +34,7 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -270,6 +271,114 @@ ACTIONS = {
                 "reference image keeps holding that object, in that same hand, "
                 "on that same side of the frame, in every single frame. The "
                 "presenting arm is the other arm."),
+    # The raised open palm, for Kumusta!'s greeting row. `present` was standing
+    # in for it: an open palm, but held low at chest height and angled UP like a
+    # waiter's tray, which reads as "here, take this" rather than "hit my hand".
+    #
+    # The discriminator this sheet has to win is against `wave`, not against
+    # `present` — both are an open hand up near the head, and on the card row
+    # they are separated ONLY by the motion arcs (see paintGreetingGlyph). So
+    # the palm is prompted to face the VIEWER and to hold dead still: a raised
+    # open hand that moves side to side is a wave, whichever card it belongs to.
+    #
+    # Deliberately exaggerated. Every other one-armed action here reaches to the
+    # side at shoulder height and the model is comfortable there; a high five
+    # that only reaches shoulder height is indistinguishable from `present` at
+    # mascot size, so the arm is pushed clearly ABOVE the head where the pose
+    # has room to read.
+    "high_five": (3, 2, 6, "gesture",
+                  "The chibi character raises one arm HIGH for a big "
+                  "enthusiastic high five: it lifts its FREE arm — the arm "
+                  "that is not holding anything — straight up above its head, "
+                  "the arm fully extended upward and reaching, and holds it "
+                  "there steadily waiting for someone to slap it. The other "
+                  "arm stays down at that side. Big happy open smile, looking "
+                  "up toward its own raised hand with bright excited eyes. "
+                  "HAND SHAPE, the most important part of the image: the hand "
+                  "is WIDE OPEN and completely FLAT, all five fingers "
+                  "straight, extended and held together pointing upward, with "
+                  "the flat front of the palm turned to face the viewer "
+                  "directly, like a hand pressed against glass. "
+                  "The hand is clearly ABOVE the top of the head. "
+                  # The two hands it must not become. `wave` is the dangerous
+                  # one: same open hand, same height, separated on the card row
+                  # only by motion arcs.
+                  "The hand does NOT wave, does NOT swing or rock from side to "
+                  "side, and does NOT move back and forth — it goes up once "
+                  "and STOPS, completely still. The fingers are NOT curled, "
+                  "NOT spread apart into a star, NOT a fist, and the thumb is "
+                  "NOT raised on its own. It is NOT a wave, NOT a fist bump "
+                  "and NOT a thumbs-up. "
+                  "The character does NOT raise both arms, does NOT jump and "
+                  "keeps both feet flat on the ground. "
+                  "CRITICAL: the character is NOT mirrored, NOT flipped and "
+                  "does NOT turn around. Whichever hand holds an object in "
+                  "the reference image keeps holding that object, in that "
+                  "same hand, on that same side of the frame, in every single "
+                  "frame. The raised arm is the other arm."),
+    # A single fist offered forward and HELD, for Kumusta!'s greeting row.
+    # `celebrate` was standing in for it and is the wrong shape entirely: it
+    # raises BOTH closed hands overhead in a cheer, which reads as "I won"
+    # rather than "meet me" — and a greeting the child must answer in kind has
+    # to be legible as the thing they are being asked to do.
+    #
+    # Offered to its own left (frame RIGHT), the same side as `point` and
+    # `present`. Not a stylistic choice: that is the direction proven to
+    # generate cleanly on this model, and it keeps the three one-armed sheets
+    # cuttable against each other. A fist punched straight AT the camera is
+    # deliberately not asked for — this model will not foreshorten a flat
+    # front-facing 2D chibi (see the gaze table in SPRITES.md), so a forward
+    # bump would come back either flat or as a full-body turn.
+    #
+    # Carries `present`'s handedness anchor for `present`'s reason: a closed
+    # fist is symmetric enough that naming a side does not pin it, and the
+    # model can satisfy "its own left" by flipping the whole character. Tying
+    # the constraint to the OBJECT in the other hand is what stops that.
+    "fist_bump": (3, 2, 6, "gesture",
+                  "The chibi character offers a friendly fist bump: it lifts "
+                  "its FREE arm — the arm that is not holding anything — and "
+                  "extends it outward to its own left at chest height, the "
+                  "hand held steadily out in the air, waiting for someone to "
+                  "meet it. It is ONE hand only. The other arm stays down at "
+                  "that side. The character faces the viewer with a warm "
+                  "friendly smile and looks toward the offered hand. "
+                  # Take 1 asked for a "soft relaxed fist" and got an open
+                  # cupped hand with the thumb standing clear of it — which in
+                  # half the frames reads as a THUMBS-UP. That is the one
+                  # failure this sheet cannot have: thumbs-up and high-five are
+                  # two of the other three cards in the same row of choices, so
+                  # an ambiguous hand does not merely look wrong, it makes the
+                  # question unanswerable. "Relaxed" is what invited the open
+                  # hand; the shape is now specified finger by finger.
+                  "HAND SHAPE, the most important part of the image: the hand "
+                  "is a TIGHTLY CLOSED FIST. All four fingers are fully curled "
+                  "down into the palm and the thumb is folded flat ACROSS the "
+                  "front of the curled fingers. The rounded knuckles face the "
+                  "viewer. It is a compact closed ball of a hand with NO "
+                  "fingers extended and NO gaps. "
+                  # Take 2 landed 8/12, and THREE of the four failures came
+                  # back as a thumbs-up — while this clause was busy saying
+                  # "NOT a thumbs-up" twice. Naming a gesture in a negation
+                  # still puts it in the prompt, and the model reached for it.
+                  # The thumb is now described only by where it physically
+                  # lies, with the forbidden gestures left unnamed.
+                  "The thumb lies flat along the OUTSIDE of the curled index "
+                  "and middle fingers, pressed down against them, and does "
+                  "not stand away from the hand in any direction. Every "
+                  "digit is curled or folded; none stands up, out or apart. "
+                  "The hand is NOT open, NOT flat, NOT a palm and NOT "
+                  "cupped, and it is not holding or lifting any object. "
+                  # Every failure mode `celebrate` would have supplied, named.
+                  "The fist is NOT raised above the shoulder, NOT held over "
+                  "the head, NOT punching, NOT swinging, and the character "
+                  "does NOT raise both arms, does NOT cheer and does NOT "
+                  "clap. The movement is small, slow and inviting, and the "
+                  "fist comes to rest and stays still. "
+                  "CRITICAL: the character is NOT mirrored, NOT flipped and "
+                  "does NOT turn around. Whichever hand holds an object in "
+                  "the reference image keeps holding that object, in that "
+                  "same hand, on that same side of the frame, in every single "
+                  "frame. The offering arm is the other arm."),
     # The reaction to a wrong answer. Disappointment, NOT distress: a crying or
     # angry mascot models distress at a child who has just made a mistake,
     # which is the one reaction this app must not have. The prompt spells out
@@ -413,7 +522,13 @@ for _base in ("bps", "lexianne", "reiz"):
             # Literally inherited, never copied: Lexianne's base moved
             # 430 -> 500 for her `point` reach, and a duplicated number
             # here would have silently kept her costumes at the old cell.
-            "cell_w": CHARACTERS[_base]["cell_w"],
+            #
+            # Recorded as a REFERENCE to the base and resolved later, not read
+            # here. An established character has no "cell_w" at all — its width
+            # comes from the idle sheet it already shipped — so reading the key
+            # eagerly raised KeyError on `bps` and took the whole module down
+            # at import, before argparse could even print --help.
+            "inherit_cell_from": _base,
         }
 
 
@@ -523,7 +638,12 @@ def generate(name: str, action: str, first_frame_url: str) -> Path:
     tag = f"{name}_{action}"
     frames_dir = CACHE / f"frames_{tag}"
     if frames_dir.exists() and any(frames_dir.glob("*.png")):
-        print(f"[{tag}] cached")
+        # The key is (character, action) ONLY — it does not cover the prompt.
+        # So editing a prompt and re-running silently recomposes the OLD clip
+        # and prints nothing to say so; a rejected take can walk straight back
+        # into the shipping directory looking like a fresh generation. That
+        # happened to bps_fist_bump. Say which lever to pull.
+        print(f"[{tag}] cached (prompt NOT re-read — use --fresh to regenerate)")
         return frames_dir
 
     prompt = ACTIONS[action][4] + STYLE
@@ -753,6 +873,11 @@ def cell_width_for(name: str) -> int:
     has no sheet yet and takes the pinned `cell_w` from CHARACTERS.
     """
     cfg = CHARACTERS[name]
+    # Costumes defer to their base character, whose own width may itself come
+    # from a shipped idle sheet. Resolved here rather than at registration so
+    # the two never drift apart.
+    if "inherit_cell_from" in cfg:
+        return cell_width_for(cfg["inherit_cell_from"])
     if "from_sheet" in cfg and Path(cfg["from_sheet"]).exists():
         return Image.open(cfg["from_sheet"]).width // cfg["grid"][0]
     if "cell_w" in cfg:
@@ -766,6 +891,10 @@ def main():
     ap.add_argument("--only", help="comma-separated subset of actions")
     ap.add_argument("--compose-only", action="store_true",
                     help="skip the API, rebuild sheets from cached frames")
+    ap.add_argument("--fresh", action="store_true",
+                    help="discard cached frames for the named actions and "
+                         "regenerate — required after editing a prompt, since "
+                         "the cache key does not cover it. COSTS CREDITS.")
     ap.add_argument("--jobs", type=int, default=4, help="concurrent generations")
     args = ap.parse_args()
 
@@ -774,6 +903,16 @@ def main():
         if a not in ACTIONS:
             sys.exit(f"unknown action: {a}")
     CACHE.mkdir(parents=True, exist_ok=True)
+
+    if args.fresh:
+        if args.compose_only:
+            sys.exit("--fresh and --compose-only are contradictory")
+        for name in args.characters:
+            for a in actions:
+                stale = CACHE / f"frames_{name}_{a}"
+                if stale.exists():
+                    shutil.rmtree(stale)
+                    print(f"[{name}_{a}] cache cleared, will regenerate")
 
     for name in args.characters:
         print(f"\n=== {name} ===")

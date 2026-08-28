@@ -9,35 +9,63 @@ import 'dart:ui';
 /// with the same gesture they are offered with, so the child never has to learn
 /// a mapping on top of the social skill itself.
 ///
-/// [spriteAction] names the sprite sheet the buddy plays. Only [wave] has a
-/// sheet drawn for this gesture; the other three are *composed* from sheets
-/// that already ship (see `buddy_art_cache.dart`), which is why the mapping
-/// lives here rather than being assumed from the slug.
+/// [spriteAction] names the sprite sheet the buddy plays, which is why the
+/// mapping lives here rather than being assumed from the slug: it does not
+/// track the slug and must not be inferred from it.
+///
+/// [fallbackAction] is the nearest sheet that ships for EVERY character, used
+/// when [spriteAction] has not been drawn for the character in play. Dedicated
+/// art arrives one character at a time — 164 credits a sheet — so for a while
+/// bps greets with real gestures while reiz still composes from `present` and
+/// `celebrate`. Degrading to a near-miss sheet is right; degrading to the
+/// painted stand-in, which is what a bare missing sheet would do, is not.
 enum Greeting {
   /// An open hand swinging — the greeting every other one is measured against.
-  wave('wave', 'wave'),
+  wave('wave', 'wave', 'wave'),
 
-  /// A flat palm held up, waiting to be met. `present` is the sheet: an open
-  /// palm raised toward the viewer, generated as "look at this" but reading as
-  /// an offered hand once there is no object in it.
-  highFive('high_five', 'present'),
+  /// A flat palm held high, waiting to be met. `high_five` raises the arm
+  /// clear above the head with the palm turned to the viewer, and holds it.
+  ///
+  /// Falls back to `present`, which is the same open palm but held low at
+  /// chest height and angled up — legible as an offered hand, just a quieter
+  /// one than a child reaching up to be slapped.
+  highFive('high_five', 'high_five', 'present'),
 
-  /// A closed hand held out. `celebrate` raises both closed hands, which is the
-  /// only closed-hand sheet either character has.
-  fistBump('fist_bump', 'celebrate'),
+  /// A closed hand held out. `fist_bump` extends one arm to chest height with
+  /// the fingers curled and the knuckles forward, and holds it there.
+  ///
+  /// Falls back to `celebrate`, which raises BOTH closed hands overhead. That
+  /// is a cheer, not an offer, and it is the weakest fallback of the four —
+  /// the strongest argument for generating this sheet per character rather
+  /// than living with the stand-in.
+  fistBump('fist_bump', 'fist_bump', 'celebrate'),
 
-  /// A thumb up. `point` is the nearest sheet — one hand raised with a rigid
-  /// digit extended — and is the one action whose handedness is already pinned
-  /// (see scripts/SPRITES.md), so it never mirrors between frames.
-  thumbsUp('thumbs_up', 'point');
+  /// A thumb up. `encourage` *is* this gesture already — it is prompted as "a
+  /// warm reassuring thumbs-up" (scripts/generate_sprites.py) and ships
+  /// non-optional for every character and costume, so it needs no new art.
+  ///
+  /// It replaced `point`, which is a raised arm with a rigid index finger
+  /// extended: the one hand shape a child must not read as a thumb, in the one
+  /// game whose whole job is teaching them to tell these four hands apart. A
+  /// nearest-sheet stand-in is acceptable where it is merely approximate, and
+  /// not where it depicts a *different* greeting in the same row of choices.
+  ///
+  /// The cost is that a still has no raise to animate, so the buddy arrives at
+  /// the pose instead of moving into it. A dedicated clip would buy that back;
+  /// this mapping is honest art in the meantime, and free.
+  thumbsUp('thumbs_up', 'encourage', 'encourage');
 
-  const Greeting(this.slug, this.spriteAction);
+  const Greeting(this.slug, this.spriteAction, this.fallbackAction);
 
   /// Stable analytics identifier. Never rename: it lands in telemetry.
   final String slug;
 
   /// Sprite-sheet action the buddy plays to offer this greeting.
   final String spriteAction;
+
+  /// Sheet to play when [spriteAction] is not drawn for this character.
+  /// Ships for every character and costume, so it always resolves.
+  final String fallbackAction;
 }
 
 /// Draws [greeting] as a painted hand inside [box].
