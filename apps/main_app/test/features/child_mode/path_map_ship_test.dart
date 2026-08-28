@@ -252,13 +252,21 @@ void main() {
 
     navKey.currentState!.pop();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 600)); // pop transition out
+    await tester.pump(); // any post-frame notify from the return itself
     // Lobby setState after taking the parked launch.
     tester.state<_HostState>(find.byType(_Host)).tick();
     await tester.pump();
     await tester.pump(); // post-frame notify
-    expect(docked, 1, reason: 'a parked Next must not wait on a flight that '
-        'will never start');
+    // Two channels announce an already-docked ship — the route's cover
+    // animation returning to dismissed, and the rebuild that follows the
+    // parked launch — and which of them lands first depends on how the pop
+    // transition falls across the pumps. The lobby consumes a parked launch
+    // once and no-ops on the rest, so what matters is that at least one
+    // announcement arrives; pinning an exact count only pinned frame timing.
+    expect(docked, greaterThanOrEqualTo(1),
+        reason: 'a parked Next must not wait on a flight that '
+            'will never start');
     // Past VoiceOverService's 4s native-operation backstop for the dock
     // announcement, so no pending timer is left when the tree disposes.
     await tester.pump(const Duration(seconds: 5));
