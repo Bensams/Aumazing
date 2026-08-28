@@ -1,11 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../model/child_profile.dart';
 import '../../../providers/child_provider.dart';
 import '../reward_type.dart';
+
+/// Builds the narrator that speaks the reward hint. Injected by tests so they
+/// can assert on the cue without touching real audio assets.
+typedef RewardVoiceOverFactory = VoiceOverService Function(BuildContext context);
+
+/// How long after the reward appears the hint is spoken.
+///
+/// The game fires its own end-of-round celebration ("Well done!") in the same
+/// breath as showing this overlay. Speaking immediately would cut that line
+/// off mid-word — [VoiceOverService.play] takes the floor from whoever holds
+/// it — so the hint waits for the celebration to land and then follows it.
+const Duration kRewardHintDelay = Duration(milliseconds: 1800);
 
 /// Full-screen reward overlay that displays the celebration effect
 /// and waits for user interaction before completing
@@ -17,6 +32,9 @@ class RewardOverlay extends StatefulWidget {
   final bool showContinueButton;
   final String? continueButtonText;
 
+  /// Overrides the narrator used for the spoken hint. Tests only.
+  final RewardVoiceOverFactory? voiceOverFactory;
+
   const RewardOverlay({
     super.key,
     required this.rewardType,
@@ -25,6 +43,7 @@ class RewardOverlay extends StatefulWidget {
     this.minDisplayDuration = const Duration(seconds: 10),
     this.showContinueButton = true,
     this.continueButtonText,
+    this.voiceOverFactory,
   });
 
   /// Create overlay from child's reward preference
@@ -35,6 +54,7 @@ class RewardOverlay extends StatefulWidget {
     Duration minDisplayDuration = const Duration(seconds: 10),
     bool showContinueButton = true,
     String? continueButtonText,
+    RewardVoiceOverFactory? voiceOverFactory,
   }) {
     final rewardType = RewardSelector.getRewardForChild(profile);
     return RewardOverlay(
@@ -44,6 +64,7 @@ class RewardOverlay extends StatefulWidget {
       minDisplayDuration: minDisplayDuration,
       showContinueButton: showContinueButton,
       continueButtonText: continueButtonText,
+      voiceOverFactory: voiceOverFactory,
     );
   }
 
@@ -62,6 +83,11 @@ class _RewardOverlayState extends State<RewardOverlay>
   late Animation<double> _fadeAnimation;
   late AnimationController _dialogueFadeController;
   late Animation<double> _dialogueFadeAnimation;
+
+  /// Narrator for the spoken hint, built from the child's own voice pack.
+  late final VoiceOverService _voiceOver;
+  Timer? _hintTimer;
+  bool _spokeHint = false;
 
   @override
   void initState() {
@@ -91,12 +117,25 @@ class _RewardOverlayState extends State<RewardOverlay>
     ));
     _dialogueFadeController.forward();
 
+    _voiceOver = (widget.voiceOverFactory ?? _defaultVoiceOver)(context);
+
     // Start the flow: dialogue (2s) → reward (6s) → auto proceed
     _startRewardFlow();
   }
 
+  /// Builds the narrator from the child's own language, pack and prompt speed.
+  static VoiceOverService _defaultVoiceOver(BuildContext context) {
+    final childProvider = context.read<ChildProvider>();
+    return VoiceOverService(
+      languageCode: childProvider.voiceAssetFolder,
+      speed: childProvider.voicePlaybackRate,
+    );
+  }
+
   @override
   void dispose() {
+    _hintTimer?.cancel();
+    _voiceOver.dispose();
     _fadeController.dispose();
     _dialogueFadeController.dispose();
     super.dispose();
@@ -110,6 +149,15 @@ class _RewardOverlayState extends State<RewardOverlay>
 
     // No text card — fade the reward in immediately so children just pop it.
     _fadeController.forward();
+
+    // Say what to do with it. This is the whole instruction now that the
+    // written banner is gone, so it is spoken once, a beat after the game's own
+    // celebration line rather than over it.
+    _hintTimer = Timer(kRewardHintDelay, () {
+      if (!mounted || _spokeHint) return;
+      _spokeHint = true;
+      _voiceOver.play(widget.rewardType.hintCue);
+    });
 
     // Floor before it can auto-complete, so quick popping still gets a moment.
     Future.delayed(const Duration(seconds: 2), () {
@@ -257,33 +305,9 @@ class _RewardOverlayState extends State<RewardOverlay>
                     ),
                   ),
 
-                // Hint text
-                if (_showReward)
-                  Positioned(
-                    top: 60,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isSmallScreen ? 12 : 16,
-                          vertical: isSmallScreen ? 6 : 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(200),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          _getHintText(),
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 14 : 16,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF9B82C4),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                // The hint that used to sit here as a white banner is now
+                // spoken (see [kRewardHintDelay]). Nothing replaces it: the
+                // reward is the one screen with no text on it at all.
               ],
             ),
           ),
@@ -349,18 +373,6 @@ class _RewardOverlayState extends State<RewardOverlay>
     );
   }
 
-  String _getHintText() {
-    switch (widget.rewardType) {
-      case RewardType.balloons:
-        return '🎈 Pop the balloons!';
-      case RewardType.fireworks:
-        return '🎆 Tap the rockets!';
-      case RewardType.bubbles:
-        return '🫧 Pop the bubbles!';
-      case RewardType.candy:
-        return '🍬 Collect the candy!';
-    }
-  }
 }
 
 /// Extension to show reward overlay as a dialog

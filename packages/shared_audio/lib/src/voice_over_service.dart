@@ -182,6 +182,27 @@ enum VoiceOverCue {
   watchCarefully,
   yourTurnInstruction,
 
+  /// The reward overlay's "here is what to do with this" line, one per reward
+  /// kind: "Pop the balloons!", "Tap the rockets!", "Pop the bubbles!",
+  /// "Collect the candy!".
+  ///
+  /// These replace the written hint that used to sit at the top of the reward.
+  /// A pre-reader could not use it, and the reward is the one screen in the app
+  /// where nothing else is being measured — so the instruction is spoken and
+  /// the screen is left as pure play.
+  ///
+  /// Whole recorded lines rather than a composed "Pop the" + noun: the verb
+  /// differs per reward (rockets are tapped, candy is collected), and a single
+  /// utterance keeps the phrase's intonation instead of stitching two clips.
+  ///
+  /// They live in Instruction because that is what they are; the category is
+  /// never drawn at random outside the game_lab audio tester, so one surfacing
+  /// on its own is not possible in the app.
+  rewardHintBalloons,
+  rewardHintFireworks,
+  rewardHintBubbles,
+  rewardHintCandy,
+
   // ── Reward & Celebration ──────────────────────────────────────────
   //
   // The end of a session, not the end of a round. Every line here is safe to
@@ -488,6 +509,10 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.touchThePicture: VoiceOverCategory.instruction,
   VoiceOverCue.watchCarefully: VoiceOverCategory.instruction,
   VoiceOverCue.yourTurnInstruction: VoiceOverCategory.instruction,
+  VoiceOverCue.rewardHintBalloons: VoiceOverCategory.instruction,
+  VoiceOverCue.rewardHintFireworks: VoiceOverCategory.instruction,
+  VoiceOverCue.rewardHintBubbles: VoiceOverCategory.instruction,
+  VoiceOverCue.rewardHintCandy: VoiceOverCategory.instruction,
 
   // Reward & Celebration
   VoiceOverCue.awesomeWorkToday: VoiceOverCategory.rewardAndCelebration,
@@ -764,6 +789,12 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
   VoiceOverCue.touchThePicture: 'voice_over/instruction/TouchThePicture.wav',
   VoiceOverCue.watchCarefully: 'voice_over/instruction/WatchCarefully.wav',
   VoiceOverCue.yourTurnInstruction: 'voice_over/instruction/YourTurn.wav',
+  VoiceOverCue.rewardHintBalloons:
+      'voice_over/instruction/PopTheBalloons.wav',
+  VoiceOverCue.rewardHintFireworks:
+      'voice_over/instruction/TapTheRockets.wav',
+  VoiceOverCue.rewardHintBubbles: 'voice_over/instruction/PopTheBubbles.wav',
+  VoiceOverCue.rewardHintCandy: 'voice_over/instruction/CollectTheCandy.wav',
 
   // Reward & Celebration
   VoiceOverCue.awesomeWorkToday:
@@ -1732,6 +1763,15 @@ class VoiceOverService {
     VoiceOverCue.milestonePreAssessmentComplete: VoiceOverCue.youFinishedIt,
     VoiceOverCue.milestoneLearningPathComplete: VoiceOverCue.youFinishedIt,
     VoiceOverCue.milestonePostAssessmentComplete: VoiceOverCue.youFinishedIt,
+
+    // The reward hints replaced a written line, so a pack without them yet must
+    // not leave the reward with no instruction at all. "Tap here." is the one
+    // thing that is true of all four rewards — every one of them is played by
+    // touching what is on screen — and it is already in every pack.
+    VoiceOverCue.rewardHintBalloons: VoiceOverCue.tapHere,
+    VoiceOverCue.rewardHintFireworks: VoiceOverCue.tapHere,
+    VoiceOverCue.rewardHintBubbles: VoiceOverCue.tapHere,
+    VoiceOverCue.rewardHintCandy: VoiceOverCue.tapHere,
   };
 
   /// Applies the current [speed] to [player] before it starts a clip.
