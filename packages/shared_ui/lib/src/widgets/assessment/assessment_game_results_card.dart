@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../assessment_result_data.dart';
 import 'assessment_section_card.dart';
 
-/// Per-game results: adjusted accuracy as a percentage, with the raw
-/// correct/error counts as a caption underneath.
+/// Per-game results: adjusted accuracy as a percentage, with the raw correct,
+/// error, and off-target counts as a caption underneath.
 class AssessmentGameResultsCard extends StatelessWidget {
   const AssessmentGameResultsCard({
     super.key,
@@ -27,6 +27,7 @@ class AssessmentGameResultsCard extends StatelessWidget {
             label: '${game.emoji} ${game.name}',
             secondaryLabel: '${game.correctCount} ${AssessmentLabels.correct} · '
                 '${game.errorCount} ${AssessmentLabels.errors} · '
+                '${game.offTargetCount} ${AssessmentLabels.offTarget} · '
                 '${game.totalItems} ${AssessmentLabels.totalItems}',
             value: game.accuracy,
             color: AssessmentPalette.performance(
@@ -35,6 +36,7 @@ class AssessmentGameResultsCard extends StatelessWidget {
             semanticsLabel: '${game.name}, '
                 '${AssessmentScoring.percent(game.accuracy)} percent, '
                 '${game.correctCount} correct, ${game.errorCount} errors, '
+                '${game.offTargetCount} ${AssessmentLabels.offTarget}, '
                 '${game.totalItems} total items',
           ),
       ]),

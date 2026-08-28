@@ -384,6 +384,7 @@ class AssessmentProvider extends ChangeNotifier {
       completedAt: DateTime.now(),
       results: List.unmodifiable(results),
       profile: profile ?? _supportProfile,
+      profileIsRunSpecific: profile != null,
       prediction: identical(prediction, _omittedPrediction)
           ? _aiPrediction
           : prediction,
@@ -544,17 +545,19 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Builds and stores the support profile for the just-finalized run.
   ///
-  /// Call once, after [finalizePreAssessment] and [predictWithAI], with the
-  /// prediction that was actually used. The profile is persisted so the
-  /// parent's later "Assessment Summary" renders the very same values — a
-  /// retake overwrites it, matching how a retake replaces the results.
+  /// Call once, after finalization, with the prediction that belongs to that
+  /// run. Omitting [aiResponse] preserves the legacy behavior of reusing the
+  /// provider's active prediction; passing null explicitly builds only from
+  /// the fresh rubric so a Premium-locked post run cannot inherit an older
+  /// prediction.
   Future<SupportProfile> finalizeSupportProfile(
     String childId, {
-    AiAssessmentResponse? aiResponse,
+    AiAssessmentResponse? aiResponse = _omittedPrediction,
   }) async {
     final profile = SupportProfileBuilder.build(
       rubric: _rubricResult,
-      aiResponse: aiResponse ?? _aiPrediction,
+      aiResponse:
+          identical(aiResponse, _omittedPrediction) ? _aiPrediction : aiResponse,
     );
     _supportProfile = profile;
     try {

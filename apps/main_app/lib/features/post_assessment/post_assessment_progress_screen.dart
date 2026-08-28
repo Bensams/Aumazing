@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../dev/developer_automation_registry.dart';
-import '../../model/area_level.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../games/copy_me/copy_me_screen.dart';
@@ -325,15 +324,6 @@ class _PostAssessmentProgressScreenState
     final childId = _childId;
 
     try {
-      // The baseline is the frozen pre-assessment snapshot, not the current
-      // "latest" prediction: by the time this runs the post prediction is
-      // about to replace it, and the parent must be shown the run they were
-      // originally given as "before".
-      final preAreaLevels = Map<String, AreaLevel>.of(
-          assessProv.preSnapshot?.prediction?.areaLevels ??
-              assessProv.aiPrediction?.areaLevels ??
-              const {});
-
       // Saves post results per game and computes the improvement summary.
       final improvement = await assessProv.finalizePostAssessment(childId);
 
@@ -352,17 +342,31 @@ class _PostAssessmentProgressScreenState
 
       if (!mounted) return;
 
-      // A locked free cycle still records and compares the completed run, but
-      // must not generate or replace the next personalized module.
+      // A Premium-locked cycle must not touch the model: its prediction could
+      // never activate the next module, and reusing the provider's active
+      // prediction would leak the previous cycle's numbers into this run. A
+      // free cycle runs the prediction so the snapshot carries this run's own
+      // area levels and result labelling.
       final postPrediction = nextModulePremiumRequired
           ? null
           : await assessProv.predictWithAI(childId, assessmentType: 'post');
 
-      // Freeze this run alongside the untouched pre snapshot.
+      // Build a fresh support profile from the post rubric. Passing the
+      // prediction (possibly null) explicitly means a locked run reuses
+      // nothing — the profile is built from the rubric alone, never from an
+      // older prediction.
+      final postProfile = await assessProv.finalizeSupportProfile(
+        childId,
+        aiResponse: postPrediction,
+      );
+
+      // Freeze this run with its own prediction and profile alongside the
+      // untouched pre snapshot.
       await assessProv.captureRunSnapshot(
         childId,
         assessmentType: 'post',
         prediction: postPrediction,
+        profile: postProfile,
       );
 
       if (!mounted) return;
@@ -372,8 +376,6 @@ class _PostAssessmentProgressScreenState
         MaterialPageRoute(
           builder: (_) => PostAssessmentHandoffScreen(
             improvement: improvement,
-            preAreaLevels: preAreaLevels,
-            postAreaLevels: postPrediction?.areaLevels ?? const {},
             nextModulePremiumRequired: nextModulePremiumRequired,
             voiceOverFactory: widget.voiceOverFactory,
           ),
