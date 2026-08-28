@@ -43,6 +43,7 @@ class AssessmentResultLayout extends StatefulWidget {
     this.onApplyRecommendations,
     this.celebrationDuration = const Duration(milliseconds: 3000),
     this.background,
+    this.headerAction,
   });
 
   /// The canonical result data. The same instance drives both modes.
@@ -75,6 +76,9 @@ class AssessmentResultLayout extends StatefulWidget {
 
   /// Optional page background decoration (defaults to the flat app canvas).
   final Decoration? background;
+
+  /// Optional action beside the analysis source in the result header.
+  final Widget? headerAction;
 
   @override
   State<AssessmentResultLayout> createState() => _AssessmentResultLayoutState();
@@ -147,6 +151,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
                               model: widget.model,
                               presentation: widget.presentation,
                               onBack: _isCompletion ? null : widget.onBack,
+                              action: widget.headerAction,
                             ),
                             SizedBox(height: isWide ? 24 : 18),
                             _buildBody(columns),

@@ -15,6 +15,7 @@ class AssessmentResultHeader extends StatelessWidget {
     required this.model,
     required this.presentation,
     this.onBack,
+    this.action,
   });
 
   final AssessmentResultViewModel model;
@@ -22,6 +23,9 @@ class AssessmentResultHeader extends StatelessWidget {
 
   /// Review mode only: shows a back affordance beside the heading.
   final VoidCallback? onBack;
+
+  /// Optional parent-facing action, such as sharing the displayed result.
+  final Widget? action;
 
   bool get _isCompletion =>
       presentation == AssessmentResultPresentation.completion;
@@ -43,8 +47,18 @@ class AssessmentResultHeader extends StatelessWidget {
 
   static String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final local = date.toLocal();
     return '${months[local.month - 1]} ${local.day}, ${local.year}';
@@ -83,6 +97,7 @@ class AssessmentResultHeader extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             AssessmentSourceTag(source: model.source),
+            if (action != null) ...[const SizedBox(width: 4), action!],
           ],
         ),
         const SizedBox(height: 6),
