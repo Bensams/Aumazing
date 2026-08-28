@@ -18,6 +18,8 @@ class RewardSfxProvider extends InheritedWidget {
   final VoidCallback? onBubblePop;
   final VoidCallback? onFireworkPop;
   final VoidCallback? onCandyPop;
+  final VoidCallback? onStarPop;
+  final VoidCallback? onTrophyPop;
 
   const RewardSfxProvider({
     super.key,
@@ -25,6 +27,8 @@ class RewardSfxProvider extends InheritedWidget {
     this.onBubblePop,
     this.onFireworkPop,
     this.onCandyPop,
+    this.onStarPop,
+    this.onTrophyPop,
     required super.child,
   });
 
@@ -52,11 +56,23 @@ class RewardSfxProvider extends InheritedWidget {
     maybeOf(context)?.onCandyPop?.call();
   }
 
+  /// Play star pop SFX if provider exists in tree.
+  static void playStarPop(BuildContext context) {
+    maybeOf(context)?.onStarPop?.call();
+  }
+
+  /// Play trophy pop SFX if provider exists in tree.
+  static void playTrophyPop(BuildContext context) {
+    maybeOf(context)?.onTrophyPop?.call();
+  }
+
   @override
   bool updateShouldNotify(RewardSfxProvider oldWidget) {
     return onBalloonPop != oldWidget.onBalloonPop ||
         onBubblePop != oldWidget.onBubblePop ||
         onFireworkPop != oldWidget.onFireworkPop ||
-        onCandyPop != oldWidget.onCandyPop;
+        onCandyPop != oldWidget.onCandyPop ||
+        onStarPop != oldWidget.onStarPop ||
+        onTrophyPop != oldWidget.onTrophyPop;
   }
 }
