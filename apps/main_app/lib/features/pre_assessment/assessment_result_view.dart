@@ -13,6 +13,7 @@ import '../../model/support_profile.dart';
 import '../../services/active_games_service.dart';
 import '../../services/assessment_result_mapper.dart';
 import '../../services/recommended_settings_applier.dart';
+import '../../services/report_pdf_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../therapy/therapy_center_recommendation_dialog.dart';
 
@@ -42,6 +43,8 @@ class AssessmentResultView extends StatefulWidget {
     this.showCelebration = true,
     this.showTherapyRecommendation = false,
     this.nextModulePremiumRequired = false,
+    required this.childDisplayName,
+    this.reportPdfSharer,
   });
 
   final List<AssessmentResult> results;
@@ -58,6 +61,8 @@ class AssessmentResultView extends StatefulWidget {
   final bool showCelebration;
   final bool showTherapyRecommendation;
   final bool nextModulePremiumRequired;
+  final String childDisplayName;
+  final ReportPdfSharer? reportPdfSharer;
 
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
@@ -65,6 +70,7 @@ class AssessmentResultView extends StatefulWidget {
 
 class _AssessmentResultViewState extends State<AssessmentResultView> {
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
+  bool _sharingReport = false;
 
   @override
   void initState() {
@@ -152,6 +158,31 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
     if (mounted) setState(() => _activeGameIds = ids);
   }
 
+  Future<void> _shareReport(AssessmentResultViewModel model) async {
+    if (_sharingReport) return;
+    setState(() => _sharingReport = true);
+    try {
+      await (widget.reportPdfSharer ?? ReportPdfService())
+          .shareAssessmentReport(
+            model: model,
+            childDisplayName: widget.childDisplayName,
+          );
+    } catch (error) {
+      debugPrint('[AssessmentResultView] report share failed: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'We couldn\u2019t create or share the PDF. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharingReport = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final model = AssessmentResultMapper.build(
@@ -174,6 +205,22 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       backLabel: widget.backLabel,
       showCelebration: widget.showCelebration,
       onApplyRecommendations: _applyRecommendations,
+      headerAction: SizedBox(
+        width: 44,
+        height: 44,
+        child:
+            _sharingReport
+                ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : IconButton(
+                  key: const ValueKey('share-assessment-pdf'),
+                  tooltip: 'Share as PDF',
+                  onPressed: () => _shareReport(model),
+                  icon: const Icon(Icons.picture_as_pdf_rounded),
+                ),
+      ),
     );
   }
 }
