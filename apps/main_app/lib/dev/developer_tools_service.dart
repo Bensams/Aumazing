@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:game_core/game_core.dart';
 
 import '../model/ai_assessment_response.dart';
-import '../model/area_level.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
 import '../model/support_profile.dart';
@@ -77,19 +76,17 @@ class SimulatedPreAssessment {
   final AiAssessmentResponse? aiResponse;
 }
 
-/// What the simulated post-assessment produced — the same three values the
+/// What the simulated post-assessment produced — the same values the
 /// real [PostAssessmentProgressScreen] hands to `PostAssessmentHandoffScreen`.
 @immutable
 class SimulatedPostAssessment {
   const SimulatedPostAssessment({
     required this.improvement,
-    required this.preAreaLevels,
-    required this.postAreaLevels,
+    this.nextModulePremiumRequired = false,
   });
 
   final Map<String, dynamic> improvement;
-  final Map<String, AreaLevel> preAreaLevels;
-  final Map<String, AreaLevel> postAreaLevels;
+  final bool nextModulePremiumRequired;
 }
 
 /// The learning-path step a "Complete Next Module" press finished.
@@ -375,15 +372,6 @@ class DeveloperToolsService {
           'Run "Complete Pre-Assessment" first.');
     }
 
-    // Read the baseline before the run starts, exactly like the real screen:
-    // the frozen pre snapshot, not the "latest" prediction that this run is
-    // about to replace.
-    final preAreaLevels = Map<String, AreaLevel>.of(
-      provider.preSnapshot?.prediction?.areaLevels ??
-          provider.aiPrediction?.areaLevels ??
-          const {},
-    );
-
     await _startRun(provider: provider, childId: childId, type: 'post');
     await _recordSpecs(
       provider: provider,
@@ -398,12 +386,23 @@ class DeveloperToolsService {
           'The simulated post-assessment produced no comparison data.');
     }
 
-    final postPrediction =
-        await provider.predictWithAI(childId, assessmentType: 'post');
+    final nextModulePremiumRequired = provider.nextCycleLocked;
+
+    final postPrediction = nextModulePremiumRequired
+        ? null
+        : await provider.predictWithAI(childId, assessmentType: 'post');
+
+    // Build a fresh post support profile — mirrors the real progress screen.
+    final postProfile = await provider.finalizeSupportProfile(
+      childId,
+      aiResponse: postPrediction,
+    );
+
     await provider.captureRunSnapshot(
       childId,
       assessmentType: 'post',
       prediction: postPrediction,
+      profile: postProfile,
     );
 
     debugPrint('[DeveloperTools] Simulated post-assessment complete: '
@@ -411,8 +410,7 @@ class DeveloperToolsService {
 
     return SimulatedPostAssessment(
       improvement: improvement,
-      preAreaLevels: preAreaLevels,
-      postAreaLevels: postPrediction?.areaLevels ?? const {},
+      nextModulePremiumRequired: nextModulePremiumRequired,
     );
   }
 

@@ -26,6 +26,8 @@ abstract final class AssessmentResultMapper {
     Set<String>? activeGameIds,
     String assessmentType = 'pre',
     ResultProgress? progress,
+    ResultOverallProgress? overallProgress,
+    bool premiumRequired = false,
   }) {
     final games = [
       for (final result in results)
@@ -36,6 +38,7 @@ abstract final class AssessmentResultMapper {
           accuracy: result.adjustedAccuracy,
           correctCount: result.score,
           errorCount: result.errorCount,
+          offTargetCount: result.randomTouchCount,
           totalItems: result.totalItems,
         ),
     ];
@@ -86,6 +89,8 @@ abstract final class AssessmentResultMapper {
       learningPath: path,
       sensoryObservations: profile.sensoryNotes,
       learningPathUnavailable: filteredOut,
+      premiumRequired: premiumRequired,
+      overallProgress: overallProgress,
       progress: progress,
     );
   }
@@ -233,8 +238,9 @@ abstract final class AssessmentResultMapper {
         icon: Icons.speed_rounded,
         label: AssessmentLabels.difficulty,
         value: _titleCase(profile.recommendedDifficulty),
-        appliesToSetting:
-            RecommendedSettingsApplier.isAppliable(AssessmentLabels.difficulty),
+        appliesToSetting: RecommendedSettingsApplier.isAppliable(
+          AssessmentLabels.difficulty,
+        ),
       ),
       ResultRecommendation(
         icon: Icons.record_voice_over_rounded,
