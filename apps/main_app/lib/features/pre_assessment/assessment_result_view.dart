@@ -12,6 +12,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../services/active_games_service.dart';
 import '../../services/assessment_result_mapper.dart';
+import '../../services/assessment_summary_service.dart';
 import '../../services/recommended_settings_applier.dart';
 import '../../services/report_pdf_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
@@ -45,6 +46,7 @@ class AssessmentResultView extends StatefulWidget {
     this.nextModulePremiumRequired = false,
     required this.childDisplayName,
     this.reportPdfSharer,
+    this.summaryService,
   });
 
   final List<AssessmentResult> results;
@@ -64,6 +66,9 @@ class AssessmentResultView extends StatefulWidget {
   final String childDisplayName;
   final ReportPdfSharer? reportPdfSharer;
 
+  /// Injectable for tests; defaults to the shared singleton.
+  final AssessmentSummaryService? summaryService;
+
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
 }
@@ -72,11 +77,17 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
   bool _sharingReport = false;
 
+  /// The summarizer's narrative, once it has arrived. Null until then — and
+  /// forever, when the summarizer is unreachable — in which case the rubric
+  /// summary the mapper builds is what stays on screen.
+  String? _aiSummary;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _awardStars();
+      _loadAiSummary();
       if (widget.showTherapyRecommendation &&
           local_scoring.AssessmentScoring.isCriticallyPoor(widget.results) &&
           mounted) {
@@ -153,6 +164,54 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
     );
   }
 
+  /// Asks the summarizer to rewrite this result's summary in warm, plain
+  /// language, then swaps it in.
+  ///
+  /// Best-effort by construction: the screen has already rendered the rubric
+  /// summary by the time this runs, and [AssessmentSummaryService] answers
+  /// with that same fallback on no internet, timeout, quota, or a missing
+  /// key — so nothing here can delay, blank, or break the result. When a
+  /// comparable earlier run exists the request is a progress narrative
+  /// (before -> after) instead of a snapshot.
+  Future<void> _loadAiSummary() async {
+    if (!mounted) return;
+    final model = _buildModel();
+    if (!model.hasAreas) return;
+
+    // Same preference that drives the localized voice-overs. A host without
+    // ChildProvider still gets a summary, in English.
+    var languageCode = 'en';
+    try {
+      languageCode = context.read<ChildProvider>().language.slug;
+    } on ProviderNotFoundException {
+      debugPrint('[AssessmentResultView] no ChildProvider; summarizing in en');
+    }
+
+    final progressAreas = model.progress?.areas ?? const [];
+    final summary = await (widget.summaryService ??
+            AssessmentSummaryService.instance)
+        .summarize(
+          areas: [
+            for (final area in model.areas)
+              {'name': area.label, 'level': area.levelName},
+          ],
+          previousAreas: [
+            for (final area in progressAreas)
+              {'name': area.label, 'level': area.beforeLevelName},
+          ],
+          overallPct: model.overallPercent,
+          supportLevel: model.supportLevel ?? 'moderate',
+          recommendations: [
+            for (final step in model.learningPath) step.name,
+          ],
+          fallback: model.summary,
+          languageCode: languageCode,
+        );
+
+    if (!mounted || !summary.isAi) return;
+    setState(() => _aiSummary = summary.text);
+  }
+
   Future<void> _loadActiveGameIds() async {
     final ids = await ActiveGamesService.instance.activeGameIds;
     if (mounted) setState(() => _activeGameIds = ids);
@@ -183,18 +242,21 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
     }
   }
 
+  AssessmentResultViewModel _buildModel() => AssessmentResultMapper.build(
+    results: widget.results,
+    profile: widget.profile,
+    aiResponse: widget.aiResponse,
+    activeGameIds: _activeGameIds,
+    assessmentType: widget.assessmentType,
+    progress: widget.progress,
+    overallProgress: widget.overallProgress,
+    premiumRequired: widget.nextModulePremiumRequired,
+    aiSummary: _aiSummary,
+  );
+
   @override
   Widget build(BuildContext context) {
-    final model = AssessmentResultMapper.build(
-      results: widget.results,
-      profile: widget.profile,
-      aiResponse: widget.aiResponse,
-      activeGameIds: _activeGameIds,
-      assessmentType: widget.assessmentType,
-      progress: widget.progress,
-      overallProgress: widget.overallProgress,
-      premiumRequired: widget.nextModulePremiumRequired,
-    );
+    final model = _buildModel();
 
     return AssessmentResultLayout(
       model: model,

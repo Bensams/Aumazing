@@ -28,6 +28,7 @@ abstract final class AssessmentResultMapper {
     ResultProgress? progress,
     ResultOverallProgress? overallProgress,
     bool premiumRequired = false,
+    String? aiSummary,
   }) {
     final games = [
       for (final result in results)
@@ -80,7 +81,8 @@ abstract final class AssessmentResultMapper {
       recommendations: buildRecommendations(profile),
       source: resolveSource(results: results, aiResponse: aiResponse),
       confidence: aiResponse?.confidence,
-      summary: _summary(aiResponse),
+      summary: _summary(aiResponse, aiSummary),
+      summaryIsAi: aiSummary != null && aiSummary.trim().isNotEmpty,
       profileDisplayName:
           aiResponse != null && !aiResponse.hasAreaLevels
               ? aiResponse.profileDisplayName
@@ -319,7 +321,19 @@ abstract final class AssessmentResultMapper {
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
-  static String _summary(AiAssessmentResponse? aiResponse) {
+  /// The narrative shown above the numbers.
+  ///
+  /// [aiSummary] — the cloud summarizer's sentences, when they arrived. It
+  /// wins when present, because it says the same thing in warmer words; the
+  /// rubric text below is what the parent sees offline, on any summarizer
+  /// failure, and for the moment before the AI text lands.
+  static String _summary(
+    AiAssessmentResponse? aiResponse, [
+    String? aiSummary,
+  ]) {
+    if (aiSummary != null && aiSummary.trim().isNotEmpty) {
+      return aiSummary.trim();
+    }
     final summary = aiResponse?.summary;
     if (summary != null && summary.trim().isNotEmpty) return summary;
     return 'Your child completed all the activities. Review each skill area '

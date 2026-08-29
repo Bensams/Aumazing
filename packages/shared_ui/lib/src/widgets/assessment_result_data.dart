@@ -57,6 +57,7 @@ abstract final class AssessmentLabels {
   static const recommendedActivities = 'Recommended Activities';
   static const progressSinceFirst = 'Progress Since the First Assessment';
   static const aiAnalysis = 'AI Analysis';
+  static const aiSummary = 'AI Summary';
   static const onDeviceAi = 'On-Device AI';
   static const ruleBased = 'Rule-Based';
 
@@ -362,6 +363,7 @@ class AssessmentResultViewModel {
     this.completedAt,
     this.confidence,
     this.summary = '',
+    this.summaryIsAi = false,
     this.profileDisplayName,
     this.supportLevel,
     this.learningPath = const [],
@@ -420,6 +422,12 @@ class AssessmentResultViewModel {
 
   /// Parent-friendly narrative summary.
   final String summary;
+
+  /// True when [summary] was written by the cloud summarizer rather than
+  /// assembled from the built-in rubric templates. Only the wording differs
+  /// — the levels, scores and recommendations are the same either way — so
+  /// this labels the sentence, it never changes what the result says.
+  final bool summaryIsAi;
 
   /// Legacy single-profile display name, when the model emitted one.
   final String? profileDisplayName;
