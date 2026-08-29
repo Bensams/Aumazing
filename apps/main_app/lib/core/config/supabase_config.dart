@@ -8,8 +8,8 @@
 /// The Supabase URL and anon (publishable) key have safe defaults so the
 /// app runs even without the define file — they are public by design (RLS
 /// enforces all data access), mirroring [ApiConfig.aiAssessmentBaseUrl].
-/// The sensitive OAuth values (Facebook token) have NO default and must be
-/// supplied via the define file for social login to work.
+/// The sensitive OAuth values have NO default and must be supplied via
+/// the define file for social login to work.
 class SupabaseConfig {
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
@@ -28,12 +28,6 @@ class SupabaseConfig {
   /// Google OAuth iOS client ID (only needed for iOS builds).
   static const String googleIosClientId =
       String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
-
-  // ── Facebook OAuth ───────────────────────────────────────────────────
-  static const String facebookAppId =
-      String.fromEnvironment('FACEBOOK_APP_ID');
-  static const String facebookClientToken =
-      String.fromEnvironment('FACEBOOK_CLIENT_TOKEN');
 
   /// True when the required backend values were provided at build time.
   static bool get isConfigured =>

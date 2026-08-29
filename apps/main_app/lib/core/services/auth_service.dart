@@ -1,7 +1,6 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,42 +23,6 @@ abstract class GoogleAuthClient {
   Future<GoogleAuthTokens?> attemptLightweightAuthentication();
 
   Future<GoogleAuthTokens> authenticate();
-}
-
-abstract class FacebookAuthClient {
-  Future<LoginResult> login({
-    List<String> permissions,
-    LoginBehavior loginBehavior,
-    LoginTracking loginTracking,
-    String? nonce,
-  });
-
-  Future<Map<String, dynamic>> getUserData({String fields});
-
-  Future<void> logOut();
-}
-
-class DefaultFacebookAuthClient implements FacebookAuthClient {
-  @override
-  Future<Map<String, dynamic>> getUserData({
-    String fields = 'name,email,picture.width(200)',
-  }) => FacebookAuth.instance.getUserData(fields: fields);
-
-  @override
-  Future<LoginResult> login({
-    List<String> permissions = const ['email', 'public_profile'],
-    LoginBehavior loginBehavior = LoginBehavior.nativeWithFallback,
-    LoginTracking loginTracking = LoginTracking.limited,
-    String? nonce,
-  }) => FacebookAuth.instance.login(
-    permissions: permissions,
-    loginBehavior: loginBehavior,
-    loginTracking: loginTracking,
-    nonce: nonce,
-  );
-
-  @override
-  Future<void> logOut() => FacebookAuth.instance.logOut();
 }
 
 class DefaultGoogleAuthClient implements GoogleAuthClient {
@@ -339,7 +302,6 @@ class AuthService {
   final Uuid _uuid = const Uuid();
   final SupabaseAuthClient _supabaseAuth;
   final GoogleAuthClient _googleAuth;
-  final FacebookAuthClient _facebookAuth;
   bool _googleInitialized = false;
 
   // Guest mode support
@@ -358,14 +320,12 @@ class AuthService {
   AuthService({
     SupabaseAuthClient? supabaseAuth,
     GoogleAuthClient? googleAuth,
-    FacebookAuthClient? facebookAuth,
     LocalDbService? localDb,
     ProtectedStorage? protectedStorage,
   }) : _supabaseAuth =
            supabaseAuth ??
            DefaultSupabaseAuthClient(Supabase.instance.client.auth),
        _googleAuth = googleAuth ?? DefaultGoogleAuthClient(),
-       _facebookAuth = facebookAuth ?? DefaultFacebookAuthClient(),
        _localDb = localDb ?? localDbService,
        _protectedStorage = protectedStorage ?? ProtectedStorage();
 
@@ -452,7 +412,7 @@ class AuthService {
   /// guest session is found.
   ///
   /// A guest account is considered "unbound" when [User.isAnonymous] is true
-  /// (i.e., it has not been linked to Google/Facebook/email).
+  /// (i.e., it has not been linked to Google or email).
   ///
   /// When token restore fails and a new anonymous account is created, child
   /// profiles keyed to the old guest user ID are automatically migrated to
@@ -535,8 +495,8 @@ class AuthService {
 
   /// Clear the stored guest refresh token and user ID.
   ///
-  /// Call this when the guest account is bound to a provider (Google,
-  /// Facebook, email) so that a fresh guest account will be created on
+  /// Call this when the guest account is bound to a provider (Google or
+  /// email) so that a fresh guest account will be created on
   /// the next guest sign-in.
   Future<void> clearStoredGuestSession() async {
     await _protectedStorage.delete(_guestRefreshTokenKey);
@@ -740,64 +700,6 @@ class AuthService {
     return response;
   }
 
-  // --- Facebook Sign-In ---
-
-  Future<AuthResponse> signInWithFacebook() async {
-    debugPrint('[FacebookAuth] Starting Facebook Sign-In flow...');
-
-    try {
-      // Trigger Facebook login
-      final LoginResult result = await _facebookAuth.login(
-        permissions: ['email', 'public_profile'],
-        loginBehavior: LoginBehavior.nativeWithFallback,
-      );
-
-      debugPrint('[FacebookAuth] Login result: ${result.status}');
-
-      if (result.status == LoginStatus.success) {
-        final String? accessToken = result.accessToken?.tokenString;
-        if (accessToken == null) {
-          throw AuthException(
-            'Facebook sign-in could not be completed. '
-            'Please try again, or sign in with your email instead.',
-          );
-        }
-        debugPrint('[FacebookAuth] Access token obtained');
-
-        // Get user data from Facebook
-        final userData = await _facebookAuth.getUserData(
-          fields: 'email,first_name,last_name,name,picture',
-        );
-        debugPrint('[FacebookAuth] User data retrieved: ${userData['name']}');
-
-        final response = await _supabaseAuth.signInWithIdToken(
-          provider: OAuthProvider.facebook,
-          idToken: accessToken,
-        );
-        debugPrint('[FacebookAuth] Supabase native sign-in succeeded');
-        return response;
-      } else if (result.status == LoginStatus.cancelled) {
-        debugPrint('[FacebookAuth] User cancelled login');
-        throw AuthException('Facebook sign-in was cancelled.');
-      } else if (result.status == LoginStatus.failed) {
-        debugPrint('[FacebookAuth] Login failed: ${result.message}');
-        throw AuthException(
-          result.message ?? 'Facebook sign-in failed. Please try again.',
-        );
-      } else {
-        throw AuthException('Facebook sign-in is already in progress.');
-      }
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      debugPrint('[FacebookAuth] Unexpected error: $e');
-      throw AuthException(
-        'Facebook sign-in could not be completed. '
-        'Please try again, or sign in with your email instead.',
-      );
-    }
-  }
-
   // --- Email OTP Verification ---
 
   Future<AuthResponse> verifyOTP({
@@ -909,11 +811,6 @@ class AuthService {
     } catch (e) {
       debugPrint('Google sign-out cleanup: $e');
     }
-    try {
-      await _facebookAuth.logOut();
-    } catch (e) {
-      debugPrint('Facebook sign-out cleanup: $e');
-    }
 
     if (isAnonymous) {
       // Use local scope to preserve the refresh token on the server so the
@@ -952,11 +849,6 @@ class AuthService {
       await GoogleSignIn.instance.disconnect();
     } catch (e) {
       debugPrint('Google delete-account cleanup: $e');
-    }
-    try {
-      await _facebookAuth.logOut();
-    } catch (e) {
-      debugPrint('Facebook delete-account cleanup: $e');
     }
     try {
       // The server-side user is gone; local scope just drops the session.
