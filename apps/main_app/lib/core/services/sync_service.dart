@@ -230,24 +230,15 @@ class SyncService {
       LocalTables.caregiverQuestionnaires,
       _mapQuestionnaireToSupabase,
     ),
-    _TableSyncSpec(
+    _TableSyncSpec.aggregated(
       LocalTables.assessmentResults,
-      _mapAssessmentResultToSupabase,
+      _groupAssessmentResultsForSupabase,
     ),
     _TableSyncSpec(
       LocalTables.moduleRecommendations,
       _mapRecommendationToSupabase,
     ),
     _TableSyncSpec(LocalTables.assessmentComparisons, _mapComparisonToSupabase),
-    _TableSyncSpec(LocalTables.sensoryConsent, _mapSensoryConsentToSupabase),
-    _TableSyncSpec(
-      LocalTables.sensoryRoundMetrics,
-      _mapSensoryRoundMetricsToSupabase,
-    ),
-    _TableSyncSpec(
-      LocalTables.sensoryPreferences,
-      _mapSensoryPreferencesToSupabase,
-    ),
   ];
 
   /// Upload all pending records for one table: chunked batch upserts with a
@@ -267,15 +258,34 @@ class SyncService {
     var synced = 0;
     var failed = 0;
 
-    for (var i = 0; i < records.length; i += _uploadChunkSize) {
-      final chunk = records.sublist(
+    final groups = spec.group(records);
+
+    // An aggregating spec may legitimately leave rows out (e.g. an
+    // assessment result with no run has nowhere to go remotely). Settle them
+    // here: left pending they would be retried on every pass forever, which
+    // is exactly the failure this sync path used to exhibit.
+    final grouped = {for (final g in groups) ...g.localIds};
+    final skipped = [
+      for (final r in records)
+        if (!grouped.contains(r['id'] as String)) r['id'] as String,
+    ];
+    if (skipped.isNotEmpty) {
+      debugPrint(
+        '[SyncService] ${spec.localTable}: ${skipped.length} row(s) have no '
+        'remote counterpart, settling them locally',
+      );
+      await _localDb.markSyncedBatch(spec.localTable, skipped);
+    }
+
+    for (var i = 0; i < groups.length; i += _uploadChunkSize) {
+      final chunk = groups.sublist(
         i,
-        i + _uploadChunkSize > records.length
-            ? records.length
+        i + _uploadChunkSize > groups.length
+            ? groups.length
             : i + _uploadChunkSize,
       );
-      final ids = [for (final r in chunk) r['id'] as String];
-      final payload = [for (final r in chunk) spec.toSupabase(r)];
+      final ids = [for (final g in chunk) ...g.localIds];
+      final payload = [for (final g in chunk) g.payload];
 
       await _localDb.markSyncingBatch(spec.localTable, ids);
 
@@ -290,17 +300,19 @@ class SyncService {
           'falling back to per-record: $batchError',
         );
         final succeeded = <String>[];
-        for (var j = 0; j < ids.length; j++) {
+        for (var j = 0; j < chunk.length; j++) {
           try {
             await _supabase.upsertBatch(remoteTable, [payload[j]]);
-            succeeded.add(ids[j]);
+            succeeded.addAll(chunk[j].localIds);
           } catch (recordError) {
             failed++;
-            await _localDb.markSyncFailed(
-              spec.localTable,
-              ids[j],
-              error: recordError.toString(),
-            );
+            for (final localId in chunk[j].localIds) {
+              await _localDb.markSyncFailed(
+                spec.localTable,
+                localId,
+                error: recordError.toString(),
+              );
+            }
           }
         }
         await _localDb.markSyncedBatch(spec.localTable, succeeded);
@@ -356,14 +368,32 @@ class SyncService {
     return ChildProfile.fromMap(local).toSupabase();
   }
 
+  /// Local runs say `type: 'pre'`; the cloud CHECK constraint wants
+  /// `assessment_type: 'pre_assessment'`. The two schemas were designed
+  /// separately and every field below differs in name, value, or both —
+  /// which is why every run upload was rejected with a 400, and with it
+  /// every game_session and game_round that referenced the missing run.
+  static const _remoteAssessmentType = {
+    'pre': 'pre_assessment',
+    'post': 'post_assessment',
+    'follow_up': 'follow_up',
+    'progress_check': 'progress_check',
+  };
+
   Map<String, dynamic> _mapAssessmentRunToSupabase(Map<String, dynamic> local) {
+    final localType = local['type'] as String?;
     return {
       'id': local['id'],
       'child_id': local['child_id'],
-      'type': local['type'],
+      // Fall back to the raw value rather than guessing: an unmapped type is
+      // better rejected loudly by the CHECK than silently filed as a pre.
+      'assessment_type': _remoteAssessmentType[localType] ?? localType,
       'started_at': local['started_at'],
-      'completed_at': local['completed_at'],
-      'status': local['status'],
+      'ended_at': local['completed_at'],
+      // Local tracks in_progress / completed / incomplete; the cloud keeps a
+      // boolean. The open-vs-abandoned distinction only matters to the local
+      // resume path (AUM-154), so it is not carried remotely.
+      'completed': local['status'] == 'completed',
     };
   }
 
@@ -465,43 +495,113 @@ class SyncService {
     };
   }
 
-  Map<String, dynamic> _mapAssessmentResultToSupabase(
-    Map<String, dynamic> local,
+  /// Rubric label → ordinal level, per `20260512_per_area_levels.sql`:
+  /// 0 = Needs Support, 1 = Emerging, 2 = Strength.
+  static const _performanceLevel = {
+    'Needs Support': 0,
+    'Emerging': 1,
+    'Strength': 2,
+  };
+
+  static const _attentionLevel = {
+    'Needs Attention Support': 0,
+    'Variable Attention': 1,
+    'Sustained Attention': 2,
+  };
+
+  /// Collapse the per-game local results of each assessment run into the one
+  /// cloud row that run is entitled to.
+  ///
+  /// Local `assessment_results_local` holds a row per mini-game (it carries
+  /// `game_id`, `score`, `error_count`). Cloud `assessment_results` holds a
+  /// row per run, keyed on `assessment_run_id NOT NULL`, carrying the four
+  /// per-area ordinal levels for the battery as a whole. Uploading the local
+  /// shape directly is what produced the 400s: of the columns being sent,
+  /// only id / child_id / assessment_run_id existed remotely.
+  ///
+  /// The per-game numbers are not lost — `game_sessions` already carries
+  /// them, and it is the table `get_child_report` reads for gameplay.
+  ///
+  /// The remote row reuses the run's uuid as its own id. That keeps the
+  /// upsert idempotent as later games in the same run finish and re-sync,
+  /// and it means `module_recommendations.source_assessment_id` — a FK to
+  /// assessment_results, not to assessment_runs — can be satisfied with the
+  /// run id the app already holds.
+  List<_SyncGroup> _groupAssessmentResultsForSupabase(
+    List<Map<String, dynamic>> records,
   ) {
-    return {
-      'id': local['id'],
-      'child_id': local['child_id'],
-      'assessment_run_id': local['assessment_run_id'],
-      'game_id': local['game_id'],
-      'type': local['type'],
-      'score': local['score'],
-      'total_items': local['total_items'],
-      'error_count': local['error_count'],
-      'random_touch_count': local['random_touch_count'] ?? 0,
-      'avg_response_time_ms': local['avg_response_time_ms'],
-      'completed_at': local['completed_at'],
-      'raw_metrics':
-          local['raw_metrics'] != null ? local['raw_metrics'] as String : null,
-      // Rubric scoring fields
-      if (local['play_skills_label'] != null)
-        'play_skills_label': local['play_skills_label'],
-      if (local['communication_label'] != null)
-        'communication_label': local['communication_label'],
-      if (local['social_interaction_label'] != null)
-        'social_interaction_label': local['social_interaction_label'],
-      if (local['behavior_attention_label'] != null)
-        'behavior_attention_label': local['behavior_attention_label'],
-      if (local['sensory_preference_label'] != null)
-        'sensory_preference_label': local['sensory_preference_label'],
-      if (local['recommended_module'] != null)
-        'recommended_module': local['recommended_module'],
-      if (local['overall_summary'] != null)
-        'overall_summary': local['overall_summary'],
-      if (local['model_source'] != null)
-        'model_source': local['model_source'],
-      if (local['xgboost_ready'] != null)
-        'xgboost_ready': (local['xgboost_ready'] as int?) == 1,
-    };
+    final byRun = <String, List<Map<String, dynamic>>>{};
+    for (final r in records) {
+      final runId = r['assessment_run_id'] as String?;
+      // A result with no run is standalone practice scoring. There is no
+      // remote row it could belong to, so it stays local.
+      if (runId == null || runId.isEmpty) continue;
+      byRun.putIfAbsent(runId, () => []).add(r);
+    }
+
+    final groups = <_SyncGroup>[];
+    byRun.forEach((runId, rows) {
+      // Latest scored row wins: the rubric labels describe the battery, and
+      // every row of a run carries the same set, so the freshest is the one
+      // written after the most games were seen.
+      rows.sort((a, b) => (a['completed_at'] as String? ?? '')
+          .compareTo(b['completed_at'] as String? ?? ''));
+      final latest = rows.last;
+
+      final completedAt = latest['completed_at'] as String?;
+      final assessmentDate =
+          (completedAt ?? latest['local_created_at'] as String? ?? '')
+              .split('T')
+              .first;
+
+      groups.add(
+        _SyncGroup(
+          {
+            'id': runId,
+            'assessment_run_id': runId,
+            'child_id': latest['child_id'],
+            'assessment_date': assessmentDate,
+            'communication_level':
+                _performanceLevel[latest['communication_label']],
+            'social_level':
+                _performanceLevel[latest['social_interaction_label']],
+            'play_level': _performanceLevel[latest['play_skills_label']],
+            'attention_level':
+                _attentionLevel[latest['behavior_attention_label']],
+            // The four *_confidence columns stay null on purpose: rubric
+            // scoring is rule-based and has no probability behind it. A
+            // fabricated 1.0 would read to a SPED validator as model
+            // certainty. They are for XGBoost, when it lands.
+            if (latest['overall_summary'] != null)
+              'notes': latest['overall_summary'],
+            // overall_band is left unset — its vocabulary
+            // (emerging/developing/progressing) is not something the rubric
+            // computes, and inventing one would be a clinical claim the
+            // assessment never made.
+            'summary_json': jsonEncode({
+              'model_source': latest['model_source'],
+              'xgboost_ready': (latest['xgboost_ready'] as int?) == 1,
+              'sensory_preference_label': latest['sensory_preference_label'],
+              'recommended_module': latest['recommended_module'],
+              'per_game': [
+                for (final r in rows)
+                  {
+                    'game_id': r['game_id'],
+                    'score': r['score'],
+                    'total_items': r['total_items'],
+                    'error_count': r['error_count'],
+                    'random_touch_count': r['random_touch_count'],
+                    'avg_response_time_ms': r['avg_response_time_ms'],
+                  },
+              ],
+            }),
+          },
+          [for (final r in rows) r['id'] as String],
+        ),
+      );
+    });
+
+    return groups;
   }
 
   Map<String, dynamic> _mapRecommendationToSupabase(
@@ -510,77 +610,54 @@ class SyncService {
     return {
       'id': local['id'],
       'child_id': local['child_id'],
-      'assessment_run_id': local['assessment_run_id'],
-      'module_id': local['module_id'],
-      'module_name': local['module_name'],
-      'starting_level': local['starting_level'],
+      // FK to assessment_results, NOT assessment_runs — the run id works
+      // here only because the aggregated result row above is keyed on it.
+      // Sending the run id to a column named *_assessment_id would otherwise
+      // have traded the old 400 for a fresh FK violation.
+      'source_assessment_id': local['assessment_run_id'],
+      'top_module': local['module_id'],
+      'recommended_by': 'rules',
+      'recommended_path_json': jsonEncode([
+        {
+          'module_id': local['module_id'],
+          'module_name': local['module_name'],
+          'starting_level': local['starting_level'],
+        },
+      ]),
       'confidence': local['confidence'],
-      'rationale': local['rationale'],
+      if (local['rationale'] != null)
+        'explanation_json': jsonEncode({'rationale': local['rationale']}),
     };
   }
 
+  /// Pre/post comparison — the payload AUM-330's beta report renders.
+  ///
+  /// Every column here was misnamed too; it had simply never failed because
+  /// nothing writes `assessment_comparisons_local` yet, so no row ever
+  /// reached the upload path. Fixed now so it does not become the next 400
+  /// the moment comparisons start being produced.
+  ///
+  /// The two id columns are FKs to assessment_results. Local stores run ids
+  /// in them, which resolve correctly because the aggregated result row is
+  /// keyed on the run id.
   Map<String, dynamic> _mapComparisonToSupabase(Map<String, dynamic> local) {
     return {
       'id': local['id'],
       'child_id': local['child_id'],
-      'pre_assessment_id': local['pre_assessment_id'],
-      'post_assessment_id': local['post_assessment_id'],
-      'accuracy_improvement': local['accuracy_improvement'],
-      'response_time_improvement_ms': local['response_time_improvement_ms'],
-      'overall_improvement_percent': local['overall_improvement_percent'],
-      'summary': local['summary'],
-    };
-  }
-
-  Map<String, dynamic> _mapSensoryConsentToSupabase(Map<String, dynamic> local) {
-    return {
-      'id': local['id'],
-      'child_id': local['child_id'],
-      'assessment_run_id': local['assessment_run_id'],
-      'consent_given': (local['consent_given'] as int?) == 1,
-      'created_at': local['created_at'],
-    };
-  }
-
-  Map<String, dynamic> _mapSensoryRoundMetricsToSupabase(Map<String, dynamic> local) {
-    return {
-      'id': local['id'],
-      'child_id': local['child_id'],
-      'assessment_run_id': local['assessment_run_id'],
-      'game_id': local['game_id'],
-      'round_number': local['round_number'],
-      'music_enabled': (local['music_enabled'] as int?) == 1,
-      'haptic_enabled': (local['haptic_enabled'] as int?) == 1,
-      'sensory_purpose': local['sensory_purpose'],
-      'correct_count': local['correct_count'] ?? 0,
-      'wrong_count': local['wrong_count'] ?? 0,
-      'accuracy': local['accuracy'] ?? 0.0,
-      'total_response_time_ms': local['total_response_time_ms'] ?? 0,
-      'avg_response_time_ms': local['avg_response_time_ms'] ?? 0.0,
-      'tap_count': local['tap_count'] ?? 0,
-      'idle_time_seconds': local['idle_time_seconds'] ?? 0.0,
-      'random_touch_count': local['random_touch_count'] ?? 0,
-      'time_to_first_touch_ms': local['time_to_first_touch_ms'] ?? 0.0,
-      'time_to_completion_ms': local['time_to_completion_ms'] ?? 0.0,
-      'hint_count': local['hint_count'] ?? 0,
-      'prompt_count': local['prompt_count'] ?? 0,
-      'retry_count': local['retry_count'] ?? 0,
-      'created_at': local['created_at'],
-    };
-  }
-
-  Map<String, dynamic> _mapSensoryPreferencesToSupabase(Map<String, dynamic> local) {
-    return {
-      'id': local['id'],
-      'child_id': local['child_id'],
-      'assessment_run_id': local['assessment_run_id'],
-      'recommended_music_enabled': (local['recommended_music_enabled'] as int?) == 1,
-      'recommended_haptic_enabled': (local['recommended_haptic_enabled'] as int?) == 1,
-      'best_config': local['best_config'],
-      'confidence': local['confidence'],
-      'config_scores': local['config_scores'],
-      'attention_summary': local['attention_summary'],
-      'analyzed_at': local['analyzed_at'],
+      'baseline_assessment_result_id': local['pre_assessment_id'],
+      'comparison_assessment_result_id': local['post_assessment_id'],
+      'compared_at': local['local_created_at'],
+      'accuracy_change': local['accuracy_improvement'],
+      'response_time_change': local['response_time_improvement_ms'],
+      'comparison_summary_json': jsonEncode({
+        'summary': local['summary'],
+        'overall_improvement_percent': local['overall_improvement_percent'],
+      }),
+      // overall_progress_status is left unset: its vocabulary
+      // (improved / maintained / needs_more_support / regression_observed)
+      // is a clinical judgement, and the local row carries only a raw
+      // improvement percentage. Deriving one here would invent a threshold
+      // nobody has agreed.
     };
   }
 
@@ -993,11 +1070,44 @@ class SyncService {
 }
 
 /// Configuration for syncing one local table to its remote counterpart
+/// One remote row plus the local rows it stands for.
+///
+/// Usually one-to-one, but [_TableSyncSpec.toGroups] lets a table collapse
+/// several local rows into a single remote row (see the assessment_results
+/// aggregation), so marking sync state has to work on a set of local ids.
+class _SyncGroup {
+  final Map<String, dynamic> payload;
+  final List<String> localIds;
+
+  const _SyncGroup(this.payload, this.localIds);
+}
+
 class _TableSyncSpec {
   final String localTable;
-  final Map<String, dynamic> Function(Map<String, dynamic>) toSupabase;
 
-  const _TableSyncSpec(this.localTable, this.toSupabase);
+  /// Per-row mapping. Null when the table aggregates instead.
+  final Map<String, dynamic> Function(Map<String, dynamic>)? toSupabase;
+
+  /// Whole-table mapping, for schemas where the local and remote row
+  /// granularity differ. Receives every pending row for the table.
+  final List<_SyncGroup> Function(List<Map<String, dynamic>>)? toGroups;
+
+  const _TableSyncSpec(this.localTable, this.toSupabase) : toGroups = null;
+
+  const _TableSyncSpec.aggregated(this.localTable, this.toGroups)
+      : toSupabase = null;
+
+  /// Group pending rows into the remote rows they map onto. Rows an
+  /// aggregating spec deliberately omits are absent from the result; the
+  /// caller settles those so they cannot sit pending forever.
+  List<_SyncGroup> group(List<Map<String, dynamic>> records) {
+    final mapper = toGroups;
+    if (mapper != null) return mapper(records);
+    final rowMapper = toSupabase!;
+    return [
+      for (final r in records) _SyncGroup(rowMapper(r), [r['id'] as String]),
+    ];
+  }
 }
 
 /// Outcome of one table's sync pass
