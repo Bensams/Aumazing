@@ -167,7 +167,9 @@ void main() {
       expect(supabase.rowCount(RemoteTables.gameSessions), 1);
       expect(supabase.ids(RemoteTables.gameSessions), {'session-1'});
       expect(supabase.rowCount(RemoteTables.assessmentResults), 1);
-      expect(supabase.ids(RemoteTables.assessmentResults), {'result-1'});
+      // The cloud keeps one result per run, so the aggregated row is keyed on
+      // the run id rather than on any single local per-game result id.
+      expect(supabase.ids(RemoteTables.assessmentResults), {'run-1'});
       expect(supabase.rowCount(RemoteTables.assessmentRuns), 1);
       expect(supabase.ids(RemoteTables.assessmentRuns), {'run-1'});
 
@@ -223,7 +225,7 @@ void main() {
       expect(supabase.rowCount(RemoteTables.gameSessions), 1);
       expect(supabase.ids(RemoteTables.gameSessions), {'session-1'});
       expect(supabase.rowCount(RemoteTables.assessmentResults), 1);
-      expect(supabase.ids(RemoteTables.assessmentResults), {'result-1'});
+      expect(supabase.ids(RemoteTables.assessmentResults), {'run-1'});
       expect(supabase.rowCount(RemoteTables.assessmentRuns), 1);
       expect(supabase.ids(RemoteTables.assessmentRuns), {'run-1'});
     },

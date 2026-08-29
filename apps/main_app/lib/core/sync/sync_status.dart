@@ -193,6 +193,12 @@ class RemoteTables {
 /// This prevents foreign key violations in Supabase
 class SyncOrder {
   /// Ordered list of table names for sync operations
+  /// The sensory_* tables are deliberately absent: no `sensory_consent`,
+  /// `sensory_round_metrics` or `sensory_preferences` table exists in the
+  /// cloud schema, so every upload attempt returned 404 and the row stayed
+  /// pending forever — which is what kept the parent-facing "some changes
+  /// haven't synced yet" banner up permanently. They stay local-only until
+  /// the cloud tables exist and their consent handling has been reviewed.
   static const List<String> dependencyOrder = [
     LocalTables.children,
     LocalTables.assessmentRuns,
@@ -203,9 +209,6 @@ class SyncOrder {
     LocalTables.assessmentResults,
     LocalTables.moduleRecommendations,
     LocalTables.assessmentComparisons,
-    LocalTables.sensoryConsent,
-    LocalTables.sensoryRoundMetrics,
-    LocalTables.sensoryPreferences,
   ];
 
   /// Get the remote table name for a local table
@@ -220,9 +223,6 @@ class SyncOrder {
       LocalTables.assessmentResults: RemoteTables.assessmentResults,
       LocalTables.moduleRecommendations: RemoteTables.moduleRecommendations,
       LocalTables.assessmentComparisons: RemoteTables.assessmentComparisons,
-      LocalTables.sensoryConsent: RemoteTables.sensoryConsent,
-      LocalTables.sensoryRoundMetrics: RemoteTables.sensoryRoundMetrics,
-      LocalTables.sensoryPreferences: RemoteTables.sensoryPreferences,
     };
     return mapping[localTable];
   }
