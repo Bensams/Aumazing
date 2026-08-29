@@ -63,6 +63,32 @@ AppLaunchTarget resolveLaunchTarget({
   }
 }
 
+/// Whether a launch to [target] has a child whose artwork is worth decoding
+/// before the first frame (AUM-329).
+///
+/// Only the two destinations that render a mascot do. Authentication and
+/// first-run setup have no active child at all, and making them wait on a
+/// profile lookup would slow the one path where nothing is gained — the
+/// parent who is signing in has no companion to meet yet.
+///
+/// Pure and public for the same reason [resolveLaunchTarget] is: the rule is
+/// worth stating once and testing without pumping a video player.
+bool launchWarmsChildArt(AppLaunchTarget target) => switch (target) {
+  AppLaunchTarget.login || AppLaunchTarget.childProfileSetup => false,
+  AppLaunchTarget.parentHome || AppLaunchTarget.childMode => true,
+};
+
+/// Where a launch lands, and what to tell the parent when it gets there.
+///
+/// [errorMessage] only ever accompanies [AppLaunchTarget.childProfileSetup] —
+/// it is bootstrap's explanation for sending them back to setup.
+class _LaunchPlan {
+  const _LaunchPlan({required this.target, this.errorMessage});
+
+  final AppLaunchTarget target;
+  final String? errorMessage;
+}
+
 /// Loading screen with video background and real assets loading progress.
 ///
 /// Pre-loads and initializes:
@@ -92,6 +118,14 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   double _progress = 0.0;
   String _status = 'Preparing...';
+
+  /// How long the launch may wait on the child's profile and artwork.
+  ///
+  /// Generous enough that a mid-range phone finishes its 21 sheets inside it,
+  /// short enough that a device having a bad day is not held at the progress
+  /// bar. Whichever way it goes the app opens; only the first frame of the
+  /// mascot differs.
+  static const _artWarmBudget = Duration(seconds: 5);
 
   /// Warmed before the first note plays, so the opening track never stutters.
   ///
@@ -131,6 +165,14 @@ class _LoadingScreenState extends State<LoadingScreen> {
     // Start video initialization
     _initVideo();
 
+    // Start the launch decision immediately rather than after the media is
+    // ready (AUM-329). It is the only step that touches the network, and until
+    // it answers nothing downstream knows *which* child is launching — so the
+    // character's sheets could not begin decoding until the lobby was already
+    // on screen. Running it alongside the preload puts the wait somewhere the
+    // progress bar is already covering.
+    final launchPlan = _resolveLaunch();
+
     // Pre-load audio assets
     await _preloadAssets();
 
@@ -140,10 +182,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
     // Ensure video is ready
     await _waitForVideo();
 
-    // Navigate based on auth status
-    if (mounted) {
-      await _navigateBasedOnAuth();
-    }
+    final plan = await launchPlan;
+    if (!mounted) return;
+
+    await _warmActiveChildArt(plan.target);
+    if (!mounted) return;
+
+    _navigateTo(plan);
   }
 
   Future<void> _initVideo() async {
@@ -204,9 +249,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
       } catch (e) {
         debugPrint('[LoadingScreen] Failed to preload $asset: $e');
       }
-
-      // Small delay to show progress
-      await Future.delayed(const Duration(milliseconds: 200));
+      // No pause between assets any more (AUM-329). It existed to keep the bar
+      // moving when there was nothing else to do; the launch decision and the
+      // character warm now fill that time with work the child can feel.
     }
   }
 
@@ -247,12 +292,53 @@ class _LoadingScreenState extends State<LoadingScreen> {
     while (!_videoInitialized && mounted) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
-
-    // Brief pause to show 100% completion
-    await Future.delayed(const Duration(milliseconds: 200));
   }
 
-  Future<void> _navigateBasedOnAuth() async {
+  /// Gets the launching child's outfit decoding before the lobby is built
+  /// (AUM-329).
+  ///
+  /// [ChildProvider.loadProfile] resolves the active child and every per-child
+  /// preference, and its own warm is fire-and-forget — right for a child
+  /// switch, which must not stall on artwork, but it means a cold start hands
+  /// off with 21 sheets still being sliced and the mascot showing its fallback
+  /// until they land. Here the wait is worth having: the progress bar is
+  /// already up, and this is the difference between a child meeting their own
+  /// companion and meeting a placeholder.
+  ///
+  /// Bounded and best-effort throughout. A target with no child skips it
+  /// outright rather than making the login path pay for a profile nobody
+  /// asked for; a slow decode gives up at [_artWarmBudget] and lets the app
+  /// through, because arriving with the fallback beats not arriving.
+  Future<void> _warmActiveChildArt(AppLaunchTarget target) async {
+    if (!launchWarmsChildArt(target)) return;
+
+    final childProvider = context.read<ChildProvider>();
+    setState(() {
+      _status = 'Waking up your buddy...';
+      _progress = 1.0;
+    });
+
+    try {
+      await childProvider.loadProfile().timeout(_artWarmBudget);
+      final profile = childProvider.profile;
+      if (profile == null) return;
+      await CharacterSprites.precacheCostumed(
+        profile.characterId,
+        profile.equippedCostume,
+      ).timeout(_artWarmBudget);
+    } catch (e) {
+      // Includes the timeout. Warming is an optimisation; the mascot still
+      // renders, just a moment later, and that must never cost a launch.
+      debugPrint('[LoadingScreen] character warm skipped: $e');
+    }
+  }
+
+  /// Decides where this launch lands, without touching the widget tree.
+  ///
+  /// Split from the navigation itself (AUM-329) so it can run alongside the
+  /// media preload instead of after it. Nothing here reads `context`, which is
+  /// what makes it safe to start before the screen has finished building.
+  Future<_LaunchPlan> _resolveLaunch() async {
     // The loading screen must never dead-end: if bootstrap (which touches
     // Supabase/auth) throws — bad config, backend down, or an offline cold
     // start — fall back to the login screen instead of hanging on the logo.
@@ -265,7 +351,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
         destination: BootstrapDestination.login,
       );
     }
-    if (!mounted) return;
 
     // Never route into the app with a token that has already expired. Supabase
     // normally refreshes sessions, but a stale/offline restore must fail
@@ -287,25 +372,28 @@ class _LoadingScreenState extends State<LoadingScreen> {
       final prefs = await SharedPreferences.getInstance();
       hasConsent = prefs.getString('privacy_consent_accepted_at') != null;
     } catch (_) {}
-    if (!mounted) return;
 
     // A returning parent has already been walked through the dashboard once;
     // that is the signal that first-time registration/login is behind them,
     // so their next open drops straight into child/game mode (AUM-306).
     final hasSeenParentTour = await TourService.instance.hasSeenParentTour();
-    if (!mounted) return;
 
-    final target = resolveLaunchTarget(
-      destination: result.destination,
-      sessionExpired: sessionExpired,
-      hasConsent: hasConsent,
-      hasSeenParentTour: hasSeenParentTour,
+    return _LaunchPlan(
+      target: resolveLaunchTarget(
+        destination: result.destination,
+        sessionExpired: sessionExpired,
+        hasConsent: hasConsent,
+        hasSeenParentTour: hasSeenParentTour,
+      ),
+      errorMessage: result.errorMessage,
     );
+  }
 
-    final Widget destination = switch (target) {
+  void _navigateTo(_LaunchPlan plan) {
+    final Widget destination = switch (plan.target) {
       AppLaunchTarget.login => const LoginScreen(),
       AppLaunchTarget.childProfileSetup => ChildProfileSetupScreen(
-        initialErrorMessage: result.errorMessage,
+        initialErrorMessage: plan.errorMessage,
       ),
       AppLaunchTarget.parentHome => const HomeScreen(),
       AppLaunchTarget.childMode => const HomeScreen(openChildMode: true),
@@ -321,9 +409,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
-
-    // Keep video playing briefly during transition, then dispose
-    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   @override

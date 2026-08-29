@@ -103,4 +103,21 @@ void main() {
       );
     });
   });
+
+  // The loading screen decodes the launching child's sprite sheets before it
+  // hands off (AUM-329), so the mascot is wearing the right outfit the moment
+  // the lobby paints instead of showing its fallback while 21 sheets slice.
+  // That is only worth doing where a child actually exists.
+  group('launchWarmsChildArt', () {
+    test('the two destinations that show a mascot warm its art', () {
+      expect(launchWarmsChildArt(AppLaunchTarget.childMode), isTrue);
+      expect(launchWarmsChildArt(AppLaunchTarget.parentHome), isTrue);
+    });
+
+    test('signing in and first-run setup pay nothing for a child they '
+        'do not have yet', () {
+      expect(launchWarmsChildArt(AppLaunchTarget.login), isFalse);
+      expect(launchWarmsChildArt(AppLaunchTarget.childProfileSetup), isFalse);
+    });
+  });
 }
