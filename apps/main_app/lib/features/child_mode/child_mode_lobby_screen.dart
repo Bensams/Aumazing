@@ -19,6 +19,7 @@ import '../../providers/stars_provider.dart';
 import '../stars/star_shop_screen.dart';
 import '../premium/premium_upgrade_screen.dart';
 import 'game_launcher.dart';
+import 'session_origin.dart';
 import 'path_map_view.dart';
 import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
@@ -808,7 +809,17 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       _autoLaunchFallback = null;
       return;
     }
-    final screen = GameLauncher.screenFor(gameId, difficulty);
+    // A game opened while the path map is on screen IS a path step — the
+    // games row is replaced by the map in that state, so there is no other
+    // way to reach a launch from here. Recorded as `recommended_module` so
+    // the beta report can tell path play apart from free practice.
+    final screen = GameLauncher.screenFor(
+      gameId,
+      difficulty,
+      origin: _viewingPath
+          ? SessionOrigin.recommendedModule
+          : SessionOrigin.practice,
+    );
     if (screen == null) return;
     _speakChoice(VoiceOverCue.letsGo);
     _hideGuide(restartIdle: false); // the game speaks for itself from here

@@ -10,6 +10,7 @@ import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
+import 'package:aumazing/services/rubric/rubric_result.dart';
 
 /// The completion guard's escape surface is a real [HomeScreen] by default; a
 /// test host overrides it so the timeout test can assert the escape without
@@ -46,7 +47,30 @@ class _BaseGateway implements AssessmentGateway {
     required String gameId,
     required List<GameplaySession> sessions,
     String? assessmentRunId,
+    RubricResult? rubric,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  }) async {}
+
+  @override
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+  }) async {}
 
   @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) => {};
@@ -98,6 +122,28 @@ class _ThrowingGateway extends _BaseGateway {
   }) async {
     throw Exception('gateway down');
   }
+
+  @override
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  }) async {}
+
+  @override
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+  }) async {}
 }
 
 /// Gateway whose writes always succeed, so no retry dialog interrupts the

@@ -10,6 +10,7 @@ import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
+import 'package:aumazing/services/rubric/rubric_result.dart';
 
 /// Records what reached the storage layer, so a test can tell "nothing was
 /// written" apart from "something was written under a made-up id".
@@ -71,7 +72,30 @@ class _RecordingGateway implements AssessmentGateway {
     required String gameId,
     required List<GameplaySession> sessions,
     String? assessmentRunId,
+    RubricResult? rubric,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  }) async {}
+
+  @override
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+  }) async {}
 
   @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) =>
