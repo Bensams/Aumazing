@@ -508,6 +508,20 @@ class _FakeLocalDbService extends LocalDbService {
     upsertedChildren.add(profile);
   }
 
+  /// Bootstrap hydrates through this rather than [upsertChild] since AUM-328,
+  /// so the cloud copy can no longer overwrite a newer local one. The fake
+  /// applies the same rule the real implementation does.
+  @override
+  Future<bool> hydrateChild(ChildProfile profile, {String? ownerId}) async {
+    final local = _children.where((child) => child.id == profile.id);
+    if (local.isNotEmpty &&
+        !profile.updatedAt.isAfter(local.first.updatedAt)) {
+      return false;
+    }
+    await upsertChild(profile, ownerId: ownerId, markPending: false);
+    return true;
+  }
+
   @override
   Future<List<ChildProfile>> getChildren({
     String? userId,

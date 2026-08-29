@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/config/payment_simulation_config.dart';
 import '../core/config/premium_access_config.dart';
 import '../dev/developer_tools_config.dart';
 
@@ -32,10 +33,23 @@ class EntitlementService extends ChangeNotifier {
   /// it is not persisted — a restart drops it.
   bool _developerPremiumOverride = false;
 
+  /// Simulated-checkout only: the Premium a mock purchase "bought" (AUM-331).
+  ///
+  /// Held apart from both [_isPremium] and [_developerPremiumOverride] on
+  /// purpose. The real entitlement keeps flowing underneath untouched, so a
+  /// simulated purchase can never be mistaken for — or overwrite — a genuine
+  /// one, and a background [refresh] cannot cancel the demo mid-sentence.
+  ///
+  /// Nothing here writes to Supabase, the `entitlements` table, or
+  /// SharedPreferences, and it is not persisted: a restart drops it, which is
+  /// the honest behaviour for a purchase that never happened.
+  bool _simulatedPurchasePremium = false;
+
   /// The effective entitlement every gate in the app reads.
   bool get isPremium =>
       PremiumAccessConfig.unlockedForEveryone ||
       _developerPremiumOverride ||
+      _simulatedPurchasePremium ||
       _isPremium;
 
   /// The genuine entitlement, ignoring any developer override.
@@ -57,6 +71,33 @@ class EntitlementService extends ChangeNotifier {
       '[Entitlement] Developer Premium override: $value '
       '(real entitlement unchanged: $_isPremium)',
     );
+    notifyListeners();
+  }
+
+  /// Whether a simulated purchase is currently standing in for Premium.
+  bool get isSimulatedPurchaseActive => _simulatedPurchasePremium;
+
+  /// Grants the Premium a simulated checkout just "paid" for (AUM-331).
+  ///
+  /// A no-op unless the simulated checkout is compiled in
+  /// ([PaymentSimulationConfig.isAvailable]), so a build that cannot show the
+  /// mock cannot be talked into honouring its result either — the grant is
+  /// gated at the same place the screen is, not merely by who calls it.
+  void grantSimulatedPurchase() {
+    if (!PaymentSimulationConfig.isAvailable) return;
+    if (_simulatedPurchasePremium) return;
+    _simulatedPurchasePremium = true;
+    debugPrint(
+      '[Entitlement] Simulated purchase granted — NOT a real payment '
+      '(real entitlement unchanged: $_isPremium)',
+    );
+    notifyListeners();
+  }
+
+  /// Drops a simulated purchase, returning to whatever is genuinely true.
+  void clearSimulatedPurchase() {
+    if (!_simulatedPurchasePremium) return;
+    _simulatedPurchasePremium = false;
     notifyListeners();
   }
 

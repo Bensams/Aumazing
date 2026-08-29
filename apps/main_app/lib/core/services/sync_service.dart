@@ -338,19 +338,22 @@ class SyncService {
 
   // ─── Data Mapping Methods ────────────────────────────────────────────
 
+  /// The child row as the cloud should hold it.
+  ///
+  /// Goes through the model rather than hand-picking columns (AUM-328). The
+  /// hand-written version sent six fields and dropped the rest — character,
+  /// costume, avatar, reward preference and every comfort setting were written
+  /// locally, marked synced, and never left the device. Any field the model
+  /// gains from here on is carried automatically; there is no second list to
+  /// forget to update.
+  ///
+  /// `local` is a raw row, so `ChildProfile.fromMap` does the int→bool
+  /// conversion SQLite needs and `toSupabase` does the bool→JSON one Postgres
+  /// needs. The rows reaching here are already filtered by
+  /// `_syncableChildWhere`, which guarantees the non-null `user_id` and
+  /// `display_name` that `fromMap` requires.
   Map<String, dynamic> _mapChildToSupabase(Map<String, dynamic> local) {
-    return {
-      'id': local['id'],
-      'parent_user_id': local['user_id'],
-      'display_name': local['display_name'],
-      'birth_date': local['birth_date'] != null
-          ? DateTime.parse(
-              local['birth_date'] as String,
-            ).toIso8601String().split('T').first
-          : null,
-      'created_at': local['local_created_at'],
-      'updated_at': local['updated_at'],
-    };
+    return ChildProfile.fromMap(local).toSupabase();
   }
 
   Map<String, dynamic> _mapAssessmentRunToSupabase(Map<String, dynamic> local) {
@@ -644,10 +647,9 @@ class SyncService {
       for (final remote in remoteChildren) {
         if (remote['deleted_at'] != null) continue;
         if (locallyDeletedChildren.contains(remote['id'])) continue;
-        await _localDb.upsertChild(
+        await _localDb.hydrateChild(
           ChildProfile.fromSupabase(remote),
           ownerId: userId,
-          markPending: false,
         );
       }
 
