@@ -109,6 +109,73 @@ void main() {
     expect(shown(tester), rest);
   });
 
+  testWidgets('equipping a costume re-dresses a mascot already on screen',
+      (tester) async {
+    // The bug this pins: the sheets were loaded once, in initState, so a
+    // costume bought in the shop left the lobby buddy in its old outfit until
+    // something else tore the screen down. The lobby watches the profile and
+    // rebuilds this widget in place, so the change has to arrive through
+    // didUpdateWidget or it does not arrive at all.
+    Widget dressed(String costumeId) => MaterialApp(
+          home: Center(
+            child: Mascot(
+              costumeId: costumeId,
+              gestureTrigger: 0,
+              entrance: MascotEntrance.none,
+              greetOnAppear: false,
+              blink: false,
+            ),
+          ),
+        );
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(dressed('none'));
+      await Future<void>.delayed(const Duration(seconds: 5));
+      await tester.pump();
+      final bare = shown(tester);
+      expect(bare, isNotNull, reason: 'the base sheets never decoded');
+
+      await tester.pumpWidget(dressed('teddy'));
+      await Future<void>.delayed(const Duration(seconds: 5));
+      await tester.pump();
+
+      expect(shown(tester), isNot(bare),
+          reason: 'the mascot is still wearing its old outfit — a costume '
+              'equipped in the shop must show up without the screen being '
+              'rebuilt from scratch');
+    });
+  });
+
+  testWidgets('switching character swaps the mascot on screen', (tester) async {
+    // Same mechanism, the other half of the pair: a parent changing the
+    // child's character must not leave the previous one standing there.
+    Widget who(MascotCharacter character) => MaterialApp(
+          home: Center(
+            child: Mascot(
+              character: character,
+              gestureTrigger: 0,
+              entrance: MascotEntrance.none,
+              greetOnAppear: false,
+              blink: false,
+            ),
+          ),
+        );
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(who(MascotCharacter.bps));
+      await Future<void>.delayed(const Duration(seconds: 5));
+      await tester.pump();
+      final bps = shown(tester);
+      expect(bps, isNotNull);
+
+      await tester.pumpWidget(who(MascotCharacter.reiz));
+      await Future<void>.delayed(const Duration(seconds: 5));
+      await tester.pump();
+
+      expect(shown(tester), isNot(bps));
+    });
+  });
+
   testWidgets('the mascot blinks by itself, then goes back to resting',
       (tester) async {
     // Resting is a single still, so without this the character is a drawing
