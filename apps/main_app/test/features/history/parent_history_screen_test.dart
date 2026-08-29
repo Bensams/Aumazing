@@ -309,7 +309,19 @@ void main() {
             historyService: _FakeHistoryService(
               summary: HistorySummary(
                 runs: [run],
-                completedModules: const [],
+                completedModules: [
+                  CompletedModuleRecord(
+                    moduleId: 'long-module',
+                    moduleName:
+                        'A very long completed module name for narrow screens',
+                    completedAt: DateTime(2026, 8, 9),
+                    status: 'completed',
+                    level: 3,
+                    maxLevel: 5,
+                    source: 'module_progress',
+                    gameCount: 0,
+                  ),
+                ],
                 practiceSessions: const [],
                 comparison: null,
               ),
@@ -332,6 +344,21 @@ void main() {
         find.text('Social communication and emotional awareness: Needs support'),
         findsOneWidget,
       );
+      expect(find.text('Completed'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('Post-assessment')).overflow,
+        TextOverflow.ellipsis,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.text(
+                'A very long completed module name for narrow screens',
+              ),
+            )
+            .overflow,
+        TextOverflow.ellipsis,
+      );
 
       final card = tester.getRect(
         find.byKey(const ValueKey('history-run-run-narrow')),
@@ -345,6 +372,20 @@ void main() {
         expect(card.contains(labelRect.topLeft), isTrue, reason: label);
         expect(card.contains(labelRect.bottomRight), isTrue, reason: label);
       }
+      final moduleLabel =
+          'A very long completed module name for narrow screens';
+      final moduleCard = tester.getRect(
+        find.ancestor(
+          of: find.text(moduleLabel),
+          matching: find.byType(AppCard),
+        ).first,
+      );
+      final moduleStatus = tester.getRect(find.text('Completed'));
+      final moduleTitleRect = tester.getRect(find.text(moduleLabel));
+      expect(moduleCard.contains(moduleTitleRect.topLeft), isTrue);
+      expect(moduleCard.contains(moduleTitleRect.bottomRight), isTrue);
+      expect(moduleCard.contains(moduleStatus.topLeft), isTrue);
+      expect(moduleCard.contains(moduleStatus.bottomRight), isTrue);
     });
 
     testWidgets('shows a minus sign on a negative delta', (tester) async {
