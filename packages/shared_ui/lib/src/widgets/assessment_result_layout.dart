@@ -41,6 +41,7 @@ class AssessmentResultLayout extends StatefulWidget {
     this.backLabel = AssessmentLabels.backToDashboard,
     this.showCelebration = true,
     this.onApplyRecommendations,
+    this.onOpenLearningPath,
     this.celebrationDuration = const Duration(milliseconds: 3000),
     this.background,
     this.headerAction,
@@ -71,6 +72,11 @@ class AssessmentResultLayout extends StatefulWidget {
   /// leaves the card read-only, which is what a host with no child to write
   /// to — the game lab, a preview — should pass.
   final Future<bool> Function()? onApplyRecommendations;
+
+  /// Opens the child's My Path view from the Recommended Activities card.
+  /// Null leaves that card read-only — a host with nowhere to send the child
+  /// (the game lab, a preview) should pass nothing.
+  final VoidCallback? onOpenLearningPath;
 
   final Duration celebrationDuration;
 
@@ -226,6 +232,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
           unavailable: model.learningPathUnavailable,
           premiumRequired: model.premiumRequired,
           dense: _dense,
+          onOpenPath: widget.onOpenLearningPath,
         ),
     ];
   }

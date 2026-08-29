@@ -8,6 +8,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../providers/child_provider.dart';
 import '../../services/scoring_service.dart' as local_scoring;
+import '../child_mode/open_my_path.dart';
 import '../therapy/therapy_center_recommendation_dialog.dart';
 import 'assessment_result_view.dart';
 
@@ -74,6 +75,7 @@ class _PreAssessmentResultScreenState extends State<PreAssessmentResultScreen> {
       onContinue: () {
         Navigator.of(context).popUntil((route) => route.isFirst);
       },
+      onOpenLearningPath: () => openMyPath(context),
     );
   }
 }
