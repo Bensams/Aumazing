@@ -17,6 +17,15 @@ final _starColors = <Color>[
   const Color(0xFF4DD0E1), // cyan accent
 ];
 
+/// Where a star starts its rise, as a fraction of screen height: below the
+/// bottom edge, so it travels *into* the scene rather than blinking into it.
+const double _kStarRiseFrom = 1.15;
+
+/// How long a star takes to rise from below the screen to its resting spot.
+/// Matched in spirit to the balloons' own float: slow enough for a child who
+/// processes movement slowly to follow one star all the way up.
+const Duration kStarRiseDuration = Duration(milliseconds: 1200);
+
 /// Trace a hand-drawn five-point star centred at [center].
 Path _starPath(Offset center, double radius) {
   final path = Path();
@@ -38,10 +47,16 @@ Path _starPath(Offset center, double radius) {
   return path;
 }
 
-/// Individual star that drifts gently (no linear fall) and can be popped.
+/// Individual star that rises in from below, then drifts gently (no linear
+/// fall) and can be popped.
 ///
-/// Under [reducedMotion] the star sits statically at its base spot — no
-/// drift, rotation or scale pulse — and merely fades out on pop.
+/// It never simply appears: it travels up from under the bottom edge to its
+/// resting spot, the way the balloons and bubbles do, so the child sees it
+/// arrive and can track it. It is poppable the whole way up.
+///
+/// Under [reducedMotion] there is no travel — the star is at its base spot from
+/// the start and only fades in — no drift, rotation or scale pulse, and it
+/// merely fades out on pop.
 class _CollectibleStar extends StatefulWidget {
   final Offset baseFraction;
   final double size;
@@ -65,8 +80,13 @@ class _CollectibleStar extends StatefulWidget {
 }
 
 class _CollectibleStarState extends State<_CollectibleStar>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _controller;
+
+  /// The one-way rise from below the bottom edge to the resting spot. Under
+  /// reduced motion it drives a plain fade-in instead of any travel.
+  late final AnimationController _rise;
+
   bool _isPopped = false;
   Offset _popCenter = Offset.zero;
 
@@ -77,17 +97,27 @@ class _CollectibleStarState extends State<_CollectibleStar>
       vsync: this,
       duration: const Duration(milliseconds: 4200),
     );
+    _rise = AnimationController(vsync: this, duration: kStarRiseDuration);
     // Gentle continuous drift; static (never started) under reduced motion.
     if (!widget.reducedMotion) _controller.repeat();
+    _rise.forward();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _rise.dispose();
     super.dispose();
   }
 
+  /// Progress of the rise, eased. 1 means the star has arrived.
+  double get _riseProgress => Curves.easeOutCubic.transform(_rise.value);
+
   /// Current centre of the star on screen, honouring reduced motion.
+  ///
+  /// Two movements combine: the one-way rise into the scene, and the endless
+  /// gentle drift once there. The drift is scaled by the rise so the star does
+  /// not wobble its way up — it travels, then it breathes.
   Offset _computePosition(Size screen) {
     final reduced = widget.reducedMotion;
     final t = reduced ? 0.0 : _controller.value;
@@ -99,9 +129,12 @@ class _CollectibleStarState extends State<_CollectibleStar>
     final driftY = reduced
         ? 0.0
         : sin(phase * 0.7 + widget.driftPhase) * 0.02 * screen.height;
+    // Reduced motion places the star at rest immediately: no travel at all.
+    final rise = reduced ? 1.0 : _riseProgress;
+    final y = _kStarRiseFrom + (widget.baseFraction.dy - _kStarRiseFrom) * rise;
     return Offset(
-      widget.baseFraction.dx * screen.width + driftX,
-      widget.baseFraction.dy * screen.height + driftY,
+      widget.baseFraction.dx * screen.width + driftX * rise,
+      y * screen.height + driftY * rise,
     );
   }
 
@@ -136,7 +169,7 @@ class _CollectibleStarState extends State<_CollectibleStar>
       // Reduced motion: a simple in-place fade; otherwise a radial burst.
       final Widget effect = widget.reducedMotion
           ? _StarFadeOut(size: widget.size, color: widget.color)
-          : _StarPopBurst(size: widget.size, color: widget.color);
+          : RewardPopBurst(size: widget.size, color: widget.color);
       return Positioned(
         left: _popCenter.dx - widget.size * 0.8,
         top: _popCenter.dy - widget.size * 0.8,
@@ -149,7 +182,7 @@ class _CollectibleStarState extends State<_CollectibleStar>
     }
 
     return AnimatedBuilder(
-      animation: _controller,
+      animation: Listenable.merge([_controller, _rise]),
       builder: (context, child) {
         final screen = MediaQuery.of(context).size;
         final center = _computePosition(screen);
@@ -159,16 +192,22 @@ class _CollectibleStarState extends State<_CollectibleStar>
         final scale = reduced
             ? 1.0
             : 1.0 + 0.06 * sin(phase * 2 + widget.driftPhase);
+        // The rise is the entrance under full motion; under reduced motion the
+        // same progress is spent on a gentle fade instead.
+        final opacity = reduced ? _riseProgress.clamp(0.0, 1.0) : 1.0;
         return Positioned(
           left: center.dx - widget.size / 2,
           top: center.dy - widget.size / 2,
-          child: Transform.rotate(
-            angle: rotation,
-            child: Transform.scale(
-              scale: scale,
-              child: CustomPaint(
-                size: Size(widget.size, widget.size),
-                painter: _StarPainter(color: widget.color),
+          child: Opacity(
+            opacity: opacity,
+            child: Transform.rotate(
+              angle: rotation,
+              child: Transform.scale(
+                scale: scale,
+                child: CustomPaint(
+                  size: Size(widget.size, widget.size),
+                  painter: _StarPainter(color: widget.color),
+                ),
               ),
             ),
           ),
@@ -225,18 +264,25 @@ class _StarPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-/// Radial sparkle burst of small stars shown when a star is popped.
-class _StarPopBurst extends StatefulWidget {
+/// Radial sparkle burst of small stars, shown wherever a reward is popped.
+///
+/// Public so the milestone scene can burst its trophy with the same gesture
+/// the stars use — one popped reward should look like another, whichever it is.
+/// Plays once on build and leaves nothing behind; the caller owns removing it.
+class RewardPopBurst extends StatefulWidget {
+  /// Width/height of the burst, in logical pixels.
   final double size;
+
+  /// The popped reward's own colour, so the sparks match what burst.
   final Color color;
 
-  const _StarPopBurst({required this.size, required this.color});
+  const RewardPopBurst({super.key, required this.size, required this.color});
 
   @override
-  State<_StarPopBurst> createState() => _StarPopBurstState();
+  State<RewardPopBurst> createState() => _RewardPopBurstState();
 }
 
-class _StarPopBurstState extends State<_StarPopBurst>
+class _RewardPopBurstState extends State<RewardPopBurst>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
@@ -393,8 +439,9 @@ class _StarFadeOutState extends State<_StarFadeOut>
 
 /// Interactive star field exclusive to the milestone victory scene.
 ///
-/// Stars burst in from random positions after [appearDelay], then drift
-/// gently with a subtle rotation and scale pulse. Tapping or dragging across
+/// Stars rise in from below the bottom edge after [appearDelay], staggered so
+/// they arrive as a stream rather than a wall, then drift gently with a subtle
+/// rotation and scale pulse. Tapping or dragging across
 /// a star pops it, playing the star-pop SFX (via [RewardSfxProvider]) and
 /// sending out a radial sparkle burst. Under reduced motion stars sit static
 /// and pops are a simple fade — but the SFX still plays.
@@ -406,11 +453,18 @@ class StarReward extends StatefulWidget {
   final double effectScale;
   final Duration appearDelay;
 
+  /// Fired once, when the last remaining star has been popped — the child has
+  /// cleared the field and has nothing left to collect. A container uses this
+  /// to let an eager child move on before the celebration's minimum hold is up.
+  /// Never fires more than once, and never fires if a star is still on screen.
+  final VoidCallback? onAllPopped;
+
   const StarReward({
     super.key,
     required this.reducedMotion,
     required this.effectScale,
     this.appearDelay = const Duration(milliseconds: 800),
+    this.onAllPopped,
   });
 
   @override
@@ -467,6 +521,7 @@ class _StarRewardState extends State<StarReward> {
 
   void _generateStars() {
     final count = _starCount;
+    _remaining = count;
     for (var i = 0; i < count; i++) {
       final delay = widget.appearDelay + Duration(milliseconds: i * 60);
       final completer = Completer<void>();
@@ -489,8 +544,21 @@ class _StarRewardState extends State<StarReward> {
     }
   }
 
+  /// How many stars are still waiting to be popped. Counts every generated
+  /// star, spawned or not, so a pop landing before the last star has appeared
+  /// cannot be mistaken for a cleared field.
+  int _remaining = 0;
+
+  /// Guards [StarReward.onAllPopped] against a second dispatch.
+  bool _announcedAllPopped = false;
+
   void _onStarPopped() {
     RewardSfxProvider.playStarPop(context);
+    if (_remaining > 0) _remaining--;
+    if (_remaining == 0 && !_announcedAllPopped) {
+      _announcedAllPopped = true;
+      widget.onAllPopped?.call();
+    }
   }
 
   /// Pops any star under the pointer — drag across to pop many smoothly.
