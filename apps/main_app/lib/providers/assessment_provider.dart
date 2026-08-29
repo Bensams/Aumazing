@@ -1157,8 +1157,17 @@ class AssessmentProvider extends ChangeNotifier {
       // post run. The beta report separates the two by the run's type, so a
       // validator can see what the child was pointed at before the module
       // path and what they are pointed at after it.
-      _recommendation = _assessmentService.recommendModule(_postResults);
-      await _persistRecommendation(childId: childId, runId: postRunId);
+      // Persisted, but NOT assigned to _recommendation. That field is the
+      // child's ACTIVE recommendation and is rebuilt from the pre results on
+      // every load — overwriting it here would make the in-session path
+      // disagree with the one a reload produces, and would slip past the
+      // entitlement gate that keeps a free repeat-cycle post prediction from
+      // becoming the active path.
+      await _persistRecommendation(
+        childId: childId,
+        runId: postRunId,
+        recommendation: _assessmentService.recommendModule(_postResults),
+      );
 
       // NOTE: _currentSessions is intentionally NOT cleared here — the
       // subsequent predictWithAI call needs the post sessions for the new
@@ -1276,22 +1285,23 @@ class AssessmentProvider extends ChangeNotifier {
   Future<void> _persistRecommendation({
     required String childId,
     required String runId,
+    Map<String, dynamic>? recommendation,
   }) async {
-    final recommendation = _recommendation;
-    if (recommendation == null) return;
+    final toSave = recommendation ?? _recommendation;
+    if (toSave == null) return;
     try {
       await _assessmentService.saveModuleRecommendation(
         childId: childId,
         assessmentRunId: runId,
-        moduleId: recommendation['module_id'] as String,
+        moduleId: toSave['module_id'] as String,
         // The rubric's module name is the one written for a human — the
         // rule-based engine's is a coarse tier ("Intermediate Skills").
         moduleName:
             _rubricResult?.recommendedModule.isNotEmpty == true
                 ? _rubricResult!.recommendedModule
-                : recommendation['module_name'] as String,
-        startingLevel: recommendation['starting_level'] as int,
-        confidence: (recommendation['confidence'] as num?)?.toDouble(),
+                : toSave['module_name'] as String,
+        startingLevel: toSave['starting_level'] as int,
+        confidence: (toSave['confidence'] as num?)?.toDouble(),
         rationale: _rubricResult?.overallSummary,
       );
     } catch (e) {
