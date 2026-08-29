@@ -79,6 +79,15 @@ abstract final class AssessmentLabels {
       'Not a clinical diagnosis. These observations are only used to '
       'customize your child’s learning activities.';
 
+  /// The way from the results straight into the child's learning path.
+  static const goToMyPath = 'Go to My Path';
+
+  /// Said next to [goToMyPath]: the button opens a child-facing screen, so the
+  /// parent is told what to do with the device before they tap it.
+  static const handDeviceToChild =
+      'Hand the device to your child — this opens Child Mode on My Path, '
+      'with these activities in this order.';
+
   static const continueToHome = 'Continue to Home';
   static const retakeAssessment = 'Retake Assessment';
   static const backToDashboard = 'Back to Dashboard';

@@ -40,6 +40,7 @@ class AssessmentResultView extends StatefulWidget {
     this.onContinue,
     this.onRetake,
     this.onBack,
+    this.onOpenLearningPath,
     this.backLabel = AssessmentLabels.home,
     this.showCelebration = true,
     this.showTherapyRecommendation = false,
@@ -59,6 +60,10 @@ class AssessmentResultView extends StatefulWidget {
   final VoidCallback? onContinue;
   final VoidCallback? onRetake;
   final VoidCallback? onBack;
+
+  /// Opens the child's My Path view from the Recommended Activities card.
+  /// Null hides that action — a host that cannot send the child anywhere.
+  final VoidCallback? onOpenLearningPath;
   final String backLabel;
   final bool showCelebration;
   final bool showTherapyRecommendation;
@@ -267,6 +272,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       backLabel: widget.backLabel,
       showCelebration: widget.showCelebration,
       onApplyRecommendations: _applyRecommendations,
+      onOpenLearningPath: widget.onOpenLearningPath,
       headerAction: SizedBox(
         width: 44,
         height: 44,
