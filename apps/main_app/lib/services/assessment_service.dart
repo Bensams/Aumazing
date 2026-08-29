@@ -4,6 +4,7 @@ import 'package:shared_ui/shared_ui.dart';
 import 'package:uuid/uuid.dart';
 
 import '../model/assessment_result.dart';
+import 'rubric/rubric_result.dart';
 import '../model/gameplay_session.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../core/services/auth_service.dart';
@@ -83,6 +84,29 @@ abstract interface class AssessmentGateway {
     required String gameId,
     required List<GameplaySession> sessions,
     String? assessmentRunId,
+    RubricResult? rubric,
+  });
+
+  /// Stores the recommendation produced for a finished run.
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  });
+
+  /// Stores a pre/post comparison. The two ids are assessment *run* ids.
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
   });
 
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults);
@@ -361,6 +385,7 @@ class AssessmentService implements AssessmentGateway {
     required String gameId,
     required List<GameplaySession> sessions,
     String? assessmentRunId,
+    RubricResult? rubric,
   }) async {
     if (sessions.isEmpty) {
       throw ArgumentError('No sessions to create assessment from');
@@ -398,6 +423,18 @@ class AssessmentService implements AssessmentGateway {
           (s, g) => s + g.duration.inMilliseconds,
         ),
       },
+      // The rubric labels are part of the row, not an afterthought applied
+      // to it later: they are what the cloud's four per-area levels are
+      // derived from, and a row written without them uploads four nulls.
+      playSkillsLabel: rubric?.playSkillsLabel.displayName,
+      communicationLabel: rubric?.communicationLabel.displayName,
+      socialInteractionLabel: rubric?.socialInteractionLabel.displayName,
+      behaviorAttentionLabel: rubric?.behaviorAttentionLabel.displayName,
+      sensoryPreferenceLabel: rubric?.sensoryPreferenceLabel.displayName,
+      recommendedModule: rubric?.recommendedModule,
+      overallSummary: rubric?.overallSummary,
+      modelSource: rubric?.modelSource,
+      xgboostReady: rubric?.xgboostReady,
     );
 
     // Write to the offline-first local DB with sync_status = 'pending'
@@ -416,6 +453,64 @@ class AssessmentService implements AssessmentGateway {
     _syncService.syncNow();
 
     return result;
+  }
+
+  // ── Recommendation & comparison persistence ──────────────────────────
+
+  @override
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  }) async {
+    await _localDb.insertModuleRecommendation(
+      id: _uuid.v4(),
+      childId: childId,
+      assessmentRunId: assessmentRunId,
+      moduleId: moduleId,
+      moduleName: moduleName,
+      startingLevel: startingLevel,
+      confidence: confidence,
+      rationale: rationale,
+      ownerId: _effectiveUserId,
+    );
+    debugPrint(
+      '[Assessment] Recommendation saved: $moduleId level $startingLevel '
+      '(sync_status=pending)',
+    );
+    _syncService.syncNow();
+  }
+
+  @override
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+  }) async {
+    await _localDb.insertAssessmentComparison(
+      id: _uuid.v4(),
+      childId: childId,
+      preAssessmentId: preAssessmentId,
+      postAssessmentId: postAssessmentId,
+      accuracyImprovement: accuracyImprovement,
+      responseTimeImprovementMs: responseTimeImprovementMs,
+      overallImprovementPercent: overallImprovementPercent,
+      summary: summary,
+      ownerId: _effectiveUserId,
+    );
+    debugPrint(
+      '[Assessment] Pre/post comparison saved for child $childId '
+      '(sync_status=pending)',
+    );
+    _syncService.syncNow();
   }
 
   // ── Canonical scoring ─────────────────────────────────────────────────

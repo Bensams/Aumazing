@@ -19,6 +19,7 @@ import '../games/kumusta/kumusta_screen.dart';
 import '../games/anong_nararamdaman/anong_nararamdaman_screen.dart';
 import '../games/tulong_kaibigan/tulong_kaibigan_screen.dart';
 import '../../widgets/mascot_host.dart';
+import 'session_origin.dart';
 
 /// Shared launcher for practice (non-assessment) games.
 ///
@@ -113,14 +114,27 @@ class GameLauncher {
   /// Wrapped in a [MascotHost] so the mascot keeps the child company during
   /// play: the host must be an ANCESTOR of the game screen for the game's
   /// MascotHost.maybeOf lookups to find it.
-  static Widget? screenFor(String gameId, int difficulty) {
+  ///
+  /// [origin] says whether this play is free practice or a step on the
+  /// child's recommended module path. It is carried as an inherited marker
+  /// rather than as the screen's `assessmentContext` on purpose — see
+  /// [SessionOrigin] — and changes nothing about how the game behaves, only
+  /// how the finished session is filed.
+  static Widget? screenFor(
+    String gameId,
+    int difficulty, {
+    String origin = SessionOrigin.practice,
+  }) {
     final game = _gameFor(gameId, difficulty);
     if (game == null) return null;
     // A game that draws its own character suppresses the corner mascot, so a
     // child is never shown two characters at once.
-    return MascotHost(
-      showMascot: !kGamesWithOwnCharacter.contains(gameId),
-      child: game,
+    return SessionOrigin(
+      context: origin,
+      child: MascotHost(
+        showMascot: !kGamesWithOwnCharacter.contains(gameId),
+        child: game,
+      ),
     );
   }
 

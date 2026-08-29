@@ -578,7 +578,12 @@ class SyncService {
             // (emerging/developing/progressing) is not something the rubric
             // computes, and inventing one would be a clinical claim the
             // assessment never made.
-            'summary_json': jsonEncode({
+            // Passed as a Dart Map, NOT jsonEncode'd. PostgREST serializes
+            // the whole payload, so a pre-encoded string lands in a jsonb
+            // column as a jsonb *string* holding JSON — jsonb_typeof said
+            // 'string' for every row uploaded so far, and nothing reading
+            // the column could index into it.
+            'summary_json': {
               'model_source': latest['model_source'],
               'xgboost_ready': (latest['xgboost_ready'] as int?) == 1,
               'sensory_preference_label': latest['sensory_preference_label'],
@@ -594,7 +599,7 @@ class SyncService {
                     'avg_response_time_ms': r['avg_response_time_ms'],
                   },
               ],
-            }),
+            },
           },
           [for (final r in rows) r['id'] as String],
         ),
@@ -617,16 +622,21 @@ class SyncService {
       'source_assessment_id': local['assessment_run_id'],
       'top_module': local['module_id'],
       'recommended_by': 'rules',
-      'recommended_path_json': jsonEncode([
+      // `name` and `level` are the keys the beta portal reads off a path
+      // step; `module_id` and `starting_level` are what the app stores. Both
+      // spellings are sent so neither side has to guess.
+      'recommended_path_json': [
         {
           'module_id': local['module_id'],
           'module_name': local['module_name'],
+          'name': local['module_name'] ?? local['module_id'],
           'starting_level': local['starting_level'],
+          'level': local['starting_level'],
         },
-      ]),
+      ],
       'confidence': local['confidence'],
       if (local['rationale'] != null)
-        'explanation_json': jsonEncode({'rationale': local['rationale']}),
+        'explanation_json': {'rationale': local['rationale']},
     };
   }
 
@@ -649,10 +659,10 @@ class SyncService {
       'compared_at': local['local_created_at'],
       'accuracy_change': local['accuracy_improvement'],
       'response_time_change': local['response_time_improvement_ms'],
-      'comparison_summary_json': jsonEncode({
+      'comparison_summary_json': {
         'summary': local['summary'],
         'overall_improvement_percent': local['overall_improvement_percent'],
-      }),
+      },
       // overall_progress_status is left unset: its vocabulary
       // (improved / maintained / needs_more_support / regression_observed)
       // is a clinical judgement, and the local row carries only a raw
@@ -854,13 +864,29 @@ class SyncService {
         'local_created_at': r['created_at'] ?? _nowIso(),
       };
 
+  /// Cloud assessment type → the local run's `type`; the inverse of
+  /// [_remoteAssessmentType].
+  static const _localAssessmentType = {
+    'pre_assessment': 'pre',
+    'post_assessment': 'post',
+    'follow_up': 'follow_up',
+    'progress_check': 'progress_check',
+  };
+
+  /// The download mappers below carried the same schema mismatch the upload
+  /// mappers did (AUM-330) — they read local column names off a cloud row, so
+  /// every hydrated run came back as an in-progress 'pre' whatever it really
+  /// was. Nothing had caught it because hydration only runs once, on a fresh
+  /// install signing into an existing account.
   Map<String, dynamic> _mapAssessmentRunToLocal(Map<String, dynamic> r) => {
         'id': r['id'],
         'child_id': r['child_id'],
-        'type': r['type'] ?? 'pre',
+        'type': _localAssessmentType[r['assessment_type']] ??
+            r['assessment_type'] ??
+            'pre',
         'started_at': r['started_at'] ?? _nowIso(),
-        'completed_at': r['completed_at'],
-        'status': r['status'] ?? 'in_progress',
+        'completed_at': r['ended_at'],
+        'status': r['completed'] == true ? 'completed' : 'in_progress',
         ..._localMeta(r),
       };
 
@@ -969,29 +995,48 @@ class SyncService {
         ..._localMeta(r),
       };
 
-  Map<String, dynamic> _mapRecommendationToLocal(Map<String, dynamic> r) => {
-        'id': r['id'],
-        'child_id': r['child_id'],
-        'assessment_run_id': r['assessment_run_id'] ?? '',
-        'module_id': r['module_id'] ?? 'unknown',
-        'module_name': r['module_name'] ?? 'Unknown',
-        'starting_level': r['starting_level'] ?? 1,
-        'confidence': r['confidence'],
-        'rationale': r['rationale'],
-        ..._localMeta(r),
-      };
+  /// The cloud keeps the recommendation as one `recommended_path_json` step
+  /// rather than as the app's flat columns, and `source_assessment_id` is the
+  /// run id the aggregated result row is keyed on.
+  Map<String, dynamic> _mapRecommendationToLocal(Map<String, dynamic> r) {
+    final path = r['recommended_path_json'];
+    final step = path is List && path.isNotEmpty && path.first is Map
+        ? Map<String, dynamic>.from(path.first as Map)
+        : const <String, dynamic>{};
+    final explanation = r['explanation_json'];
+    return {
+      'id': r['id'],
+      'child_id': r['child_id'],
+      'assessment_run_id': r['source_assessment_id'] ?? '',
+      'module_id': step['module_id'] ?? r['top_module'] ?? 'unknown',
+      'module_name':
+          step['module_name'] ?? step['name'] ?? r['top_module'] ?? 'Unknown',
+      'starting_level': step['starting_level'] ?? step['level'] ?? 1,
+      'confidence': r['confidence'],
+      'rationale':
+          explanation is Map ? explanation['rationale'] as String? : null,
+      ..._localMeta(r),
+    };
+  }
 
-  Map<String, dynamic> _mapComparisonToLocal(Map<String, dynamic> r) => {
-        'id': r['id'],
-        'child_id': r['child_id'],
-        'pre_assessment_id': r['pre_assessment_id'] ?? '',
-        'post_assessment_id': r['post_assessment_id'] ?? '',
-        'accuracy_improvement': r['accuracy_improvement'],
-        'response_time_improvement_ms': r['response_time_improvement_ms'],
-        'overall_improvement_percent': r['overall_improvement_percent'],
-        'summary': r['summary'],
-        ..._localMeta(r),
-      };
+  Map<String, dynamic> _mapComparisonToLocal(Map<String, dynamic> r) {
+    final summary = r['comparison_summary_json'];
+    final asMap = summary is Map
+        ? Map<String, dynamic>.from(summary)
+        : const <String, dynamic>{};
+    return {
+      'id': r['id'],
+      'child_id': r['child_id'],
+      'pre_assessment_id': r['baseline_assessment_result_id'] ?? '',
+      'post_assessment_id': r['comparison_assessment_result_id'] ?? '',
+      'accuracy_improvement': r['accuracy_change'],
+      'response_time_improvement_ms':
+          (r['response_time_change'] as num?)?.round(),
+      'overall_improvement_percent': asMap['overall_improvement_percent'],
+      'summary': asMap['summary'],
+      ..._localMeta(r),
+    };
+  }
 
   Map<String, dynamic> _mapSensoryConsentToLocal(Map<String, dynamic> r) => {
         'id': r['id'],

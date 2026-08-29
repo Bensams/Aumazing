@@ -367,16 +367,14 @@ class _BetaPageState extends State<BetaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Gameplay Indicators '
-              '(${sessions.length} assessment sessions)'),
-          _buildSessionsTable(sessions),
+          _sectionTitle('Gameplay Indicators (${sessions.length} sessions)'),
+          _buildGroupedSessions(sessions),
           const SizedBox(height: 24),
-          _sectionTitle('Rubric Outcome (latest assessment)'),
-          _buildRubricTable(results.isEmpty ? null : results.first),
+          _sectionTitle('Rubric Outcome'),
+          _buildRubricSections(results),
           const SizedBox(height: 24),
           _sectionTitle('AI Recommendation'),
-          _buildRecommendation(
-              recommendations.isEmpty ? null : recommendations.first),
+          _buildRecommendationSections(recommendations),
           const SizedBox(height: 24),
           _sectionTitle('Pre vs Post Comparison'),
           _buildComparisons(comparisons),
@@ -393,6 +391,73 @@ class _BetaPageState extends State<BetaPage> {
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(text, style: Theme.of(context).textTheme.titleMedium),
       );
+
+  /// The gameplay buckets, in the order a validator reads them: what the
+  /// child could do before, what they did with the path they were given,
+  /// what they could do after, and everything else they played.
+  ///
+  /// Keyed on the session's own `bucket` (its recorded context), so a game
+  /// opened from the recommended module path is separated from free practice
+  /// by what the app recorded rather than by an inference drawn here.
+  static const _sessionBuckets = [
+    ('pre_assessment', 'Pre-assessment'),
+    ('recommended_module', 'Recommended module path'),
+    ('post_assessment', 'Post-assessment'),
+    ('practice', 'Practice mode'),
+  ];
+
+  Widget _buildGroupedSessions(List<Map<String, dynamic>> sessions) {
+    if (sessions.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('No gameplay synced yet.'),
+        ),
+      );
+    }
+
+    String bucketOf(Map<String, dynamic> s) =>
+        (s['bucket'] ?? s['context'] ?? 'practice').toString();
+
+    final known = {for (final (key, _) in _sessionBuckets) key};
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final session in sessions) {
+      final bucket = bucketOf(session);
+      // An unrecognised context ('training', 'free_play', or anything a
+      // later build adds) is shown under its own heading rather than
+      // dropped — a silently missing session is worse than an odd label.
+      groups.putIfAbsent(known.contains(bucket) ? bucket : bucket, () => [])
+          .add(session);
+    }
+
+    final ordered = <(String, String)>[
+      for (final (key, label) in _sessionBuckets)
+        if (groups.containsKey(key)) (key, label),
+      for (final key in groups.keys)
+        if (!known.contains(key)) (key, _humanizeKey(key)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (index, (key, label)) in ordered.indexed) ...[
+          if (index > 0) const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              '$label · ${groups[key]!.length} '
+              '${groups[key]!.length == 1 ? 'session' : 'sessions'}',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          _buildSessionsTable(groups[key]!),
+        ],
+      ],
+    );
+  }
 
   Widget _buildSessionsTable(List<Map<String, dynamic>> sessions) {
     if (sessions.isEmpty) {
@@ -413,7 +478,6 @@ class _BetaPageState extends State<BetaPage> {
               ?.copyWith(fontWeight: FontWeight.w700),
           columns: const [
             DataColumn(label: Text('Game')),
-            DataColumn(label: Text('Type')),
             DataColumn(label: Text('Score')),
             DataColumn(label: Text('Accuracy')),
             DataColumn(label: Text('Completion')),
@@ -431,8 +495,6 @@ class _BetaPageState extends State<BetaPage> {
               DataRow(cells: [
                 DataCell(Text((s['game_id'] as String? ?? '')
                     .replaceAll('_', ' '))),
-                DataCell(Text(
-                    s['context'] == 'pre_assessment' ? 'pre' : 'post')),
                 DataCell(Text('${s['score']}/${s['total_items']}')),
                 DataCell(Text(_pct(s['accuracy']))),
                 DataCell(Text(_pct(s['task_completion_rate']))),
@@ -449,6 +511,106 @@ class _BetaPageState extends State<BetaPage> {
               ]),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Assessment phases, newest-relevant last, as the report reads them.
+  static const _phases = [
+    ('pre_assessment', 'Pre-assessment'),
+    ('post_assessment', 'Post-assessment'),
+  ];
+
+  /// The newest entry of [rows] for each assessment phase.
+  ///
+  /// Rows arrive newest-first from the RPC, so the first match per phase is
+  /// the current one. Rows whose phase is unknown (an older row written
+  /// before the run join existed) fall into [other] so they are still shown
+  /// rather than silently dropped.
+  (Map<String, Map<String, dynamic>> byPhase, List<Map<String, dynamic>> other)
+      _splitByPhase(List<Map<String, dynamic>> rows) {
+    final byPhase = <String, Map<String, dynamic>>{};
+    final other = <Map<String, dynamic>>[];
+    final known = {for (final (key, _) in _phases) key};
+    for (final row in rows) {
+      final type = row['assessment_type'] as String?;
+      if (type == null || !known.contains(type)) {
+        other.add(row);
+        continue;
+      }
+      byPhase.putIfAbsent(type, () => row);
+    }
+    return (byPhase, other);
+  }
+
+  /// The rubric outcome of the pre- and post-assessment side by side.
+  ///
+  /// Was a single "latest assessment" card, which could not say which of the
+  /// two assessments it described — and on a child who had done both, showed
+  /// only the post, so the baseline the recommendation was built from was
+  /// nowhere on the page.
+  Widget _buildRubricSections(List<Map<String, dynamic>> results) {
+    if (results.isEmpty) return _buildRubricTable(null);
+    final (byPhase, other) = _splitByPhase(results);
+    if (byPhase.isEmpty && other.isEmpty) return _buildRubricTable(null);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (key, label) in _phases)
+          if (byPhase[key] != null) ...[
+            _phaseHeading(label, byPhase[key]!['assessment_date']),
+            _buildRubricTable(byPhase[key]),
+            const SizedBox(height: 12),
+          ],
+        if (byPhase.isEmpty && other.isNotEmpty) ...[
+          _phaseHeading('Latest assessment', other.first['assessment_date']),
+          _buildRubricTable(other.first),
+        ],
+      ],
+    );
+  }
+
+  /// The recommendation each assessment produced, kept apart.
+  ///
+  /// The pre-assessment's recommendation is what the child's module path was
+  /// built from; the post-assessment's is what they are pointed at next.
+  /// Collapsing them into "the newest recommendation" hid exactly the
+  /// before/after the beta study is trying to judge.
+  Widget _buildRecommendationSections(
+      List<Map<String, dynamic>> recommendations) {
+    if (recommendations.isEmpty) return _buildRecommendation(null);
+    final (byPhase, other) = _splitByPhase(recommendations);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (key, label) in _phases)
+          if (byPhase[key] != null) ...[
+            _phaseHeading(label, byPhase[key]!['assessment_date']),
+            _buildRecommendation(byPhase[key]),
+            const SizedBox(height: 12),
+          ],
+        // Only shown when nothing could be attributed to a phase: a
+        // recommendation whose source run predates the join.
+        if (byPhase.isEmpty && other.isNotEmpty) ...[
+          _phaseHeading('Unattributed', other.first['assessment_date']),
+          _buildRecommendation(other.first),
+        ],
+      ],
+    );
+  }
+
+  Widget _phaseHeading(String label, dynamic date) {
+    final parsed = DateTime.tryParse(date?.toString() ?? '');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        parsed == null
+            ? label
+            : '$label · ${DateFormat('MMM d, yyyy').format(parsed)}',
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -547,8 +709,25 @@ class _BetaPageState extends State<BetaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Top module: ${recommendation['top_module'] ?? '—'}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                      'Top module: ${recommendation['top_module'] ?? '—'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                Text(
+                  'conf ${_pct(recommendation['confidence'])}'
+                  '${recommendation['recommended_by'] == null ? '' : ' · ${recommendation['recommended_by']}'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            if (_rationaleOf(recommendation) != null) ...[
+              const SizedBox(height: 6),
+              Text(_rationaleOf(recommendation)!,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (steps.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
@@ -572,6 +751,18 @@ class _BetaPageState extends State<BetaPage> {
         ),
       ),
     );
+  }
+
+  /// The parent-facing explanation the app stored alongside the
+  /// recommendation, if any. Pipeline-owned shape, so anything that is not
+  /// the expected `{rationale: ...}` is left unrendered rather than guessed.
+  String? _rationaleOf(Map<String, dynamic> recommendation) {
+    final explanation = recommendation['explanation_json'];
+    if (explanation is! Map) return null;
+    final rationale = explanation['rationale'];
+    return rationale is String && rationale.trim().isNotEmpty
+        ? rationale
+        : null;
   }
 
   String _stepLabel(dynamic step) {
@@ -632,17 +823,9 @@ class _BetaPageState extends State<BetaPage> {
                   Chip(
                     label: Text(_formatProgressStatus(status)),
                     avatar: Icon(
-                      status == 'improved'
-                          ? Icons.trending_up_rounded
-                          : status == 'declined'
-                              ? Icons.trending_down_rounded
-                              : Icons.trending_flat_rounded,
+                      _statusIcon(status),
                       size: 18,
-                      color: status == 'improved'
-                          ? Colors.green.shade700
-                          : status == 'declined'
-                              ? Colors.red.shade700
-                              : Colors.grey,
+                      color: _statusColor(status),
                     ),
                   )
                 else
@@ -705,10 +888,31 @@ class _BetaPageState extends State<BetaPage> {
     );
   }
 
+  /// A regression and a plateau are different findings and must not share
+  /// an arrow: 'needs_more_support' means the child did not move, not that
+  /// they went backwards.
+  IconData _statusIcon(String status) => switch (status) {
+        'improved' => Icons.trending_up_rounded,
+        'declined' || 'regression_observed' => Icons.trending_down_rounded,
+        _ => Icons.trending_flat_rounded,
+      };
+
+  Color _statusColor(String status) => switch (status) {
+        'improved' => Colors.green.shade700,
+        'declined' || 'regression_observed' => Colors.red.shade700,
+        'needs_more_support' => Colors.orange.shade800,
+        _ => Colors.grey,
+      };
+
   /// Overall progress arrives as machine slugs or display text depending
   /// on which pipeline wrote it — normalize both.
   String _formatProgressStatus(String raw) => switch (raw) {
+        // The four the assessment_comparisons CHECK constraint admits...
         'improved' => 'Improved',
+        'maintained' => 'Maintained',
+        'needs_more_support' => 'Needs more support',
+        'regression_observed' => 'Regression observed',
+        // ...plus the older spellings an earlier pipeline wrote.
         'declined' => 'Declined',
         'no_change' => 'No change',
         _ => raw,

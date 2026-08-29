@@ -326,8 +326,9 @@ void main() {
       await service.startSync();
 
       final row = supabase.single(RemoteTables.assessmentResults);
-      final summary =
-          jsonDecode(row['summary_json'] as String) as Map<String, dynamic>;
+      // Sent as a Map, not as a pre-encoded string: a jsonb column given a
+      // JSON string stores a jsonb *string*, which nothing can index into.
+      final summary = row['summary_json'] as Map<String, dynamic>;
       final perGame = summary['per_game'] as List;
       expect(perGame, hasLength(2));
       expect(
