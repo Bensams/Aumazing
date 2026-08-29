@@ -23,9 +23,6 @@
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.android.gms.**
 
-## Facebook SDK
--keep class com.facebook.** { *; }
--dontwarn com.facebook.**
 
 ## Supabase / OkHttp / Retrofit
 -dontwarn okhttp3.**

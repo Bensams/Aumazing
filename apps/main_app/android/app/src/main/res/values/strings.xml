@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">aumazing</string>
-    <string name="facebook_app_id">4458074451092574</string>
-    <string name="facebook_client_token">594a43ec476f200bd4f77bad8b160006</string>
-    <string name="fb_login_protocol_scheme">fb4458074451092574</string>
 </resources>
