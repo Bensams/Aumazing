@@ -87,98 +87,105 @@ class GameSummaryDialog extends StatelessWidget {
     final pct = (_overallAccuracy * 100).round();
 
     // Non-dismissible: the parent must press Continue to proceed.
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFF8F6FF), Color(0xFFFFFFFF)],
+    //
+    // Wrapped in [ParentAdaptiveOrientation]: this is the first parent-facing
+    // screen after the child's landscape hand-off, so the lock has to flip
+    // back to the parent policy here — portrait on a phone — rather than one
+    // screen later on the result page.
+    return ParentAdaptiveOrientation(
+      child: PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF8F6FF), Color(0xFFFFFFFF)],
+              ),
             ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('🎉', style: TextStyle(fontSize: 40)),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Pre-Assessment Summary',
-                        style: AppTextStyles.headlineSmall.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      // Performance badge
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _performanceEmoji(),
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _performanceLabel(),
-                            style: AppTextStyles.labelLarge.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          StatusPillBadge.fromScore(pct),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-
-                // Scrollable content
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Tap stats (correct, errors, off-target)
-                        _buildTapStats(),
-                        const SizedBox(height: 12),
-
-                        // Overall stats (time, total)
-                        _buildOverallStats(),
-                        const SizedBox(height: 12),
-
-                        // Per-game breakdown
-                        _buildGameBreakdown(),
+                        const Text('🎉', style: TextStyle(fontSize: 40)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Pre-Assessment Summary',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 8),
+                        // Performance badge
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _performanceEmoji(),
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _performanceLabel(),
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            StatusPillBadge.fromScore(pct),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
-                ),
 
-                // Footer
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: AppPrimaryButton(
-                      label: 'Continue',
-                      icon: Icons.arrow_forward_rounded,
-                      onPressed: onContinue,
+                  // Scrollable content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Tap stats (correct, errors, off-target)
+                          _buildTapStats(),
+                          const SizedBox(height: 12),
+
+                          // Overall stats (time, total)
+                          _buildOverallStats(),
+                          const SizedBox(height: 12),
+
+                          // Per-game breakdown
+                          _buildGameBreakdown(),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+
+                  // Footer
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: AppPrimaryButton(
+                        label: 'Continue',
+                        icon: Icons.arrow_forward_rounded,
+                        onPressed: onContinue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
