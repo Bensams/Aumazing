@@ -56,7 +56,11 @@ class ParentHistoryService {
     final sessionsByRun = <String, List<GameplaySession>>{};
     final practiceSessions = <GameplaySession>[];
     for (final session in sessions) {
-      if (session.context == 'practice') {
+      // 'practice' and 'recommended_module' are both free play as far as the
+      // parent's history is concerned — the second is only a practice game
+      // reached from the learning path (see SessionOrigin).
+      if (session.context != 'pre_assessment' &&
+          session.context != 'post_assessment') {
         practiceSessions.add(session);
         continue;
       }

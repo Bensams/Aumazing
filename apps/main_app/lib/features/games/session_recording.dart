@@ -6,6 +6,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/assessment_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../child_mode/session_origin.dart';
 import '../home/home_screen.dart';
 
 /// Persists a finished game before the flow moves on.
@@ -63,6 +64,15 @@ abstract final class GameSessionRecording {
       return false;
     }
 
+    // Free practice and a step on the recommended module path reach here
+    // with the same `assessmentContext` ('practice') — it gates in-game
+    // behaviour and must not differ between the two. Which of them this was
+    // travels as an inherited marker instead, and only changes how the row
+    // is filed. Read before the first await, like everything else here.
+    final recordedContext = assessmentContext == SessionOrigin.practice
+        ? SessionOrigin.of(context)
+        : assessmentContext;
+
     final provider = context.read<AssessmentProvider>();
     // Read before the first await: a retry dialog can rebuild the tree, and
     // the game screen may be gone by the time the write succeeds.
@@ -73,7 +83,7 @@ abstract final class GameSessionRecording {
         final session = await provider.recordGameSession(
           childId: childId,
           gameId: gameId,
-          context: assessmentContext,
+          context: recordedContext,
           score: score,
           totalItems: totalItems,
           errorCount: errorCount,
