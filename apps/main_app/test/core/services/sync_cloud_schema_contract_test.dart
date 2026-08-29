@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:aumazing/core/services/connectivity_service.dart';
 import 'package:aumazing/core/services/local_db_service.dart';

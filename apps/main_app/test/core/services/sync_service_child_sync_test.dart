@@ -249,6 +249,198 @@ void main() {
       },
     );
 
+    test(
+      'hydrateFromCloud expands one cloud result into a row per mini-game',
+      () async {
+        final db = await localDb.database;
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            'id': 'run-post',
+            'child_id': 'sync-child',
+            'assessment_type': 'post_assessment',
+            'started_at': '2026-05-01T10:00:00.000',
+            'ended_at': '2026-05-01T10:15:00.000',
+            'completed': true,
+            'created_at': '2026-05-01T10:00:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+        // The cloud keeps ONE row per run, with the battery's four ordinal
+        // levels and the per-game detail inside summary_json.
+        supabase.remoteRows[RemoteTables.assessmentResults] = [
+          {
+            'id': 'run-post',
+            'assessment_run_id': 'run-post',
+            'child_id': 'sync-child',
+            'assessment_date': '2026-05-01',
+            'communication_level': 1,
+            'social_level': 2,
+            'play_level': 0,
+            'attention_level': 2,
+            'notes': 'Turn-taking is a strength.',
+            'summary_json': {
+              'model_source': 'rubric_based',
+              'xgboost_ready': true,
+              'sensory_preference_label': 'No Sensory Support Needed',
+              'recommended_module': 'Play Skills Starter Module',
+              'per_game': [
+                {
+                  'game_id': 'match_it',
+                  'score': 9,
+                  'total_items': 10,
+                  'error_count': 1,
+                  'random_touch_count': 2,
+                  'avg_response_time_ms': 2400,
+                },
+                {
+                  'game_id': 'copy_me',
+                  'score': 7,
+                  'total_items': 8,
+                  'error_count': 0,
+                  'random_touch_count': 1,
+                  'avg_response_time_ms': 2100,
+                },
+              ],
+            },
+            'created_at': '2026-05-01T10:15:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+
+        await service.hydrateFromCloud();
+
+        final rows = await db.query(LocalTables.assessmentResults);
+        expect(rows, hasLength(2), reason: 'one local row per mini-game');
+        final byGame = {for (final r in rows) r['game_id']: r};
+        expect(byGame.keys.toSet(), {'match_it', 'copy_me'});
+
+        final matchIt = byGame['match_it']!;
+        expect(matchIt['score'], 9);
+        expect(matchIt['total_items'], 10);
+        expect(matchIt['error_count'], 1);
+        expect(matchIt['random_touch_count'], 2);
+        expect(matchIt['avg_response_time_ms'], 2400);
+        // The type lives on the run, not on the result.
+        expect(matchIt['type'], 'post');
+        // Ordinals map back to the labels the rubric wrote.
+        expect(matchIt['communication_label'], 'Emerging');
+        expect(matchIt['social_interaction_label'], 'Strength');
+        expect(matchIt['play_skills_label'], 'Needs Support');
+        expect(matchIt['behavior_attention_label'], 'Sustained Attention');
+        expect(matchIt['overall_summary'], 'Turn-taking is a strength.');
+        expect(matchIt['recommended_module'], 'Play Skills Starter Module');
+        expect(matchIt['sync_status'], SyncStatus.synced.value);
+        // The labels describe the battery, so every game of the run shares
+        // them.
+        expect(byGame['copy_me']!['social_interaction_label'], 'Strength');
+      },
+    );
+
+    test(
+      'hydrateFromCloud reads summary_json that was stored double-encoded',
+      () async {
+        final db = await localDb.database;
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            'id': 'run-pre',
+            'child_id': 'sync-child',
+            'assessment_type': 'pre_assessment',
+            'started_at': '2026-05-01T10:00:00.000',
+            'ended_at': '2026-05-01T10:15:00.000',
+            'completed': true,
+            'created_at': '2026-05-01T10:00:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+        // Rows uploaded before the jsonb double-encoding fix are stored as a
+        // jsonb STRING holding JSON. They are already in the live database,
+        // so hydration has to read them.
+        supabase.remoteRows[RemoteTables.assessmentResults] = [
+          {
+            'id': 'run-pre',
+            'assessment_run_id': 'run-pre',
+            'child_id': 'sync-child',
+            'assessment_date': '2026-05-01',
+            'communication_level': null,
+            'social_level': null,
+            'play_level': null,
+            'attention_level': null,
+            'summary_json':
+                '{"per_game":[{"game_id":"match_it","score":4,'
+                '"total_items":4,"error_count":3,"random_touch_count":0,'
+                '"avg_response_time_ms":4560}]}',
+            'created_at': '2026-05-01T10:15:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+
+        await service.hydrateFromCloud();
+
+        final rows = await db.query(LocalTables.assessmentResults);
+        expect(rows, hasLength(1));
+        expect(rows.single['game_id'], 'match_it');
+        expect(rows.single['score'], 4);
+        expect(rows.single['type'], 'pre');
+        // Never scored in the cloud, so no label is invented here.
+        expect(rows.single['communication_label'], isNull);
+      },
+    );
+
+    test(
+      'hydrateFromCloud drops a result it cannot expand rather than '
+      'inventing a placeholder',
+      () async {
+        final db = await localDb.database;
+        supabase.remoteRows[RemoteTables.assessmentRuns] = [
+          {
+            'id': 'run-empty',
+            'child_id': 'sync-child',
+            'assessment_type': 'pre_assessment',
+            'started_at': '2026-05-01T10:00:00.000',
+            'ended_at': '2026-05-01T10:15:00.000',
+            'completed': true,
+            'created_at': '2026-05-01T10:00:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+        supabase.remoteRows[RemoteTables.assessmentResults] = [
+          // No per_game: nothing says which games this summarised.
+          {
+            'id': 'run-empty',
+            'assessment_run_id': 'run-empty',
+            'child_id': 'sync-child',
+            'assessment_date': '2026-05-01',
+            'summary_json': const <String, dynamic>{},
+            'created_at': '2026-05-01T10:15:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+          // No hydrated run: its local FK could not be satisfied anyway.
+          {
+            'id': 'orphan',
+            'assessment_run_id': 'run-that-was-never-pulled',
+            'child_id': 'sync-child',
+            'assessment_date': '2026-05-01',
+            'summary_json': {
+              'per_game': [
+                {'game_id': 'match_it', 'score': 1, 'total_items': 1},
+              ],
+            },
+            'created_at': '2026-05-01T10:15:00.000',
+            'updated_at': '2026-05-01T10:15:00.000',
+          },
+        ];
+
+        await service.hydrateFromCloud();
+
+        // The old mapper wrote a game_id 'unknown', type 'pre', score 0 row
+        // for each of these, which then showed up in the parent's history as
+        // an assessment the child never sat.
+        expect(await db.query(LocalTables.assessmentResults), isEmpty);
+        // The run itself still hydrates, so the play is not lost.
+        expect(await db.query(LocalTables.assessmentRuns), hasLength(1));
+      },
+    );
+
     test('hydrateFromCloud never resurrects a child deleted locally', () async {
       // Deleted on this device; the cloud row lives on until the deletion
       // is propagated, so hydration is the moment it could come back.
@@ -365,10 +557,48 @@ class _SyncTestLocalDb extends LocalDbService {
           )
         ''');
 
+        // Full schema for assessment results too: hydration expands one
+        // cloud row into a row per mini-game, so the stub skeleton below
+        // (an id and sync columns) cannot hold what it produces.
+        await db.execute('''
+          CREATE TABLE ${LocalTables.assessmentResults} (
+            id TEXT PRIMARY KEY,
+            child_id TEXT NOT NULL,
+            assessment_run_id TEXT,
+            game_id TEXT NOT NULL,
+            type TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            total_items INTEGER NOT NULL,
+            error_count INTEGER NOT NULL,
+            random_touch_count INTEGER NOT NULL DEFAULT 0,
+            avg_response_time_ms INTEGER NOT NULL,
+            completed_at TEXT,
+            raw_metrics TEXT,
+            play_skills_label TEXT,
+            communication_label TEXT,
+            social_interaction_label TEXT,
+            behavior_attention_label TEXT,
+            sensory_preference_label TEXT,
+            recommended_module TEXT,
+            overall_summary TEXT,
+            model_source TEXT DEFAULT 'rubric_based',
+            xgboost_ready INTEGER DEFAULT 1,
+            sync_status TEXT NOT NULL DEFAULT 'pending',
+            sync_error TEXT,
+            sync_attempts INTEGER NOT NULL DEFAULT 0,
+            last_synced_at TEXT,
+            deleted_at TEXT,
+            updated_at TEXT NOT NULL,
+            local_created_at TEXT NOT NULL,
+            owner_id TEXT
+          )
+        ''');
+
         for (final table in SyncOrder.dependencyOrder.where(
           (table) =>
               table != LocalTables.children &&
-              table != LocalTables.assessmentRuns,
+              table != LocalTables.assessmentRuns &&
+              table != LocalTables.assessmentResults,
         )) {
           await db.execute('''
             CREATE TABLE $table (
