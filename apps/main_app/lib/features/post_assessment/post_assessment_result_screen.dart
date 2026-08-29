@@ -7,6 +7,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_progress_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
+import '../child_mode/open_my_path.dart';
 import '../pre_assessment/assessment_result_view.dart';
 
 /// Parent-facing post-assessment results.
@@ -104,6 +105,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
             nextModulePremiumRequired: nextModulePremiumRequired,
             onContinue:
                 () => Navigator.of(context).popUntil((route) => route.isFirst),
+            onOpenLearningPath: () => openMyPath(context),
           ),
         );
       },
