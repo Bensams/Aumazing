@@ -221,11 +221,19 @@ mixin GameCompletionGuard<T extends StatefulWidget> on State<T> {
     });
   }
 
-  /// The surface a timed-out completion falls back to. Defaults to the lobby
-  /// ([HomeScreen]); a test host overrides this so the worst-case escape does
-  /// not need the whole lobby provider stack to render.
+  /// The surface a timed-out completion falls back to.
+  ///
+  /// [HomeScreen] is the *parent* dashboard, so it is entered with
+  /// `openChildMode: true`: the dashboard stays mounted underneath as the
+  /// PIN-protected parent base and the child lobby is pushed on top — the same
+  /// landing a returning child gets. A child whose game timed out must never be
+  /// dropped onto the parent's screens (AUM-317); the escape is the lobby.
+  ///
+  /// A test host overrides this so the worst-case escape does not need the
+  /// whole lobby provider stack to render.
   @protected
-  Widget completionFallbackSurface() => const HomeScreen();
+  Widget completionFallbackSurface() =>
+      const HomeScreen(openChildMode: true);
 
   @override
   void dispose() {

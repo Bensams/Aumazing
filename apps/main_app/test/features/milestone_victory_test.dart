@@ -467,6 +467,106 @@ void main() {
       expect(continued, 1);
     });
 
+    testWidgets('holds the playable stage — no way out for the first seconds', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: true,
+            playSfx: false,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            onContinue: () {},
+          ),
+          profile: profileWith(),
+        ),
+      );
+      await tester.pump();
+
+      // Well past the old 1.6s post-arrival hold: the celebration is a stage
+      // the child plays on, not a flash, so the way out is not there yet.
+      await tester.pump(const Duration(seconds: 5));
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsNothing,
+        reason: 'the celebration must not be snatched away after a beat',
+      );
+
+      // The full hold, plus the control's fade-in.
+      await tester.pump(kMilestoneHoldDuration - const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(find.bySemanticsLabel('Continue'), findsOneWidget);
+
+      // Leave no timer pending at teardown.
+      await tester.tap(find.bySemanticsLabel('Continue'), warnIfMissed: false);
+      await tester.pump();
+    });
+
+    testWidgets('a child who pops every reward moves on without waiting it out',
+        (tester) async {
+      /// Stars still waiting to be popped. Full motion deliberately: a popped
+      /// star bursts and leaves the field, where reduced motion fades one in
+      /// place and it would still be counted here.
+      Finder liveStars() => find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter.runtimeType.toString() == '_StarPainter',
+      );
+
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: false,
+            playSfx: false,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            onContinue: () {},
+          ),
+          profile: profileWith(),
+        ),
+      );
+      await tester.pump();
+      // Let the whole star field spawn (800 ms + 19 * 60 ms) and rise into
+      // view; a star still climbing is partly off screen and cannot be tapped.
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(kStarRiseDuration);
+
+      // Past the minimum hold — which exists so the spoken milestone line is
+      // never cut off — but nowhere near the full one.
+      await tester.pump(kMilestoneMinHold);
+
+      // The trophy first: it sits above the field, so the stars behind it are
+      // out of reach until it is gone.
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsNothing,
+        reason: 'a popped trophy alone is not a cleared stage',
+      );
+
+      var guard = 0;
+      while (liveStars().evaluate().isNotEmpty && guard++ < 40) {
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+      expect(liveStars(), findsNothing);
+
+      // The last burst is allowed to finish, then the way out appears — long
+      // before the full hold would have run out.
+      await tester.pump(kMilestoneAllPoppedSettle);
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsOneWidget,
+        reason: 'nothing left to collect — do not make the child wait',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Continue'), warnIfMissed: false);
+      await tester.pump();
+    });
+
     testWidgets('is not left without a way forward — the max hold frees it', (
       tester,
     ) async {
