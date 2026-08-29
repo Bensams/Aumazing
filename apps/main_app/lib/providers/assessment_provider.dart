@@ -850,8 +850,12 @@ class AssessmentProvider extends ChangeNotifier {
       if (analytics != null) _currentRunAnalytics[gameId] = analytics;
     }
 
-    // Practice completions advance the learning path (sequential unlock).
-    if (context == 'practice') {
+    // Non-assessment completions advance the learning path (sequential
+    // unlock). Tested on `isAssessment` rather than on the literal
+    // 'practice': a step opened from the path map records itself as
+    // 'recommended_module' (see SessionOrigin), and comparing to the literal
+    // would have stopped the path advancing the moment it was labelled.
+    if (!isAssessment) {
       await markPathGameCompleted(childId, gameId);
     }
     notifyListeners();
@@ -1017,6 +1021,14 @@ class AssessmentProvider extends ChangeNotifier {
         return false;
       }
 
+      // Rubric scoring runs BEFORE the result rows are written, not after.
+      // It used to run afterwards and apply its labels to the in-memory list
+      // only, so every row persisted — and every row uploaded — carried four
+      // null area levels, and the beta portal's "Rubric Outcome" read as
+      // empty for a child who had completed the whole battery. The labels
+      // are the row's payload, so they are known before it is created.
+      _rubricResult = _scoreRubric(sessions, explanationFallback: _rubricResult);
+
       // Group sessions by game and create assessment results
       final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
@@ -1027,6 +1039,7 @@ class AssessmentProvider extends ChangeNotifier {
           gameId: gameId,
           sessions: gameSessions,
           assessmentRunId: _currentAssessmentRunId,
+          rubric: _rubricResult,
         );
         _preResults.add(result);
       }
@@ -1035,85 +1048,14 @@ class AssessmentProvider extends ChangeNotifier {
 
       _recommendation = _assessmentService.recommendModule(_preResults);
 
-      // --- Rubric Scoring (new) ---
-      try {
-        const rubricScorer = RubricScoringService();
-        const sensoryAnalyzer = SensoryLabelAnalyzer();
-        const recommender = RecommendationService();
-
-        // Get sensory label if metrics are available
-        final sensoryLabel =
-            _sensoryMetrics != null && _sensoryMetrics!.isNotEmpty
-                ? sensoryAnalyzer.analyze(_sensoryMetrics!)
-                : SensoryPreferenceLabel.noSensorySupportNeeded;
-
-        // Score all areas — from this run's sessions only.
-        final playSkills = rubricScorer.scorePlaySkills(sessions);
-        final communication = rubricScorer.scoreCommunication(sessions);
-        final socialInteraction = rubricScorer.scoreSocialInteraction(sessions);
-        final behaviorAttention = rubricScorer.scoreBehaviorAttention(sessions);
-
-        // Get recommendation
-        final recommendation = recommender.recommend(
-          playSkills: playSkills,
-          communication: communication,
-          socialInteraction: socialInteraction,
-          behaviorAttention: behaviorAttention,
-          sensoryPreference: sensoryLabel,
-        );
-
-        // Generate summary
-        final summary = recommender.generateSummary(
-          playSkills: playSkills,
-          communication: communication,
-          socialInteraction: socialInteraction,
-          behaviorAttention: behaviorAttention,
-          sensoryPreference: sensoryLabel,
-          recommendedModule: recommendation.moduleName,
-        );
-
-        // Create rubric result
-        _rubricResult = RubricResult(
-          playSkillsLabel: playSkills,
-          communicationLabel: communication,
-          socialInteractionLabel: socialInteraction,
-          behaviorAttentionLabel: behaviorAttention,
-          sensoryPreferenceLabel: sensoryLabel,
-          recommendedModule: recommendation.moduleName,
-          overallSummary: summary,
-        );
-
-        // Update assessment results with rubric labels (immutable — replace list)
-        _preResults =
-            _preResults
-                .map(
-                  (result) => result.copyWithRubric(
-                    playSkillsLabel: playSkills.displayName,
-                    communicationLabel: communication.displayName,
-                    socialInteractionLabel: socialInteraction.displayName,
-                    behaviorAttentionLabel: behaviorAttention.displayName,
-                    sensoryPreferenceLabel: sensoryLabel.displayName,
-                    recommendedModule: recommendation.moduleName,
-                    overallSummary: summary,
-                    modelSource: 'rubric_based',
-                    xgboostReady: true,
-                  ),
-                )
-                .toList();
-
-        debugPrint(
-          '[AssessmentProvider] Rubric scoring complete: '
-          'playSkills=${playSkills.displayName}, '
-          'communication=${communication.displayName}, '
-          'socialInteraction=${socialInteraction.displayName}, '
-          'behaviorAttention=${behaviorAttention.displayName}, '
-          'sensory=${sensoryLabel.displayName}, '
-          'recommended=${recommendation.moduleName}',
-        );
-      } catch (e) {
-        // Rubric scoring failure should not break the existing flow
-        debugPrint('[AssessmentProvider] Rubric scoring failed: $e');
-      }
+      // Persist the recommendation itself. It was computed on every
+      // assessment and then only ever held in memory, so the cloud's
+      // module_recommendations table stayed empty and the beta portal's
+      // "AI Recommendation" panel had nothing to show.
+      await _persistRecommendation(
+        childId: childId,
+        runId: _currentAssessmentRunId!,
+      );
 
       // Note: _currentSessions are NOT cleared here so they remain
       // available for the AI prediction call (predictWithAI).
@@ -1183,6 +1125,13 @@ class AssessmentProvider extends ChangeNotifier {
         return {'has_data': false};
       }
 
+      // Re-score the rubric from the post sessions so the AI fallback and
+      // profile reflect the child's NEW performance, not the pre-assessment.
+      // Scored before the rows are written, for the same reason the pre
+      // flow does: the four area levels are part of the row, and computing
+      // them afterwards left every persisted post result with nulls.
+      _rubricResult = _scoreRubric(sessions, explanationFallback: _rubricResult);
+
       final gameIds = sessions.map((s) => s.gameId).toSet();
       for (final gameId in gameIds) {
         final gameSessions = sessions.where((s) => s.gameId == gameId).toList();
@@ -1192,33 +1141,24 @@ class AssessmentProvider extends ChangeNotifier {
           gameId: gameId,
           sessions: gameSessions,
           assessmentRunId: _currentAssessmentRunId,
+          rubric: _rubricResult,
         );
         _postResults.add(result);
       }
       // Retake: the new run's results replace the previous run's.
       _postResults = latestPerGame(_postResults);
 
-      // Mark the assessment run as completed
-      await _assessmentService.completeAssessmentRun(_currentAssessmentRunId!);
+      final postRunId = _currentAssessmentRunId!;
 
-      // Re-score the rubric from the post sessions so the AI fallback and
-      // profile reflect the child's NEW performance, not the pre-assessment.
-      try {
-        const rubricScorer = RubricScoringService();
-        _rubricResult = RubricResult(
-          playSkillsLabel: rubricScorer.scorePlaySkills(sessions),
-          communicationLabel: rubricScorer.scoreCommunication(sessions),
-          socialInteractionLabel: rubricScorer.scoreSocialInteraction(sessions),
-          behaviorAttentionLabel: rubricScorer.scoreBehaviorAttention(sessions),
-          sensoryPreferenceLabel:
-              _rubricResult?.sensoryPreferenceLabel ??
-              SensoryPreferenceLabel.noSensorySupportNeeded,
-          recommendedModule: _rubricResult?.recommendedModule ?? '',
-          overallSummary: 'Post-assessment rubric scoring.',
-        );
-      } catch (e) {
-        debugPrint('[AssessmentProvider] post rubric scoring failed: $e');
-      }
+      // Mark the assessment run as completed
+      await _assessmentService.completeAssessmentRun(postRunId);
+
+      // The post-assessment gets its OWN recommendation row, keyed on the
+      // post run. The beta report separates the two by the run's type, so a
+      // validator can see what the child was pointed at before the module
+      // path and what they are pointed at after it.
+      _recommendation = _assessmentService.recommendModule(_postResults);
+      await _persistRecommendation(childId: childId, runId: postRunId);
 
       // NOTE: _currentSessions is intentionally NOT cleared here — the
       // subsequent predictWithAI call needs the post sessions for the new
@@ -1236,7 +1176,19 @@ class AssessmentProvider extends ChangeNotifier {
       if (comparison['has_data'] != true) {
         _lastFinalizationError =
             'There is no pre-assessment to compare these results with.';
+        return comparison;
       }
+
+      // Persist the comparison. Like the recommendation, it was computed and
+      // handed to the result screen but never stored, so the cloud table the
+      // beta report reads stayed empty however many post-assessments a child
+      // finished.
+      await _persistComparison(
+        childId: childId,
+        baseline: baseline,
+        postRunId: postRunId,
+        comparison: comparison,
+      );
       return comparison;
     } catch (e) {
       _lastFinalizationError = 'Could not save the assessment results.';
@@ -1245,6 +1197,146 @@ class AssessmentProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Scores the four rubric areas (plus sensory) from [sessions].
+  ///
+  /// Returns null only if scoring throws — a rubric failure has never been
+  /// allowed to fail an assessment, and the run is still saved without
+  /// labels. [explanationFallback] carries the sensory label forward from an
+  /// earlier scoring pass, which the post-assessment relies on: the sensory
+  /// experiment runs once, before the pre-assessment.
+  RubricResult? _scoreRubric(
+    List<GameplaySession> sessions, {
+    RubricResult? explanationFallback,
+  }) {
+    try {
+      const rubricScorer = RubricScoringService();
+      const sensoryAnalyzer = SensoryLabelAnalyzer();
+      const recommender = RecommendationService();
+
+      final sensoryLabel = _sensoryMetrics != null && _sensoryMetrics!.isNotEmpty
+          ? sensoryAnalyzer.analyze(_sensoryMetrics!)
+          : explanationFallback?.sensoryPreferenceLabel ??
+                SensoryPreferenceLabel.noSensorySupportNeeded;
+
+      final playSkills = rubricScorer.scorePlaySkills(sessions);
+      final communication = rubricScorer.scoreCommunication(sessions);
+      final socialInteraction = rubricScorer.scoreSocialInteraction(sessions);
+      final behaviorAttention = rubricScorer.scoreBehaviorAttention(sessions);
+
+      final recommendation = recommender.recommend(
+        playSkills: playSkills,
+        communication: communication,
+        socialInteraction: socialInteraction,
+        behaviorAttention: behaviorAttention,
+        sensoryPreference: sensoryLabel,
+      );
+
+      final summary = recommender.generateSummary(
+        playSkills: playSkills,
+        communication: communication,
+        socialInteraction: socialInteraction,
+        behaviorAttention: behaviorAttention,
+        sensoryPreference: sensoryLabel,
+        recommendedModule: recommendation.moduleName,
+      );
+
+      debugPrint(
+        '[AssessmentProvider] Rubric scoring complete: '
+        'playSkills=${playSkills.displayName}, '
+        'communication=${communication.displayName}, '
+        'socialInteraction=${socialInteraction.displayName}, '
+        'behaviorAttention=${behaviorAttention.displayName}, '
+        'sensory=${sensoryLabel.displayName}, '
+        'recommended=${recommendation.moduleName}',
+      );
+
+      return RubricResult(
+        playSkillsLabel: playSkills,
+        communicationLabel: communication,
+        socialInteractionLabel: socialInteraction,
+        behaviorAttentionLabel: behaviorAttention,
+        sensoryPreferenceLabel: sensoryLabel,
+        recommendedModule: recommendation.moduleName,
+        overallSummary: summary,
+      );
+    } catch (e) {
+      // Rubric scoring failure must not break the assessment flow.
+      debugPrint('[AssessmentProvider] Rubric scoring failed: $e');
+      return explanationFallback;
+    }
+  }
+
+  /// Stores the recommendation for the run that just finished.
+  ///
+  /// Never fatal: the assessment itself is already saved, and losing the
+  /// recommendation row costs a panel in the beta report, not the run.
+  Future<void> _persistRecommendation({
+    required String childId,
+    required String runId,
+  }) async {
+    final recommendation = _recommendation;
+    if (recommendation == null) return;
+    try {
+      await _assessmentService.saveModuleRecommendation(
+        childId: childId,
+        assessmentRunId: runId,
+        moduleId: recommendation['module_id'] as String,
+        // The rubric's module name is the one written for a human — the
+        // rule-based engine's is a coarse tier ("Intermediate Skills").
+        moduleName:
+            _rubricResult?.recommendedModule.isNotEmpty == true
+                ? _rubricResult!.recommendedModule
+                : recommendation['module_name'] as String,
+        startingLevel: recommendation['starting_level'] as int,
+        confidence: (recommendation['confidence'] as num?)?.toDouble(),
+        rationale: _rubricResult?.overallSummary,
+      );
+    } catch (e) {
+      debugPrint('[AssessmentProvider] saving recommendation failed: $e');
+    }
+  }
+
+  /// Stores the pre/post comparison for the post run that just finished.
+  ///
+  /// The two ids are assessment *run* ids: the cloud keys one result row per
+  /// run on the run's own uuid (see SyncService), so a run id resolves to the
+  /// result row the comparison points at.
+  Future<void> _persistComparison({
+    required String childId,
+    required List<AssessmentResult> baseline,
+    required String postRunId,
+    required Map<String, dynamic> comparison,
+  }) async {
+    // The baseline results all belong to one pre run; without a run id there
+    // is no result row on the other side of the comparison to point at.
+    final preRunId = baseline
+        .map((r) => r.assessmentRunId)
+        .firstWhere((id) => id != null && id.isNotEmpty, orElse: () => null);
+    if (preRunId == null) {
+      debugPrint(
+        '[AssessmentProvider] no pre-assessment run id — comparison not saved',
+      );
+      return;
+    }
+    try {
+      await _assessmentService.saveAssessmentComparison(
+        childId: childId,
+        preAssessmentId: preRunId,
+        postAssessmentId: postRunId,
+        accuracyImprovement:
+            (comparison['accuracy_improvement'] as num?)?.toDouble(),
+        responseTimeImprovementMs:
+            (comparison['response_time_improvement'] as num?)?.round(),
+        overallImprovementPercent:
+            ((comparison['accuracy_improvement'] as num?)?.toDouble() ?? 0) *
+            100,
+        summary: _rubricResult?.overallSummary,
+      );
+    } catch (e) {
+      debugPrint('[AssessmentProvider] saving comparison failed: $e');
     }
   }
 

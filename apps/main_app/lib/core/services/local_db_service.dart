@@ -1814,6 +1814,88 @@ class LocalDbService {
     return rows.map((r) => AssessmentRunRecord.fromMap(r)).toList();
   }
 
+  // ─── Module Recommendations & Comparisons ─────────────────────────────
+
+  /// Stores the module recommendation produced for one assessment run.
+  ///
+  /// Replace-on-conflict is on the row id, so a re-run creates a new row
+  /// rather than overwriting the previous recommendation: the history of
+  /// what a child was pointed at, and when, is the point of the table.
+  Future<void> insertModuleRecommendation({
+    required String id,
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+    String? ownerId,
+    bool markPending = true,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      LocalTables.moduleRecommendations,
+      {
+        'id': id,
+        'child_id': childId,
+        'assessment_run_id': assessmentRunId,
+        'module_id': moduleId,
+        'module_name': moduleName,
+        'starting_level': startingLevel,
+        'confidence': confidence,
+        'rationale': rationale,
+        'sync_status':
+            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+        'updated_at': now,
+        'local_created_at': now,
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Stores a pre/post comparison.
+  ///
+  /// [preAssessmentId] and [postAssessmentId] are assessment *run* ids — the
+  /// cloud keys one result row per run on the run's own uuid, so a run id is
+  /// what resolves to the result row on either side of the comparison.
+  Future<void> insertAssessmentComparison({
+    required String id,
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+    String? ownerId,
+    bool markPending = true,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      LocalTables.assessmentComparisons,
+      {
+        'id': id,
+        'child_id': childId,
+        'pre_assessment_id': preAssessmentId,
+        'post_assessment_id': postAssessmentId,
+        'accuracy_improvement': accuracyImprovement,
+        'response_time_improvement_ms': responseTimeImprovementMs,
+        'overall_improvement_percent': overallImprovementPercent,
+        'summary': summary,
+        'sync_status':
+            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+        'updated_at': now,
+        'local_created_at': now,
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   // ─── Module Progress ──────────────────────────────────────────────────
 
   Future<void> upsertModuleProgress(

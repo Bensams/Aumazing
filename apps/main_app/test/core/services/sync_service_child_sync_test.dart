@@ -202,13 +202,18 @@ void main() {
 
         supabase.remoteRows[RemoteTables.assessmentRuns] = [
           {
-            // Same id as the local row, different content — must lose
+            // Same id as the local row, different content — must lose.
+            // Spelled in the CLOUD's columns (assessment_type / ended_at /
+            // completed), which is what hydration actually receives; the
+            // fixture used to use the local spellings and so agreed with a
+            // download mapper that was reading fields the cloud has never
+            // had.
             'id': 'run-local',
             'child_id': 'sync-child',
-            'type': 'pre',
+            'assessment_type': 'pre_assessment',
             'started_at': '2026-04-20T13:00:00.000',
-            'completed_at': '2026-04-20T13:20:00.000',
-            'status': 'completed',
+            'ended_at': '2026-04-20T13:20:00.000',
+            'completed': true,
             'created_at': '2026-04-20T13:00:00.000',
             'updated_at': '2026-04-20T13:20:00.000',
           },
@@ -216,10 +221,10 @@ void main() {
             // Cloud-only row (e.g. from another device) — must be pulled
             'id': 'run-remote',
             'child_id': 'sync-child',
-            'type': 'post',
+            'assessment_type': 'post_assessment',
             'started_at': '2026-05-01T10:00:00.000',
-            'completed_at': '2026-05-01T10:15:00.000',
-            'status': 'completed',
+            'ended_at': '2026-05-01T10:15:00.000',
+            'completed': true,
             'created_at': '2026-05-01T10:00:00.000',
             'updated_at': '2026-05-01T10:15:00.000',
           },
@@ -234,9 +239,12 @@ void main() {
         // The cloud held a later version of this run (completed at 13:20
         // against the local 13:00), so it replaces the stale local copy.
         expect(byId['run-local']!['status'], 'completed');
+        expect(byId['run-local']!['type'], 'pre');
+        expect(byId['run-local']!['completed_at'], '2026-04-20T13:20:00.000');
         expect(byId['run-local']!['sync_status'], SyncStatus.synced.value);
         // Remote row inserted as already-synced
         expect(byId['run-remote']!['status'], 'completed');
+        expect(byId['run-remote']!['type'], 'post');
         expect(byId['run-remote']!['sync_status'], SyncStatus.synced.value);
       },
     );

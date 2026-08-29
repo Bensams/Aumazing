@@ -19,6 +19,7 @@ import '../../widgets/mascot.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../../widgets/milestone_victory_screen.dart';
 import 'game_launcher.dart';
+import 'session_origin.dart';
 import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
 
@@ -171,7 +172,16 @@ class GameEndChoiceDialog {
         return;
       }
 
-      final screen = GameLauncher.screenFor(target.id, difficulty);
+      // A replay of a step that is on the path is still path play; a
+      // registry-order "next" (no path) is not.
+      final onPath = pathDifficulty != null;
+      final screen = GameLauncher.screenFor(
+        target.id,
+        difficulty,
+        origin: onPath
+            ? SessionOrigin.recommendedModule
+            : SessionOrigin.practice,
+      );
       if (screen != null) {
         Navigator.of(
           context,
