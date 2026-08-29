@@ -400,6 +400,8 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
               final typeBadge = _typeBadge(isPre ? 'PRE' : 'POST', isPre);
               final title = Text(
                 isPre ? 'Pre-assessment' : 'Post-assessment',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.titleMedium.copyWith(
                   color: AppColors.textPrimary,
                 ),
@@ -747,22 +749,43 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  module.moduleName,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final title = Text(
+                module.moduleName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
                 ),
-              ),
-              const StatusPillBadge(
+              );
+              const status = StatusPillBadge(
                 label: 'Completed',
                 level: StatusLevel.success,
                 compact: true,
-              ),
-            ],
+              );
+
+              // Keep the title and completion pill side by side on normal
+              // cards, but stack them before the pill can squeeze the title.
+              if (constraints.maxWidth < 320) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: AppSpacing.xs),
+                    status,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: AppSpacing.sm),
+                  status,
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
