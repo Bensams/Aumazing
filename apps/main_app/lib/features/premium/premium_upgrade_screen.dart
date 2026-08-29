@@ -5,11 +5,13 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
+import '../../core/config/payment_simulation_config.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/utils/network_errors.dart';
 import '../../providers/child_provider.dart';
 import '../../services/entitlement_service.dart';
 import '../settings/bind_account_modal.dart';
+import 'mock_paymongo_checkout_screen.dart';
 
 /// Premium upgrade screen (freemium model, PayMongo sandbox).
 ///
@@ -82,6 +84,64 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
     );
     if (mounted) setState(() {});
     return _authService.isBoundAccount;
+  }
+
+  /// The demo path: the same flow, with the gateway replaced by a screen that
+  /// says so (AUM-331).
+  ///
+  /// Runs in place of [_startCheckout] entirely — no `create-checkout` call,
+  /// no WebView, no network — so a demo cannot accidentally touch PayMongo.
+  /// The account-linking requirement above is deliberately *not* skipped: the
+  /// point of a demo is to show the flow parents will actually walk, and that
+  /// flow starts with linking.
+  Future<void> _startSimulatedCheckout() async {
+    if (!_authService.isBoundAccount) {
+      final linked = await _promptLinkAccount();
+      if (!mounted) return;
+      if (!linked) {
+        setState(() => _error =
+            'You need a linked account before upgrading to Premium.');
+        return;
+      }
+    }
+    setState(() => _error = null);
+
+    final outcome = await Navigator.of(context).push<MockCheckoutOutcome>(
+      MaterialPageRoute(builder: (_) => const MockPaymongoCheckoutScreen()),
+    );
+    if (!mounted) return;
+
+    switch (outcome) {
+      case MockCheckoutOutcome.paid:
+        // No waitForActivation: there is no webhook coming, because there was
+        // no payment. The grant is in-memory and dies with the process.
+        EntitlementService.instance.grantSimulatedPurchase();
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Premium unlocked (simulated) 🎉'),
+            content: const Text(
+              'Advanced analytics and the interactive therapy locator are '
+              'now available.\n\nThis was a simulated purchase — no payment '
+              'was made, and Premium ends when the app is closed.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Great!'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) Navigator.of(context).pop();
+      case MockCheckoutOutcome.declined:
+        setState(() => _error =
+            'Simulated payment declined. Nothing was charged — try again '
+            'or choose another method.');
+      case MockCheckoutOutcome.cancelled:
+      case null:
+        setState(() => _error = null);
+    }
   }
 
   Future<void> _startCheckout() async {
@@ -182,6 +242,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
   Widget build(BuildContext context) {
     final palette = context.watch<ChildProvider>().activePalette;
     final isBound = _authService.isBoundAccount;
+    final simulated = PaymentSimulationConfig.isAvailable;
 
     return Scaffold(
       body: Container(
@@ -288,16 +349,32 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
                     const SizedBox(height: AppSpacing.md),
                     AppPrimaryButton(
                       label: isBound
-                          ? 'Upgrade with PayMongo'
+                          ? (simulated
+                              ? 'Upgrade (simulated payment)'
+                              : 'Upgrade with PayMongo')
                           : 'Link account & upgrade',
-                      icon: isBound ? Icons.lock_rounded : Icons.link_rounded,
+                      icon: isBound
+                          ? (simulated
+                              ? Icons.science_rounded
+                              : Icons.lock_rounded)
+                          : Icons.link_rounded,
                       isLoading: _busy,
-                      onPressed: _busy ? null : _startCheckout,
+                      onPressed: _busy
+                          ? null
+                          : (simulated
+                              ? _startSimulatedCheckout
+                              : _startCheckout),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Sandbox build: use PayMongo test cards — no real '
-                      'charges.',
+                      simulated
+                          // Said before the parent commits, not only inside
+                          // the checkout: nobody should reach a payment button
+                          // unsure whether it takes money.
+                          ? 'Demo build: payment is simulated — PayMongo is '
+                              'never contacted and nothing is charged.'
+                          : 'Sandbox build: use PayMongo test cards — no real '
+                              'charges.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySmall
                           .copyWith(color: AppColors.mutedForeground),
