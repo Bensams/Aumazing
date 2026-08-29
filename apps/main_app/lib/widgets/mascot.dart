@@ -223,6 +223,16 @@ enum MascotEntrance {
 
 class _MascotState extends State<Mascot> with TickerProviderStateMixin {
   CharacterSprites? _sprites;
+
+  /// The outfit the sheets in [_sprites] are being loaded for, as
+  /// `character/costume`.
+  ///
+  /// Both halves can change under a mounted mascot — equipping in the shop, or
+  /// a parent switching the character — and the loads are async, so a slow
+  /// first load must not be allowed to land on top of a newer one. Any result
+  /// whose key no longer matches is dropped.
+  late String _outfit;
+
   late final AnimationController _travel;
 
   /// The gentle sink that accompanies [MascotGesture.oops].
@@ -286,10 +296,26 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
       vsync: this,
       duration: MascotGesture.oops.duration,
     );
+    _outfit = _outfitKey(widget);
+    _loadSprites(begin: true);
+  }
+
+  static String _outfitKey(Mascot w) =>
+      '${w.character.name}/${w.costumeId ?? 'none'}';
+
+  /// Decodes the sheets for the outfit named by [_outfit].
+  ///
+  /// [begin] only on the very first load: the entrance walk and the greeting
+  /// belong to the mascot *arriving*. A costume change is the same character
+  /// still standing there, so it swaps the sheets and nothing else — a lobby
+  /// buddy that waved again every time the child tried on an outfit would read
+  /// as the screen having reloaded.
+  void _loadSprites({required bool begin}) {
+    final key = _outfit;
     widget.character.loadCostumed(widget.costumeId).then((s) {
-      if (!mounted) return;
+      if (!mounted || key != _outfit) return;
       setState(() => _sprites = s);
-      _begin();
+      if (begin) _begin();
     }).catchError((Object e, StackTrace st) {
       // A missing or mis-cut sheet used to fail silently and simply leave the
       // mascot absent, which is invisible until someone notices the character
@@ -420,6 +446,23 @@ class _MascotState extends State<Mascot> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(Mascot old) {
     super.didUpdateWidget(old);
+    // The outfit is a widget field, and the widget is rebuilt from a watched
+    // profile — so equipping a costume in the shop, or switching character,
+    // arrives here rather than through a fresh State. Loading only in
+    // initState left the mascot in the outfit it happened to be built with:
+    // the child bought a costume, went back to the lobby, and their buddy was
+    // still wearing the old one until something else tore the screen down.
+    //
+    // The sheets are cached process-wide (and ChildProvider warms this exact
+    // pair as it saves), so the re-load is normally a cache hit and the swap
+    // is immediate. `_sprites` is deliberately left in place meanwhile: the
+    // previous outfit is a better thing to show for one frame than the empty
+    // fallback box.
+    final outfit = _outfitKey(widget);
+    if (outfit != _outfit) {
+      _outfit = outfit;
+      _loadSprites(begin: false);
+    }
     // The sink is the app's own motion, layered over whatever the sheet does,
     // so it runs off the same trigger CalmMascot plays the frames on. It is
     // also the whole of the reaction on a character whose `oops` sheet hasn't
