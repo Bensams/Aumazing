@@ -498,13 +498,13 @@ if ($code -ne 0) {
     Exit-Run $code
 }
 
-$apk = Get-ChildItem (Join-Path $appDir 'build\app\outputs\flutter-apk') -Filter 'app-release.apk' -ErrorAction SilentlyContinue |
+$builtApk = Get-ChildItem (Join-Path $appDir 'build\app\outputs\flutter-apk') -Filter 'app-release.apk' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $apk) { throw "Build reported success but no app-release.apk was found." }
+if (-not $builtApk) { throw "Build reported success but no app-release.apk was found." }
 
-$sizeMb = [math]::Round($apk.Length / 1MB, 1)
+$sizeMb = [math]::Round($builtApk.Length / 1MB, 1)
 Write-Host ""
-Write-Host "Built $($apk.Name) ($sizeMb MB)" -ForegroundColor Green
+Write-Host "Built $($builtApk.Name) ($sizeMb MB)" -ForegroundColor Green
 
 if ($mode -eq 'package') {
     $versionMatch = Select-String -LiteralPath (Join-Path $appDir 'pubspec.yaml') -Pattern '^version:\s*(\S+)\s*$' | Select-Object -First 1
@@ -512,14 +512,14 @@ if ($mode -eq 'package') {
     $releaseDir = Join-Path $repoRoot 'output\releases'
     New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
     $publishApk = Join-Path $releaseDir "aumazing-free-premium-$version.apk"
-    Copy-Item -LiteralPath $apk.FullName -Destination $publishApk -Force
+    Copy-Item -LiteralPath $builtApk.FullName -Destination $publishApk -Force
     Write-Host "Publish package: $publishApk" -ForegroundColor Green
     Exit-Run 0
 }
 
 Write-Host "Installing on $target ..." -ForegroundColor Cyan
 
-$installOut = Invoke-Adb -s $target install -r "$($apk.FullName)"
+$installOut = Invoke-Adb -s $target install -r "$($builtApk.FullName)"
 Write-Host $installOut.Trim()
 if ($installOut -notmatch 'Success') {
     Write-Host "  install failed." -ForegroundColor Red
