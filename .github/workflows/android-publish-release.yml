@@ -61,6 +61,7 @@ jobs:
           TAG="v${VERSION%%+*}-run${{ github.run_number }}"
           PREMIUM_LABEL=$([ "${{ inputs.unlock_premium }}" = "true" ] && echo "Premium unlocked (promo build)" || echo "Standard (Premium gated by entitlement)")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "premium_label=$PREMIUM_LABEL" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
@@ -70,8 +71,43 @@ jobs:
           name: Aumazing ${{ steps.meta.outputs.tag }}
           draft: ${{ inputs.draft }}
           body: |
-            Automated Android release.
+            Aumazing ${{ steps.meta.outputs.version }} expands assessment reporting, child personalization,
+            guided activities, and the in-game reward experience.
 
+            ## Features added
+
+            - Added richer assessment reports with saved rubric details,
+              recommendations, and pre/post comparisons in the app and beta portal.
+            - Recommended activities can now open My Path directly, and the
+              pre-assessment summary uses a dedicated full-screen parent handoff.
+            - Child settings, buddy, character, and costume selections now persist
+              and sync, with the chosen mascot shown across the child experience.
+            - Added a clearly labelled simulated checkout flow for Premium testing.
+            - Expanded gameplay feedback with an interactive victory trophy,
+              star and trophy sounds, spoken reward hints, and Trace It shape glyphs.
+            - Added multilingual Kumusta greeting voice-over and new high-five and
+              fist-bump gesture sheets for every character skin.
+            - Simplified sign-in by removing the Facebook option and SDK.
+
+            ## Fixes
+
+            - Restored Gemini assessment summaries and preserved recommendations,
+              rubric data, and pre/post comparisons through result handoffs.
+            - Corrected assessment cloud synchronization and reconstruction of
+              per-game results from uploaded assessment rows.
+            - Fixed parent-summary orientation and assessment/history card overlaps.
+            - Fixed My Path victories returning to the dashboard instead of the
+              child lobby, plus several stranded end-of-game transitions.
+            - Fixed voice-over continuing after focus loss, truncated English
+              instructions, and silent Kumusta hard-mode reorientation.
+            - Prevented cloud data from overwriting character and costume choices,
+              and refreshed the mascot immediately after a selection change.
+            - Fixed sensory-consent label wrapping, dialog underline artifacts,
+              and mismatched buddy drag targets.
+
+            ## Build details
+
+            - App version: ${{ steps.meta.outputs.version }}
             - Source: ${{ github.ref_name }} @ ${{ github.sha }}
             - Premium: ${{ steps.meta.outputs.premium_label }}
           files: apps/main_app/build/app/outputs/flutter-apk/app-release.apk
