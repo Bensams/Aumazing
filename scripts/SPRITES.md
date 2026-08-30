@@ -245,6 +245,23 @@ for n in ['look_up_left', 'look_up', 'look_up_right']:
 
 The outlier against its neighbours is the one to redo.
 
+## The frame cache does not know about the prompt
+
+`generate()` keys on `frames_{character}_{action}` and nothing else. Edit a
+prompt, re-run, and it prints `cached` and recomposes the **old** clip — the
+sheet lands in the shipping directory looking exactly like a fresh generation,
+because it is a real compose of real frames. A rejected take walked back in
+this way and was caught only by opening the PNG a second time.
+
+```bash
+python scripts/generate_sprites.py bps --only fist_bump --fresh   # COSTS CREDITS
+```
+
+`--fresh` deletes the cached frames for the named actions first. The cache key
+was deliberately left alone: adding a prompt hash would invalidate every clip
+already on disk, turning any later `--compose-only` into a four-figure re-spend.
+An explicit flag is the cheaper half of that trade.
+
 ## Safety rails
 
 **`SheetTooTight`** — refuses to write any sheet whose subject fills >95% of

@@ -46,7 +46,8 @@ class KumustaScreen extends StatefulWidget {
     int totalItems,
     int errorCount,
     int totalResponseTimeMs,
-  )? onComplete;
+  )?
+  onComplete;
 
   /// Optional sensory controller for per-round music/haptic during pre-assessment.
   final SensoryRoundController? sensoryController;
@@ -55,15 +56,15 @@ class KumustaScreen extends StatefulWidget {
   State<KumustaScreen> createState() => _KumustaScreenState();
 }
 
-class _KumustaScreenState extends State<KumustaScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+class _KumustaScreenState extends State<KumustaScreen>
+    with GameCompletionGuard {
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(
+    widget.assessmentContext,
+  );
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   bool _showSparkle = false;
   late final KumustaGame _game;
   late final DateTime _sessionStartTime;
@@ -73,8 +74,7 @@ class _KumustaScreenState extends State<KumustaScreen> {
   /// child meets both characters across sessions, but never mid-session: a
   /// greeting exchange is with *someone*, and swapping partners halfway would
   /// undo the point of the game.
-  late final String _character =
-      math.Random().nextBool() ? 'bps' : 'reiz';
+  late final String _character = math.Random().nextBool() ? 'bps' : 'reiz';
 
   @override
   void initState() {
@@ -101,9 +101,10 @@ class _KumustaScreenState extends State<KumustaScreen> {
       totalRounds: _totalRounds,
       childId: childId,
       character: _character,
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectGreeting: _onCorrectGreeting,
@@ -127,13 +128,13 @@ class _KumustaScreenState extends State<KumustaScreen> {
       // answer a bid. `showMe` stood here first and asks for the wrong thing:
       // it is the assessment library's "demonstrate for me", which is a child
       // performing for an adult rather than returning someone's greeting.
-      onPlayInstructionVo: () =>
-          _voiceOverService.play(VoiceOverCue.sayHelloBack),
+      onPlayInstructionVo:
+          () => _voiceOverService.play(VoiceOverCue.sayHelloBack),
       // The verbal prompt rung: "Your turn." Deliberately the turn-taking cue
       // rather than "tap here" — it names the social obligation, which is the
       // thing being taught, instead of the motor act.
-      onPlayHintVo: () =>
-          _voiceOverService.play(VoiceOverCue.yourTurnInstruction),
+      onPlayHintVo:
+          () => _voiceOverService.play(VoiceOverCue.yourTurnInstruction),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
       onBuddyGreets: _onBuddyGreets,
@@ -158,29 +159,28 @@ class _KumustaScreenState extends State<KumustaScreen> {
     _voiceOverService.play(_cueFor(greeting));
   }
 
-  /// Maps a greeting to the nearest existing voice cue.
+  /// Names the greeting the buddy is offering.
   ///
-  /// Reused cues rather than four new recordings: every voice pack already
-  /// ships these, in all three languages, and a cue with no clip is silence on
-  /// device. Bespoke lines ("Apir!", "Beat!") would read better and are the
-  /// obvious upgrade — they need a pass through `tools/voice_gen` for every
-  /// pack first, which is why they are not here yet.
+  /// These four cues are dedicated recordings ("Apir!", "Beat!"), generated
+  /// through `tools/voice_gen` for all eighteen packs. They replaced borrowed
+  /// cues that named the wrong thing entirely: fistBump played "Now you try"
+  /// and thumbsUp played "Very good" — praise, spoken before the child had
+  /// done anything, which teaches that the reward arrives regardless of the
+  /// answer. wave played "Here we go", an opener rather than a greeting.
   ///
-  /// ponytail: greeting-specific VO. Add once `tools/voice_gen/lines.csv`
-  /// carries `greetings/Wave`, `HighFive`, `FistBump`, `ThumbsUp` and the
-  /// packs have been regenerated.
+  /// Saying the gesture aloud is also the only route in for a child who cannot
+  /// yet read the hand: the buddy's pose and the card glyph are both visual,
+  /// so without the word there is no non-visual way to answer the bid.
   VoiceOverCue _cueFor(Greeting greeting) {
     switch (greeting) {
       case Greeting.wave:
-        // "Hello" has no cue; "Here we go" is the warmest of the openers that
-        // does, and it reads as an approach rather than an instruction.
-        return VoiceOverCue.hereWeGo;
+        return VoiceOverCue.greetingWave;
       case Greeting.highFive:
-        return VoiceOverCue.bigHighFive;
+        return VoiceOverCue.greetingHighFive;
       case Greeting.fistBump:
-        return VoiceOverCue.nowYouTry;
+        return VoiceOverCue.greetingFistBump;
       case Greeting.thumbsUp:
-        return VoiceOverCue.veryGood;
+        return VoiceOverCue.greetingThumbsUp;
     }
   }
 
@@ -217,8 +217,7 @@ class _KumustaScreenState extends State<KumustaScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
 
@@ -231,30 +230,41 @@ class _KumustaScreenState extends State<KumustaScreen> {
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id;
 
-    // The write must land before the flow advances, so a completed game is
-    // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: childId,
-      gameId: 'kumusta',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: childProvider.musicEnabled,
-      hapticFeedbackEnabled: childProvider.vibrationEnabled,
-    );
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: childId,
+        gameId: 'kumusta',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: childProvider.musicEnabled,
+        hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      );
+    } catch (e) {
+      debugPrint('[Kumusta] session recording failed: $e');
+    }
     if (!mounted) return;
 
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
 
     if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
       _showRewardThenCompletion(score, totalItems, errorCount);
     }
   }
@@ -265,22 +275,31 @@ class _KumustaScreenState extends State<KumustaScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              GameEndChoiceDialog.show(context, currentGameId: 'kumusta');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'kumusta',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -290,14 +309,15 @@ class _KumustaScreenState extends State<KumustaScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => MascotHost(
-          showMascot: false, // Kumusta draws its own buddy.
-          child: KumustaScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-            difficulty: widget.difficulty,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              showMascot: false, // Kumusta draws its own buddy.
+              child: KumustaScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
     );
   }
@@ -322,10 +342,11 @@ class _KumustaScreenState extends State<KumustaScreen> {
           // Flame: Game area (full screen)
           Container(
             decoration: BoxDecoration(
-                gradient: context
-                    .watch<ChildProvider>()
-                    .activePalette
-                    .gameBackgroundFor('kumusta')),
+              gradient: context
+                  .watch<ChildProvider>()
+                  .activePalette
+                  .gameBackgroundFor('kumusta'),
+            ),
             child: GameWidget(game: _game),
           ),
 
@@ -348,11 +369,11 @@ class _KumustaScreenState extends State<KumustaScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)
@@ -361,9 +382,10 @@ class _KumustaScreenState extends State<KumustaScreen> {
             left: AppSpacing.md,
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
-              text: _gameComplete
-                  ? strings.kumustaComplete
-                  : strings.kumustaInstruction,
+              text:
+                  _gameComplete
+                      ? strings.kumustaComplete
+                      : strings.kumustaInstruction,
               isVisible: _showPrompt || _gameComplete,
             ),
           ),

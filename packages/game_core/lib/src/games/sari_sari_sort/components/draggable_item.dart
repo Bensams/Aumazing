@@ -105,7 +105,10 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   /// character keeps showing. The fingertip-follow mixin adjusts for the
   /// scale every tick, so [visualCenter] — the point drop hit-testing uses —
   /// stays exactly where the finger is either way.
-  final double dragScale;
+  ///
+  /// Mutable because a game whose target is sized from the canvas has to
+  /// re-fit the held card when the canvas changes; it is only read on pick-up.
+  double dragScale;
 
   /// Fired when the child lifts the item (drag start).
   final void Function(DraggableItem item) onPickedUp;

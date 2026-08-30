@@ -15,24 +15,41 @@ import 'milestone_victory_scene.dart';
 typedef MilestoneVoiceOverFactory = VoiceOverService Function(
     BuildContext context);
 
-/// How long the finished pose is held before the continue control appears, so
-/// the child has a beat to take in that they have arrived and the trophy is
-/// theirs.
-const Duration kMilestoneHoldDuration = Duration(milliseconds: 1600);
+/// How long the celebration is held before the continue control appears.
+///
+/// The scene is a playable stage — a trophy and stars the child pops — not a
+/// flourish to be snatched away after a beat, so it is held long enough to
+/// actually be played with. Matched to the assessment hand-off's own hold
+/// (`kHandoffCelebrationDuration`) so a milestone feels the same length
+/// wherever the child meets it. Timed from when the screen appears, not from
+/// the companion's arrival: a slow climb must not push the whole hold later.
+///
+/// A child who clears every reward before this is up moves on early — see
+/// [kMilestoneMinHold].
+const Duration kMilestoneHoldDuration = Duration(seconds: 12);
 
-/// A safety valve: even if the companion never reports arriving (a sheet fails
-/// to load, a timer is lost), the continue control appears by now so the child
-/// is never trapped on the celebration.
-const Duration kMilestoneMaxHold = Duration(seconds: 8);
+/// The floor under the early exit. Even a child who pops the trophy and every
+/// star in one fast drag stays long enough for the spoken milestone line —
+/// dispatched 650 ms in — to be heard rather than cut off.
+const Duration kMilestoneMinHold = Duration(seconds: 3);
+
+/// The beat left after the last reward is popped, so its burst finishes on the
+/// stage rather than being cut mid-sparkle by the control fading in.
+const Duration kMilestoneAllPoppedSettle = Duration(milliseconds: 900);
+
+/// A safety valve: even if a timer is lost, the continue control appears by now
+/// so the child is never trapped on the celebration.
+const Duration kMilestoneMaxHold = Duration(seconds: 15);
 
 /// The full-screen milestone celebration for a completed learning path.
 ///
 /// Wraps [MilestoneVictoryScene] with the one game-complete sound and haptic
 /// (played once, respecting the child's own settings) and a single large,
 /// icon-first continue control that returns them to their path map. The control
-/// is reading-free and only appears once the celebration has been held, and a
-/// max-hold fallback reveals it even if the animation stalls — the child is
-/// never left with no way forward.
+/// is reading-free and only appears once the celebration has been held — twelve
+/// seconds, or sooner for a child who has already popped the trophy and every
+/// star and so has nothing left to play with. A max-hold fallback reveals it
+/// even if a timer is lost, so the child is never left with no way forward.
 ///
 /// The pre- and post-assessment milestones do *not* use this screen: they embed
 /// the same [MilestoneVictoryScene] inside the assessment hand-off, which owns
@@ -47,6 +64,8 @@ class MilestoneVictoryScreen extends StatefulWidget {
     this.reducedMotion,
     this.climbDuration = kMilestoneClimbDuration,
     this.holdDuration = kMilestoneHoldDuration,
+    this.minHold = kMilestoneMinHold,
+    this.allPoppedSettle = kMilestoneAllPoppedSettle,
     this.maxHold = kMilestoneMaxHold,
     this.playSfx = true,
     this.voiceOverFactory,
@@ -65,10 +84,16 @@ class MilestoneVictoryScreen extends StatefulWidget {
   final bool? reducedMotion;
   final Duration climbDuration;
 
-  /// How long after arrival the continue control appears.
+  /// How long after the celebration appears the continue control does.
   final Duration holdDuration;
 
-  /// Absolute cap after which the control appears regardless of arrival.
+  /// The earliest the control may appear, even with every reward popped.
+  final Duration minHold;
+
+  /// How long the cleared stage is held after the final pop.
+  final Duration allPoppedSettle;
+
+  /// Absolute cap after which the control appears no matter what.
   final Duration maxHold;
 
   /// Whether to play the game-complete cue. A test seam; production leaves it
@@ -92,6 +117,7 @@ class MilestoneVictoryScreen extends StatefulWidget {
     String? costumeId,
     Duration climbDuration = kMilestoneClimbDuration,
     Duration holdDuration = kMilestoneHoldDuration,
+    Duration minHold = kMilestoneMinHold,
   }) {
     final completer = Completer<void>();
     Navigator.of(context).push(
@@ -104,6 +130,7 @@ class MilestoneVictoryScreen extends StatefulWidget {
           costumeId: costumeId,
           climbDuration: climbDuration,
           holdDuration: holdDuration,
+          minHold: minHold,
           onContinue: () {
             if (!completer.isCompleted) completer.complete();
           },
@@ -123,9 +150,17 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
   bool _showContinue = false;
   bool _continued = false;
   Timer? _holdTimer;
+  Timer? _minHoldTimer;
+  Timer? _allPoppedTimer;
   Timer? _maxHoldTimer;
   Timer? _voiceTimer;
   bool _spokeMilestone = false;
+
+  /// Whether the child has cleared every reward, and whether the minimum hold
+  /// has passed. The early exit needs both: the first says the child is
+  /// finished playing, the second protects the spoken milestone line.
+  bool _allRewardsPopped = false;
+  bool _minHoldElapsed = false;
 
   /// Narrator for the milestone line, built from the child's own voice pack.
   late final VoiceOverService _voiceOver;
@@ -167,8 +202,20 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
       _voiceOver.play(widget.kind.voiceCue);
     });
 
-    // Never trap the child: even if arrival is never reported, reveal the
-    // control by the max hold.
+    // The full hold. Timed from here rather than from the companion's arrival
+    // so the stage stays playable for a predictable length whatever the climb
+    // does.
+    _holdTimer = Timer(widget.holdDuration, _revealContinue);
+
+    // The early exit only opens after the minimum hold.
+    _minHoldTimer = Timer(widget.minHold, () {
+      if (!mounted) return;
+      _minHoldElapsed = true;
+      _maybeRevealAfterAllPopped();
+    });
+
+    // Never trap the child: even if a timer is lost, reveal the control by the
+    // max hold.
     _maxHoldTimer = Timer(widget.maxHold, _revealContinue);
   }
 
@@ -181,11 +228,21 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
     );
   }
 
-  /// The companion has reached the trophy — hold the pose briefly, then let the
-  /// child move on.
-  void _onArrived() {
-    _holdTimer?.cancel();
-    _holdTimer = Timer(widget.holdDuration, _revealContinue);
+  /// The child popped the last reward — the trophy and every star are gone, so
+  /// there is nothing left on the stage to play with. Let them move on rather
+  /// than making them wait out the full hold.
+  void _onAllRewardsPopped() {
+    if (_allRewardsPopped) return;
+    _allRewardsPopped = true;
+    _maybeRevealAfterAllPopped();
+  }
+
+  /// Reveals the control once both the stage is empty and the minimum hold has
+  /// passed. Idempotent: a second call never schedules a second reveal.
+  void _maybeRevealAfterAllPopped() {
+    if (!_allRewardsPopped || !_minHoldElapsed) return;
+    if (_allPoppedTimer != null || _showContinue) return;
+    _allPoppedTimer = Timer(widget.allPoppedSettle, _revealContinue);
   }
 
   void _revealContinue() {
@@ -199,6 +256,8 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
     if (_continued) return;
     _continued = true;
     _holdTimer?.cancel();
+    _minHoldTimer?.cancel();
+    _allPoppedTimer?.cancel();
     _maxHoldTimer?.cancel();
     // Always pushed in production (via [show]); the guard keeps it safe if it
     // is ever the only route on screen.
@@ -210,6 +269,8 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
   @override
   void dispose() {
     _holdTimer?.cancel();
+    _minHoldTimer?.cancel();
+    _allPoppedTimer?.cancel();
     _maxHoldTimer?.cancel();
     _voiceTimer?.cancel();
     _voiceOver.dispose();
@@ -229,7 +290,7 @@ class _MilestoneVictoryScreenState extends State<MilestoneVictoryScreen> {
             costumeId: widget.costumeId,
             reducedMotion: widget.reducedMotion,
             climbDuration: widget.climbDuration,
-            onArrived: _onArrived,
+            onAllRewardsPopped: _onAllRewardsPopped,
           ),
           // Large, icon-first continue control — appears only once the child
           // can see they have arrived. Reading-free: a big forward arrow.

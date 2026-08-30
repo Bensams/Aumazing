@@ -21,10 +21,11 @@ class AssessmentSummary {
 /// the parent always sees a summary. Successful AI summaries are cached
 /// per result so repeat views (and offline re-opens) are instant and free.
 class AssessmentSummaryService {
-  AssessmentSummaryService._();
+  /// Public so tests can subclass and stub [summarize]. Callers use
+  /// [instance] — there is no reason to build a second one at runtime.
+  AssessmentSummaryService();
 
-  static final AssessmentSummaryService instance =
-      AssessmentSummaryService._();
+  static final AssessmentSummaryService instance = AssessmentSummaryService();
 
   static const _timeout = Duration(seconds: 12);
 

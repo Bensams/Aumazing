@@ -7,6 +7,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_progress_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
+import '../child_mode/open_my_path.dart';
 import '../pre_assessment/assessment_result_view.dart';
 
 /// Parent-facing post-assessment results.
@@ -31,67 +32,70 @@ class PostAssessmentResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<AssessmentProvider, ChildProvider>(
-      builder: (context, assessProv, childProv, _) {
-        final postSnapshot = assessProv.postSnapshot;
-        final preSnapshot = assessProv.preSnapshot;
+    // The parent orientation policy has to apply from the first frame — the
+    // child hand-off before this screen left the device locked landscape, and
+    // the loading/empty branches below are parent-facing too.
+    return ParentAdaptiveOrientation(
+      child: Consumer2<AssessmentProvider, ChildProvider>(
+        builder: (context, assessProv, childProv, _) {
+          final postSnapshot = assessProv.postSnapshot;
+          final preSnapshot = assessProv.preSnapshot;
 
-        // The post snapshot was captured before navigating here and contains
-        // the post run's own results, profile, and prediction. Never mix the
-        // mutable provider fields into this historical run.
-        final results = postSnapshot?.results ?? const [];
+          // The post snapshot was captured before navigating here and contains
+          // the post run's own results, profile, and prediction. Never mix the
+          // mutable provider fields into this historical run.
+          final results = postSnapshot?.results ?? const [];
 
-        if (results.isEmpty) {
-          // Defensive: should not happen in the normal flow.
-          return Scaffold(
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: AppGradients.parentLavenderMint,
+          if (results.isEmpty) {
+            // Defensive: should not happen in the normal flow.
+            return Scaffold(
+              body: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppGradients.parentLavenderMint,
+                ),
+                child: const SafeArea(
+                  child: Center(child: Text('No post-assessment data found.')),
+                ),
               ),
-              child: const SafeArea(
-                child: Center(child: Text('No post-assessment data found.')),
-              ),
-            ),
-          );
-        }
-
-        // New snapshots carry the freshly finalized post profile. Legacy post
-        // snapshots may contain the pre profile, so rebuild those from the
-        // frozen post results instead of showing stale settings.
-        final profile =
-            (postSnapshot?.profileIsRunSpecific == true
-                ? postSnapshot?.profile
-                : null) ??
-            const local_scoring.ScoringService().generateProfile(
-              results: results,
-              sensorySettings: childProv.sensorySettingsMap,
             );
+          }
 
-        // The prediction frozen in the post snapshot — never the mutable
-        // provider.aiPrediction, which could have been overwritten.
-        final aiResponse = postSnapshot?.prediction;
+          // New snapshots carry the freshly finalized post profile. Legacy post
+          // snapshots may contain the pre profile, so rebuild those from the
+          // frozen post results instead of showing stale settings.
+          final profile =
+              (postSnapshot?.profileIsRunSpecific == true
+                  ? postSnapshot?.profile
+                  : null) ??
+              const local_scoring.ScoringService().generateProfile(
+                results: results,
+                sensorySettings: childProv.sensorySettingsMap,
+              );
 
-        // Pre→post comparison using the frozen snapshots.
-        final progress = AssessmentProgressService.compare(
-          before: preSnapshot,
-          after: postSnapshot,
-        );
-        final overallProgress =
-            improvement['has_data'] == true
-                ? ResultOverallProgress(
-                  accuracyDelta:
-                      (improvement['accuracy_improvement'] as num?)
-                          ?.toDouble() ??
-                      0,
-                  responseTimeDeltaMs:
-                      (improvement['response_time_improvement'] as num?)
-                          ?.toDouble() ??
-                      0,
-                )
-                : null;
+          // The prediction frozen in the post snapshot — never the mutable
+          // provider.aiPrediction, which could have been overwritten.
+          final aiResponse = postSnapshot?.prediction;
 
-        return ParentAdaptiveOrientation(
-          child: AssessmentResultView(
+          // Pre→post comparison using the frozen snapshots.
+          final progress = AssessmentProgressService.compare(
+            before: preSnapshot,
+            after: postSnapshot,
+          );
+          final overallProgress =
+              improvement['has_data'] == true
+                  ? ResultOverallProgress(
+                    accuracyDelta:
+                        (improvement['accuracy_improvement'] as num?)
+                            ?.toDouble() ??
+                        0,
+                    responseTimeDeltaMs:
+                        (improvement['response_time_improvement'] as num?)
+                            ?.toDouble() ??
+                        0,
+                  )
+                  : null;
+
+          return AssessmentResultView(
             results: results,
             profile: profile,
             aiResponse: aiResponse,
@@ -104,9 +108,10 @@ class PostAssessmentResultScreen extends StatelessWidget {
             nextModulePremiumRequired: nextModulePremiumRequired,
             onContinue:
                 () => Navigator.of(context).popUntil((route) => route.isFirst),
-          ),
-        );
-      },
+            onOpenLearningPath: () => openMyPath(context),
+          );
+        },
+      ),
     );
   }
 }

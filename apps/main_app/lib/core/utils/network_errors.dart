@@ -49,7 +49,7 @@ String friendly(Object error, {String? fallback}) {
 ///
 /// [AuthException.message] is written for the person signing in — by Supabase
 /// for its own failures, and by `AuthService` for the ones it raises itself
-/// (cancelled Google sign-in, cancelled Facebook login). [PostgrestException]
+/// (cancelled Google sign-in). [PostgrestException]
 /// and friends are the opposite: their messages are database diagnostics, so
 /// they deliberately fall through to the generic text.
 String? _authorMessage(Object error) {

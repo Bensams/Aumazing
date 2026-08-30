@@ -45,7 +45,8 @@ class AnongNararamdamanScreen extends StatefulWidget {
     int totalItems,
     int errorCount,
     int totalResponseTimeMs,
-  )? onComplete;
+  )?
+  onComplete;
 
   /// Optional sensory controller for per-round music/haptic during
   /// pre-assessment.
@@ -56,15 +57,15 @@ class AnongNararamdamanScreen extends StatefulWidget {
       _AnongNararamdamanScreenState();
 }
 
-class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
-  late final int _totalRounds = GameRoundPolicy.roundsForContext(widget.assessmentContext);
+class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen>
+    with GameCompletionGuard {
+  late final int _totalRounds = GameRoundPolicy.roundsForContext(
+    widget.assessmentContext,
+  );
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   bool _showStarSparkle = false;
 
   /// True while tier 3 is asking its follow-up question, so the bubble stops
@@ -111,10 +112,12 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
       // The buddy whose feelings the child reads is the character they picked —
       // the same one they see as the mascot — normalised so an unknown id falls
       // back to BPS rather than a missing face set.
-      character: MascotCharacter.fromId(childProvider.profile?.characterId).name,
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
-          : DifficultyProfile.assessment,
+      character:
+          MascotCharacter.fromId(childProvider.profile?.characterId).name,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(widget.difficulty ?? 2)
+              : DifficultyProfile.assessment,
       strings: config.strings,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
@@ -134,8 +137,8 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
       // the item, the colour or the step. The recording comes out of the
       // child's own voice pack, so the spoken emotion word is in the same
       // language as the word printed on the card.
-      onPlayCorrectVo: (label) =>
-          _voiceOverService.playAnswerLabel(emotion: label.emotion),
+      onPlayCorrectVo:
+          (label) => _voiceOverService.playAnswerLabel(emotion: label.emotion),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayInstructionVo: () => _voiceOverService.playEmotionQuestion(),
       // Every trial opens by saying what happened — "Nahulog ang kanyang ice
@@ -143,8 +146,9 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
       // printed under the picture as well, but a child who cannot read it would
       // otherwise be asked how someone feels about an event nobody told them
       // about.
-      onPlaySceneVo: (sceneId) =>
-          _voiceOverService.playSceneCaption(sceneId, alsoAsk: true),
+      onPlaySceneVo:
+          (sceneId) =>
+              _voiceOverService.playSceneCaption(sceneId, alsoAsk: true),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
     );
@@ -196,8 +200,7 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
 
@@ -210,30 +213,43 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id;
 
-    // The write must land before the flow advances, so a completed game is
-    // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: childId,
-      gameId: 'anong_nararamdaman',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: childProvider.musicEnabled,
-      hapticFeedbackEnabled: childProvider.vibrationEnabled,
-    );
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: childId,
+        gameId: 'anong_nararamdaman',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: childProvider.musicEnabled,
+        hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      );
+    } catch (e) {
+      debugPrint('[AnongNararamdaman] session recording failed: $e');
+    }
     if (!mounted) return;
 
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
 
     if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
+      // The reward overlay is about to appear; the watchdog stays armed until
+      // the choice (or non-practice pop) is actually on screen.
       _showRewardThenCompletion(score, totalItems, errorCount);
     }
   }
@@ -245,23 +261,31 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              GameEndChoiceDialog.show(context,
-                  currentGameId: 'anong_nararamdaman');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'anong_nararamdaman',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -271,14 +295,16 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => MascotHost(
-          showMascot: false, // Anong Nararamdaman draws its own emotion face.
-          child: AnongNararamdamanScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-            difficulty: widget.difficulty,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              showMascot:
+                  false, // Anong Nararamdaman draws its own emotion face.
+              child: AnongNararamdamanScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
     );
   }
@@ -310,10 +336,11 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
           // Flame: Game area (full screen)
           Container(
             decoration: BoxDecoration(
-                gradient: context
-                    .watch<ChildProvider>()
-                    .activePalette
-                    .gameBackgroundFor('anong_nararamdaman')),
+              gradient: context
+                  .watch<ChildProvider>()
+                  .activePalette
+                  .gameBackgroundFor('anong_nararamdaman'),
+            ),
             child: GameWidget(game: _game),
           ),
 
@@ -336,11 +363,11 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           // Flutter: Voice-over prompt (overlay)

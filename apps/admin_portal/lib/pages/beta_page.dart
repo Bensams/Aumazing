@@ -2,21 +2,84 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Beta Review — the SPED validation workspace.
-///
+
+/// Data access behind the Beta Review page, injected so widget tests can
+/// drive the page without a live Supabase project. The default
+/// implementation routes through the consent-gated admin RPCs — the same
+/// access path the server-side policies require (no broad admin SELECT).
+abstract interface class BetaReportClient {
+  /// The `get_beta_children` RPC row list.
+  Future<dynamic> loadChildren();
+
+  /// The single `rubric_thresholds` row (or null).
+  Future<dynamic> loadThresholds();
+
+  /// The `get_child_report` RPC payload for [childId].
+  Future<dynamic> loadReport(String childId);
+
+  /// Records a SPED validator agree/disagree review for one area.
+  Future<void> submitReview({
+    required String childId,
+    required String area,
+    required bool agrees,
+    String? comment,
+    String? reviewerId,
+  });
+}
+
+class SupabaseBetaReportClient implements BetaReportClient {
+  const SupabaseBetaReportClient();
+
+  @override
+  Future<dynamic> loadChildren() =>
+      Supabase.instance.client.rpc('get_beta_children');
+
+  @override
+  Future<dynamic> loadThresholds() => Supabase.instance.client
+      .from('rubric_thresholds')
+      .select()
+      .eq('id', 1)
+      .maybeSingle();
+
+  @override
+  Future<dynamic> loadReport(String childId) => Supabase.instance.client
+      .rpc('get_child_report', params: {'p_child_id': childId});
+
+  @override
+  Future<void> submitReview({
+    required String childId,
+    required String area,
+    required bool agrees,
+    String? comment,
+    String? reviewerId,
+  }) =>
+      Supabase.instance.client.from('validator_reviews').insert({
+        'child_id': childId,
+        'area': area,
+        'agrees': agrees,
+        'comment': comment,
+        'reviewer_id': reviewerId,
+      });
+}
+
 /// Shows research-consented children ONLY (the get_beta_children /
 /// get_child_report RPCs refuse everything else server-side). For each
 /// child: the raw gameplay indicators the rubric consumes, the per-area
-/// rubric outcome with the thresholds applied, and the AI recommendation —
-/// side by side so a SPED professional can judge whether the
-/// recommendation matches the child's developmental needs, and record an
-/// agree/disagree review per area (the study's validation data).
+/// rubric outcome with the thresholds applied, the AI recommendation, and
+/// the pre/post comparison — side by side so a SPED professional can judge
+/// whether the recommendation matches the child's developmental needs,
+/// and record an agree/disagree review per area (the study's validation
+/// data).
 class BetaPage extends StatefulWidget {
-  const BetaPage({super.key});
+  const BetaPage({super.key, BetaReportClient? client})
+      : _client = client ?? const SupabaseBetaReportClient();
+
+  final BetaReportClient _client;
 
   @override
   State<BetaPage> createState() => _BetaPageState();
 }
+
 
 class _BetaPageState extends State<BetaPage> {
   List<Map<String, dynamic>> _children = const [];
@@ -47,12 +110,8 @@ class _BetaPageState extends State<BetaPage> {
       _error = null;
     });
     try {
-      final rows = await Supabase.instance.client.rpc('get_beta_children');
-      final thresholds = await Supabase.instance.client
-          .from('rubric_thresholds')
-          .select()
-          .eq('id', 1)
-          .maybeSingle();
+      final rows = await widget._client.loadChildren();
+      final thresholds = await widget._client.loadThresholds();
       if (!mounted) return;
       setState(() {
         _children = List<Map<String, dynamic>>.from(rows as List);
@@ -76,8 +135,7 @@ class _BetaPageState extends State<BetaPage> {
       _report = null;
     });
     try {
-      final report = await Supabase.instance.client
-          .rpc('get_child_report', params: {'p_child_id': childId});
+      final report = await widget._client.loadReport(childId);
       if (!mounted) return;
       setState(() {
         _report = Map<String, dynamic>.from(report as Map);
@@ -125,15 +183,15 @@ class _BetaPageState extends State<BetaPage> {
     if (confirmed != true || _selectedChildId == null) return;
 
     try {
-      await Supabase.instance.client.from('validator_reviews').insert({
-        'child_id': _selectedChildId,
-        'area': area,
-        'agrees': agrees,
-        'comment': commentController.text.trim().isEmpty
+      await widget._client.submitReview(
+        childId: _selectedChildId!,
+        area: area,
+        agrees: agrees,
+        comment: commentController.text.trim().isEmpty
             ? null
             : commentController.text.trim(),
-        'reviewer_id': Supabase.instance.client.auth.currentUser?.id,
-      });
+        reviewerId: Supabase.instance.client.auth.currentUser?.id,
+      );
       _loadReport(_selectedChildId!);
     } catch (e) {
       if (mounted) {
@@ -299,6 +357,9 @@ class _BetaPageState extends State<BetaPage> {
         List<Map<String, dynamic>>.from(_report!['results'] as List);
     final recommendations =
         List<Map<String, dynamic>>.from(_report!['recommendations'] as List);
+    // Older RPC versions (pre AUM-330) omit the comparisons key.
+    final comparisons = List<Map<String, dynamic>>.from(
+        (_report!['comparisons'] as List?) ?? const []);
     final reviews =
         List<Map<String, dynamic>>.from(_report!['reviews'] as List);
 
@@ -306,16 +367,17 @@ class _BetaPageState extends State<BetaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Gameplay Indicators '
-              '(${sessions.length} assessment sessions)'),
-          _buildSessionsTable(sessions),
+          _sectionTitle('Gameplay Indicators (${sessions.length} sessions)'),
+          _buildGroupedSessions(sessions),
           const SizedBox(height: 24),
-          _sectionTitle('Rubric Outcome (latest assessment)'),
-          _buildRubricTable(results.isEmpty ? null : results.first),
+          _sectionTitle('Rubric Outcome'),
+          _buildRubricSections(results),
           const SizedBox(height: 24),
           _sectionTitle('AI Recommendation'),
-          _buildRecommendation(
-              recommendations.isEmpty ? null : recommendations.first),
+          _buildRecommendationSections(recommendations),
+          const SizedBox(height: 24),
+          _sectionTitle('Pre vs Post Comparison'),
+          _buildComparisons(comparisons),
           const SizedBox(height: 24),
           _sectionTitle('SPED Validator Sign-off'),
           _buildValidatorPanel(reviews),
@@ -329,6 +391,73 @@ class _BetaPageState extends State<BetaPage> {
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(text, style: Theme.of(context).textTheme.titleMedium),
       );
+
+  /// The gameplay buckets, in the order a validator reads them: what the
+  /// child could do before, what they did with the path they were given,
+  /// what they could do after, and everything else they played.
+  ///
+  /// Keyed on the session's own `bucket` (its recorded context), so a game
+  /// opened from the recommended module path is separated from free practice
+  /// by what the app recorded rather than by an inference drawn here.
+  static const _sessionBuckets = [
+    ('pre_assessment', 'Pre-assessment'),
+    ('recommended_module', 'Recommended module path'),
+    ('post_assessment', 'Post-assessment'),
+    ('practice', 'Practice mode'),
+  ];
+
+  Widget _buildGroupedSessions(List<Map<String, dynamic>> sessions) {
+    if (sessions.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('No gameplay synced yet.'),
+        ),
+      );
+    }
+
+    String bucketOf(Map<String, dynamic> s) =>
+        (s['bucket'] ?? s['context'] ?? 'practice').toString();
+
+    final known = {for (final (key, _) in _sessionBuckets) key};
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final session in sessions) {
+      final bucket = bucketOf(session);
+      // An unrecognised context ('training', 'free_play', or anything a
+      // later build adds) is shown under its own heading rather than
+      // dropped — a silently missing session is worse than an odd label.
+      groups.putIfAbsent(known.contains(bucket) ? bucket : bucket, () => [])
+          .add(session);
+    }
+
+    final ordered = <(String, String)>[
+      for (final (key, label) in _sessionBuckets)
+        if (groups.containsKey(key)) (key, label),
+      for (final key in groups.keys)
+        if (!known.contains(key)) (key, _humanizeKey(key)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (index, (key, label)) in ordered.indexed) ...[
+          if (index > 0) const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              '$label · ${groups[key]!.length} '
+              '${groups[key]!.length == 1 ? 'session' : 'sessions'}',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          _buildSessionsTable(groups[key]!),
+        ],
+      ],
+    );
+  }
 
   Widget _buildSessionsTable(List<Map<String, dynamic>> sessions) {
     if (sessions.isEmpty) {
@@ -349,7 +478,6 @@ class _BetaPageState extends State<BetaPage> {
               ?.copyWith(fontWeight: FontWeight.w700),
           columns: const [
             DataColumn(label: Text('Game')),
-            DataColumn(label: Text('Type')),
             DataColumn(label: Text('Score')),
             DataColumn(label: Text('Accuracy')),
             DataColumn(label: Text('Completion')),
@@ -367,8 +495,6 @@ class _BetaPageState extends State<BetaPage> {
               DataRow(cells: [
                 DataCell(Text((s['game_id'] as String? ?? '')
                     .replaceAll('_', ' '))),
-                DataCell(Text(
-                    s['context'] == 'pre_assessment' ? 'pre' : 'post')),
                 DataCell(Text('${s['score']}/${s['total_items']}')),
                 DataCell(Text(_pct(s['accuracy']))),
                 DataCell(Text(_pct(s['task_completion_rate']))),
@@ -385,6 +511,106 @@ class _BetaPageState extends State<BetaPage> {
               ]),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Assessment phases, newest-relevant last, as the report reads them.
+  static const _phases = [
+    ('pre_assessment', 'Pre-assessment'),
+    ('post_assessment', 'Post-assessment'),
+  ];
+
+  /// The newest entry of [rows] for each assessment phase.
+  ///
+  /// Rows arrive newest-first from the RPC, so the first match per phase is
+  /// the current one. Rows whose phase is unknown (an older row written
+  /// before the run join existed) fall into [other] so they are still shown
+  /// rather than silently dropped.
+  (Map<String, Map<String, dynamic>> byPhase, List<Map<String, dynamic>> other)
+      _splitByPhase(List<Map<String, dynamic>> rows) {
+    final byPhase = <String, Map<String, dynamic>>{};
+    final other = <Map<String, dynamic>>[];
+    final known = {for (final (key, _) in _phases) key};
+    for (final row in rows) {
+      final type = row['assessment_type'] as String?;
+      if (type == null || !known.contains(type)) {
+        other.add(row);
+        continue;
+      }
+      byPhase.putIfAbsent(type, () => row);
+    }
+    return (byPhase, other);
+  }
+
+  /// The rubric outcome of the pre- and post-assessment side by side.
+  ///
+  /// Was a single "latest assessment" card, which could not say which of the
+  /// two assessments it described — and on a child who had done both, showed
+  /// only the post, so the baseline the recommendation was built from was
+  /// nowhere on the page.
+  Widget _buildRubricSections(List<Map<String, dynamic>> results) {
+    if (results.isEmpty) return _buildRubricTable(null);
+    final (byPhase, other) = _splitByPhase(results);
+    if (byPhase.isEmpty && other.isEmpty) return _buildRubricTable(null);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (key, label) in _phases)
+          if (byPhase[key] != null) ...[
+            _phaseHeading(label, byPhase[key]!['assessment_date']),
+            _buildRubricTable(byPhase[key]),
+            const SizedBox(height: 12),
+          ],
+        if (byPhase.isEmpty && other.isNotEmpty) ...[
+          _phaseHeading('Latest assessment', other.first['assessment_date']),
+          _buildRubricTable(other.first),
+        ],
+      ],
+    );
+  }
+
+  /// The recommendation each assessment produced, kept apart.
+  ///
+  /// The pre-assessment's recommendation is what the child's module path was
+  /// built from; the post-assessment's is what they are pointed at next.
+  /// Collapsing them into "the newest recommendation" hid exactly the
+  /// before/after the beta study is trying to judge.
+  Widget _buildRecommendationSections(
+      List<Map<String, dynamic>> recommendations) {
+    if (recommendations.isEmpty) return _buildRecommendation(null);
+    final (byPhase, other) = _splitByPhase(recommendations);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (key, label) in _phases)
+          if (byPhase[key] != null) ...[
+            _phaseHeading(label, byPhase[key]!['assessment_date']),
+            _buildRecommendation(byPhase[key]),
+            const SizedBox(height: 12),
+          ],
+        // Only shown when nothing could be attributed to a phase: a
+        // recommendation whose source run predates the join.
+        if (byPhase.isEmpty && other.isNotEmpty) ...[
+          _phaseHeading('Unattributed', other.first['assessment_date']),
+          _buildRecommendation(other.first),
+        ],
+      ],
+    );
+  }
+
+  Widget _phaseHeading(String label, dynamic date) {
+    final parsed = DateTime.tryParse(date?.toString() ?? '');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        parsed == null
+            ? label
+            : '$label · ${DateFormat('MMM d, yyyy').format(parsed)}',
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -483,8 +709,25 @@ class _BetaPageState extends State<BetaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Top module: ${recommendation['top_module'] ?? '—'}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                      'Top module: ${recommendation['top_module'] ?? '—'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                Text(
+                  'conf ${_pct(recommendation['confidence'])}'
+                  '${recommendation['recommended_by'] == null ? '' : ' · ${recommendation['recommended_by']}'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            if (_rationaleOf(recommendation) != null) ...[
+              const SizedBox(height: 6),
+              Text(_rationaleOf(recommendation)!,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (steps.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
@@ -510,6 +753,18 @@ class _BetaPageState extends State<BetaPage> {
     );
   }
 
+  /// The parent-facing explanation the app stored alongside the
+  /// recommendation, if any. Pipeline-owned shape, so anything that is not
+  /// the expected `{rationale: ...}` is left unrendered rather than guessed.
+  String? _rationaleOf(Map<String, dynamic> recommendation) {
+    final explanation = recommendation['explanation_json'];
+    if (explanation is! Map) return null;
+    final rationale = explanation['rationale'];
+    return rationale is String && rationale.trim().isNotEmpty
+        ? rationale
+        : null;
+  }
+
   String _stepLabel(dynamic step) {
     if (step is Map) {
       final name = step['name'] ?? step['game_id'] ?? step['module'] ?? '?';
@@ -517,6 +772,193 @@ class _BetaPageState extends State<BetaPage> {
       return level == null ? '$name' : '$name (Lvl $level)';
     }
     return step.toString();
+  }
+
+  static const _comparisonAreas = [
+    ('communication', 'Communication'),
+    ('social', 'Social Interaction'),
+    ('play', 'Play Skills'),
+    ('attention', 'Attention'),
+  ];
+
+  Widget _buildComparisons(List<Map<String, dynamic>> comparisons) {
+    if (comparisons.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'No pre/post comparison synced yet.\n\n'
+            'A comparison appears after the child completes the '
+            'post-assessment.',
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final (index, c) in comparisons.indexed) ...[
+          if (index > 0) const SizedBox(height: 12),
+          _buildComparisonCard(c),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildComparisonCard(Map<String, dynamic> c) {
+    final comparedAt = DateTime.tryParse(c['compared_at'] as String? ?? '');
+    final dateFormat = DateFormat('MMM d, yyyy');
+    final status = c['overall_progress_status'] as String?;
+    final baseline = asMap(c['baseline']);
+    final comparison = asMap(c['comparison']);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (status != null)
+                  Chip(
+                    label: Text(_formatProgressStatus(status)),
+                    avatar: Icon(
+                      _statusIcon(status),
+                      size: 18,
+                      color: _statusColor(status),
+                    ),
+                  )
+                else
+                  const Text('Overall: —'),
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    comparedAt == null
+                        ? ''
+                        : 'Compared ${dateFormat.format(comparedAt.toLocal())}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (final (key, label) in _comparisonAreas)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 160,
+                      child: Text(label,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                    Expanded(
+                      child: Text(
+                        _formatLevel(baseline['${key}_level']),
+                        style: TextStyle(
+                          color: _levelColor(_formatLevel(
+                              baseline['${key}_level'])),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(Icons.arrow_forward_rounded, size: 16),
+                    ),
+                    Expanded(
+                      child: Text(
+                        _formatLevel(comparison['${key}_level']),
+                        style: TextStyle(
+                          color: _levelColor(_formatLevel(
+                              comparison['${key}_level'])),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ..._buildSummaryRows(c['comparison_summary_json']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A regression and a plateau are different findings and must not share
+  /// an arrow: 'needs_more_support' means the child did not move, not that
+  /// they went backwards.
+  IconData _statusIcon(String status) => switch (status) {
+        'improved' => Icons.trending_up_rounded,
+        'declined' || 'regression_observed' => Icons.trending_down_rounded,
+        _ => Icons.trending_flat_rounded,
+      };
+
+  Color _statusColor(String status) => switch (status) {
+        'improved' => Colors.green.shade700,
+        'declined' || 'regression_observed' => Colors.red.shade700,
+        'needs_more_support' => Colors.orange.shade800,
+        _ => Colors.grey,
+      };
+
+  /// Overall progress arrives as machine slugs or display text depending
+  /// on which pipeline wrote it — normalize both.
+  String _formatProgressStatus(String raw) => switch (raw) {
+        // The four the assessment_comparisons CHECK constraint admits...
+        'improved' => 'Improved',
+        'maintained' => 'Maintained',
+        'needs_more_support' => 'Needs more support',
+        'regression_observed' => 'Regression observed',
+        // ...plus the older spellings an earlier pipeline wrote.
+        'declined' => 'Declined',
+        'no_change' => 'No change',
+        _ => raw,
+      };
+
+  /// Renders the comparison summary as simple key/value rows. The payload
+  /// shape is pipeline-owned, so anything beyond scalars is shown as
+  /// compact JSON rather than guessed at.
+  List<Widget> _buildSummaryRows(dynamic summary) {
+    if (summary is! Map || summary.isEmpty) return const [];
+    return [
+      const SizedBox(height: 12),
+      for (final entry in summary.entries)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 220,
+                child: Text(
+                  _humanizeKey(entry.key.toString()),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  entry.value is Map || entry.value is List
+                      ? entry.value.toString()
+                      : '${entry.value ?? '—'}',
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
+  }
+
+  static Map<String, dynamic> asMap(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : const {};
+
+  /// 'prompt_dependency_delta' -> 'Prompt dependency delta'.
+  String _humanizeKey(String raw) {
+    final spaced = raw.replaceAll('_', ' ').trim();
+    if (spaced.isEmpty) return spaced;
+    return '${spaced[0].toUpperCase()}${spaced.substring(1)}';
   }
 
   Widget _buildValidatorPanel(List<Map<String, dynamic>> reviews) {

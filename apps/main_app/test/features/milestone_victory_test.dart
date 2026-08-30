@@ -44,149 +44,387 @@ void main() {
         child: MaterialApp(theme: AppTheme.light, home: home),
       );
 
+  /// [host] without a [RewardSfxProvider]; used by the SFX tests so the new
+  /// trophy/star pop callbacks can be counted, and (with [onTrophyPop]/[
+  /// [onStarPop] omitted) to prove the null-guard path.
+  Widget sfxHost(
+    Widget home, {
+    ChildProfile? profile,
+    VoidCallback? onTrophyPop,
+    VoidCallback? onStarPop,
+  }) => ChangeNotifierProvider<ChildProvider>(
+    create: (_) => _TestChildProvider(profile),
+    child: MaterialApp(
+      theme: AppTheme.light,
+      home: RewardSfxProvider(
+        onTrophyPop: onTrophyPop,
+        onStarPop: onStarPop,
+        child: home,
+      ),
+    ),
+  );
+
   ChildProfile profileWith({
     String characterId = 'reiz',
     String equippedCostume = 'teddy',
-  }) =>
-      ChildProfile(
-        id: 'child-1',
-        userId: 'user-1',
-        displayName: 'Test',
-        birthDate: DateTime(2022, 4, 20),
-        avatar: 'bear',
-        characterId: characterId,
-        equippedCostume: equippedCostume,
-        createdAt: DateTime(2024),
-        updatedAt: DateTime(2024),
-      );
+  }) => ChildProfile(
+    id: 'child-1',
+    userId: 'user-1',
+    displayName: 'Test',
+    birthDate: DateTime(2022, 4, 20),
+    avatar: 'bear',
+    characterId: characterId,
+    equippedCostume: equippedCostume,
+    createdAt: DateTime(2024),
+    updatedAt: DateTime(2024),
+  );
 
   group('the scene', () {
-    testWidgets('shows the subtitle; the title is voiced, not drawn',
-        (tester) async {
-      await tester.pumpWidget(host(
-        const Scaffold(
-          body: MilestoneVictoryScene(
-            title: 'You Completed Your Learning Path!',
-            subtitle: 'You finished every activity on your path!',
-            reducedMotion: true,
+    testWidgets('shows the subtitle; the title is voiced, not drawn', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'You Completed Your Learning Path!',
+              subtitle: 'You finished every activity on your path!',
+              reducedMotion: true,
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
 
-      expect(find.text('You finished every activity on your path!'),
-          findsOneWidget);
+      expect(
+        find.text('You finished every activity on your path!'),
+        findsOneWidget,
+      );
       // The headline is not drawn — it overflows and a pre-reader cannot use
       // it; it is spoken instead (and kept for screen readers via semantics).
       expect(find.text('You Completed Your Learning Path!'), findsNothing);
     });
 
-    testWidgets('the companion uses the profile characterId and costume',
-        (tester) async {
-      await tester.pumpWidget(host(
-        const Scaffold(
-          body: MilestoneVictoryScene(
-            title: 'Pre-Assessment Complete!',
-            subtitle: 'You finished all the activities!',
-            reducedMotion: true,
+    testWidgets('the companion uses the profile characterId and costume', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Pre-Assessment Complete!',
+              subtitle: 'You finished all the activities!',
+              reducedMotion: true,
+            ),
           ),
+          profile: profileWith(characterId: 'reiz', equippedCostume: 'teddy'),
         ),
-        profile: profileWith(characterId: 'reiz', equippedCostume: 'teddy'),
-      ));
+      );
       await tester.pump();
 
       final mascot = tester.widget<Mascot>(find.byType(Mascot));
-      expect(mascot.character, MascotCharacter.reiz,
-          reason: 'the companion must be the profile choice, never inferred');
+      expect(
+        mascot.character,
+        MascotCharacter.reiz,
+        reason: 'the companion must be the profile choice, never inferred',
+      );
       expect(mascot.costumeId, 'teddy');
     });
 
-    testWidgets('the companion and the trophy are both in the trophy phase',
-        (tester) async {
-      await tester.pumpWidget(host(
-        const Scaffold(
-          body: MilestoneVictoryScene(
-            title: 'Post-Assessment Complete!',
-            subtitle: 'You finished all the activities!',
-            reducedMotion: true,
+    testWidgets('the companion and the trophy are both in the trophy phase', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Post-Assessment Complete!',
+              subtitle: 'You finished all the activities!',
+              reducedMotion: true,
+            ),
           ),
+          profile: profileWith(),
         ),
-        profile: profileWith(),
-      ));
+      );
       await tester.pump();
 
-      expect(find.byType(Mascot), findsOneWidget,
-          reason: 'the companion appears in the celebration itself, not only '
-              'on a later panel');
-      expect(find.byKey(kMilestoneTrophyKey), findsOneWidget,
-          reason: 'a drawn, composed trophy — not a bare emoji');
+      expect(
+        find.byType(Mascot),
+        findsOneWidget,
+        reason:
+            'the companion appears in the celebration itself, not only '
+            'on a later panel',
+      );
+      expect(
+        find.byKey(kMilestoneTrophyKey),
+        findsOneWidget,
+        reason: 'a drawn, composed trophy — not a bare emoji',
+      );
       // The emoji trophy the old celebration used must be gone.
       expect(find.text('🏆'), findsNothing);
     });
 
-    testWidgets('reduced motion stands the companion still, without traversal',
-        (tester) async {
-      var arrived = false;
-      await tester.pumpWidget(host(
-        Scaffold(
-          body: MilestoneVictoryScene(
-            title: 'Pre-Assessment Complete!',
-            subtitle: 'You finished all the activities!',
-            reducedMotion: true,
-            onArrived: () => arrived = true,
+    testWidgets(
+      'reduced motion stands the companion still, without traversal',
+      (tester) async {
+        var arrived = false;
+        await tester.pumpWidget(
+          host(
+            Scaffold(
+              body: MilestoneVictoryScene(
+                title: 'Pre-Assessment Complete!',
+                subtitle: 'You finished all the activities!',
+                reducedMotion: true,
+                onArrived: () => arrived = true,
+              ),
+            ),
+            profile: profileWith(),
           ),
-        ),
-        profile: profileWith(),
-      ));
-      await tester.pump();
+        );
+        await tester.pump();
 
-      final mascot = tester.widget<Mascot>(find.byType(Mascot));
-      expect(mascot.entrance, MascotEntrance.none,
-          reason: 'nothing walks across the scene under reduced motion');
-      expect(arrived, isTrue,
-          reason: 'arrival is immediate — the companion is already at the top');
+        final mascot = tester.widget<Mascot>(find.byType(Mascot));
+        expect(
+          mascot.entrance,
+          MascotEntrance.none,
+          reason: 'nothing walks across the scene under reduced motion',
+        );
+        expect(
+          arrived,
+          isTrue,
+          reason: 'arrival is immediate — the companion is already at the top',
+        );
 
-      // No lingering animations: the scene settles.
-      await tester.pumpAndSettle();
-    });
+        // No lingering animations: the scene settles.
+        await tester.pumpAndSettle();
+      },
+    );
 
-    testWidgets('full motion walks the companion in with the walk entrance',
-        (tester) async {
-      await tester.pumpWidget(host(
-        const Scaffold(
-          body: MilestoneVictoryScene(
-            title: 'Pre-Assessment Complete!',
-            subtitle: 'You finished all the activities!',
-            reducedMotion: false,
+    testWidgets('full motion walks the companion in with the walk entrance', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Pre-Assessment Complete!',
+              subtitle: 'You finished all the activities!',
+              reducedMotion: false,
+            ),
           ),
+          profile: profileWith(),
         ),
-        profile: profileWith(),
-      ));
+      );
       await tester.pump();
       // Let the staged intro timers fire so none are left pending at teardown.
       await tester.pump(const Duration(milliseconds: 700));
 
       final mascot = tester.widget<Mascot>(find.byType(Mascot));
       expect(mascot.entrance, MascotEntrance.fromLeft);
-      expect(mascot.gesture, MascotGesture.celebrate,
-          reason: 'it celebrates on reaching the top');
+      expect(
+        mascot.gesture,
+        MascotGesture.celebrate,
+        reason: 'it celebrates on reaching the top',
+      );
+    });
+    testWidgets('plays the trophy-pop SFX exactly once (reduced motion)', (
+      tester,
+    ) async {
+      var trophyPops = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: true,
+            ),
+          ),
+          profile: profileWith(),
+          onTrophyPop: () => trophyPops++,
+        ),
+      );
+      await tester.pump();
+      expect(
+        trophyPops,
+        1,
+        reason: 'the trophy pop plays once, even under reduced motion',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(trophyPops, 1, reason: 'never replays on later frames');
+    });
+
+    testWidgets('plays the trophy-pop SFX exactly once (full motion)', (
+      tester,
+    ) async {
+      var trophyPops = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: false,
+            ),
+          ),
+          profile: profileWith(),
+          onTrophyPop: () => trophyPops++,
+        ),
+      );
+      await tester.pump();
+      expect(trophyPops, 0, reason: 'full motion waits for the trophy to land');
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(trophyPops, 1, reason: 'the trophy timer fires the pop');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(trophyPops, 1, reason: 'never replays');
+    });
+
+    // ── The trophy is a reward the child can pop ──────────────────────
+
+    /// Stars still waiting to be popped, so a test can clear the whole stage.
+    Finder liveStars() => find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint &&
+          widget.painter.runtimeType.toString() == '_StarPainter',
+    );
+
+    testWidgets('tapping the trophy pops it: SFX, a burst, and off the stage', (
+      tester,
+    ) async {
+      var trophyPops = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: false,
+            ),
+          ),
+          profile: profileWith(),
+          onTrophyPop: () => trophyPops++,
+        ),
+      );
+      // Past the arrival pop, so the count below is the child's own.
+      await tester.pump(const Duration(milliseconds: 900));
+      expect(trophyPops, 1);
+
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+
+      expect(trophyPops, 2, reason: 'the pop the child made is its own event');
+      expect(find.byKey(kMilestoneTrophyKey), findsNothing);
+      expect(
+        find.byKey(kMilestoneTrophyPopKey),
+        findsOneWidget,
+        reason: 'it bursts where it stood',
+      );
+
+      // The burst clears itself off the stage rather than lingering.
+      await tester.pump(kMilestoneTrophyPopDuration);
+      expect(find.byKey(kMilestoneTrophyPopKey), findsNothing);
+
+      // And a popped trophy stays popped — tapping the empty spot is inert.
+      await tester.tapAt(tester.getCenter(find.byType(MilestoneVictoryScene)));
+      await tester.pump();
+      expect(find.byKey(kMilestoneTrophyKey), findsNothing);
+    });
+
+    testWidgets('onAllRewardsPopped waits for the trophy AND every star', (
+      tester,
+    ) async {
+      var allPopped = 0;
+      await tester.pumpWidget(
+        sfxHost(
+          Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: false,
+              onAllRewardsPopped: () => allPopped++,
+            ),
+          ),
+          profile: profileWith(),
+        ),
+      );
+      // Let the whole star field spawn (800ms + 19 * 60ms) and rise into view;
+      // a star still climbing is partly off screen and cannot be tapped.
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(kStarRiseDuration);
+
+      // The trophy goes first — it sits above the star field, so a star behind
+      // it is out of reach until it is gone.
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      expect(
+        allPopped,
+        0,
+        reason: 'a popped trophy alone is not a cleared stage',
+      );
+
+      // Then the stars, one at a time — silent until the very last one.
+      var guard = 0;
+      while (liveStars().evaluate().isNotEmpty && guard++ < 40) {
+        expect(
+          allPopped,
+          0,
+          reason: '${liveStars().evaluate().length} star(s) still to collect',
+        );
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+
+      expect(liveStars(), findsNothing);
+      expect(allPopped, 1, reason: 'the stage is finally clear');
+
+      await tester.pump(kMilestoneTrophyPopDuration);
+      expect(allPopped, 1, reason: 'announced exactly once');
+    });
+
+    testWidgets('no provider present: the scene plays without a crash', (
+      tester,
+    ) async {
+      // host() has no RewardSfxProvider — the pop must be a silent no-op.
+      await tester.pumpWidget(
+        host(
+          const Scaffold(
+            body: MilestoneVictoryScene(
+              title: 'Done!',
+              subtitle: 'You finished!',
+              reducedMotion: true,
+            ),
+          ),
+          profile: profileWith(),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(MilestoneVictoryScene), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        find.byType(MilestoneVictoryScene),
+        findsOneWidget,
+        reason: 'an absent provider must not crash the scene',
+      );
     });
   });
 
   group('the learning-path screen', () {
     testWidgets('speaks the milestone line for its kind', (tester) async {
       final narrator = _RecordingVoiceOver();
-      await tester.pumpWidget(host(
-        MilestoneVictoryScreen(
-          kind: MilestoneKind.learningPath,
-          reducedMotion: true,
-          playSfx: false,
-          holdDuration: const Duration(milliseconds: 50),
-          voiceOverFactory: (_) => narrator,
-          onContinue: () {},
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: true,
+            playSfx: false,
+            holdDuration: const Duration(milliseconds: 50),
+            voiceOverFactory: (_) => narrator,
+            onContinue: () {},
+          ),
+          profile: profileWith(),
         ),
-        profile: profileWith(),
-      ));
+      );
       await tester.pump();
       // The line is spoken a beat into the celebration, after the chime.
       await tester.pump(const Duration(milliseconds: 700));
@@ -194,20 +432,23 @@ void main() {
       expect(narrator.played, [VoiceOverCue.milestoneLearningPathComplete]);
     });
 
-    testWidgets('reveals a continue control and fires onContinue exactly once',
-        (tester) async {
+    testWidgets('reveals a continue control and fires onContinue exactly once', (
+      tester,
+    ) async {
       var continued = 0;
-      await tester.pumpWidget(host(
-        MilestoneVictoryScreen(
-          kind: MilestoneKind.learningPath,
-          reducedMotion: true,
-          playSfx: false,
-          holdDuration: const Duration(milliseconds: 50),
-          voiceOverFactory: (_) => _RecordingVoiceOver(),
-          onContinue: () => continued++,
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: true,
+            playSfx: false,
+            holdDuration: const Duration(milliseconds: 50),
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            onContinue: () => continued++,
+          ),
+          profile: profileWith(),
         ),
-        profile: profileWith(),
-      ));
+      );
       await tester.pump();
       // Arrival is immediate under reduced motion; hold, then the control fades
       // in (400 ms) — pump past it so it is on screen and tappable.
@@ -226,30 +467,136 @@ void main() {
       expect(continued, 1);
     });
 
-    testWidgets('is not left without a way forward — the max hold frees it',
-        (tester) async {
-      var continued = 0;
-      await tester.pumpWidget(host(
-        MilestoneVictoryScreen(
-          kind: MilestoneKind.learningPath,
-          reducedMotion: true,
-          playSfx: false,
-          voiceOverFactory: (_) => _RecordingVoiceOver(),
-          // The normal post-arrival hold is long; the max-hold safety valve is
-          // short, so it is what actually reveals the control here.
-          holdDuration: const Duration(seconds: 30),
-          maxHold: const Duration(milliseconds: 50),
-          onContinue: () => continued++,
+    testWidgets('holds the playable stage — no way out for the first seconds', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: true,
+            playSfx: false,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            onContinue: () {},
+          ),
+          profile: profileWith(),
         ),
-        profile: profileWith(),
-      ));
+      );
+      await tester.pump();
+
+      // Well past the old 1.6s post-arrival hold: the celebration is a stage
+      // the child plays on, not a flash, so the way out is not there yet.
+      await tester.pump(const Duration(seconds: 5));
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsNothing,
+        reason: 'the celebration must not be snatched away after a beat',
+      );
+
+      // The full hold, plus the control's fade-in.
+      await tester.pump(kMilestoneHoldDuration - const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(find.bySemanticsLabel('Continue'), findsOneWidget);
+
+      // Leave no timer pending at teardown.
+      await tester.tap(find.bySemanticsLabel('Continue'), warnIfMissed: false);
+      await tester.pump();
+    });
+
+    testWidgets('a child who pops every reward moves on without waiting it out',
+        (tester) async {
+      /// Stars still waiting to be popped. Full motion deliberately: a popped
+      /// star bursts and leaves the field, where reduced motion fades one in
+      /// place and it would still be counted here.
+      Finder liveStars() => find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter.runtimeType.toString() == '_StarPainter',
+      );
+
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: false,
+            playSfx: false,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            onContinue: () {},
+          ),
+          profile: profileWith(),
+        ),
+      );
+      await tester.pump();
+      // Let the whole star field spawn (800 ms + 19 * 60 ms) and rise into
+      // view; a star still climbing is partly off screen and cannot be tapped.
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(kStarRiseDuration);
+
+      // Past the minimum hold — which exists so the spoken milestone line is
+      // never cut off — but nowhere near the full one.
+      await tester.pump(kMilestoneMinHold);
+
+      // The trophy first: it sits above the field, so the stars behind it are
+      // out of reach until it is gone.
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsNothing,
+        reason: 'a popped trophy alone is not a cleared stage',
+      );
+
+      var guard = 0;
+      while (liveStars().evaluate().isNotEmpty && guard++ < 40) {
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+      expect(liveStars(), findsNothing);
+
+      // The last burst is allowed to finish, then the way out appears — long
+      // before the full hold would have run out.
+      await tester.pump(kMilestoneAllPoppedSettle);
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(
+        find.bySemanticsLabel('Continue'),
+        findsOneWidget,
+        reason: 'nothing left to collect — do not make the child wait',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Continue'), warnIfMissed: false);
+      await tester.pump();
+    });
+
+    testWidgets('is not left without a way forward — the max hold frees it', (
+      tester,
+    ) async {
+      var continued = 0;
+      await tester.pumpWidget(
+        host(
+          MilestoneVictoryScreen(
+            kind: MilestoneKind.learningPath,
+            reducedMotion: true,
+            playSfx: false,
+            voiceOverFactory: (_) => _RecordingVoiceOver(),
+            // The normal post-arrival hold is long; the max-hold safety valve is
+            // short, so it is what actually reveals the control here.
+            holdDuration: const Duration(seconds: 30),
+            maxHold: const Duration(milliseconds: 50),
+            onContinue: () => continued++,
+          ),
+          profile: profileWith(),
+        ),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
       await tester.pump(const Duration(milliseconds: 450));
 
       final continueButton = find.bySemanticsLabel('Continue');
-      expect(continueButton, findsOneWidget,
-          reason: 'the max-hold fallback must free a stuck celebration');
+      expect(
+        continueButton,
+        findsOneWidget,
+        reason: 'the max-hold fallback must free a stuck celebration',
+      );
 
       // Tap to continue — this also cancels the long hold timer so none is left
       // pending at teardown.
@@ -278,7 +625,7 @@ class _RecordingVoiceOver extends VoiceOverService {
 
 class _TestChildProvider extends ChildProvider {
   _TestChildProvider(this._profile)
-      : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
+    : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
 
   final ChildProfile? _profile;
 

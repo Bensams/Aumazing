@@ -395,25 +395,53 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _typeBadge(isPre ? 'PRE' : 'POST', isPre),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  isPre ? 'Pre-assessment' : 'Post-assessment',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final typeBadge = _typeBadge(isPre ? 'PRE' : 'POST', isPre);
+              final title = Text(
+                isPre ? 'Pre-assessment' : 'Post-assessment',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
                 ),
-              ),
-              StatusPillBadge(
+              );
+              final status = StatusPillBadge(
                 label: _statusLabel(record.status),
                 level: _statusLevel(record.status),
                 compact: true,
-              ),
-            ],
+              );
+
+              // Keep the title and status pill side by side on normal cards,
+              // but stack them before the pill can squeeze the title away.
+              if (constraints.maxWidth < 320) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        typeBadge,
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: title),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    status,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  typeBadge,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: title),
+                  const SizedBox(width: AppSpacing.sm),
+                  status,
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -434,11 +462,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
             const SizedBox(height: AppSpacing.sm),
             _chipWrap([
               for (final skill in run.skills)
-                StatusPillBadge(
-                  label: '${skill.area}: ${skill.label}',
-                  level: _skillLevel(skill.label),
-                  compact: true,
-                ),
+                _skillChip('${skill.area}: ${skill.label}', skill.label),
             ]),
           ],
           if (run.recommendedModule != null) ...[
@@ -536,6 +560,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
       ),
       child: Text(
         label,
+        softWrap: true,
         style: AppTextStyles.statusBadge.copyWith(
           color: AppColors.statusInfoDark,
         ),
@@ -543,13 +568,54 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
     );
   }
 
-  Widget _chipWrap(List<Widget> chips) {
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: chips,
+  Widget _skillChip(String label, String skillLabel) {
+    final level = _skillLevel(skillLabel);
+    final background = switch (level) {
+      StatusLevel.success => AppColors.statusSuccessBg,
+      StatusLevel.warning => AppColors.statusWarningBg,
+      StatusLevel.danger => AppColors.statusDangerBg,
+      StatusLevel.info => AppColors.statusInfoBg,
+      StatusLevel.neutral => AppColors.muted,
+    };
+    final foreground = switch (level) {
+      StatusLevel.success => AppColors.statusSuccessDark,
+      StatusLevel.warning => AppColors.statusWarningDark,
+      StatusLevel.danger => AppColors.statusDangerDark,
+      StatusLevel.info => AppColors.statusInfoDark,
+      StatusLevel.neutral => AppColors.textSecondary,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppRadius.chip,
+        border: Border.all(color: foreground.withAlpha(40)),
+      ),
+      child: Text(
+        label,
+        softWrap: true,
+        style: AppTextStyles.statusBadge.copyWith(color: foreground),
+      ),
     );
   }
+  Widget _chipWrap(List<Widget> chips) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final chip in chips)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                child: chip,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
 
   // ── Progress comparison ──────────────────────────────────────────────
 
@@ -683,22 +749,43 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  module.moduleName,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final title = Text(
+                module.moduleName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
                 ),
-              ),
-              const StatusPillBadge(
+              );
+              const status = StatusPillBadge(
                 label: 'Completed',
                 level: StatusLevel.success,
                 compact: true,
-              ),
-            ],
+              );
+
+              // Keep the title and completion pill side by side on normal
+              // cards, but stack them before the pill can squeeze the title.
+              if (constraints.maxWidth < 320) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: AppSpacing.xs),
+                    status,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: AppSpacing.sm),
+                  status,
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(

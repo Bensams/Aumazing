@@ -42,8 +42,10 @@ Future<void> main() async {
   // instead of an unhandled-exception dump; let real errors through.
   PlatformDispatcher.instance.onError = (error, stack) {
     if (_isTransientNetworkError(error)) {
-      debugPrint('[Offline] Suppressed transient network error: '
-          '${error.runtimeType}');
+      debugPrint(
+        '[Offline] Suppressed transient network error: '
+        '${error.runtimeType}',
+      );
       return true; // handled
     }
     return false; // let the default handler report it
@@ -119,12 +121,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   /// Pause music when the app goes to background, resume when it returns.
   ///
+  /// Blurring the app also mutes every live narrator through
+  /// [VoiceOverService.stopAll]: voice-over instances are per-screen and not
+  /// lifecycle-observed. Narration is contextual — screens re-trigger it on
+  /// interaction — so it stops rather than pauses and never auto-resumes.
+  ///
   /// [resumeMusic] already checks [AudioConfig.musicEnabled] internally,
   /// so music will only resume if the user hasn't disabled it in settings.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
       _audioService.pauseMusic();
+      VoiceOverService.stopAll();
     } else if (state == AppLifecycleState.resumed) {
       // resumeMusic() checks _config.musicEnabled — if the user turned
       // music off in settings and we properly synced AudioConfig, this
@@ -162,6 +172,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onBubblePop: _audioService.playBubblePopSfx,
               onFireworkPop: _audioService.playFireworkPopSfx,
               onCandyPop: _audioService.playCandyPopSfx,
+              onStarPop: _audioService.playStarPopSfx,
+              onTrophyPop: _audioService.playTrophyPopSfx,
               child: MaterialApp(
                 title: 'Aumazing',
                 debugShowCheckedModeBanner: false,

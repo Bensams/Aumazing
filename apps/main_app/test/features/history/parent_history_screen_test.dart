@@ -270,6 +270,124 @@ void main() {
       expect(find.text('Incomplete'), findsOneWidget);
     });
 
+    testWidgets('wraps long status and result labels on a narrow card', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final run = _runHistory(
+        id: 'run-narrow',
+        type: 'post',
+        status: 'in_progress',
+        startedAt: DateTime(2026, 8, 8),
+        games: [
+          _game(
+            gameId: 'long_game',
+            gameName: 'Emotion recognition and communication practice',
+            score: 8,
+            errorCount: 2,
+            configLabel:
+                'Extended multi-round communication and emotional regulation flow',
+            endedAt: DateTime(2026, 8, 8, 9),
+          ),
+        ],
+        skills: const [
+          SkillBreakdownEntry(
+            area: 'Social communication and emotional awareness',
+            label: 'Needs support',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildApp(
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: _TestAssessmentProvider(),
+          screen: ParentHistoryScreen(
+            childId: 'child-1',
+            historyService: _FakeHistoryService(
+              summary: HistorySummary(
+                runs: [run],
+                completedModules: [
+                  CompletedModuleRecord(
+                    moduleId: 'long-module',
+                    moduleName:
+                        'A very long completed module name for narrow screens',
+                    completedAt: DateTime(2026, 8, 9),
+                    status: 'completed',
+                    level: 3,
+                    maxLevel: 5,
+                    source: 'module_progress',
+                    gameCount: 0,
+                  ),
+                ],
+                practiceSessions: const [],
+                comparison: null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('In progress'), findsOneWidget);
+      expect(
+        find.text(
+          'Extended multi-round communication and emotional regulation flow',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Social communication and emotional awareness: Needs support'),
+        findsOneWidget,
+      );
+      expect(find.text('Completed'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('Post-assessment')).overflow,
+        TextOverflow.ellipsis,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.text(
+                'A very long completed module name for narrow screens',
+              ),
+            )
+            .overflow,
+        TextOverflow.ellipsis,
+      );
+
+      final card = tester.getRect(
+        find.byKey(const ValueKey('history-run-run-narrow')),
+      );
+      for (final label in [
+        'In progress',
+        'Extended multi-round communication and emotional regulation flow',
+        'Social communication and emotional awareness: Needs support',
+      ]) {
+        final labelRect = tester.getRect(find.text(label));
+        expect(card.contains(labelRect.topLeft), isTrue, reason: label);
+        expect(card.contains(labelRect.bottomRight), isTrue, reason: label);
+      }
+      final moduleLabel =
+          'A very long completed module name for narrow screens';
+      final moduleCard = tester.getRect(
+        find.ancestor(
+          of: find.text(moduleLabel),
+          matching: find.byType(AppCard),
+        ).first,
+      );
+      final moduleStatus = tester.getRect(find.text('Completed'));
+      final moduleTitleRect = tester.getRect(find.text(moduleLabel));
+      expect(moduleCard.contains(moduleTitleRect.topLeft), isTrue);
+      expect(moduleCard.contains(moduleTitleRect.bottomRight), isTrue);
+      expect(moduleCard.contains(moduleStatus.topLeft), isTrue);
+      expect(moduleCard.contains(moduleStatus.bottomRight), isTrue);
+    });
+
     testWidgets('shows a minus sign on a negative delta', (tester) async {
       await tester.binding.setSurfaceSize(const Size(960, 540));
       addTearDown(() => tester.binding.setSurfaceSize(null));

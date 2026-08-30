@@ -141,6 +141,7 @@ reward_and_celebration/YoureAmazing.wav,You're amazing!,no,0.6,0.5,excited
 shapes/Circle.wav,Circle.,yes,0.5,0.5,neutral
 shapes/Diamond.wav,Diamond.,yes,0.5,0.5,neutral
 shapes/Heart.wav,Heart.,yes,0.5,0.5,neutral
+shapes/Square.wav,Square.,yes,0.5,0.5,neutral
 shapes/Star.wav,Star.,yes,0.5,0.5,neutral
 shapes/Triangle.wav,Triangle.,yes,0.5,0.5,neutral
 transition/GetReady.wav,Get ready!,no,0.6,0.5,happy
@@ -189,6 +190,10 @@ routines/PutAway.wav,Put the toy away.,no,0.5,0.5,neutral
 instruction/LookWhereImLooking.wav,"Look where your friend is looking, then tap it.",no,0.4,0.5,calm
 instruction/LookOverThere.wav,Look over there!,no,0.5,0.5,neutral
 instruction/SayHelloBack.wav,Say hello back!,no,0.5,0.5,happy
+instruction/GreetWave.wav,Wave!,no,0.5,0.5,happy
+instruction/GreetHighFive.wav,High five!,no,0.5,0.5,happy
+instruction/GreetFistBump.wav,Fist bump!,no,0.5,0.5,happy
+instruction/GreetThumbsUp.wav,Thumbs up!,no,0.5,0.5,happy
 emotions/HowIsHeFeeling.wav,How is he feeling?,no,0.5,0.5,neutral
 emotions/Happy.wav,Happy.,yes,0.5,0.5,neutral
 emotions/Sad.wav,Sad.,yes,0.5,0.5,neutral
@@ -210,3 +215,7 @@ emotions/scenes/PuzzleStuck.wav,The puzzle piece will not fit.,no,0.5,0.5,neutra
 milestone/MilestonePreComplete.wav,Pre-assessment complete!,no,0.6,0.5,excited
 milestone/MilestonePathComplete.wav,You completed your learning path!,no,0.6,0.5,excited
 milestone/MilestonePostComplete.wav,Post-assessment complete!,no,0.6,0.5,excited
+instruction/PopTheBalloons.wav,Pop the balloons!,no,0.6,0.5,excited
+instruction/TapTheRockets.wav,Tap the rockets!,no,0.6,0.5,excited
+instruction/PopTheBubbles.wav,Pop the bubbles!,no,0.6,0.5,excited
+instruction/CollectTheCandy.wav,Collect the candy!,no,0.6,0.5,excited

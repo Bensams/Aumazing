@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:game_core/game_core.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_ui/shared_ui.dart' hide AnimatedBuilder;
 
 import '../services/game_factory.dart' show GameLabGameFactory;
@@ -126,7 +127,22 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
 }
 
 // Simple reward types for game_lab flow selection
-enum _RewardType { balloons, fireworks, bubbles, candy }
+enum _RewardType {
+  balloons,
+  fireworks,
+  bubbles,
+  candy;
+
+  /// The spoken instruction for this reward. Mirrors `RewardType.hintCue` in
+  /// main_app — game_lab keeps its own copy of the enum, so the mapping is
+  /// duplicated here rather than the profile-aware type being imported.
+  VoiceOverCue get hintCue => switch (this) {
+        _RewardType.balloons => VoiceOverCue.rewardHintBalloons,
+        _RewardType.fireworks => VoiceOverCue.rewardHintFireworks,
+        _RewardType.bubbles => VoiceOverCue.rewardHintBubbles,
+        _RewardType.candy => VoiceOverCue.rewardHintCandy,
+      };
+}
 
 /// Reward screen that shows dialogue first, then reward with fade animations
 class _RewardScreen extends StatefulWidget {
@@ -200,6 +216,10 @@ class _RewardScreenState extends State<_RewardScreen>
         });
         // Fade in reward
         _fadeController.forward();
+        // Say what to do with it — the written hint banner used to do this.
+        GameLabServices.instance.voiceOverService.play(
+          widget.rewardType.hintCue,
+        );
         // Phase 2: Auto proceed after total 8 seconds (2s dialogue + 6s reward)
         Future.delayed(const Duration(seconds: 6), () {
           if (mounted) {
@@ -247,19 +267,6 @@ class _RewardScreenState extends State<_RewardScreen>
           onComplete: () {},
           onAllCollected: () {},
         );
-    }
-  }
-
-  String _getHintText(_RewardType type) {
-    switch (type) {
-      case _RewardType.balloons:
-        return '🎈 Pop the balloons!';
-      case _RewardType.fireworks:
-        return '🎆 Tap the rockets!';
-      case _RewardType.bubbles:
-        return '🫧 Pop the bubbles!';
-      case _RewardType.candy:
-        return '🍬 Collect the candy!';
     }
   }
 
@@ -388,33 +395,8 @@ class _RewardScreenState extends State<_RewardScreen>
                   ),
                 ),
 
-              // Hint text (only when reward is shown)
-              if (_showReward)
-                Positioned(
-                  top: 60,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isSmallScreen ? 12 : 16,
-                        vertical: isSmallScreen ? 6 : 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        _getHintText(widget.rewardType),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 16,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF9B82C4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              // The hint banner that used to sit here is spoken instead, at the
+              // moment the reward fades in.
             ],
           ),
         ),

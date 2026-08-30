@@ -5,10 +5,11 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 
-/// Summary dialog shown after ALL pre-assessment games complete.
+/// Full-screen summary page shown after ALL pre-assessment games complete.
 ///
 /// Displays a combined overview of all games played: correct taps,
-/// error taps, failure taps, time, and a Continue button.
+/// error taps, off-target taps, time, and a Continue button. Non-dismissible:
+/// the parent must press Continue (system back is blocked).
 class GameSummaryDialog extends StatelessWidget {
   const GameSummaryDialog({
     super.key,
@@ -85,102 +86,108 @@ class GameSummaryDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = (_overallAccuracy * 100).round();
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 540),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF8F6FF),
-              Color(0xFFFFFFFF),
-            ],
-          ),
-          borderRadius: AppRadius.card,
-          boxShadow: AppShadows.modal,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Fixed header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+    // Non-dismissible: the parent must press Continue to proceed.
+    //
+    // Wrapped in [ParentAdaptiveOrientation]: this is the first parent-facing
+    // screen after the child's landscape hand-off, so the lock has to flip
+    // back to the parent policy here — portrait on a phone — rather than one
+    // screen later on the result page.
+    return ParentAdaptiveOrientation(
+      child: PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF8F6FF), Color(0xFFFFFFFF)],
+              ),
+            ),
+            child: SafeArea(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('🎉', style: TextStyle(fontSize: 40)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Pre-Assessment Summary',
-                    style: AppTextStyles.headlineSmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  // Performance badge
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_performanceEmoji(),
-                          style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 6),
-                      Text(
-                        _performanceLabel(),
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('🎉', style: TextStyle(fontSize: 40)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Pre-Assessment Summary',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      StatusPillBadge.fromScore(pct),
-                    ],
+                        const SizedBox(height: 8),
+                        // Performance badge
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _performanceEmoji(),
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _performanceLabel(),
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            StatusPillBadge.fromScore(pct),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
+
+                  // Scrollable content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Tap stats (correct, errors, off-target)
+                          _buildTapStats(),
+                          const SizedBox(height: 12),
+
+                          // Overall stats (time, total)
+                          _buildOverallStats(),
+                          const SizedBox(height: 12),
+
+                          // Per-game breakdown
+                          _buildGameBreakdown(),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Footer
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: AppPrimaryButton(
+                        label: 'Continue',
+                        icon: Icons.arrow_forward_rounded,
+                        onPressed: onContinue,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Scrollable content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Tap stats (correct, errors, failures)
-                    _buildTapStats(),
-                    const SizedBox(height: 12),
-
-                    // Overall stats (time, total)
-                    _buildOverallStats(),
-                    const SizedBox(height: 12),
-
-                    // Per-game breakdown
-                    _buildGameBreakdown(),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            ),
-
-            // Fixed footer
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-              child: SizedBox(
-                width: double.infinity,
-                child: AppPrimaryButton(
-                  label: 'Continue',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: onContinue,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -202,6 +209,7 @@ class GameSummaryDialog extends StatelessWidget {
               '✅',
               'Correct\nTaps',
               '$_totalCorrect',
+              AssessmentLabels.correctTapsInfo,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -210,6 +218,7 @@ class GameSummaryDialog extends StatelessWidget {
               '❌',
               'Error\nTaps',
               '$_totalErrors',
+              AssessmentLabels.errorTapsInfo,
             ),
           ),
           Container(width: 1, height: 48, color: AppColors.border),
@@ -218,6 +227,7 @@ class GameSummaryDialog extends StatelessWidget {
               '⚠️',
               'Off-Target\nTaps',
               '$_totalRandomTouches',
+              AssessmentLabels.offTargetTapsInfo,
             ),
           ),
         ],
@@ -225,26 +235,45 @@ class GameSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildTapStat(String emoji, String label, String value) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildTapStat(
+    String emoji,
+    String label,
+    String value,
+    String explanation,
+  ) {
+    return Stack(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTextStyles.titleMedium.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-        Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 11,
+        // Parent-friendly explanation (AUM-319): corner affordance so the
+        // fold on a 360×640dp screen is not pushed down by the icon.
+        Positioned(
+          top: 0,
+          right: 0,
+          child: MetricInfoIcon(
+            title: label.replaceAll('\n', ' '),
+            explanations: [(label.replaceAll('\n', ' '), explanation)],
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -293,7 +322,11 @@ class GameSummaryDialog extends StatelessWidget {
   }
 
   Widget _buildMiniStat(
-      IconData icon, String label, String value, Color color) {
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -334,11 +367,13 @@ class GameSummaryDialog extends StatelessWidget {
             children: [
               const Text('🎮', style: TextStyle(fontSize: 16)),
               const SizedBox(width: 6),
-              Text('Game Results',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  )),
+              Text(
+                'Game Results',
+                style: AppTextStyles.labelLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -366,11 +401,13 @@ class GameSummaryDialog extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    )),
+                Text(
+                  name,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 Text(
                   '✅ ${r.score}  ❌ ${r.errorCount}  ⚠️ ${r.randomTouchCount}',
                   style: AppTextStyles.bodySmall.copyWith(
