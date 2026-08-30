@@ -21,6 +21,7 @@ import 'package:aumazing/model/module_recommendation.dart';
 import 'package:aumazing/model/support_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
+import 'package:aumazing/services/assessment_summary_service.dart';
 import 'package:aumazing/widgets/assessment_handoff.dart';
 
 /// When the post-assessment finished it pushed [PostAssessmentResultScreen]
@@ -208,6 +209,7 @@ void main() {
             home: PostAssessmentResultScreen(
               improvement: improvement,
               nextModulePremiumRequired: locked,
+              summaryService: _FallbackSummaryService(),
             ),
           ),
         );
@@ -255,7 +257,9 @@ void main() {
       ],
       child: MaterialApp(
         theme: AppTheme.light,
-        home: const AssessmentDashboardScreen(),
+        home: AssessmentDashboardScreen(
+          summaryService: _FallbackSummaryService(),
+        ),
       ),
     ));
     await tester.pumpAndSettle();
@@ -294,7 +298,9 @@ void main() {
       ],
       child: MaterialApp(
         theme: AppTheme.light,
-        home: const AssessmentDashboardScreen(),
+        home: AssessmentDashboardScreen(
+          summaryService: _FallbackSummaryService(),
+        ),
       ),
     ));
     await tester.pumpAndSettle();
@@ -569,6 +575,18 @@ class _RecordingVoiceOver extends VoiceOverService {
   }
 }
 
+class _FallbackSummaryService extends AssessmentSummaryService {
+  @override
+  Future<AssessmentSummary> summarize({
+    required List<Map<String, String>> areas,
+    required int overallPct,
+    required String supportLevel,
+    required List<String> recommendations,
+    required String fallback,
+    List<Map<String, String>>? previousAreas,
+    String languageCode = 'en',
+  }) async => AssessmentSummary(text: fallback, isAi: false);
+}
 
 /// The screen only ever reads [AiAssessmentResponse.areaLevels]; the rest of
 /// the schema is legacy dual-response padding.

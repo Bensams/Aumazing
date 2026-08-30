@@ -17,6 +17,7 @@ import '../providers/child_provider.dart';
 import '../services/active_games_service.dart';
 import '../services/entitlement_service.dart';
 import '../services/learning_path_service.dart';
+import '../widgets/assessment_handoff.dart';
 import 'build_info.dart';
 import 'developer_automation_registry.dart';
 import 'developer_autoplay_controller.dart';
@@ -29,9 +30,17 @@ import 'developer_tools_service.dart';
 /// its own outcome. Nothing here reports success before the underlying write
 /// and finalization have actually succeeded.
 class DeveloperToolsPanel extends StatefulWidget {
-  const DeveloperToolsPanel({super.key, this.service = const DeveloperToolsService()});
+  const DeveloperToolsPanel({
+    super.key,
+    this.service = const DeveloperToolsService(),
+    this.handoffVoiceOverFactory,
+  });
 
   final DeveloperToolsService service;
+
+  /// Test seam for keeping shortcut navigation tests off platform audio.
+  @visibleForTesting
+  final HandoffVoiceOverFactory? handoffVoiceOverFactory;
 
   /// Whether a toolbox sheet is on screen right now.
   static bool _isOpen = false;
@@ -537,6 +546,7 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
         results: result.results,
         profile: result.profile,
         aiResponse: result.aiResponse,
+        voiceOverFactory: widget.handoffVoiceOverFactory,
       ),
     );
   }
@@ -606,6 +616,7 @@ class _DeveloperToolsPanelState extends State<DeveloperToolsPanel> {
       screen: PostAssessmentHandoffScreen(
         improvement: result.improvement,
         nextModulePremiumRequired: result.nextModulePremiumRequired,
+        voiceOverFactory: widget.handoffVoiceOverFactory,
       ),
     );
   }

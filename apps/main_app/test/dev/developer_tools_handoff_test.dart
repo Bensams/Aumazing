@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -63,7 +64,10 @@ void main() {
                     context: context,
                     isScrollControlled: true,
                     useRootNavigator: true,
-                    builder: (_) => DeveloperToolsPanel(service: service),
+                    builder: (_) => DeveloperToolsPanel(
+                      service: service,
+                      handoffVoiceOverFactory: (_) => _NoopVoiceOver(),
+                    ),
                   ),
                   child: const Text('open toolbox'),
                 ),
@@ -367,6 +371,17 @@ void main() {
 }
 
 // ── Doubles ────────────────────────────────────────────────────────────
+
+class _NoopVoiceOver extends VoiceOverService {
+  _NoopVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {}
+}
 
 /// Returns canned results instead of writing to SQLite and running the model
 /// — the pipeline itself is covered in developer_tools_service_test.dart; what
