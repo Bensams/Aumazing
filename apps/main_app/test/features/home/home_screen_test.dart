@@ -10,6 +10,7 @@ import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart'
 import 'package:aumazing/features/settings/bind_account_modal.dart';
 import 'package:aumazing/features/settings/settings_screen.dart';
 import 'package:aumazing/model/child_profile.dart';
+import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
@@ -204,6 +205,62 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 700));
   });
+
+  testWidgets(
+    'skills snapshot is domain-first and uses the latest post-assessment',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v1': true,
+      });
+      TourService.instance.resetCache();
+
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: _DashboardAssessmentProvider(
+            pre: [
+              _dashboardResult(
+                type: 'pre',
+                runId: 'run-pre',
+                gameId: 'copy_me',
+                score: 6,
+                errors: 4,
+                communication: 'Emerging',
+              ),
+            ],
+            post: [
+              _dashboardResult(
+                type: 'post',
+                runId: 'run-post',
+                gameId: 'copy_me',
+                score: 9,
+                errors: 1,
+                communication: 'Strength',
+              ),
+            ],
+          ),
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.text('Skills Snapshot'), findsOneWidget);
+      expect(find.text('Latest post-assessment'), findsOneWidget);
+      expect(find.text('Communication'), findsOneWidget);
+      expect(find.text('Play Skills'), findsOneWidget);
+      expect(find.text('Social Interaction'), findsOneWidget);
+      expect(find.text('Attention & Focus'), findsOneWidget);
+      expect(find.text('90% activity accuracy'), findsWidgets);
+      expect(find.text('60% activity accuracy'), findsNothing);
+      expect(find.text('Assessment Scores'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    },
+  );
 
   testWidgets(
     'settings and bind account dialogs stay stable in compact layout',
@@ -416,37 +473,34 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
     });
 
-    testWidgets(
-      'openChildMode keeps a future-dated active profile in setup',
-      (tester) async {
-        SharedPreferences.setMockInitialValues({
-          'parent_dashboard_tour_seen_v1': true,
-        });
-        TourService.instance.resetCache();
+    testWidgets('openChildMode keeps a future-dated active profile in setup', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v1': true,
+      });
+      TourService.instance.resetCache();
 
-        await tester.binding.setSurfaceSize(const Size(960, 540));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        await tester.pumpWidget(
-          _buildTestApp(
-            authService: AuthService(
-              supabaseAuth: _FakeSupabaseAuthClient(),
-            ),
-            childProvider: _TestChildProvider(
-              initialProfile: _profile.copyWith(birthDate: DateTime(2100)),
-            ),
-            openChildMode: true,
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(
+            initialProfile: _profile.copyWith(birthDate: DateTime(2100)),
           ),
-        );
-        await _settleUi(tester);
+          openChildMode: true,
+        ),
+      );
+      await _settleUi(tester);
 
-        expect(find.byType(ChildProfileSetupScreen), findsOneWidget);
-        expect(find.byType(ChildModeLobbyScreen), findsNothing);
+      expect(find.byType(ChildProfileSetupScreen), findsOneWidget);
+      expect(find.byType(ChildModeLobbyScreen), findsNothing);
 
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 1));
-      },
-    );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
 
     testWidgets('the default (first login) stays on the parent dashboard', (
       tester,
@@ -503,6 +557,7 @@ Widget _buildBindAccountTestApp({required AuthService authService}) {
 Widget _buildTestApp({
   required AuthService authService,
   required ChildProvider childProvider,
+  AssessmentProvider? assessmentProvider,
   ProgressProvider? progressProvider,
   Stream<SyncState>? syncStates,
   bool openChildMode = false,
@@ -510,11 +565,9 @@ Widget _buildTestApp({
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>.value(value: childProvider),
-      ChangeNotifierProvider<StarsProvider>(
-        create: (_) => _NoStarsProvider(),
-      ),
+      ChangeNotifierProvider<StarsProvider>(create: (_) => _NoStarsProvider()),
       ChangeNotifierProvider<AssessmentProvider>(
-        create: (_) => _TestAssessmentProvider(),
+        create: (_) => assessmentProvider ?? _TestAssessmentProvider(),
       ),
       ChangeNotifierProvider<ProgressProvider>.value(
         value: progressProvider ?? _TestProgressProvider(),
@@ -592,6 +645,58 @@ class _TestAssessmentProvider extends AssessmentProvider {
   @override
   Future<void> loadAssessments(String childId) async {}
 }
+
+class _DashboardAssessmentProvider extends AssessmentProvider {
+  _DashboardAssessmentProvider({required this.pre, required this.post});
+
+  final List<AssessmentResult> pre;
+  final List<AssessmentResult> post;
+
+  @override
+  List<AssessmentResult> get preResults => pre;
+
+  @override
+  List<AssessmentResult> get postResults => post;
+
+  @override
+  bool get hasPreAssessment => pre.isNotEmpty;
+
+  @override
+  bool get hasPostAssessment => post.isNotEmpty;
+
+  @override
+  String? get recommendedModuleName => null;
+
+  @override
+  int get recommendedLevel => 1;
+
+  @override
+  Future<void> loadAssessments(String childId) async {}
+}
+
+AssessmentResult _dashboardResult({
+  required String type,
+  required String runId,
+  required String gameId,
+  required int score,
+  required int errors,
+  required String communication,
+}) => AssessmentResult(
+  id: '$runId-$gameId',
+  childId: 'child-1',
+  assessmentRunId: runId,
+  gameId: gameId,
+  type: type,
+  score: score,
+  totalItems: 10,
+  errorCount: errors,
+  avgResponseTimeMs: 1000,
+  completedAt: type == 'post' ? DateTime(2026, 2, 1) : DateTime(2026, 1, 1),
+  communicationLabel: communication,
+  playSkillsLabel: 'Emerging',
+  socialInteractionLabel: 'Emerging',
+  behaviorAttentionLabel: 'Variable Attention',
+);
 
 class _TestProgressProvider extends ProgressProvider {
   final List<GameplaySession> _sessions = const [];
@@ -715,6 +820,7 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   Future<UserResponse> updateUser(UserAttributes attributes) {
     throw UnimplementedError();
   }
+
   @override
   Future<AuthResponse> verifyEmailChange({
     required String email,
