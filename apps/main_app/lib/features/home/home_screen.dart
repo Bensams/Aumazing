@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
@@ -19,6 +18,7 @@ import '../../providers/progress_provider.dart';
 import '../../services/active_games_service.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/learning_path_service.dart';
+import '../../services/parent_skill_summary_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
@@ -1184,14 +1184,16 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'History & Progress',
             subtitle: 'Assessment, My Path, and practice history',
             color: AppColors.skyBlue,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ParentHistoryScreen(
-                  childId: profile.id,
-                  childName: profile.displayName,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder:
+                        (_) => ParentHistoryScreen(
+                          childId: profile.id,
+                          childName: profile.displayName,
+                        ),
+                  ),
                 ),
-              ),
-            ),
           ),
         );
       },
@@ -1632,104 +1634,79 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Progress Section ────────────────────────────────────────────────
 
   Widget _buildProgressSection() {
-    return Consumer<AssessmentProvider>(
-      builder: (context, assessProv, _) {
+    return Consumer2<AssessmentProvider, ProgressProvider>(
+      builder: (context, assessProv, progressProv, _) {
         // While a switch is loading the new child's rows, showing the chart
         // would render the previous child's scores under the new name.
         if (assessProv.isLoading || assessProv.preResults.isEmpty) {
           return const SizedBox.shrink();
         }
 
-        final results = assessProv.preResults;
-        final barGroups = <BarChartGroupData>[];
-
-        for (var i = 0; i < results.length && i < 4; i++) {
-          barGroups.add(
-            BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: results[i].adjustedAccuracy * 100,
-                  color: AppColors.primaryPurple,
-                  width: 20,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(6),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final gameLabels =
-            results.take(4).map((r) => r.gameId.replaceAll('_', ' ')).toList();
+        // Once a post-assessment exists, the parent should see the latest
+        // picture — not the pre-assessment values under a generic title.
+        final isPost = assessProv.postResults.isNotEmpty;
+        final results = isPost ? assessProv.postResults : assessProv.preResults;
+        final summary = ParentSkillSummaryService.build(
+          assessmentType: isPost ? 'post' : 'pre',
+          results: results,
+          sessions: progressProv.recentSessions,
+        );
 
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Assessment Scores',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                height: 160,
-                child: BarChart(
-                  BarChartData(
-                    maxY: 100,
-                    barGroups: barGroups,
-                    borderData: FlBorderData(show: false),
-                    gridData: const FlGridData(show: false),
-                    titlesData: FlTitlesData(
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 32,
-                          getTitlesWidget: (value, meta) {
-                            if (value % 25 == 0) {
-                              return Text(
-                                '${value.toInt()}%',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            final idx = value.toInt();
-                            if (idx < gameLabels.length) {
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  gameLabels[idx],
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    fontSize: 10,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Skills Snapshot',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.lavenderLight,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      isPost ? 'Latest post-assessment' : 'First assessment',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.primaryPurple,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Skill-area interpretation with supporting activity data',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              for (var i = 0; i < summary.areas.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                _ParentSkillAreaRow(area: summary.areas[i]),
+              ],
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Percentages describe performance in the activities. '
+                'The skill level also considers prompts, retries, completion, '
+                'turn-taking, idle time, and touch patterns.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.mutedForeground,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -1743,7 +1720,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The Advanced Parent Dashboard (Premium): historical pre → post skill
   /// trends. Free users see a locked teaser; Premium users see the
-  /// per-game improvement once a post-assessment exists. Rebuilds live when
+  /// per-area improvement once a post-assessment exists. Rebuilds live when
   /// the entitlement changes.
   Widget _buildAdvancedTrends() {
     return ListenableBuilder(
@@ -1792,8 +1769,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        return Consumer<AssessmentProvider>(
-          builder: (context, assessProv, _) {
+        return Consumer2<AssessmentProvider, ProgressProvider>(
+          builder: (context, assessProv, progressProv, _) {
             // Mid-switch the pre/post rows may still be the previous
             // child's; say nothing until the new child's rows are in.
             if (assessProv.isLoading) return const SizedBox.shrink();
@@ -1823,25 +1800,23 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            // Match pre and post results by game for a paired comparison.
-            final postByGame = {
-              for (final r in assessProv.postResults) r.gameId: r,
-            };
-            final rows = <(String, double, double)>[];
-            for (final pre in assessProv.preResults) {
-              final post = postByGame[pre.gameId];
-              if (post == null) continue;
-              rows.add((
-                pre.gameId.replaceAll('_', ' '),
-                pre.adjustedAccuracy * 100,
-                post.adjustedAccuracy * 100,
-              ));
-            }
-            if (rows.isEmpty) return const SizedBox.shrink();
+            final before = ParentSkillSummaryService.build(
+              assessmentType: 'pre',
+              results: assessProv.preResults,
+              sessions: progressProv.recentSessions,
+            );
+            final after = ParentSkillSummaryService.build(
+              assessmentType: 'post',
+              results: assessProv.postResults,
+              sessions: progressProv.recentSessions,
+            );
+            final progress = ParentSkillSummaryService.compare(
+              before: before,
+              after: after,
+            );
+            if (progress.areas.isEmpty) return const SizedBox.shrink();
 
-            final avgDelta =
-                rows.map((r) => r.$3 - r.$2).reduce((a, b) => a + b) /
-                rows.length;
+            final overallPoints = (progress.overallAccuracyDelta * 100).round();
 
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -1851,30 +1826,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Advanced Trends',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.textPrimary,
+                        Expanded(
+                          child: Text(
+                            'Progress Since the First Assessment',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: AppSpacing.sm),
                         Icon(
-                          avgDelta >= 0
+                          overallPoints >= 0
                               ? Icons.trending_up_rounded
                               : Icons.trending_down_rounded,
                           size: 18,
                           color:
-                              avgDelta >= 0
+                              overallPoints >= 0
                                   ? AppColors.statusSuccessDark
                                   : AppColors.mutedForeground,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${avgDelta >= 0 ? '+' : ''}'
-                          '${avgDelta.toStringAsFixed(0)}% overall',
+                          '${overallPoints >= 0 ? '+' : ''}$overallPoints pts',
                           style: AppTextStyles.bodySmall.copyWith(
                             color:
-                                avgDelta >= 0
+                                overallPoints >= 0
                                     ? AppColors.statusSuccessDark
                                     : AppColors.mutedForeground,
                             fontWeight: FontWeight.w700,
@@ -1884,67 +1860,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Pre vs Post accuracy per activity',
+                      progress.improvedAreaCount == 0
+                          ? 'Skill areas held steady across the two assessments.'
+                          : '${progress.improvedAreaCount} of '
+                              '${progress.areas.length} skill areas moved up.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    for (final (label, pre, post) in rows)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 96,
-                              child: Text(
-                                label,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Stack(
-                                  children: [
-                                    LinearProgressIndicator(
-                                      value: pre / 100,
-                                      minHeight: 12,
-                                      backgroundColor: AppColors.lavenderLight,
-                                      valueColor: const AlwaysStoppedAnimation(
-                                        AppColors.lavender,
-                                      ),
-                                    ),
-                                    LinearProgressIndicator(
-                                      value: post / 100,
-                                      minHeight: 12,
-                                      backgroundColor: Colors.transparent,
-                                      valueColor: const AlwaysStoppedAnimation(
-                                        AppColors.primaryPurple,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${(post - pre) >= 0 ? '+' : ''}'
-                              '${(post - pre).toStringAsFixed(0)}%',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color:
-                                    (post - pre) >= 0
-                                        ? AppColors.statusSuccessDark
-                                        : AppColors.mutedForeground,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                    for (var i = 0; i < progress.areas.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      _ParentSkillProgressRow(progress: progress.areas[i]),
+                    ],
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Overall activity accuracy changed by '
+                      '${overallPoints >= 0 ? '+' : ''}$overallPoints '
+                      'percentage points. This compares activity performance '
+                      'on two different days; it is not a diagnosis.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontSize: 11,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -2020,9 +1960,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     progressProv.loadedChildId ??
                     context.read<ChildProvider>().profile?.id ??
                     '';
-                final rowKey = ValueKey(
-                  'recentActivityItem-${session.id}',
-                );
+                final rowKey = ValueKey('recentActivityItem-${session.id}');
                 final reportLabel =
                     '$gameName, ${session.score} of ${session.totalItems} correct, '
                     'played ${_formatDate(session.endedAt)}';
@@ -2040,7 +1978,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             childId: childId,
                             sessionId: session.id,
                             authService: _authService,
-                            palette: context.read<ChildProvider>().activePalette,
+                            palette:
+                                context.read<ChildProvider>().activePalette,
                           ),
                     ),
                   );
@@ -2220,6 +2159,168 @@ class _MissingGameplayReportScreen extends StatelessWidget {
 }
 
 // ── Supporting Widgets ────────────────────────────────────────────────
+
+class _ParentSkillAreaRow extends StatelessWidget {
+  const _ParentSkillAreaRow({required this.area});
+
+  final ParentSkillAreaSummary area;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = area.levelInt;
+    final levelColor =
+        level == null
+            ? AppColors.mutedForeground
+            : AssessmentPalette.level(level);
+
+    return Semantics(
+      label:
+          '${area.label}: ${area.levelName}. ${area.metricText}. '
+          '${area.detail ?? ''}',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    area.label,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (level != null) ...[
+                  AssessmentLevelMeter(filled: level + 1, color: levelColor),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    area.levelName,
+                    textAlign: TextAlign.right,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: levelColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              area.metricText,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (area.detail != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                area.detail!,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.mutedForeground,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ParentSkillProgressRow extends StatelessWidget {
+  const _ParentSkillProgressRow({required this.progress});
+
+  final ParentSkillAreaProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final levelDelta = progress.levelDelta;
+    final improved = levelDelta != null && levelDelta > 0;
+    final steady = levelDelta == 0;
+    final icon =
+        improved
+            ? Icons.trending_up_rounded
+            : steady
+            ? Icons.trending_flat_rounded
+            : Icons.trending_down_rounded;
+    final color =
+        improved
+            ? AppColors.statusSuccessDark
+            : steady
+            ? AppColors.textSecondary
+            : levelDelta == null
+            ? AppColors.mutedForeground
+            : AppColors.statusWarningDark;
+    final metricDelta = progress.metricDelta;
+    final beforeMetric = progress.before.metricPercent;
+    final afterMetric = progress.after.metricPercent;
+    final metricText =
+        beforeMetric == null || afterMetric == null
+            ? 'Supporting percentage unavailable for one assessment'
+            : progress.before.metricLabel == progress.after.metricLabel
+            ? '$beforeMetric% → $afterMetric% ${progress.after.metricLabel}'
+                '${metricDelta == null ? '' : ' '
+                        '(${metricDelta >= 0 ? '+' : ''}$metricDelta points)'}'
+            : 'Before: ${progress.before.metricText} · '
+                'After: ${progress.after.metricText}';
+
+    return Semantics(
+      label:
+          '${progress.after.label}: ${progress.before.levelName} to '
+          '${progress.after.levelName}. $metricText.',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(icon, size: 19, color: color),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    progress.after.label,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${progress.before.levelName} → '
+                    '${progress.after.levelName}',
+                    style: AppTextStyles.bodySmall.copyWith(color: color),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    metricText,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// A card body that pairs a message with a call-to-action button. Side by
 /// side when the card is wide enough; on a portrait phone the button drops
