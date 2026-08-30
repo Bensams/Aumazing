@@ -71,39 +71,27 @@ jobs:
           name: Aumazing ${{ steps.meta.outputs.tag }}
           draft: ${{ inputs.draft }}
           body: |
-            Aumazing ${{ steps.meta.outputs.version }} expands assessment reporting, child personalization,
-            guided activities, and the in-game reward experience.
+            Aumazing ${{ steps.meta.outputs.version }} makes assessment progress
+            easier for parents to understand and improves wireless development reliability.
 
             ## Features added
 
-            - Added richer assessment reports with saved rubric details,
-              recommendations, and pre/post comparisons in the app and beta portal.
-            - Recommended activities can now open My Path directly, and the
-              pre-assessment summary uses a dedicated full-screen parent handoff.
-            - Child settings, buddy, character, and costume selections now persist
-              and sync, with the chosen mascot shown across the child experience.
-            - Added a clearly labelled simulated checkout flow for Premium testing.
-            - Expanded gameplay feedback with an interactive victory trophy,
-              star and trophy sounds, spoken reward hints, and Trace It shape glyphs.
-            - Added multilingual Kumusta greeting voice-over and new high-five and
-              fist-bump gesture sheets for every character skin.
-            - Simplified sign-in by removing the Facebook option and SDK.
+            - Reorganized parent assessment summaries around Communication,
+              Play Skills, Social Interaction, and Attention & Focus instead of
+              exposing individual game names as the primary interpretation.
+            - Kept supporting activity percentages visible alongside the
+              parent-friendly skill bands, with unavailable evidence clearly labelled.
+            - Updated Advanced Trends to compare pre- and post-assessment skill
+              domains, showing percentage-point movement separately from band changes.
 
             ## Fixes
 
-            - Restored Gemini assessment summaries and preserved recommendations,
-              rubric data, and pre/post comparisons through result handoffs.
-            - Corrected assessment cloud synchronization and reconstruction of
-              per-game results from uploaded assessment rows.
-            - Fixed parent-summary orientation and assessment/history card overlaps.
-            - Fixed My Path victories returning to the dashboard instead of the
-              child lobby, plus several stranded end-of-game transitions.
-            - Fixed voice-over continuing after focus loss, truncated English
-              instructions, and silent Kumusta hard-mode reorientation.
-            - Prevented cloud data from overwriting character and costume choices,
-              and refreshed the mascot immediately after a selection change.
-            - Fixed sensory-consent label wrapping, dialog underline artifacts,
-              and mismatched buddy drag targets.
+            - Made the wireless runner automatically match an attached USB phone
+              to its rotating Android wireless-debugging endpoint.
+            - Made wireless connection checks use the live ADB device state and
+              wait for the phone's TCP listener instead of relying on fixed timing.
+            - Added clearer guidance when Wi-Fi client isolation prevents the PC
+              from reaching the phone.
 
             ## Build details
 
