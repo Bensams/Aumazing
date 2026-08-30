@@ -213,14 +213,42 @@ function Get-AdbDevices {
 
 function Test-WirelessConnect([string]$target) {
     Write-Host "  trying $target ..." -NoNewline
-    $out = Invoke-Adb connect $target
-    if ($out -match 'connected to') {
-        # `connected to` is also printed for an already-connected device
-        $alive = Get-AdbDevices | Where-Object { $_.Serial -eq $target -and $_.State -eq 'device' }
-        if ($alive) { Write-Host " ok" -ForegroundColor Green; return $true }
-    }
+    $null = Invoke-Adb connect $target
+    # The wording changed across adb releases ("connected", "already
+    # connected", or no useful stdout when mDNS auto-connect won the race).
+    # The device table is the authoritative result, not the sentence adb used.
+    $alive = Get-AdbDevices | Where-Object { $_.Serial -eq $target -and $_.State -eq 'device' }
+    if ($alive) { Write-Host " ok" -ForegroundColor Green; return $true }
     Write-Host " no" -ForegroundColor DarkGray
     Invoke-Adb disconnect $target | Out-Null
+    return $false
+}
+
+# A restarted adbd can return from `adb tcpip` before its Wi-Fi listener is
+# routable. Polling the socket avoids two expensive `adb connect` timeouts and
+# gives slower phones / access points enough time to update ARP state.
+function Test-TcpEndpoint([string]$target, [int]$timeoutMs = 1000) {
+    if ($target -notmatch '^(.+):(\d+)$') { return $false }
+    $hostName = $Matches[1]
+    $portNumber = [int]$Matches[2]
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $pending = $client.ConnectAsync($hostName, $portNumber)
+        if (-not $pending.Wait($timeoutMs)) { return $false }
+        return $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
+function Wait-TcpEndpoint([string]$target, [int]$timeoutSeconds = 20) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
+    do {
+        if (Test-TcpEndpoint $target) { return $true }
+        Start-Sleep -Milliseconds 750
+    } while ([DateTime]::UtcNow -lt $deadline)
     return $false
 }
 
@@ -316,14 +344,36 @@ if (-not $target) {
 if (-not $target) {
     Write-Host "Asking mDNS what's advertising adb on this network..."
     $mdns = Invoke-Adb mdns services
-    $found = [regex]::Matches($mdns, '_adb-tls-connect\._tcp\s+(\d+\.\d+\.\d+\.\d+:\d+)') |
-        ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+    $found = @([regex]::Matches($mdns, '_adb-tls-connect\._tcp\s+(\d+\.\d+\.\d+\.\d+:\d+)') |
+        ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
 
     if (-not $found) { Write-Host "  nothing advertising." -ForegroundColor DarkGray }
     else {
-        $ordered = @(Select-Device 'advertised (mDNS)' $found)
+        # When a cable is attached, use the phone's Wi-Fi IP to identify its
+        # rotating Android 11+ TLS port. This avoids asking the user to choose
+        # between every other phone advertising adb on the same network.
+        $usbNow = @(Get-AdbDevices | Where-Object {
+            $_.State -eq 'device' -and $_.Serial -notmatch ':\d+$'
+        } | ForEach-Object { $_.Serial })
+        $matchingMdns = @()
+        foreach ($usb in $usbNow) {
+            $usbIp = Get-DeviceWifiIp $usb
+            if ($usbIp) {
+                $matchingMdns += @($found | Where-Object { $_ -like "${usbIp}:*" })
+            }
+        }
+        $matchingMdns = @($matchingMdns | Select-Object -Unique)
+
+        if ($matchingMdns.Count -eq 1) {
+            $chosen = $matchingMdns[0]
+            Write-Host "  matched USB phone to $chosen" -ForegroundColor DarkGray
+        } else {
+            $chosen = Select-Device 'advertised (mDNS)' $found
+        }
+
+        $ordered = @($chosen)
         # put the chosen one first, still try the rest if it refuses
-        $ordered += ($found | Where-Object { $_ -ne $ordered[0] })
+        $ordered += @($found | Where-Object { $_ -ne $chosen })
         foreach ($t in $ordered) {
             if (Test-WirelessConnect $t) { $target = $t; break }
         }
@@ -353,11 +403,17 @@ if (-not $target) {
     if (-not $deviceIp) { throw "Could not read the phone's Wi-Fi IP. Is it on Wi-Fi (not just mobile data)?" }
 
     Invoke-Adb -s $usbSerial tcpip $Port | Out-Host
-    Start-Sleep -Seconds 2
 
     $target = "${deviceIp}:$Port"
+    Write-Host "  waiting for $target to become reachable ..." -NoNewline
+    if (-not (Wait-TcpEndpoint $target)) {
+        Write-Host " timed out" -ForegroundColor DarkGray
+        throw "Phone restarted adb on $target, but Windows cannot reach that port. Check that the phone and PC are on the same non-guest Wi-Fi and that client/AP isolation is off."
+    }
+    Write-Host " ready" -ForegroundColor Green
+
     if (-not (Test-WirelessConnect $target)) {
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 1
         if (-not (Test-WirelessConnect $target)) { throw "adb connect $target failed. Same Wi-Fi network as this PC?" }
     }
 }
