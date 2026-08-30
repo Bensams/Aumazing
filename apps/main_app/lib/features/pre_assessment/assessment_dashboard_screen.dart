@@ -6,6 +6,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_progress_service.dart';
+import '../../services/assessment_summary_service.dart';
 import '../../services/scoring_service.dart';
 import '../child_mode/open_my_path.dart';
 import 'assessment_result_view.dart';
@@ -25,7 +26,11 @@ import 'pre_assessment_intro_screen.dart';
 /// reopening this screen after changing the child's sensory settings must not
 /// rewrite a past result.
 class AssessmentDashboardScreen extends StatelessWidget {
-  const AssessmentDashboardScreen({super.key});
+  const AssessmentDashboardScreen({super.key, this.summaryService});
+
+  /// Test seam for keeping dashboard widget tests off the network.
+  @visibleForTesting
+  final AssessmentSummaryService? summaryService;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +89,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
             childDisplayName: childProv.profile?.displayName ?? 'Your child',
             showTherapyRecommendation: true,
             nextModulePremiumRequired: hasPost && assessProv.nextCycleLocked,
+            summaryService: summaryService,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),
             onOpenLearningPath: () => openMyPath(context),

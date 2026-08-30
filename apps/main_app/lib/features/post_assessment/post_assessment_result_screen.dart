@@ -6,6 +6,7 @@ import 'package:shared_ui/shared_ui.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_progress_service.dart';
+import '../../services/assessment_summary_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../child_mode/open_my_path.dart';
 import '../pre_assessment/assessment_result_view.dart';
@@ -22,6 +23,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
     super.key,
     required this.improvement,
     this.nextModulePremiumRequired = false,
+    this.summaryService,
   });
 
   /// Output of AssessmentService.compareAssessments.
@@ -29,6 +31,10 @@ class PostAssessmentResultScreen extends StatelessWidget {
 
   /// Whether generating the next personalized module requires Premium.
   final bool nextModulePremiumRequired;
+
+  /// Test seam for keeping result-screen widget tests off the network.
+  @visibleForTesting
+  final AssessmentSummaryService? summaryService;
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +112,7 @@ class PostAssessmentResultScreen extends StatelessWidget {
             childDisplayName: childProv.profile?.displayName ?? 'Your child',
             showTherapyRecommendation: true,
             nextModulePremiumRequired: nextModulePremiumRequired,
+            summaryService: summaryService,
             onContinue:
                 () => Navigator.of(context).popUntil((route) => route.isFirst),
             onOpenLearningPath: () => openMyPath(context),
