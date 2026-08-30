@@ -39,7 +39,8 @@ class SariSariSortScreen extends StatefulWidget {
     int totalItems,
     int errorCount,
     int totalResponseTimeMs,
-  )? onComplete;
+  )?
+  onComplete;
 
   final SensoryRoundController? sensoryController;
 
@@ -50,14 +51,12 @@ class SariSariSortScreen extends StatefulWidget {
   State<SariSariSortScreen> createState() => _SariSariSortScreenState();
 }
 
-class _SariSariSortScreenState extends State<SariSariSortScreen> {
+class _SariSariSortScreenState extends State<SariSariSortScreen>
+    with GameCompletionGuard {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
   late final int _totalRounds;
@@ -101,9 +100,10 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       // Hint policy per difficulty tier (Easy: unlimited + guided demo,
       // Medium: small budget, Hard: no answer hints). Assessment keeps the
       // fixed legacy behaviour so its telemetry stays comparable.
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(config.difficulty)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(config.difficulty)
+              : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectDrop: _onCorrectDrop,
@@ -120,12 +120,13 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       // Voice-over
       // Immediate feedback names what was just answered ("red circle");
       // praise is saved for the end-of-game reward.
-      onPlayCorrectVo: (label) => _voiceOverService.playAnswerLabel(
-        color: label.color,
-        shape: label.shape,
-        letter: label.letter,
-        item: label.item,
-      ),
+      onPlayCorrectVo:
+          (label) => _voiceOverService.playAnswerLabel(
+            color: label.color,
+            shape: label.shape,
+            letter: label.letter,
+            item: label.item,
+          ),
       onPlayWrongVo: () => _voiceOverService.playWrongEncouragement(),
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
@@ -185,8 +186,7 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
 
@@ -201,30 +201,43 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
     final childProvider = context.read<ChildProvider>();
     final childId = childProvider.profile?.id;
 
-    // The write must land before the flow advances, so a completed game is
-    // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: childId,
-      gameId: 'sari_sari_sort',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: childProvider.musicEnabled,
-      hapticFeedbackEnabled: childProvider.vibrationEnabled,
-    );
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: childId,
+        gameId: 'sari_sari_sort',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: childProvider.musicEnabled,
+        hapticFeedbackEnabled: childProvider.vibrationEnabled,
+      );
+    } catch (e) {
+      debugPrint('[SariSariSort] session recording failed: $e');
+    }
     if (!mounted) return;
 
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
 
     if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
+      // The reward overlay is about to appear; the watchdog stays armed until
+      // the choice (or non-practice pop) is actually on screen.
       _showRewardThenCompletion(score, totalItems, errorCount);
     }
   }
@@ -236,26 +249,34 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          // Longer reward so children enjoy popping it (engagement);
-          // the text "Great Job" dialog has been removed.
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false, // pop-to-advance; no text button
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward overlay
-            if (widget.assessmentContext == 'practice') {
-              // Post-reward choice: play the next game or back to the lobby.
-              GameEndChoiceDialog.show(context,
-                  currentGameId: 'sari_sari_sort');
-            } else {
-              Navigator.of(context).pop(); // Back to the lobby
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              // Longer reward so children enjoy popping it (engagement);
+              // the text "Great Job" dialog has been removed.
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false, // pop-to-advance; no text button
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward overlay
+                if (widget.assessmentContext == 'practice') {
+                  // Post-reward choice: play the next game or back to the lobby.
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'sari_sari_sort',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop(); // Back to the lobby
+                }
+              },
+            ),
+          ),
     );
   }
 
@@ -267,13 +288,14 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
       MaterialPageRoute(
         // A pushed route leaves the old host behind, so the replacement
         // screen carries its own.
-        builder: (_) => MascotHost(
-          child: SariSariSortScreen(
-            assessmentContext: widget.assessmentContext,
-            sensoryController: widget.sensoryController,
-            difficulty: widget.difficulty,
-          ),
-        ),
+        builder:
+            (_) => MascotHost(
+              child: SariSariSortScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
     );
   }
@@ -302,10 +324,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
             },
             child: Container(
               decoration: BoxDecoration(
-                  gradient: context
-                      .watch<ChildProvider>()
-                      .activePalette
-                      .gameBackgroundFor('sari_sari_sort')),
+                gradient: context
+                    .watch<ChildProvider>()
+                    .activePalette
+                    .gameBackgroundFor('sari_sari_sort'),
+              ),
               child: GameWidget(game: _game),
             ),
           ),
@@ -328,11 +351,11 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
             totalSteps: _totalRounds,
             currentStep: _currentStep,
             onParentTap: _handleParentTap,
-            onRetry:
-                widget.assessmentContext == 'practice' ? _retryGame : null,
-            onMenu: widget.assessmentContext == 'practice'
-                ? () => Navigator.of(context).pop()
-                : null,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
 
           Positioned(
@@ -341,9 +364,10 @@ class _SariSariSortScreenState extends State<SariSariSortScreen> {
             left: AppSpacing.md,
             child: VoiceOverPromptBubble(
               showText: context.watch<ChildProvider>().showTextPrompts,
-              text: _gameComplete
-                  ? 'Well done! You finished the game!'
-                  : strings.sortInstruction,
+              text:
+                  _gameComplete
+                      ? 'Well done! You finished the game!'
+                      : strings.sortInstruction,
               isVisible: _showPrompt || _gameComplete,
             ),
           ),

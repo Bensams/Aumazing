@@ -4,3 +4,4 @@ export 'bubbles_reward.dart';
 export 'candy_reward.dart';
 export 'fireworks_reward.dart';
 export 'sine_curve.dart';
+export 'star_reward.dart';

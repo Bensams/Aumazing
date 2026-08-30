@@ -7,6 +7,7 @@ import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../services/assessment_progress_service.dart';
 import '../../services/scoring_service.dart';
+import '../child_mode/open_my_path.dart';
 import 'assessment_result_view.dart';
 import 'pre_assessment_intro_screen.dart';
 
@@ -85,6 +86,7 @@ class AssessmentDashboardScreen extends StatelessWidget {
             nextModulePremiumRequired: hasPost && assessProv.nextCycleLocked,
             backLabel: AssessmentLabels.home,
             onBack: () => Navigator.of(context).pop(),
+            onOpenLearningPath: () => openMyPath(context),
             onRetake: () {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(

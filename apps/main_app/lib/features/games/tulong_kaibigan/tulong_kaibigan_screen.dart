@@ -27,8 +27,13 @@ class TulongKaibiganScreen extends StatefulWidget {
   });
 
   final String assessmentContext;
-  final void Function(int score, int totalItems, int errorCount,
-      int totalResponseTimeMs)? onComplete;
+  final void Function(
+    int score,
+    int totalItems,
+    int errorCount,
+    int totalResponseTimeMs,
+  )?
+  onComplete;
   final SensoryRoundController? sensoryController;
   final int? difficulty;
 
@@ -36,14 +41,12 @@ class TulongKaibiganScreen extends StatefulWidget {
   State<TulongKaibiganScreen> createState() => _TulongKaibiganScreenState();
 }
 
-class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
+class _TulongKaibiganScreenState extends State<TulongKaibiganScreen>
+    with GameCompletionGuard {
   int _currentStep = 0;
   bool _showPrompt = true;
   bool _gameComplete = false;
 
-  /// Guards against a duplicate game-complete callback recording the
-  /// session (or advancing the flow) twice.
-  bool _completionHandled = false;
   late final int _totalRounds;
   late final TulongKaibiganGame _game;
   late final DateTime _sessionStartTime;
@@ -77,9 +80,10 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
       itemsPerRound: config.itemsPerRound,
       childId: config.childId,
       strings: config.strings,
-      profile: widget.assessmentContext == 'practice'
-          ? DifficultyProfile.forLevel(config.difficulty)
-          : DifficultyProfile.assessment,
+      profile:
+          widget.assessmentContext == 'practice'
+              ? DifficultyProfile.forLevel(config.difficulty)
+              : DifficultyProfile.assessment,
       onStepChanged: _onStepChanged,
       onGameComplete: _onGameComplete,
       onCorrectDrop: _onCorrectDrop,
@@ -136,8 +140,7 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
   }) async {
     // The engine can fire this more than once on a fast finish; the flow
     // past this point pops routes, so run it exactly once.
-    if (_completionHandled) return;
-    _completionHandled = true;
+    if (!beginCompletion()) return;
 
     setState(() => _gameComplete = true);
     MascotHost.maybeOf(context)?.play(MascotGesture.celebrate);
@@ -148,27 +151,43 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
     widget.sensoryController?.stampRoundSensoryState(analytics);
     // The write must land before the flow advances, so a completed game is
     // never celebrated over a session that was silently lost.
-    await GameSessionRecording.record(
-      context,
-      childId: child.profile?.id,
-      gameId: 'tulong_kaibigan',
-      assessmentContext: widget.assessmentContext,
-      score: score,
-      totalItems: totalItems,
-      errorCount: errorCount,
-      totalResponseTimeMs: totalResponseTimeMs,
-      startedAt: _sessionStartTime,
-      analytics: analytics,
-      bgMusicEnabled: child.musicEnabled,
-      hapticFeedbackEnabled: child.vibrationEnabled,
-      applySessionSensoryDefaults: widget.sensoryController == null,
-    );
+    //
+    // A failed write must never strand the child on the finished frame. The
+    // record call handles its own retry dialog and no-profile warning; this
+    // catch is a last-resort net for anything that escapes it (a deactivated
+    // context, an unexpected throw). Either way the reward/choice still runs.
+    try {
+      await GameSessionRecording.record(
+        context,
+        childId: child.profile?.id,
+        gameId: 'tulong_kaibigan',
+        assessmentContext: widget.assessmentContext,
+        score: score,
+        totalItems: totalItems,
+        errorCount: errorCount,
+        totalResponseTimeMs: totalResponseTimeMs,
+        startedAt: _sessionStartTime,
+        analytics: analytics,
+        bgMusicEnabled: child.musicEnabled,
+        hapticFeedbackEnabled: child.vibrationEnabled,
+        applySessionSensoryDefaults: widget.sensoryController == null,
+      );
+    } catch (e) {
+      debugPrint('[TulongKaibigan] session recording failed: $e');
+    }
     if (!mounted) return;
     if (widget.onComplete != null) {
+      // The host takes over navigation; the watchdog no longer applies.
+      cancelCompletionWatchdog();
       widget.onComplete!(score, totalItems, errorCount, totalResponseTimeMs);
       return;
     }
-    if (mounted) _showReward();
+    if (mounted) {
+      // Re-arm the watchdog now that the reward is about to appear, so a slow
+      // session write doesn't cut the reward/choice short.
+      armCompletionWatchdog();
+      _showReward();
+    }
   }
 
   void _showReward() {
@@ -177,38 +196,49 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: child.profile!,
-          minDisplayDuration: const Duration(seconds: 10),
-          showContinueButton: false,
-          onComplete: () {
-            Navigator.of(dialogContext).pop();
-            if (widget.assessmentContext == 'practice') {
-              GameEndChoiceDialog.show(context,
-                  currentGameId: 'tulong_kaibigan');
-            } else {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: child.profile!,
+              minDisplayDuration: const Duration(seconds: 10),
+              showContinueButton: false,
+              onComplete: () {
+                Navigator.of(dialogContext).pop();
+                if (widget.assessmentContext == 'practice') {
+                  GameEndChoiceDialog.show(
+                    context,
+                    currentGameId: 'tulong_kaibigan',
+                    // The choice route is pushed → the watchdog stands down.
+                    onShown: cancelCompletionWatchdog,
+                  );
+                } else {
+                  // Non-practice: the screen pops immediately; disarm the watchdog
+                  // so it can't fire mid-pop for a half-torn route.
+                  cancelCompletionWatchdog();
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ),
     );
   }
 
   void _retryGame() {
     MascotHost.maybeOf(context)?.flash(MascotPose.encourage);
-    Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => MascotHost(
-        showMascot: false, // Tulong Kaibigan draws its own buddies.
-        child: TulongKaibiganScreen(
-          assessmentContext: widget.assessmentContext,
-          sensoryController: widget.sensoryController,
-          difficulty: widget.difficulty,
-        ),
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => MascotHost(
+              showMascot: false, // Tulong Kaibigan draws its own buddies.
+              child: TulongKaibiganScreen(
+                assessmentContext: widget.assessmentContext,
+                sensoryController: widget.sensoryController,
+                difficulty: widget.difficulty,
+              ),
+            ),
       ),
-    ));
+    );
   }
 
   Future<void> _handleParentTap() async {
@@ -226,37 +256,41 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen> {
     final strings = context.watch<ChildProvider>().strings;
 
     return Scaffold(
-      body: Stack(children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: context
-                .watch<ChildProvider>()
-                .activePalette
-                .gameBackgroundFor('tulong_kaibigan'),
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: context
+                  .watch<ChildProvider>()
+                  .activePalette
+                  .gameBackgroundFor('tulong_kaibigan'),
+            ),
+            child: GameWidget(game: _game),
           ),
-          child: GameWidget(game: _game),
-        ),
-        ChildModeTopBar(
-          totalSteps: _totalRounds,
-          currentStep: _currentStep,
-          onParentTap: _handleParentTap,
-          onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
-          onMenu: widget.assessmentContext == 'practice'
-              ? () => Navigator.of(context).pop()
-              : null,
-        ),
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 8,
-          left: AppSpacing.md,
-          child: VoiceOverPromptBubble(
-            showText: context.watch<ChildProvider>().showTextPrompts,
-            text: _gameComplete
-                ? strings.tulongKaibiganComplete
-                : strings.tulongKaibiganInstruction,
-            isVisible: _showPrompt || _gameComplete,
+          ChildModeTopBar(
+            totalSteps: _totalRounds,
+            currentStep: _currentStep,
+            onParentTap: _handleParentTap,
+            onRetry: widget.assessmentContext == 'practice' ? _retryGame : null,
+            onMenu:
+                widget.assessmentContext == 'practice'
+                    ? () => Navigator.of(context).pop()
+                    : null,
           ),
-        ),
-      ]),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: AppSpacing.md,
+            child: VoiceOverPromptBubble(
+              showText: context.watch<ChildProvider>().showTextPrompts,
+              text:
+                  _gameComplete
+                      ? strings.tulongKaibiganComplete
+                      : strings.tulongKaibiganInstruction,
+              isVisible: _showPrompt || _gameComplete,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

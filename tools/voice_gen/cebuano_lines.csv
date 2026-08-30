@@ -141,6 +141,7 @@ reward_and_celebration/YoureAmazing,Kahibulongan ka!,"excited, bouncy, cheerful 
 shapes/Circle,Lingin.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Diamond,Diamante.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Heart,Kasingkasing.,"warm, clear, friendly kid's voice, calm pace",neutral
+shapes/Square,Kuwadrado.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Star,Bituon.,"warm, clear, friendly kid's voice, calm pace",neutral
 shapes/Triangle,Trianggulo.,"warm, clear, friendly kid's voice, calm pace",neutral
 transition/GetReady,Pangandam na!,"happy, warm, cheerful tone",happy
@@ -189,6 +190,10 @@ routines/PutAway,Ihipos ang dulaan.,"warm, clear, friendly kid's voice, calm pac
 instruction/LookWhereImLooking,"Tan-awa kung asa nagtan-aw ang imong higala, dayon tapika kini.","warm, clear, friendly kid's voice, calm pace",calm
 instruction/LookOverThere,Tan-awa didto!,"warm, clear, friendly kid's voice, calm pace",neutral
 instruction/SayHelloBack,Pangumusta sab ka!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetWave,Ikaway!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetHighFive,Apir!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetFistBump,Beat!,"warm, clear, friendly kid's voice, calm pace",happy
+instruction/GreetThumbsUp,Nindot!,"warm, clear, friendly kid's voice, calm pace",happy
 emotions/HowIsHeFeeling,Unsay iyang gibati?,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Happy,Malipayon.,"warm, clear, friendly kid's voice, calm pace",neutral
 emotions/Sad,Masulub-on.,"warm, clear, friendly kid's voice, calm pace",neutral
@@ -210,3 +215,7 @@ emotions/scenes/PuzzleStuck,Dili mosulod ang piraso sa puzzle.,"warm, clear, fri
 milestone/MilestonePreComplete,Human na ang pre-assessment!,"excited, bouncy, cheerful kid's voice, high energy",excited
 milestone/MilestonePathComplete,Nahuman na nimo ang imong learning path!,"excited, bouncy, cheerful kid's voice, high energy",excited
 milestone/MilestonePostComplete,Human na ang post-assessment!,"excited, bouncy, cheerful kid's voice, high energy",excited
+instruction/PopTheBalloons,Butohi ang mga lobo!,"excited, bouncy, cheerful kid's voice, high energy",excited
+instruction/TapTheRockets,Tapika ang mga kwitis!,"excited, bouncy, cheerful kid's voice, high energy",excited
+instruction/PopTheBubbles,Butohi ang mga bula!,"excited, bouncy, cheerful kid's voice, high energy",excited
+instruction/CollectTheCandy,Kuhaa ang mga kendi!,"excited, bouncy, cheerful kid's voice, high energy",excited

@@ -1435,6 +1435,58 @@ class LocalDbService {
     );
   }
 
+  /// Writes a cloud copy of a child under the same conflict rule every other
+  /// table gets from [hydrateRecords]: **the copy with the later `updated_at`
+  /// wins, and a tie goes to local** (AUM-328).
+  ///
+  /// Hydration used to call [upsertChild] straight, which replaces the row
+  /// outright. That silently discarded any local edit not yet pushed — a
+  /// character or costume chosen just before the app was closed was overwritten
+  /// by the cloud's older copy on the next launch — and because the replacement
+  /// also stamped `sync_status` back to synced, the edit was never pushed
+  /// afterwards either. The choice did not just fail to sync; it was destroyed.
+  ///
+  /// Unlike [upsertChild] this keeps the remote `updated_at` rather than
+  /// stamping now. The timestamp is the whole basis of the rule, and a hydrated
+  /// row claiming to have been written *now* would out-rank every genuinely
+  /// later cloud edit for good — a second device could never win again.
+  ///
+  /// Returns true when the local row was written.
+  Future<bool> hydrateChild(ChildProfile profile, {String? ownerId}) async {
+    final db = await database;
+    final remoteUpdatedAt = profile.updatedAt.toIso8601String();
+
+    final existing = await db.query(
+      LocalTables.children,
+      columns: ['updated_at'],
+      where: 'id = ?',
+      whereArgs: [profile.id],
+      limit: 1,
+    );
+    if (existing.isNotEmpty &&
+        !_remoteIsNewer(
+          existing.first['updated_at'] as String?,
+          remoteUpdatedAt,
+        )) {
+      return false;
+    }
+
+    final map = profile.toMap();
+    map.remove('created_at');
+    map['local_created_at'] = profile.createdAt.toIso8601String();
+    map['updated_at'] = remoteUpdatedAt;
+    map['sync_status'] = SyncStatus.synced.value;
+    map['last_synced_at'] = DateTime.now().toIso8601String();
+    map['owner_id'] = ownerId ?? profile.userId;
+
+    await db.insert(
+      LocalTables.children,
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return true;
+  }
+
   Future<List<ChildProfile>> getChildren({
     String? userId,
     bool includeDeleted = false,
@@ -1760,6 +1812,88 @@ class LocalDbService {
       orderBy: 'started_at DESC',
     );
     return rows.map((r) => AssessmentRunRecord.fromMap(r)).toList();
+  }
+
+  // ─── Module Recommendations & Comparisons ─────────────────────────────
+
+  /// Stores the module recommendation produced for one assessment run.
+  ///
+  /// Replace-on-conflict is on the row id, so a re-run creates a new row
+  /// rather than overwriting the previous recommendation: the history of
+  /// what a child was pointed at, and when, is the point of the table.
+  Future<void> insertModuleRecommendation({
+    required String id,
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+    String? ownerId,
+    bool markPending = true,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      LocalTables.moduleRecommendations,
+      {
+        'id': id,
+        'child_id': childId,
+        'assessment_run_id': assessmentRunId,
+        'module_id': moduleId,
+        'module_name': moduleName,
+        'starting_level': startingLevel,
+        'confidence': confidence,
+        'rationale': rationale,
+        'sync_status':
+            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+        'updated_at': now,
+        'local_created_at': now,
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Stores a pre/post comparison.
+  ///
+  /// [preAssessmentId] and [postAssessmentId] are assessment *run* ids — the
+  /// cloud keys one result row per run on the run's own uuid, so a run id is
+  /// what resolves to the result row on either side of the comparison.
+  Future<void> insertAssessmentComparison({
+    required String id,
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+    String? ownerId,
+    bool markPending = true,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      LocalTables.assessmentComparisons,
+      {
+        'id': id,
+        'child_id': childId,
+        'pre_assessment_id': preAssessmentId,
+        'post_assessment_id': postAssessmentId,
+        'accuracy_improvement': accuracyImprovement,
+        'response_time_improvement_ms': responseTimeImprovementMs,
+        'overall_improvement_percent': overallImprovementPercent,
+        'summary': summary,
+        'sync_status':
+            markPending ? SyncStatus.pending.value : SyncStatus.synced.value,
+        'updated_at': now,
+        'local_created_at': now,
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ─── Module Progress ──────────────────────────────────────────────────

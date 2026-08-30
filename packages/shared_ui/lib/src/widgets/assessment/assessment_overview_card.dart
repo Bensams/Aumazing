@@ -100,12 +100,33 @@ class AssessmentOverviewCard extends StatelessWidget {
               color: AppColors.inputFill,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              model.summary,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.45,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (model.summaryIsAi) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('✨', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 6),
+                      Text(
+                        AssessmentLabels.aiSummary,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primaryPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                Text(
+                  model.summary,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

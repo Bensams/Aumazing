@@ -7,6 +7,7 @@ import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
+import 'package:aumazing/services/rubric/rubric_result.dart';
 
 /// In-memory stand-in for the SQLite/Supabase-backed [AssessmentService].
 ///
@@ -95,6 +96,7 @@ class _FakeGateway implements AssessmentGateway {
     required String gameId,
     required List<GameplaySession> sessions,
     String? assessmentRunId,
+    RubricResult? rubric,
   }) async {
     if (failCreateResult) throw StateError('write failed');
     final totalItems = sessions.fold<int>(0, (sum, s) => sum + s.totalItems);
@@ -118,6 +120,28 @@ class _FakeGateway implements AssessmentGateway {
     created.add(result);
     return result;
   }
+
+  @override
+  Future<void> saveModuleRecommendation({
+    required String childId,
+    required String assessmentRunId,
+    required String moduleId,
+    required String moduleName,
+    required int startingLevel,
+    double? confidence,
+    String? rationale,
+  }) async {}
+
+  @override
+  Future<void> saveAssessmentComparison({
+    required String childId,
+    required String preAssessmentId,
+    required String postAssessmentId,
+    double? accuracyImprovement,
+    int? responseTimeImprovementMs,
+    double? overallImprovementPercent,
+    String? summary,
+  }) async {}
 
   @override
   Map<String, dynamic> recommendModule(List<AssessmentResult> preResults) => {

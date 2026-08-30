@@ -71,6 +71,7 @@ class AudioService {
       debugPrint('[AudioService] Audio operation timed out');
     }
   }
+
   AudioConfig _config;
 
   /// Dedicated player for looping background music.
@@ -92,11 +93,13 @@ class AudioService {
   static const String _assetPrefix = 'packages/shared_audio/assets/audio';
 
   AudioService({AudioConfig? config})
-      : _config = config ?? AudioConfig.defaults {
+    : _config = config ?? AudioConfig.defaults {
     _musicPlayer = AudioPlayer();
     _musicPlayer.audioCache = AudioCache(prefix: '');
-    _playerQueues[_musicPlayer] =
-        _enqueuePlayer(_musicPlayer, () => _musicPlayer.setAudioContext(_musicAudioContext));
+    _playerQueues[_musicPlayer] = _enqueuePlayer(
+      _musicPlayer,
+      () => _musicPlayer.setAudioContext(_musicAudioContext),
+    );
   }
 
   AudioConfig get config => _config;
@@ -110,10 +113,14 @@ class AudioService {
     if (_disposed) return;
     _config = config;
     final generation = _generation;
-    unawaited(_bounded(_enqueuePlayer(_musicPlayer, () async {
-      if (!_valid(generation)) return;
-      await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-    })));
+    unawaited(
+      _bounded(
+        _enqueuePlayer(_musicPlayer, () async {
+          if (!_valid(generation)) return;
+          await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+        }),
+      ),
+    );
   }
 
   // ── Background Music ───────────────────────────────────────────────
@@ -124,56 +131,66 @@ class AudioService {
   /// The full asset path is resolved automatically via the package prefix.
   Future<void> playMusic(String trackName) {
     if (_disposed || !_config.musicEnabled) return Future<void>.value();
-    if (_currentTrack == trackName && isMusicPlaying) return Future<void>.value();
+    if (_currentTrack == trackName && isMusicPlaying)
+      return Future<void>.value();
     final generation = _generation;
-    return _bounded(_enqueuePlayer(_musicPlayer, () async {
-      if (!_valid(generation) || !_config.musicEnabled) return;
-      try {
-        await _musicPlayer.stop();
-        if (!_valid(generation)) return;
-        await _musicPlayer.setReleaseMode(ReleaseMode.loop);
-        await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-        if (!_valid(generation)) return;
-        await _musicPlayer.play(AssetSource('$_assetPrefix/$trackName'));
-        if (_valid(generation)) _currentTrack = trackName;
-      } catch (e) {
-        if (_valid(generation)) debugPrint('[AudioService] Error playing music "$trackName": $e');
-      }
-    }));
+    return _bounded(
+      _enqueuePlayer(_musicPlayer, () async {
+        if (!_valid(generation) || !_config.musicEnabled) return;
+        try {
+          await _musicPlayer.stop();
+          if (!_valid(generation)) return;
+          await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+          await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+          if (!_valid(generation)) return;
+          await _musicPlayer.play(AssetSource('$_assetPrefix/$trackName'));
+          if (_valid(generation)) _currentTrack = trackName;
+        } catch (e) {
+          if (_valid(generation))
+            debugPrint('[AudioService] Error playing music "$trackName": $e');
+        }
+      }),
+    );
   }
 
   /// Pause background music (can be resumed with [resumeMusic]).
   Future<void> pauseMusic() {
     if (_disposed) return Future<void>.value();
     final generation = _generation;
-    return _bounded(_enqueuePlayer(_musicPlayer, () async {
-      if (!_valid(generation)) return;
-      await _musicPlayer.pause();
-    }));
+    return _bounded(
+      _enqueuePlayer(_musicPlayer, () async {
+        if (!_valid(generation)) return;
+        await _musicPlayer.pause();
+      }),
+    );
   }
 
   /// Resume previously paused music.
   Future<void> resumeMusic() {
     if (_disposed || !_config.musicEnabled) return Future<void>.value();
     final generation = _generation;
-    return _bounded(_enqueuePlayer(_musicPlayer, () async {
-      if (!_valid(generation)) return;
-      await _musicPlayer.setVolume(_config.effectiveMusicVolume);
-      if (_valid(generation)) await _musicPlayer.resume();
-    }));
+    return _bounded(
+      _enqueuePlayer(_musicPlayer, () async {
+        if (!_valid(generation)) return;
+        await _musicPlayer.setVolume(_config.effectiveMusicVolume);
+        if (_valid(generation)) await _musicPlayer.resume();
+      }),
+    );
   }
 
   /// Stop background music entirely.
   Future<void> stopMusic() {
     if (_disposed) return Future<void>.value();
     final generation = ++_generation;
-    return _bounded(_enqueuePlayer(_musicPlayer, () async {
-      if (!_valid(generation)) return;
-      await _musicPlayer.stop();
-      if (!_valid(generation)) return;
-      _currentTrack = null;
-      _currentCategory = null;
-    }));
+    return _bounded(
+      _enqueuePlayer(_musicPlayer, () async {
+        if (!_valid(generation)) return;
+        await _musicPlayer.stop();
+        if (!_valid(generation)) return;
+        _currentTrack = null;
+        _currentCategory = null;
+      }),
+    );
   }
 
   /// Play a random track from the provided list.
@@ -201,8 +218,10 @@ class AudioService {
   ///
   /// An unknown [categoryKey] falls back to the default category rather than
   /// leaving the child in silence.
-  Future<void> playCategoryMusic(String? categoryKey,
-      {bool restart = false}) async {
+  Future<void> playCategoryMusic(
+    String? categoryKey, {
+    bool restart = false,
+  }) async {
     if (!_config.musicEnabled) return;
 
     final category = bgmCategoryOrDefault(categoryKey);
@@ -254,11 +273,13 @@ class AudioService {
       try {
         if (!_valid(generation) || !_config.sfxEnabled) return;
         await player.setVolume(
-            (_config.effectiveSfxVolume * volumeScale).clamp(0.0, 1.0));
+          (_config.effectiveSfxVolume * volumeScale).clamp(0.0, 1.0),
+        );
         if (!_valid(generation)) return;
         await player.play(AssetSource('$_assetPrefix/$sfxName'));
       } catch (e) {
-        if (_valid(generation)) debugPrint('[AudioService] Error playing SFX "$sfxName": $e');
+        if (_valid(generation))
+          debugPrint('[AudioService] Error playing SFX "$sfxName": $e');
       } finally {
         _reservedSfxPlayers.remove(player);
       }
@@ -278,8 +299,10 @@ class AudioService {
       final player = AudioPlayer();
       player.audioCache = AudioCache(prefix: '');
       _sfxPlayers.add(player);
-      _playerQueues[player] =
-          _enqueuePlayer(player, () => player.setAudioContext(_sfxAudioContext));
+      _playerQueues[player] = _enqueuePlayer(
+        player,
+        () => player.setAudioContext(_sfxAudioContext),
+      );
       return player;
     }
     return _sfxPlayers.firstWhere(
@@ -366,6 +389,12 @@ class AudioService {
   /// SFX file for candy collection.
   static const String _candyPopSfx = 'sfx/rewards/candy_popped.ogg';
 
+  /// SFX file for a popped star in the milestone victory scene.
+  static const String _starPopSfx = 'sfx/rewards/star_pop.ogg';
+
+  /// SFX file for the trophy reveal in the milestone victory scene.
+  static const String _trophyPopSfx = 'sfx/rewards/trophy_pop.ogg';
+
   /// Play the "correct answer" sound effect.
   Future<void> playCorrectSfx() => playSfx(_correctSfx);
 
@@ -389,8 +418,7 @@ class AudioService {
   /// Plays on its own SFX player, so it lays under the celebration voice-over
   /// rather than cutting it off — held back to 70% so it stays a bed and does
   /// not mask the praise line running on top of it.
-  Future<void> playCheerClapSfx() =>
-      playSfx(_cheerClapSfx, volumeScale: 0.7);
+  Future<void> playCheerClapSfx() => playSfx(_cheerClapSfx, volumeScale: 0.7);
 
   /// Play the full end-of-game celebration bed: the completion chime, then the
   /// children's cheer a beat later.
@@ -422,6 +450,12 @@ class AudioService {
   /// Play the candy collection sound effect.
   Future<void> playCandyPopSfx() => playSfx(_candyPopSfx);
 
+  /// Play the star-pop sound effect.
+  Future<void> playStarPopSfx() => playSfx(_starPopSfx);
+
+  /// Play the trophy-pop sound effect.
+  Future<void> playTrophyPopSfx() => playSfx(_trophyPopSfx);
+
   // ── Lifecycle ──────────────────────────────────────────────────────
 
   Future<void> dispose() {
@@ -429,16 +463,17 @@ class AudioService {
     _disposed = true;
     _generation++;
     final players = <AudioPlayer>[_musicPlayer, ..._sfxPlayers];
-    final future = Future.wait<void>([
-      for (final player in players)
-        _enqueuePlayer(player, () => player.dispose()),
-    ]).whenComplete(() {
-      _playerQueues.clear();
-      _reservedSfxPlayers.clear();
-      _sfxPlayers.clear();
-      _currentTrack = null;
-      _currentCategory = null;
-    });
+    final future =
+        Future.wait<void>([
+          for (final player in players)
+            _enqueuePlayer(player, () => player.dispose()),
+        ]).whenComplete(() {
+          _playerQueues.clear();
+          _reservedSfxPlayers.clear();
+          _sfxPlayers.clear();
+          _currentTrack = null;
+          _currentCategory = null;
+        });
     _disposeFuture = future;
     return future;
   }

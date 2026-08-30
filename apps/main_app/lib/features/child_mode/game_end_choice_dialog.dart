@@ -19,6 +19,7 @@ import '../../widgets/mascot.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../../widgets/milestone_victory_screen.dart';
 import 'game_launcher.dart';
+import 'session_origin.dart';
 import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
 
@@ -47,6 +48,13 @@ class GameEndChoiceDialog {
   static Future<void> show(
     BuildContext context, {
     required String currentGameId,
+
+    /// Invoked once a terminal next surface is on screen — the time-up dialog,
+    /// a path-victory celebration, or the choice dialog itself. A completion
+    /// watchdog (AUM-317) uses this to stand down; it must NOT cancel earlier,
+    /// or a reward that appears but hands off to a dialog that never shows
+    /// still strands the child on the finished frame.
+    void Function()? onShown,
   }) async {
     // Stars are awarded here rather than inside each game screen: this is the
     // one place all ten of them converge, and it runs AFTER the reward overlay
@@ -56,7 +64,7 @@ class GameEndChoiceDialog {
     // Note that nothing about how the game *went* reaches this call. That is
     // what makes "the payout cannot depend on performance" (STAR-B1)
     // structural rather than a promise someone has to remember to keep.
-    await _awardStars(context, currentGameId);
+    await _awardStars(context, currentGameId, onShown: onShown);
     if (!context.mounted) return;
 
     // Screen-time enforcement happens here — at the natural boundary after
@@ -67,6 +75,7 @@ class GameEndChoiceDialog {
     // still earned this game's stars. Withholding them because the session
     // ended would turn the timer into a punishment.
     if (ScreenTimeService.instance.isExhausted) {
+      onShown?.call();
       await TimeUpDialog.show(context);
       return;
     }
@@ -89,7 +98,15 @@ class GameEndChoiceDialog {
     // child's current recommended path. Celebrate it — once — instead of
     // offering a misleading "Next", then return them to the path map so the
     // fully-completed path is visible.
-    if (await _maybeShowPathVictory(context, path, currentGameId)) return;
+    if (await _maybeShowPathVictory(
+      context,
+      path,
+      currentGameId,
+      onShown: onShown,
+    )) {
+      onShown?.call();
+      return;
+    }
     if (!context.mounted) return;
 
     var pathNext = LearningPathService.nextOnPath(path, currentGameId);
@@ -108,20 +125,28 @@ class GameEndChoiceDialog {
     final current = GameRegistry.find(currentGameId);
     final palette = context.read<ChildProvider>().activePalette;
 
-    final choice = await showDialog<_EndChoice>(
+    final choiceFuture = showDialog<_EndChoice>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black26,
       builder:
-          (_) => _GameEndChoiceContent(
-            palette: palette,
-            currentGameIcon: current?.icon,
-            currentGameLogo: current?.logoAsset,
-            nextGameIcon: next?.icon,
-            nextGameLogo: next?.logoAsset,
-            nextGameName: next?.name,
+          (_) => PopScope(
+            canPop: false,
+            child: _GameEndChoiceContent(
+              palette: palette,
+              currentGameIcon: current?.icon,
+              currentGameLogo: current?.logoAsset,
+              nextGameIcon: next?.icon,
+              nextGameLogo: next?.logoAsset,
+              nextGameName: next?.name,
+            ),
           ),
     );
+    // The choice-dialog route is now pushed — a completion watchdog (AUM-317)
+    // stands down here, not when the reward appeared, so a reward that hands
+    // off to a dialog that never shows still gets the watchdog's escape.
+    onShown?.call();
+    final choice = await choiceFuture;
     if (!context.mounted) return;
 
     // Which game to launch, if any — the same one again, or the next one.
@@ -152,7 +177,16 @@ class GameEndChoiceDialog {
         return;
       }
 
-      final screen = GameLauncher.screenFor(target.id, difficulty);
+      // A replay of a step that is on the path is still path play; a
+      // registry-order "next" (no path) is not.
+      final onPath = pathDifficulty != null;
+      final screen = GameLauncher.screenFor(
+        target.id,
+        difficulty,
+        origin: onPath
+            ? SessionOrigin.recommendedModule
+            : SessionOrigin.practice,
+      );
       if (screen != null) {
         Navigator.of(
           context,
@@ -182,8 +216,9 @@ class GameEndChoiceDialog {
   static Future<bool> _maybeShowPathVictory(
     BuildContext context,
     List<LearningPathEntry> path,
-    String currentGameId,
-  ) async {
+    String currentGameId, {
+    void Function()? onShown,
+  }) async {
     if (path.isEmpty) return false;
     if (!path.any((e) => e.game.id == currentGameId)) return false;
 
@@ -228,6 +263,12 @@ class GameEndChoiceDialog {
 
     // The companion is always the child's own profile choice.
     final profile = context.read<ChildProvider>().profile;
+    // The celebration is a real next surface AND a long one — the child plays
+    // with it for up to fifteen seconds. Stand the completion watchdog down
+    // *before* pushing it, never after: waiting for the celebration to finish
+    // let the watchdog's 15s window expire mid-victory and ferry the child out
+    // to the parent dashboard instead of back to the lobby.
+    onShown?.call();
     await MilestoneVictoryScreen.show(
       context,
       kind: MilestoneKind.learningPath,
@@ -259,8 +300,13 @@ class GameEndChoiceDialog {
   /// moments and leave an hour where a game pays but the cap disagrees.
   static Future<void> _awardStars(
     BuildContext context,
-    String currentGameId,
-  ) async {
+    String currentGameId, {
+
+    /// Fired the moment a star surface is actually on screen, so the
+    /// completion watchdog stands down instead of firing out from under a
+    /// celebration the child is still watching.
+    void Function()? onShown,
+  }) async {
     final childId = context.read<ChildProvider>().profile?.id;
     if (childId == null) return;
 
@@ -274,12 +320,14 @@ class GameEndChoiceDialog {
 
     switch (award.outcome) {
       case StarAwardOutcome.earned:
+        onShown?.call();
         await StarEarnedOverlay.show(context, granted: award.granted);
 
       case StarAwardOutcome.alreadyEarnedToday:
         // Names the game, then points somewhere. A child who has just
         // finished something has done the right thing and should hear so —
         // what changed is only where the remaining stars are (AUM-286).
+        onShown?.call();
         await StarEarnedOverlay.showNothingEarned(
           context,
           headline:
@@ -291,6 +339,7 @@ class GameEndChoiceDialog {
       case StarAwardOutcome.dailyCapReached:
         // Word for word what the shop says for this state, so a child meets
         // one sentence for "today is complete" and not two competing ones.
+        onShown?.call();
         await StarEarnedOverlay.showNothingEarned(
           context,
           headline: "You've got all of today's stars!",

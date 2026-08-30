@@ -268,6 +268,56 @@ void main() {
   });
 
   testWidgets(
+    'the path victory stands the completion watchdog down and lands on the '
+    'lobby',
+    (tester) async {
+      // AUM-317 regression: the celebration is a fifteen-second surface, and
+      // `onShown` used to be called only once it had finished. That let the
+      // watchdog's own 15s window expire mid-victory and ferry the child out
+      // to the parent dashboard instead of back to the child lobby.
+      var shown = 0;
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _wrap(
+          _LobbyWithGame(onShown: () => shown++),
+          prediction: _completedPathPrediction,
+          progressProvider: _TestProgressProvider(),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('finish'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      // The celebration is on screen — and the watchdog has already been told,
+      // so it cannot fire out from under it.
+      expect(
+        find.text('You finished every activity on your path!'),
+        findsOneWidget,
+      );
+      expect(
+        shown,
+        greaterThan(0),
+        reason: 'the watchdog must stand down before the long celebration, '
+            'not after it',
+      );
+
+      // Continuing takes the child back to the child lobby underneath — never
+      // onward to a parent surface.
+      await tester.pump(const Duration(seconds: 16));
+      await tester.tap(find.byIcon(Icons.arrow_forward_rounded),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(find.text('play'), findsOneWidget, reason: 'back at the lobby');
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
     'finishing the last path game stamps the My Path history row and '
     'shows the victory',
     (tester) async {
@@ -308,9 +358,11 @@ void main() {
       expect(stamped.completedAt, isNotNull);
 
       // Dismiss the celebration so its hold timers are cancelled before the
-      // test tears the tree down. The safety valve reveals the continue
-      // control by eight seconds regardless of the staged intro state.
-      await tester.pump(const Duration(seconds: 9));
+      // test tears the tree down. The celebration is now a playable stage held
+      // for twelve seconds (a child who pops every reward leaves sooner), with
+      // the safety valve revealing the continue control by fifteen regardless
+      // of the staged intro state.
+      await tester.pump(const Duration(seconds: 16));
       await tester.tap(find.byIcon(Icons.arrow_forward_rounded),
           warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -322,7 +374,11 @@ void main() {
 /// A stand-in for the child-mode stack: a lobby route with a game pushed
 /// on top, which is where [GameEndChoiceDialog.show] is called from.
 class _LobbyWithGame extends StatelessWidget {
-  const _LobbyWithGame();
+  const _LobbyWithGame({this.onShown});
+
+  /// Forwarded to [GameEndChoiceDialog.show] — this is what a real game screen
+  /// wires its completion watchdog to.
+  final void Function()? onShown;
 
   @override
   Widget build(BuildContext context) {
@@ -340,6 +396,7 @@ class _LobbyWithGame extends StatelessWidget {
                                 () => GameEndChoiceDialog.show(
                                   gameContext,
                                   currentGameId: 'match_it',
+                                  onShown: onShown,
                                 ),
                             child: const Text('finish'),
                           ),

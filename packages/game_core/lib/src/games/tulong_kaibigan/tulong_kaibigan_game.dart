@@ -142,13 +142,48 @@ class TulongKaibiganGame extends FlameGame
       (profile.unlimitedHints ||
           _hintsThisRound < (profile.hintsPerRound ?? 0));
   TulongRequest get _activeRequest => _requests[_requestIndex];
+
+  /// The largest a held card is allowed to stay while it is dragged.
+  ///
+  /// A card held at half size is hard for a four-year-old to read, so the card
+  /// keeps as much of its resting size as the layout allows.
+  static const double maxDraggedCardScale = 0.65;
+
+  /// The smallest a held card is shrunk to when the buddy is narrow.
+  ///
+  /// This is the value the game shipped with, so the tightest canvas is no
+  /// worse than before while every roomier one gets a bigger card.
+  static const double minDraggedCardScale = 0.5;
+
   /// The scale a held card shrinks to, so the buddy the child is aiming at
   /// stays visible instead of being covered by the lifted card.
   ///
-  /// Sized so a held card is still narrower than the buddy box on every
-  /// supported canvas (two buddies sharing the character column is the
-  /// narrowest case, and the shortest landscape phone the tightest).
-  static const double draggedCardScale = 0.5;
+  /// Kept under the buddy's drawn width — two buddies sharing the character
+  /// column is the narrowest case, and the shortest landscape phone the
+  /// tightest — and as close to [maxDraggedCardScale] as that allows.
+  @visibleForTesting
+  static double draggedCardScaleFor({
+    required double cardSide,
+    required double buddyWidth,
+  }) {
+    if (cardSide <= 0) return maxDraggedCardScale;
+    // Leave a sliver of buddy showing on either side, so "narrower than the
+    // character" is visible rather than a tie.
+    final fits = buddyWidth * 0.92 / cardSide;
+    return fits.clamp(minDraggedCardScale, maxDraggedCardScale);
+  }
+
+  /// [draggedCardScaleFor] applied to the buddies and cards actually on screen.
+  double get _draggedCardScale {
+    if (_buddies.isEmpty || _items.isEmpty) return minDraggedCardScale;
+    var narrowest = double.infinity;
+    // The box width, not the drawn body: [buddyBoxFor] already gives the box
+    // the sprite's own proportions, and the box is known before the art loads.
+    for (final buddy in _buddies) narrowest = math.min(narrowest, buddy.size.x);
+    var widest = 0.0;
+    for (final item in _items) widest = math.max(widest, item.size.x);
+    return draggedCardScaleFor(cardSide: widest, buddyWidth: narrowest);
+  }
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -353,6 +388,10 @@ class TulongKaibiganGame extends FlameGame
       // snapping it back mid-gesture would read as it escaping the child's grip.
       if (item != _draggingItem) item.position = item.homePosition.clone();
     }
+    // The buddy box and the card slots both come from the canvas, so the scale
+    // that keeps one narrower than the other has to be recomputed on a resize.
+    final scale = _draggedCardScale;
+    for (final item in _items) item.dragScale = scale;
   }
 
   void _setupRound() {
@@ -407,13 +446,15 @@ class TulongKaibiganGame extends FlameGame
         onPickedUp: _onPickedUp,
         onDropped: _onDropped,
         language: strings.language,
-        dragScale: draggedCardScale,
+        dragScale: minDraggedCardScale,
         position: Vector2(slot.left, slot.top),
         size: Vector2(math.max(slot.width, 1), math.max(slot.height, 1)),
       );
       _items.add(item);
       add(item);
     }
+    final scale = _draggedCardScale;
+    for (final item in _items) item.dragScale = scale;
 
     _requestShownAt = DateTime.now();
     analyticsShowStimulus();
@@ -453,11 +494,17 @@ class TulongKaibiganGame extends FlameGame
     onPlayDropSfx?.call();
     BuddyComponent? target;
     var targetIndex = -1;
+    // The accept zones are deliberately forgiving, so on a tier-3 round the two
+    // buddies' zones overlap between them. Award the drop to the buddy it
+    // landed nearest rather than to the first one in the list, or every
+    // ambiguous drop would be credited to the buddy on the left.
+    var best = double.infinity;
     for (var i = 0; i < _buddies.length; i++) {
-      if (_buddies[i].accepts(point)) {
+      final distance = _buddies[i].distanceTo(point);
+      if (distance != null && distance < best) {
+        best = distance;
         target = _buddies[i];
         targetIndex = i;
-        break;
       }
     }
     final bubbleVisible = _buddies[_activeRequest.buddyIndex].bubbleVisible;
@@ -535,6 +582,7 @@ class TulongKaibiganGame extends FlameGame
       _startIdleTimer();
     });
   }
+
   void _advanceRequest() {
     if (!isLifecycleActive) return;
     _requestIndex++;

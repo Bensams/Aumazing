@@ -101,10 +101,12 @@ class ChildBootstrapService {
     for (final remote in remoteChildren) {
       if (remote['deleted_at'] != null) continue;
       if (locallyDeleted.contains(remote['id'])) continue;
-      await _localDbService.upsertChild(
+      // Newer-wins, not blind replace: this runs on every online launch, so
+      // writing the cloud copy over the local one unconditionally destroyed
+      // any change made since the last successful push (AUM-328).
+      await _localDbService.hydrateChild(
         ChildProfile.fromSupabase(remote),
         ownerId: userId,
-        markPending: false,
       );
     }
   }

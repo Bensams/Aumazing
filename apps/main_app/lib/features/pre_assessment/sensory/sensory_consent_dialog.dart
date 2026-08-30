@@ -121,7 +121,13 @@ class SensoryConsentDialog extends StatelessWidget {
                       onPressed: () => Navigator.of(context).pop(
                         SensoryConsentResult.declined,
                       ),
-                      child: Text(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                          horizontal: 8,
+                        ),
+                      ),
+                      child: _ButtonLabel(
                         'Use My Settings',
                         style: AppTextStyles.buttonMedium.copyWith(
                           color: AppColors.mutedForeground,
@@ -135,7 +141,13 @@ class SensoryConsentDialog extends StatelessWidget {
                       onPressed: () => Navigator.of(context).pop(
                         SensoryConsentResult.accepted,
                       ),
-                      child: const Text('Allow Testing'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                          horizontal: 12,
+                        ),
+                      ),
+                      child: const _ButtonLabel('Allow Testing'),
                     ),
                   ),
                 ],
@@ -143,6 +155,35 @@ class SensoryConsentDialog extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A button label that stays on one centred line.
+///
+/// The dialog puts both buttons in equal-width [Expanded] slots, so on a
+/// narrow phone the label used to wrap — and, with no space left to break
+/// at, split mid-word ("Testin / g"). Keeping it to a single line and
+/// scaling it down only when it genuinely does not fit avoids that in
+/// portrait, landscape and on tablets alike.
+class _ButtonLabel extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _ButtonLabel(this.text, {this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: style,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        softWrap: false,
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/stars_provider.dart';
+import 'package:aumazing/widgets/mascot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -82,6 +83,24 @@ void main() {
 
     expect(find.byType(ChildModeLobbyScreen), findsNothing);
     expect(find.text('Parent screen'), findsOneWidget);
+  });
+
+  testWidgets('the corner mascot is the chosen character, in the costume '
+      'the child equipped', (tester) async {
+    // The lobby is the screen a costume is bought for: a purchase that did
+    // not show up here would read to the child as not having worked, and a
+    // parent who picked Reiz must not be met by BPS.
+    await _pumpLobby(
+      tester,
+      profile: _profile.copyWith(characterId: 'reiz', equippedCostume: 'teddy'),
+    );
+
+    final mascot = tester.widget<Mascot>(find.byType(Mascot));
+    expect(mascot.character, MascotCharacter.reiz);
+    expect(mascot.costumeId, 'teddy');
+    expect(mascot.semanticLabel, contains('Reiz'));
+
+    await _disposeLobby(tester);
   });
 
   // The form factor drives the step-2 layout; pin it per test rather than
@@ -343,9 +362,14 @@ Finder _card(String label) =>
 Future<void> _pumpLobby(
   WidgetTester tester, {
   Set<String> starsEarnedToday = const {},
+  ChildProfile? profile,
 }) async {
   await tester.pumpWidget(
-    _wrap(const ChildModeLobbyScreen(), starsEarnedToday: starsEarnedToday),
+    _wrap(
+      const ChildModeLobbyScreen(),
+      starsEarnedToday: starsEarnedToday,
+      profile: profile,
+    ),
   );
   await tester.pump();
   // Short of the 900ms entry-guidance delay, which speaks through the audio
@@ -364,11 +388,15 @@ Future<void> _disposeLobby(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 5));
 }
 
-Widget _wrap(Widget screen, {Set<String> starsEarnedToday = const {}}) {
+Widget _wrap(
+  Widget screen, {
+  Set<String> starsEarnedToday = const {},
+  ChildProfile? profile,
+}) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ChildProvider>(
-        create: (_) => _TestChildProvider(),
+        create: (_) => _TestChildProvider(profile),
       ),
       ChangeNotifierProvider<AssessmentProvider>(
         create: (_) => _TestAssessmentProvider(),
@@ -399,11 +427,13 @@ class _TestStarsProvider extends StarsProvider {
 }
 
 class _TestChildProvider extends ChildProvider {
-  _TestChildProvider()
+  _TestChildProvider([this._override])
     : super(authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()));
 
+  final ChildProfile? _override;
+
   @override
-  ChildProfile? get profile => _profile;
+  ChildProfile? get profile => _override ?? _profile;
 
   @override
   Future<void> loadProfile() async {}

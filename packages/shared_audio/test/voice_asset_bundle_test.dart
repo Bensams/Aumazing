@@ -18,6 +18,7 @@ void main() {
     VoiceOverCue.itemGatas,
     VoiceOverCue.colorGold,
     VoiceOverCue.shapeHeart,
+    VoiceOverCue.shapeSquare,
     // The Sari-Sari toy shelf: these four are the whole `toys` category, so a
     // missing clip is silence on every correct answer in that bin.
     VoiceOverCue.itemBola,
@@ -42,6 +43,11 @@ void main() {
     // tells the child the task is to greet *back* rather than to pick a
     // picture. A pack missing it does not degrade — it changes the game.
     VoiceOverCue.sayHelloBack,
+    // The four greeting names Kumusta! speaks as the buddy offers each bid.
+    // fistBump is the sample because it is the one whose absence is hardest to
+    // notice: it previously borrowed "Now you try", so a missing clip does not
+    // fall silent in review, it simply sounds like the old behaviour.
+    VoiceOverCue.greetingFistBump,
     // Tulong, Kaibigan! composes its request from `canIHaveThe` plus an item
     // name, and thanks the child with `thankYouFriend`. The composed half is
     // why both are sampled here: a missing `canIHaveThe` does not fall silent,

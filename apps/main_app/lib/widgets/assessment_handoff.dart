@@ -18,7 +18,21 @@ typedef HandoffVoiceOverFactory = VoiceOverService Function(
     BuildContext context);
 
 /// How long the trophy celebration holds before the hand-off panel replaces it.
-const Duration kHandoffCelebrationDuration = Duration(milliseconds: 4500);
+///
+/// The scene is not just a flourish — it is a playable stage, with a trophy and
+/// stars the child pops — so it is held long enough to actually be played with.
+/// A child who clears every one of them before this is up moves on early (see
+/// [kHandoffAllPoppedSettle]); everyone else gets the full fifteen seconds.
+const Duration kHandoffCelebrationDuration = Duration(seconds: 15);
+
+/// The floor under the early exit. Even a child who clears the field in a
+/// single fast drag stays long enough for the spoken milestone line — dispatched
+/// 650 ms in — to be heard rather than cut off by the panel swap.
+const Duration kHandoffMinCelebration = Duration(seconds: 3);
+
+/// The beat left after the last reward is popped, so its burst finishes on the
+/// celebration rather than being wiped mid-sparkle by the cross-fade.
+const Duration kHandoffAllPoppedSettle = Duration(milliseconds: 900);
 
 /// How long after the hand-off panel appears the narrator speaks.
 ///
@@ -35,6 +49,13 @@ const Duration kHandoffVoiceDelay = Duration(milliseconds: 700);
 /// happens *after* the parent verifies — that is [onParentVerified]. Both
 /// halves of the screen are child-facing, so it stays landscape throughout;
 /// the result screens restore the parent orientation themselves on entry.
+///
+/// The celebration is the child's reward for finishing, and it is playable —
+/// they pop the trophy and the stars on it — so it is not snatched away after
+/// a couple of seconds. It holds for [celebrationDuration] (fifteen seconds),
+/// and ends early only when the child has popped every reward and so has
+/// nothing left to do there. Either way the hand-off panel and its spoken
+/// prompt come next.
 class AssessmentHandoffScreen extends StatefulWidget {
   const AssessmentHandoffScreen({
     super.key,
@@ -43,6 +64,8 @@ class AssessmentHandoffScreen extends StatefulWidget {
     this.subtitle = 'You finished all the activities!',
     this.milestoneVoiceCue,
     this.celebrationDuration = kHandoffCelebrationDuration,
+    this.minCelebrationDuration = kHandoffMinCelebration,
+    this.allPoppedSettle = kHandoffAllPoppedSettle,
     this.voiceDelay = kHandoffVoiceDelay,
     this.voiceOverFactory,
   });
@@ -65,8 +88,15 @@ class AssessmentHandoffScreen extends StatefulWidget {
   /// line, so the two never overlap.
   final VoiceOverCue? milestoneVoiceCue;
 
-  /// How long the celebration phase holds.
+  /// How long the celebration phase holds when the child does not clear the
+  /// stars themselves.
   final Duration celebrationDuration;
+
+  /// The earliest the celebration may end, even with every star popped.
+  final Duration minCelebrationDuration;
+
+  /// How long the cleared stage is held after the final pop.
+  final Duration allPoppedSettle;
 
   /// Delay between the hand-off panel appearing and the narrator speaking.
   final Duration voiceDelay;
@@ -91,6 +121,14 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
   Timer? _celebrationTimer;
   Timer? _voiceTimer;
   Timer? _milestoneVoiceTimer;
+  Timer? _minHoldTimer;
+  Timer? _allPoppedTimer;
+
+  /// Whether the child has cleared every reward, and whether the minimum hold
+  /// has passed. The early exit needs both: the first says the child is
+  /// finished playing, the second protects the spoken milestone line.
+  bool _allRewardsPopped = false;
+  bool _minHoldElapsed = false;
 
   /// Set the moment the milestone line is dispatched, so a rebuild never speaks
   /// it twice.
@@ -132,11 +170,41 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
     }
 
     // Hand over once the celebration has had its moment.
-    _celebrationTimer = Timer(widget.celebrationDuration, () {
+    _celebrationTimer = Timer(widget.celebrationDuration, _endCelebration);
+
+    // The early exit only opens after the minimum hold.
+    _minHoldTimer = Timer(widget.minCelebrationDuration, () {
       if (!mounted) return;
-      setState(() => _showCelebration = false);
-      _speakHandOffPrompt();
+      _minHoldElapsed = true;
+      _maybeSettleAfterAllPopped();
     });
+  }
+
+  /// The child popped the last reward — trophy and every star are gone, so
+  /// there is nothing left on the stage to play with. Let them move on rather
+  /// than making them wait out the full hold.
+  void _onAllRewardsPopped() {
+    if (_allRewardsPopped) return;
+    _allRewardsPopped = true;
+    _maybeSettleAfterAllPopped();
+  }
+
+  /// Starts the post-clear settle once both the field is empty and the minimum
+  /// hold has passed. Idempotent: a second call never schedules a second end.
+  void _maybeSettleAfterAllPopped() {
+    if (!_allRewardsPopped || !_minHoldElapsed) return;
+    if (_allPoppedTimer != null || !_showCelebration) return;
+    _allPoppedTimer = Timer(widget.allPoppedSettle, _endCelebration);
+  }
+
+  /// Swaps the celebration for the hand-off panel and speaks the prompt. Safe
+  /// to call twice — the full hold and the early exit can race.
+  void _endCelebration() {
+    if (!mounted || !_showCelebration) return;
+    _celebrationTimer?.cancel();
+    _allPoppedTimer?.cancel();
+    setState(() => _showCelebration = false);
+    _speakHandOffPrompt();
   }
 
   /// Builds the narrator from the child's own language, pack and prompt speed.
@@ -167,6 +235,8 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
   @override
   void dispose() {
     _celebrationTimer?.cancel();
+    _minHoldTimer?.cancel();
+    _allPoppedTimer?.cancel();
     _voiceTimer?.cancel();
     _milestoneVoiceTimer?.cancel();
     _voiceOver.dispose();
@@ -216,6 +286,7 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
       child: MilestoneVictoryScene(
         title: widget.title,
         subtitle: widget.subtitle,
+        onAllRewardsPopped: _onAllRewardsPopped,
       ),
     );
   }

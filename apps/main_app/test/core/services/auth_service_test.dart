@@ -1,5 +1,4 @@
 import 'package:aumazing/core/services/auth_service.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -99,37 +98,6 @@ void main() {
     ));
   });
 
-  test('signInWithFacebook uses Supabase native token sign-in', () async {
-    final facebookAuth = _FakeFacebookAuthClient(
-      loginResult: LoginResult(
-        status: LoginStatus.success,
-        accessToken: ClassicToken(
-          userId: 'fb-user',
-          tokenString: 'fb-access-token',
-          expires: DateTime.now().add(const Duration(hours: 1)),
-          applicationId: 'fb-app',
-          declinedPermissions: const [],
-          grantedPermissions: const ['email', 'public_profile'],
-        ),
-      ),
-      userData: const {'name': 'Benedict'},
-    );
-    final supabaseAuth = _FakeSupabaseAuthClient();
-    final authService = AuthService(
-      facebookAuth: facebookAuth,
-      supabaseAuth: supabaseAuth,
-    );
-
-    final response = await authService.signInWithFacebook();
-
-    expect(response, same(supabaseAuth.response));
-    expect(supabaseAuth.signInWithIdTokenCalls, hasLength(1));
-    expect(supabaseAuth.signInWithIdTokenCalls.single, (
-      provider: OAuthProvider.facebook,
-      idToken: 'fb-access-token',
-      accessToken: null,
-    ));
-  });
   test('email binding verification uses email-change OTP semantics', () async {
     final supabaseAuth = _FakeSupabaseAuthClient();
     final authService = AuthService(supabaseAuth: supabaseAuth);
@@ -174,27 +142,6 @@ class _FakeGoogleAuthClient implements GoogleAuthClient {
   Future<void> initialize({String? serverClientId, String? clientId}) async {}
 }
 
-class _FakeFacebookAuthClient implements FacebookAuthClient {
-  _FakeFacebookAuthClient({required this.loginResult, required this.userData});
-
-  final LoginResult loginResult;
-  final Map<String, dynamic> userData;
-
-  @override
-  Future<Map<String, dynamic>> getUserData({String fields = ''}) async =>
-      userData;
-
-  @override
-  Future<LoginResult> login({
-    List<String> permissions = const ['email', 'public_profile'],
-    LoginBehavior loginBehavior = LoginBehavior.nativeWithFallback,
-    LoginTracking loginTracking = LoginTracking.limited,
-    String? nonce,
-  }) async => loginResult;
-
-  @override
-  Future<void> logOut() async {}
-}
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {
   _FakeSupabaseAuthClient({

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../assessment_result_data.dart';
 import 'assessment_section_card.dart';
+import 'metric_info_icon.dart';
 
 /// Per-game results: adjusted accuracy as a percentage, with the raw correct,
 /// error, and off-target counts as a caption underneath.
@@ -20,12 +21,21 @@ class AssessmentGameResultsCard extends StatelessWidget {
     return AssessmentSectionCard(
       label: AssessmentLabels.gameResults,
       emoji: '🎮',
+      trailing: MetricInfoIcon(
+        title: AssessmentLabels.gameResults,
+        explanations: [
+          (AssessmentLabels.correct, AssessmentLabels.correctTapsInfo),
+          (AssessmentLabels.errors, AssessmentLabels.errorTapsInfo),
+          (AssessmentLabels.offTarget, AssessmentLabels.offTargetTapsInfo),
+        ],
+      ),
       dense: dense,
       children: assessmentWithDividers([
         for (final game in games)
           AssessmentMeterRow(
             label: '${game.emoji} ${game.name}',
-            secondaryLabel: '${game.correctCount} ${AssessmentLabels.correct} · '
+            secondaryLabel:
+                '${game.correctCount} ${AssessmentLabels.correct} · '
                 '${game.errorCount} ${AssessmentLabels.errors} · '
                 '${game.offTargetCount} ${AssessmentLabels.offTarget} · '
                 '${game.totalItems} ${AssessmentLabels.totalItems}',
@@ -33,7 +43,8 @@ class AssessmentGameResultsCard extends StatelessWidget {
             color: AssessmentPalette.performance(
               AssessmentScoring.percent(game.accuracy),
             ),
-            semanticsLabel: '${game.name}, '
+            semanticsLabel:
+                '${game.name}, '
                 '${AssessmentScoring.percent(game.accuracy)} percent, '
                 '${game.correctCount} correct, ${game.errorCount} errors, '
                 '${game.offTargetCount} ${AssessmentLabels.offTarget}, '

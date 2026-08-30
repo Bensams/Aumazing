@@ -19,6 +19,7 @@ import '../../providers/stars_provider.dart';
 import '../stars/star_shop_screen.dart';
 import '../premium/premium_upgrade_screen.dart';
 import 'game_launcher.dart';
+import 'session_origin.dart';
 import 'path_map_view.dart';
 import 'pending_path_launch.dart';
 import 'time_up_dialog.dart';
@@ -808,7 +809,17 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       _autoLaunchFallback = null;
       return;
     }
-    final screen = GameLauncher.screenFor(gameId, difficulty);
+    // A game opened while the path map is on screen IS a path step — the
+    // games row is replaced by the map in that state, so there is no other
+    // way to reach a launch from here. Recorded as `recommended_module` so
+    // the beta report can tell path play apart from free practice.
+    final screen = GameLauncher.screenFor(
+      gameId,
+      difficulty,
+      origin: _viewingPath
+          ? SessionOrigin.recommendedModule
+          : SessionOrigin.practice,
+    );
     if (screen == null) return;
     _speakChoice(VoiceOverCue.letsGo);
     _hideGuide(restartIdle: false); // the game speaks for itself from here
@@ -1104,8 +1115,13 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
     );
   }
 
-  /// BPS keeps the child company from the corner, waving hello on entry and
-  /// whenever the guidance voice speaks.
+  /// The child's own character keeps them company from the corner, waving
+  /// hello on entry and whenever the guidance voice speaks.
+  ///
+  /// Wears whatever costume the child has equipped: this is the screen the
+  /// costume is bought *for*, so a purchase that did not show up here would
+  /// read as not having worked. The profile is watched, not read, so equipping
+  /// from the shop changes the corner without leaving the lobby.
   Widget _buildMascotCorner() {
     return Positioned(
       left: AppSpacing.md,
@@ -1113,14 +1129,19 @@ class _ChildModeLobbyScreenState extends State<ChildModeLobbyScreen>
       child: IgnorePointer(
         child: ListenableBuilder(
           listenable: _mascot,
-          builder:
-              (context, _) => Mascot(
-                height: 92,
-                pose: _mascot.pose,
-                gesture: _mascot.gesture,
-                gestureTrigger: _mascot.tick,
-                semanticLabel: 'BPS the mascot',
-              ),
+          builder: (context, _) {
+            final profile = context.watch<ChildProvider>().profile;
+            return Mascot(
+              character: MascotCharacter.fromId(profile?.characterId),
+              costumeId: profile?.equippedCostume,
+              height: 92,
+              pose: _mascot.pose,
+              gesture: _mascot.gesture,
+              gestureTrigger: _mascot.tick,
+              semanticLabel:
+                  '${profile?.character.displayName ?? 'BPS'} the mascot',
+            );
+          },
         ),
       ),
     );

@@ -52,12 +52,18 @@ class BuddyComponent extends PositionComponent {
     );
   }
 
+  /// The box a dropped card has to land in to count as "handed to this buddy".
+  ///
+  /// It spans the buddy's full drawn width and the lower 80% of the body,
+  /// because a four-year-old aims at the character they can see, not at the
+  /// hands. A zone drawn tighter than the sprite made honest attempts read as
+  /// motor misses; see [accepts] for the tolerance on top of this.
   Rect get handTarget {
     final body = drawnBody;
     return Rect.fromCenter(
-      center: Offset(body.center.dx, body.top + body.height * 0.62),
-      width: body.width * 0.92,
-      height: body.height * 0.66,
+      center: Offset(body.center.dx, body.top + body.height * 0.60),
+      width: body.width,
+      height: body.height * 0.80,
     );
   }
 
@@ -66,12 +72,26 @@ class BuddyComponent extends PositionComponent {
     return position + Vector2(body.center.dx, body.top + body.height * 0.62);
   }
 
-  bool accepts(Vector2 gamePoint) {
-    final local = gamePoint - position;
-    // Twenty percent breathing room turns an imprecise drag into a successful
+  /// Slack added around [handTarget], as a fraction of the component's longer
+  /// side, to forgive the aim of a child still building fine motor control.
+  static const double _tolerance = 0.16;
+
+  bool accepts(Vector2 gamePoint) => distanceTo(gamePoint) != null;
+
+  /// How far [gamePoint] lands from the centre of the accept zone, or null if
+  /// it misses the zone entirely.
+  ///
+  /// Two buddies share the character column on a tier-3 round, and with this
+  /// much tolerance their zones overlap in the gutter between them. The caller
+  /// uses this to give an ambiguous drop to the buddy it landed nearest,
+  /// instead of to whichever buddy happens to be checked first.
+  double? distanceTo(Vector2 gamePoint) {
+    final local = (gamePoint - position).toOffset();
+    // Sixteen percent breathing room turns an imprecise drag into a successful
     // social response instead of mislabelling it as a social error.
-    final inflated = handTarget.inflate(math.max(size.x, size.y) * 0.10);
-    return inflated.contains(local.toOffset());
+    final inflated = handTarget.inflate(math.max(size.x, size.y) * _tolerance);
+    if (!inflated.contains(local)) return null;
+    return (local - handTarget.center).distance;
   }
 
   void showRequest(StoreItemData item) {

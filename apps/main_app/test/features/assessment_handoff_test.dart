@@ -127,6 +127,117 @@ void main() {
     });
   });
 
+  // ── How long the celebration is allowed to last ──────────────────────
+
+  /// The scene is a playable stage, not a two-second flourish: the child pops
+  /// the trophy and the stars on it. So it holds for a full fifteen seconds —
+  /// unless they have already cleared every one of them, in which case there is
+  /// nothing left to stay for.
+  group('the celebration holds long enough to be played with', () {
+    /// Stars still waiting to be popped (a popped one swaps its painter).
+    Finder liveStars() => find.byWidgetPredicate(
+          (widget) =>
+              widget is CustomPaint &&
+              widget.painter.runtimeType.toString() == '_StarPainter',
+        );
+
+    Widget bareHandoff() => host(AssessmentHandoffScreen(
+          onParentVerified: (_) {},
+          voiceOverFactory: (_) => narrator,
+        ));
+
+    /// Waits out the star field's whole entrance: the staggered spawn (the
+    /// scene's 800ms delay plus 19 * 60ms for the 20 high-quality stars) and
+    /// then the rise from below the bottom edge. A star still climbing is
+    /// partly off screen and cannot be reliably tapped.
+    Future<void> settleStarField(WidgetTester tester) async {
+      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(kStarRiseDuration);
+    }
+
+    testWidgets('a child who touches nothing gets the full fifteen seconds',
+        (tester) async {
+      narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(bareHandoff());
+      await tester.pump();
+
+      expect(kHandoffCelebrationDuration, const Duration(seconds: 15));
+
+      // A second short of the hold, the stage is still theirs.
+      await tester.pump(const Duration(seconds: 14));
+      expect(find.byType(MilestoneVictoryScene), findsOneWidget);
+      expect(find.text(kHandoffInstructionText), findsNothing,
+          reason: 'the hand-off must not cut the celebration short');
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text(kHandoffInstructionText), findsOneWidget);
+    });
+
+    testWidgets('clearing every reward ends it early, after the burst settles',
+        (tester) async {
+      narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(bareHandoff());
+      // Let the whole field spawn (800ms + 19 * 60ms for the 20 high-quality
+      // stars) and finish rising in, then pop the trophy and every star.
+      await settleStarField(tester);
+      expect(liveStars(), findsNWidgets(20));
+
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      expect(find.byKey(kMilestoneTrophyKey), findsNothing,
+          reason: 'the popped trophy leaves the stage');
+
+      var guard = 0;
+      while (liveStars().evaluate().isNotEmpty && guard++ < 40) {
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+      expect(liveStars(), findsNothing, reason: 'the child cleared the stage');
+
+      // The stage does not vanish under the child's finger: the last burst
+      // gets its beat before the panel swap.
+      expect(find.text(kHandoffInstructionText), findsNothing);
+      await tester.pump(kHandoffAllPoppedSettle ~/ 2);
+      expect(find.text(kHandoffInstructionText), findsNothing,
+          reason: 'the last burst is still settling');
+
+      await tester.pump(kHandoffAllPoppedSettle);
+      await tester.pumpAndSettle();
+      expect(find.text(kHandoffInstructionText), findsOneWidget,
+          reason: 'nothing left to collect — the child may move on');
+      expect(narrator.played, [VoiceOverCue.giveTheDeviceToYourParent]);
+    });
+
+    testWidgets('popping only some rewards does not end it early',
+        (tester) async {
+      narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(bareHandoff());
+      await settleStarField(tester);
+
+      // The trophy and a handful of stars — but not the whole stage.
+      // Overlapping stars mean a tap can clear more than one, so assert only
+      // that what is left is neither untouched nor empty.
+      await tester.tap(find.byKey(kMilestoneTrophyKey), warnIfMissed: false);
+      await tester.pump();
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(liveStars().first, warnIfMissed: false);
+        await tester.pump();
+      }
+      final remaining = liveStars().evaluate().length;
+      expect(remaining, greaterThan(0));
+      expect(remaining, lessThan(20));
+
+      await tester.pump(const Duration(seconds: 8));
+      expect(find.text(kHandoffInstructionText), findsNothing,
+          reason: 'rewards are still there to pop — the full hold applies');
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.text(kHandoffInstructionText), findsOneWidget);
+    });
+  });
+
   // ── The spoken hand-off ──────────────────────────────────────────────
 
   group('the hand-off instruction is spoken', () {
