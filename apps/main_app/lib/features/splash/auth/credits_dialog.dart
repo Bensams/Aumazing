@@ -93,9 +93,14 @@ class CreditsDialog extends StatelessWidget {
                       // 3. Expert Validators & Practitioners
                       const _SectionTitle('EXPERT VALIDATORS & PRACTITIONERS'),
                       const _ValidatorCard(
-                        name: "Ma'am Lea",
+                        name: 'Mrs. Lea Famor',
                         role: 'SPED Teacher & Educational Evaluator',
                         description: 'Evaluated learning module structure and provided domain validation on game appropriateness.',
+                      ),
+                      const _ValidatorCard(
+                        name: 'Mrs. Merrie Grace Domasin Bordaje',
+                        role: 'Pre-Assessment Games & Focus Development Contributor',
+                        description: 'Contributed the four pre-assessment games and identified focus development areas for children, including communication, social interaction, and play skills.',
                       ),
                       const _ValidatorCard(
                         name: 'Kenneth Ray',
