@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:shared_ui/shared_ui.dart';
@@ -172,11 +174,26 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       }
       if (!mounted) return;
 
-      final paid = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => _CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
-        ),
-      );
+      // webview_flutter has no web implementation, so on the web the checkout
+      // opens in a new browser tab and we poll the backend for activation.
+      // On mobile/desktop it stays in the in-app WebView, which can detect the
+      // success/cancel redirects itself.
+      final bool paid;
+      if (kIsWeb) {
+        await launchUrl(
+          Uri.parse(checkoutUrl),
+          webOnlyWindowName: '_blank',
+        );
+        paid = true;
+      } else {
+        paid = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (_) =>
+                    _CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
+              ),
+            ) ??
+            false;
+      }
       if (!mounted) return;
 
       if (paid == true) {

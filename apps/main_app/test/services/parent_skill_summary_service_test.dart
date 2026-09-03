@@ -1,7 +1,15 @@
+import 'package:aumazing/model/area_level.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/gameplay_session.dart';
 import 'package:aumazing/services/parent_skill_summary_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+AreaLevel _areaLevel(int levelInt) => AreaLevel(
+  level: const ['needs_support', 'emerging', 'strength'][levelInt],
+  levelInt: levelInt,
+  levelName: const ['Needs Support', 'Emerging', 'Strength'][levelInt],
+  confidence: 0.9,
+);
 
 AssessmentResult _result({
   required String gameId,
@@ -60,6 +68,53 @@ GameplaySession _session({
 
 void main() {
   group('ParentSkillSummaryService', () {
+    test('the AI prediction levels override the rubric labels so the snapshot '
+        'matches the summary Developmental Profile', () {
+      final results = [
+        _result(gameId: 'copy_me', score: 8, totalItems: 10, errors: 2),
+        _result(gameId: 'do_what_i_say', score: 6, totalItems: 10, errors: 4),
+        _result(gameId: 'match_it', score: 10, totalItems: 10, errors: 0),
+        _result(gameId: 'my_turn_your_turn', score: 8, totalItems: 10, errors: 2),
+      ];
+      // Rubric labels say a mix (Emerging/Strength/Needs Support/Variable), but
+      // the finalized AI prediction says every area is a Strength.
+      final summary = ParentSkillSummaryService.build(
+        assessmentType: 'pre',
+        results: results,
+        areaLevels: {
+          'communication': _areaLevel(2),
+          'social': _areaLevel(2),
+          'play': _areaLevel(2),
+          'attention': _areaLevel(2),
+        },
+      );
+
+      expect(summary.area('communication')!.levelInt, 2);
+      expect(summary.area('communication')!.levelName, 'Strength');
+      expect(summary.area('social')!.levelInt, 2);
+      expect(summary.area('play')!.levelInt, 2);
+      // Attention keeps its own vocabulary but the prediction's level value.
+      expect(summary.area('attention')!.levelInt, 2);
+      expect(summary.area('attention')!.levelName, 'Sustained');
+    });
+
+    test('falls back to the rubric labels when no prediction is supplied', () {
+      final summary = ParentSkillSummaryService.build(
+        assessmentType: 'pre',
+        results: [
+          _result(
+            gameId: 'copy_me',
+            score: 8,
+            totalItems: 10,
+            errors: 2,
+            communication: 'Needs Support',
+          ),
+        ],
+      );
+      expect(summary.area('communication')!.levelName, 'Needs Support');
+      expect(summary.area('communication')!.levelInt, 0);
+    });
+
     test('builds the four parent areas in the requested order', () {
       final summary = ParentSkillSummaryService.build(
         assessmentType: 'pre',

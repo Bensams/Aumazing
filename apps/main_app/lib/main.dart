@@ -9,6 +9,7 @@ import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/services/db_web_factory.dart';
 import 'core/offline_first_integration.dart';
 import 'dev/developer_tools_overlay.dart';
 import 'features/parent_lock/parent_pin_delegate.dart';
@@ -36,6 +37,11 @@ bool _isTransientNetworkError(Object error) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Install the platform's sqflite factory. No-op on mobile/desktop; on the web
+  // it swaps in the WASM-backed factory so the offline-first local database
+  // works in the browser. Must run before any LocalDbService access below.
+  initPlatformDatabaseFactory();
 
   // Offline-first: transient network errors from background work (token
   // refresh, sync retries) are expected while offline. Log one quiet line
@@ -182,7 +188,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 // builder returns the navigator untouched, so nothing extra
                 // enters the tree. See DeveloperToolsConfig.
                 navigatorKey: DeveloperToolsOverlay.navigatorKey,
-                builder: DeveloperToolsOverlay.wrap,
+                // RotateToPlayGate is a pure pass-through on native (Android/iOS
+                // are unaffected); on the web it prompts to rotate when a
+                // landscape-only screen is shown in portrait.
+                builder: (context, child) => DeveloperToolsOverlay.wrap(
+                  context,
+                  RotateToPlayGate(child: child),
+                ),
                 home: const AumazingSplashScreen(),
               ),
             ),

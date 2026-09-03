@@ -673,6 +673,23 @@ class AuthService {
   }
 
   Future<AuthResponse> signInWithGoogle() async {
+    // Web: the google_sign_in package can't run interactive auth in the
+    // browser, so use Supabase's OAuth redirect instead. The page navigates to
+    // Google and back to this URL; supabase_flutter restores the session from
+    // the return URL and the auth-state listener routes the app to home. This
+    // branch never runs on Android/iOS, so the native flow below is unchanged.
+    if (kIsWeb) {
+      debugPrint('[GoogleAuth] Starting web OAuth redirect flow...');
+      final redirect = '${Uri.base.origin}${Uri.base.path}';
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: redirect,
+      );
+      // The browser is redirecting; nothing below runs. Session arrives on the
+      // return load via detectSessionInUrl + onAuthStateChange.
+      return AuthResponse();
+    }
+
     debugPrint('[GoogleAuth] Starting Google Sign-In flow...');
     final tokens = await _getGoogleAuthTokens();
 

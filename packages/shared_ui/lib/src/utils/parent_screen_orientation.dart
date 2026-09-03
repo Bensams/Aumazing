@@ -1,7 +1,14 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'device_form_factor.dart';
+
+/// Web-only signal: true while a landscape-designed (child/game) screen is
+/// active, so the web rotate-to-play overlay ([RotateToPlayGate]) knows when to
+/// prompt. It is only ever written on the web and never read on native, so the
+/// Android/iOS builds are entirely unaffected.
+final ValueNotifier<bool> childWantsLandscape = ValueNotifier<bool>(false);
 
 /// The orientations a child-facing screen allows: landscape, both ways.
 const List<DeviceOrientation> kChildOrientations = [
@@ -26,6 +33,7 @@ List<DeviceOrientation> parentOrientationsFor(double smallestWidthDp) =>
 /// Parent-facing screens use [lockParentAdaptive] instead.
 void lockParentLandscape() {
   SystemChrome.setPreferredOrientations(kChildOrientations);
+  if (kIsWeb) childWantsLandscape.value = true;
 }
 
 /// Call when leaving a child-facing screen — restores the parent policy.
@@ -41,6 +49,7 @@ void lockParentAdaptive() {
   SystemChrome.setPreferredOrientations(
     parentOrientationsFor(deviceSmallestWidthDp),
   );
+  if (kIsWeb) childWantsLandscape.value = false;
 }
 
 /// True when the parent UI is running in its portrait phone layout. Screens
