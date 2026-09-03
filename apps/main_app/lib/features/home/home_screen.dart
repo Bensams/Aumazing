@@ -1650,6 +1650,10 @@ class _HomeScreenState extends State<HomeScreen> {
           assessmentType: isPost ? 'post' : 'pre',
           results: results,
           sessions: progressProv.recentSessions,
+          // Use the finalized AI prediction so this snapshot's levels match the
+          // Assessment Summary's Developmental Profile (same source). Falls back
+          // to the rubric labels on the results when no prediction is stored.
+          areaLevels: assessProv.aiPrediction?.areaLevels,
         );
 
         return AppCard(
