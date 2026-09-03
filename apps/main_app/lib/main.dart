@@ -188,7 +188,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 // builder returns the navigator untouched, so nothing extra
                 // enters the tree. See DeveloperToolsConfig.
                 navigatorKey: DeveloperToolsOverlay.navigatorKey,
-                builder: DeveloperToolsOverlay.wrap,
+                // RotateToPlayGate is a pure pass-through on native (Android/iOS
+                // are unaffected); on the web it prompts to rotate when a
+                // landscape-only screen is shown in portrait.
+                builder: (context, child) => DeveloperToolsOverlay.wrap(
+                  context,
+                  RotateToPlayGate(child: child),
+                ),
                 home: const AumazingSplashScreen(),
               ),
             ),

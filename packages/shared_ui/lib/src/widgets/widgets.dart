@@ -40,3 +40,4 @@ export 'three_star_sparkle.dart';
 export 'ui_tap_sfx_provider.dart';
 export 'reward_sfx_provider.dart';
 export 'rewards/rewards.dart';
+export 'rotate_to_play_gate.dart';
