@@ -1,3 +1,4 @@
+import '../model/area_level.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
 
@@ -98,10 +99,18 @@ abstract final class ParentSkillSummaryService {
   static const _socialGame = 'my_turn_your_turn';
 
   /// Builds the four areas in the parent-requested display order.
+  ///
+  /// [areaLevels] is the finalized per-area interpretation from the run's AI
+  /// prediction (the same source the Assessment Summary's Developmental Profile
+  /// uses). When provided, it decides each area's level so this snapshot and the
+  /// summary always agree; the rubric labels on [results] are only used as the
+  /// fallback when no prediction is available. The supporting percentages/detail
+  /// still come from the activity data either way.
   static ParentSkillRunSummary build({
     required String assessmentType,
     required List<AssessmentResult> results,
     Iterable<GameplaySession> sessions = const [],
+    Map<String, AreaLevel>? areaLevels,
   }) {
     final runId = _latestRunId(results);
     final runResults =
@@ -171,6 +180,7 @@ abstract final class ParentSkillSummaryService {
             runResults,
             (result) => result.communicationLabel,
           ),
+          aiLevel: areaLevels?['communication'],
           metricLabel: 'activity accuracy',
           metric: _weightedAdjustedAccuracy(communicationResults),
           detail: 'Copy Me and Do What I Say activities',
@@ -182,6 +192,7 @@ abstract final class ParentSkillSummaryService {
             runResults,
             (result) => result.playSkillsLabel,
           ),
+          aiLevel: areaLevels?['play'],
           metricLabel: 'activity accuracy',
           metric: _weightedAdjustedAccuracy(playResults),
           detail: 'Match It and Copy Me activities',
@@ -193,6 +204,7 @@ abstract final class ParentSkillSummaryService {
             runResults,
             (result) => result.socialInteractionLabel,
           ),
+          aiLevel: areaLevels?['social'],
           metricLabel:
               turnTaking == null
                   ? 'activity accuracy'
@@ -210,6 +222,7 @@ abstract final class ParentSkillSummaryService {
             runResults,
             (result) => result.behaviorAttentionLabel,
           ),
+          aiLevel: areaLevels?['attention'],
           metricLabel: 'tasks completed',
           metric: completion,
           detail:
@@ -246,17 +259,34 @@ abstract final class ParentSkillSummaryService {
     required String metricLabel,
     required double? metric,
     String? detail,
+    AreaLevel? aiLevel,
   }) {
-    final level = _level(rawLevel, attention: key == 'attention');
+    final attention = key == 'attention';
+    // The finalized AI prediction (when present) decides the level, so this
+    // snapshot matches the summary's Developmental Profile. The rubric label is
+    // only the fallback. The level *value* comes from the prediction; the level
+    // *name* stays in this snapshot's vocabulary (e.g. Sustained/Variable for
+    // attention) so wording is consistent within the card.
+    final (String levelName, int? levelInt) = aiLevel != null
+        ? (_nameForLevel(aiLevel.levelInt, attention: attention), aiLevel.levelInt)
+        : _level(rawLevel, attention: attention);
     return ParentSkillAreaSummary(
       key: key,
       label: label,
-      levelName: level.$1,
-      levelInt: level.$2,
+      levelName: levelName,
+      levelInt: levelInt,
       metricLabel: metricLabel,
       metricPercent: metric == null ? null : (metric * 100).round(),
       detail: detail,
     );
+  }
+
+  /// The snapshot's display name for a 0–2 level ordinal.
+  static String _nameForLevel(int levelInt, {required bool attention}) {
+    final i = levelInt.clamp(0, 2);
+    return attention
+        ? const ['Needs Support', 'Variable', 'Sustained'][i]
+        : const ['Needs Support', 'Emerging', 'Strength'][i];
   }
 
   static (String, int?) _level(String? raw, {required bool attention}) {
