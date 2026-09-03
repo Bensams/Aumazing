@@ -31,6 +31,10 @@
 
   <title>aumazing</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- In-browser AI: onnxruntime-web bridge (see web/ort_bridge.mjs). Runs the
+       on-device assessment models in the browser, no server required. -->
+  <script type="module" src="ort_bridge.mjs"></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

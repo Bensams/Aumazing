@@ -17,7 +17,8 @@ void main() {
     expect(find.text('Benedict Paul S. Samson'), findsOneWidget);
     expect(find.text('Ruel Jr. A. Mendio'), findsOneWidget);
     expect(find.text('Alexandra Mendoza'), findsOneWidget);
-    expect(find.text("Ma'am Lea"), findsOneWidget);
+    expect(find.text('Mrs. Lea Famor'), findsOneWidget);
+    expect(find.text('Mrs. Merrie Grace Domasin Bordaje'), findsOneWidget);
     expect(find.text('Kenneth Ray'), findsOneWidget);
   });
 
