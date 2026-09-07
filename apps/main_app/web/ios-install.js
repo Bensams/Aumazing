@@ -7,6 +7,7 @@
   const guide = document.getElementById('ios-install-guide');
   const guideOpen = document.getElementById('ios-install-guide-open');
   const guideClose = document.getElementById('ios-install-guide-close');
+  const guideImage = guide && guide.querySelector('[data-ios-install-guide-src]');
 
   const userAgent = navigator.userAgent;
   // iPadOS can request desktop sites using a Mac user agent.
@@ -54,6 +55,9 @@
   const openGuide = () => {
     if (!guide || banner.hidden) return;
     guideOpener = guideOpen;
+    if (guideImage && !guideImage.getAttribute('src')) {
+      guideImage.setAttribute('src', guideImage.getAttribute('data-ios-install-guide-src'));
+    }
     if (!guideIsOpen()) {
       if (typeof guide.showModal === 'function') {
         try {
