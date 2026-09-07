@@ -49,9 +49,10 @@ try {
     }
     Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $appRoot 'assets/icon/app_icon_full.png') -Force
 
-    # With the existing 16% inset, 62% artwork occupies 45.5dp of the 108dp
-    # adaptive layer. Even its corners fit inside Android's 66dp safe circle.
-    Write-Icon 'assets/icon/app_icon_foreground.png' $sourceImage.Width 0.62
+    # The adaptive XML no longer insets the foreground, so this scale is the only
+    # padding. 68% artwork occupies 73.4dp of the 108dp adaptive layer, which
+    # fills the ~72dp launcher mask instead of floating inside it.
+    Write-Icon 'assets/icon/app_icon_foreground.png' $sourceImage.Width 0.68
     $densities = @(
         @{ Name = 'mdpi'; Launcher = 48; Foreground = 108 },
         @{ Name = 'hdpi'; Launcher = 72; Foreground = 162 },
@@ -61,7 +62,7 @@ try {
     )
     foreach ($density in $densities) {
         Write-Icon "android/app/src/main/res/mipmap-$($density.Name)/ic_launcher.png" $density.Launcher
-        Write-Icon "android/app/src/main/res/drawable-$($density.Name)/ic_launcher_foreground.png" $density.Foreground 0.62
+        Write-Icon "android/app/src/main/res/drawable-$($density.Name)/ic_launcher_foreground.png" $density.Foreground 0.68
     }
 
     foreach ($size in @(192, 512)) {

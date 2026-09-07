@@ -87,7 +87,7 @@ flutter_launcher_icons:
   # Keep this inset aligned with scripts/update-app-icons.ps1.
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/icon/app_icon_foreground.png
-  adaptive_icon_foreground_inset: 16
+  adaptive_icon_foreground_inset: 0
   ios: true
   remove_alpha_ios: true
   windows:
