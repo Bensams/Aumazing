@@ -45,11 +45,40 @@
     <div class="ios-install-copy">
       <h2 id="ios-install-title">Add Aumazing to your Home Screen</h2>
       <p><span id="ios-install-safari" hidden>Open this page in <strong>Safari</strong>. </span>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong> and <strong>Add</strong>. Keep <strong>Open as Web App</strong> on if shown.</p>
+      <button id="ios-install-guide-open" class="ios-install-guide-open" type="button" aria-haspopup="dialog" aria-controls="ios-install-guide">Show step-by-step guide</button>
     </div>
     <button id="ios-install-dismiss" type="button" aria-label="Dismiss install instructions" title="Dismiss install instructions">
       <img src="icons/dismiss.svg" width="20" height="20" alt="">
     </button>
   </aside>
+  <dialog id="ios-install-guide" class="ios-install-guide" aria-labelledby="ios-install-guide-title" aria-describedby="ios-install-guide-intro">
+    <div class="ios-install-guide-shell">
+      <header class="ios-install-guide-header">
+        <div>
+          <p class="ios-install-guide-eyebrow">iPhone and iPad</p>
+          <h2 id="ios-install-guide-title">Install Aumazing on iPhone</h2>
+        </div>
+        <button id="ios-install-guide-close" class="ios-install-guide-close" type="button" aria-label="Close installation guide" title="Close installation guide">
+          <img src="icons/dismiss.svg" width="20" height="20" alt="">
+        </button>
+      </header>
+      <div class="ios-install-guide-body">
+        <p id="ios-install-guide-intro" class="ios-install-guide-intro">First, open the Aumazing link in <strong>Safari</strong>.</p>
+        <ol class="ios-install-guide-steps">
+          <li><strong>Tap Share</strong><span>Tap the Share button in Safari.</span></li>
+          <li><strong>Tap Add to Home Screen</strong><span>Scroll through the Share menu and choose Add to Home Screen.</span></li>
+          <li><strong>Tap Add</strong><span>Keep the name Aumazing, then tap Add.</span></li>
+          <li><strong>Open Aumazing</strong><span>Tap the Aumazing icon on your Home Screen.</span></li>
+        </ol>
+        <figure class="ios-install-guide-figure">
+          <img src="ios-install-guide.png" width="1024" height="1536" alt="Illustrated four-step guide: tap Share, tap Add to Home Screen, tap Add, then open the Aumazing icon from the Home Screen.">
+          <figcaption>Follow the four steps shown in the guide.</figcaption>
+        </figure>
+        <p class="ios-install-guide-note"><strong>ⓘ If Open as Web App appears, keep it turned on.</strong></p>
+        <a class="ios-install-guide-full-size" href="ios-install-guide.png" target="_blank" rel="noopener">View full-size guide</a>
+      </div>
+    </div>
+  </dialog>
   <script src="ios-install.js"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
