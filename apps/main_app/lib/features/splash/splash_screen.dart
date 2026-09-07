@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -24,7 +25,7 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
 
     // Matches the orientation of the login screen this leads into, so a
     // phone does not rotate to landscape and straight back on launch. The
-    // splash video is BoxFit.cover, so it fills either shape.
+    // splash video keeps the full logo visible on narrow screens.
     lockParentAdaptive();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
@@ -32,7 +33,7 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
   }
 
   Future<void> _initVideo() async {
-    const videoAsset = 'assets/videos/Aumazing_Splash_Screen_Generation.mp4';
+    const videoAsset = 'assets/videos/Aumazing_Splash_Screen.mp4';
 
     // Verify the asset actually exists before handing it to ExoPlayer.
     try {
@@ -50,10 +51,15 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
       await controller.initialize();
       if (!mounted || _navigated) return;
 
+      // Browsers allow muted autoplay without a user gesture. Keep the
+      // supplied soundtrack on native platforms.
+      await controller.setVolume(kIsWeb ? 0 : 1);
+      if (!mounted || _navigated) return;
+
       controller.addListener(_onVideoProgress);
       _videoReady = true;
       setState(() {});
-      controller.play();
+      await controller.play();
     } catch (_) {
       // Initialization or playback failed — skip.
       _skipSplash();
@@ -92,9 +98,9 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
     if (!mounted) return;
 
     // Always go to LoadingScreen first to preload assets
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoadingScreen()),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const LoadingScreen()));
   }
 
   @override
@@ -112,32 +118,33 @@ class _AumazingSplashScreenState extends State<AumazingSplashScreen> {
       // a wide video on a portrait phone is invisible and there is no flash
       // between the OS splash and this one.
       backgroundColor: Colors.white,
-      body: (_videoReady && ctl != null && ctl.value.isInitialized)
-          ? LayoutBuilder(
-              builder: (context, constraints) {
-                final viewAspect = constraints.maxWidth / constraints.maxHeight;
-                // Cropping the wide splash video to fill a portrait phone cuts
-                // the logo off at both edges, so show the whole frame when the
-                // screen is narrower than the video. Wider screens still fill.
-                final fit = viewAspect < ctl.value.aspectRatio
-                    ? BoxFit.contain
-                    : BoxFit.cover;
+      body:
+          (_videoReady && ctl != null && ctl.value.isInitialized)
+              ? LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewAspect =
+                      constraints.maxWidth / constraints.maxHeight;
+                  // Cropping the wide splash video to fill a portrait phone cuts
+                  // the logo off at both edges, so show the whole frame when the
+                  // screen is narrower than the video. Wider screens still fill.
+                  final fit =
+                      viewAspect < ctl.value.aspectRatio
+                          ? BoxFit.contain
+                          : BoxFit.cover;
 
-                return SizedBox.expand(
-                  child: FittedBox(
-                    fit: fit,
-                    child: SizedBox(
-                      width: ctl.value.size.width,
-                      height: ctl.value.size.height,
-                      child: VideoPlayer(ctl),
+                  return SizedBox.expand(
+                    child: FittedBox(
+                      fit: fit,
+                      child: SizedBox(
+                        width: ctl.value.size.width,
+                        height: ctl.value.size.height,
+                        child: VideoPlayer(ctl),
+                      ),
                     ),
-                  ),
-                );
-              },
-            )
-          : const SizedBox.expand(
-              child: ColoredBox(color: Colors.white),
-            ),
+                  );
+                },
+              )
+              : const SizedBox.expand(child: ColoredBox(color: Colors.white)),
     );
   }
 }
