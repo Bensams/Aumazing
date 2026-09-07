@@ -569,7 +569,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: ScaleTransition(
                                   scale: _logoScale,
                                   child: Image.asset(
-                                    'assets/images/Aumazing_Logo.png',
+                                    'assets/images/Aumazing_Logo_v2.png',
                                     width: 180,
                                     height: 120,
                                   ),
