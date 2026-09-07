@@ -1,0 +1,115 @@
+.ios-install-banner[hidden] {
+  display: none;
+}
+
+.ios-install-banner,
+.ios-install-banner * {
+  box-sizing: border-box;
+}
+
+.ios-install-banner {
+  position: fixed;
+  z-index: 10000;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: max(24px, env(safe-area-inset-left));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 780px;
+  max-height: calc(100% - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  margin: 0 auto;
+  padding: 20px 24px 22px;
+  overflow-y: auto;
+  border: 1px solid #d5dee1;
+  border-top: 3px solid #008da0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #242a30;
+  box-shadow: 0 4px 20px #00000026;
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+  text-align: left;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: pan-y;
+}
+
+.ios-install-logo {
+  flex: 0 0 88px;
+  width: 88px;
+  height: 56px;
+  margin-top: 6px;
+  object-fit: contain;
+}
+
+.ios-install-copy {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ios-install-copy h2 {
+  margin: 0 0 5px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.ios-install-copy p {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.45;
+}
+
+#ios-install-dismiss {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#ios-install-dismiss:hover,
+#ios-install-dismiss:active {
+  background: #e9f4f5;
+}
+
+#ios-install-dismiss:focus-visible {
+  outline: 2px solid #008da0;
+  outline-offset: -2px;
+}
+
+@media (max-width: 359px) {
+  .ios-install-logo {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .ios-install-banner {
+    padding: 16px 18px 18px;
+    gap: 12px;
+  }
+
+  .ios-install-logo {
+    flex-basis: 68px;
+    width: 68px;
+    height: 48px;
+  }
+
+  .ios-install-copy h2 {
+    font-size: 22px;
+  }
+
+  .ios-install-copy p {
+    font-size: 18px;
+  }
+}
