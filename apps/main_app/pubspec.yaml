@@ -75,15 +75,18 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
-# App launcher icon (star + child + puzzle rainbow artwork).
-# Regenerate with: dart run flutter_launcher_icons
+# App launcher icon: packages/assets/images/Aumazing_App_Logo.png.
+# Regenerate Android + web from the repo root:
+#   powershell -File scripts/update-app-icons.ps1
+# The script preserves safe padding for adaptive and maskable icons.
+# The configuration below also supports the other native platforms.
 flutter_launcher_icons:
   image_path: assets/icon/app_icon_full.png
   android: true
-  # Adaptive icon: white background, padded artwork in the safe zone so
-  # circular masks don't crop the star or the puzzle rainbow.
+  # Keep this inset aligned with scripts/update-app-icons.ps1.
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  adaptive_icon_foreground_inset: 16
   ios: true
   remove_alpha_ios: true
   windows:
