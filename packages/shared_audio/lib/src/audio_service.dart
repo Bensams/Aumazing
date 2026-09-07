@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'audio_config.dart';
 import 'bgm_library.dart';
 
+import 'web_music_player_stub.dart'
+    if (dart.library.js_interop) 'web_music_player.dart';
+
 /// Audio context for SFX that doesn't request audio focus (allows mixing with music)
 final _sfxAudioContext = AudioContext(
   android: AudioContextAndroid(
@@ -76,6 +79,7 @@ class AudioService {
 
   /// Dedicated player for looping background music.
   late final AudioPlayer _musicPlayer;
+  final WebMusicPlayer? _webMusic = kIsWeb ? WebMusicPlayer() : null;
 
   /// Pool of SFX players (created on demand, reused when possible).
   final List<AudioPlayer> _sfxPlayers = [];
@@ -105,13 +109,15 @@ class AudioService {
   AudioConfig get config => _config;
 
   /// Whether music is currently playing.
-  bool get isMusicPlaying => _musicPlayer.state == PlayerState.playing;
+  bool get isMusicPlaying =>
+      _webMusic?.isPlaying ?? (_musicPlayer.state == PlayerState.playing);
 
   // ── Configuration ──────────────────────────────────────────────────
 
   void updateConfig(AudioConfig config) {
     if (_disposed) return;
     _config = config;
+    _webMusic?.setVolume(config.effectiveMusicVolume);
     final generation = _generation;
     unawaited(
       _bounded(
@@ -129,10 +135,18 @@ class AudioService {
   ///
   /// [trackName] is just the filename, e.g. `'bg_music.ogg'`.
   /// The full asset path is resolved automatically via the package prefix.
+  ///
+  /// Web retains the requested track and starts/retries it directly from a
+  /// browser activation event using a persistent music element and context.
   Future<void> playMusic(String trackName) {
     if (_disposed || !_config.musicEnabled) return Future<void>.value();
     if (_currentTrack == trackName && isMusicPlaying)
       return Future<void>.value();
+    if (_webMusic != null) {
+      _currentTrack = trackName;
+      _webMusic.play(trackName, _config.effectiveMusicVolume);
+      return Future<void>.value();
+    }
     final generation = _generation;
     return _bounded(
       _enqueuePlayer(_musicPlayer, () async {
@@ -156,6 +170,10 @@ class AudioService {
   /// Pause background music (can be resumed with [resumeMusic]).
   Future<void> pauseMusic() {
     if (_disposed) return Future<void>.value();
+    if (_webMusic != null) {
+      _webMusic.pause();
+      return Future<void>.value();
+    }
     final generation = _generation;
     return _bounded(
       _enqueuePlayer(_musicPlayer, () async {
@@ -168,6 +186,11 @@ class AudioService {
   /// Resume previously paused music.
   Future<void> resumeMusic() {
     if (_disposed || !_config.musicEnabled) return Future<void>.value();
+    if (_webMusic != null) {
+      _webMusic.setVolume(_config.effectiveMusicVolume);
+      _webMusic.resume();
+      return Future<void>.value();
+    }
     final generation = _generation;
     return _bounded(
       _enqueuePlayer(_musicPlayer, () async {
@@ -181,6 +204,12 @@ class AudioService {
   /// Stop background music entirely.
   Future<void> stopMusic() {
     if (_disposed) return Future<void>.value();
+    if (_webMusic != null) {
+      _webMusic.stop();
+      _currentTrack = null;
+      _currentCategory = null;
+      return Future<void>.value();
+    }
     final generation = ++_generation;
     return _bounded(
       _enqueuePlayer(_musicPlayer, () async {
@@ -461,19 +490,19 @@ class AudioService {
   Future<void> dispose() {
     if (_disposeFuture != null) return _disposeFuture!;
     _disposed = true;
+    _webMusic?.dispose();
     _generation++;
     final players = <AudioPlayer>[_musicPlayer, ..._sfxPlayers];
-    final future =
-        Future.wait<void>([
-          for (final player in players)
-            _enqueuePlayer(player, () => player.dispose()),
-        ]).whenComplete(() {
-          _playerQueues.clear();
-          _reservedSfxPlayers.clear();
-          _sfxPlayers.clear();
-          _currentTrack = null;
-          _currentCategory = null;
-        });
+    final future = Future.wait<void>([
+      for (final player in players)
+        _enqueuePlayer(player, () => player.dispose()),
+    ]).whenComplete(() {
+      _playerQueues.clear();
+      _reservedSfxPlayers.clear();
+      _sfxPlayers.clear();
+      _currentTrack = null;
+      _currentCategory = null;
+    });
     _disposeFuture = future;
     return future;
   }
