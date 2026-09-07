@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flame/components.dart' hide Timer;
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/painting.dart';
@@ -132,9 +131,6 @@ class CopyMeGame extends FlameGame
   /// card was dropped onto it.
   Rect _patternRowRect = Rect.zero;
 
-  /// The "TAP THE SHAPES TO COPY!" caption, shown only during the input phase.
-  TextComponent? _copyCaption;
-
   List<int> _sequence = [];
   int _inputIndex = 0;
   bool _demonstrating = false;
@@ -214,17 +210,15 @@ class CopyMeGame extends FlameGame
     final gameW = size.x;
     final gameH = size.y;
 
-    // Two rows now: the pattern row (top) plus the palette row (bottom), each
-    // with a caption above it. Size the cards so both rows and their captions
-    // fit under the overlay strip and clear of the mascot band.
-    const topCapBand = 30.0; // "Watch the pattern!…" line above the slots
-    const midCapBand = 30.0; // "TAP THE SHAPES TO COPY!" above the palette
-    const rowGap = 20.0; // breathing room between the two blocks
+    // Keep the pattern row and palette clear of the overlay strip, with
+    // breathing room above the slots and between the two rows.
+    const topPadding = 30.0;
+    const rowGap = 50.0;
     final availH = gameH - kTopOverlayBand - 12;
 
     var cardSize = math.min(
       gameW / 5.4,
-      (availH - topCapBand - midCapBand - rowGap) / 2,
+      (availH - topPadding - rowGap) / 2,
     );
     cardSize = cardSize.clamp(40.0, availH / 2);
 
@@ -234,11 +228,11 @@ class CopyMeGame extends FlameGame
     double xFor(int i) => startX + i * (cardSize + gap);
 
     // Stack the two blocks and centre them vertically in the available band.
-    final blockH = topCapBand + cardSize + rowGap + midCapBand + cardSize;
+    final blockH = topPadding + cardSize + rowGap + cardSize;
     final blockTop = kTopOverlayBand + (availH - blockH) / 2;
 
-    final slotRowY = blockTop + topCapBand;
-    final paletteRowY = slotRowY + cardSize + rowGap + midCapBand;
+    final slotRowY = blockTop + topPadding;
+    final paletteRowY = slotRowY + cardSize + rowGap;
 
     _patternRowRect = Rect.fromLTWH(
       startX - gap,
@@ -246,28 +240,6 @@ class CopyMeGame extends FlameGame
       totalW + 2 * gap,
       cardSize + 2 * gap,
     );
-
-    // Top caption (always visible).
-    add(_caption(
-      'Watch the pattern! Then copy it in the row below.',
-      y: blockTop + 4,
-      width: gameW,
-      fontSize: math.max(13.0, cardSize * 0.16),
-      color: const Color(0xFF4A4458),
-      bold: false,
-    ));
-
-    // Middle caption ("TAP THE SHAPES TO COPY!") — its text is set during the
-    // input phase and cleared during the demo, so it only shows when it applies.
-    _copyCaption = _caption(
-      '',
-      y: slotRowY + cardSize + rowGap + 2,
-      width: gameW,
-      fontSize: math.max(13.0, cardSize * 0.17),
-      color: const Color(0xFF3F8F5B),
-      bold: true,
-    );
-    add(_copyCaption!);
 
     // Pattern row — the dashed placeholder slots.
     for (var i = 0; i < 4; i++) {
@@ -297,29 +269,6 @@ class CopyMeGame extends FlameGame
     }
   }
 
-  TextComponent _caption(
-    String text, {
-    required double y,
-    required double width,
-    required double fontSize,
-    required Color color,
-    required bool bold,
-  }) {
-    return TextComponent(
-      text: text,
-      position: Vector2(width / 2, y),
-      anchor: Anchor.topCenter,
-      textRenderer: TextPaint(
-        style: TextStyle(
-          fontSize: fontSize,
-          color: color,
-          fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-          letterSpacing: bold ? 0.5 : 0.0,
-        ),
-      ),
-    );
-  }
-
   void _startRound() {
     _inputIndex = 0;
     _inputPhase = false;
@@ -337,11 +286,10 @@ class CopyMeGame extends FlameGame
     analyticsStartRound(roundNumber: _currentRound + 1);
     analyticsAddRoundData('sequence_length', len);
 
-    // Empty the pattern row and hide the copy caption while demonstrating.
+    // Empty the pattern row before demonstrating.
     for (final slot in _slots) {
       slot.clear();
     }
-    _copyCaption?.text = '';
 
     // Disable input during demo
     for (final s in _shapes) {
@@ -397,7 +345,6 @@ class CopyMeGame extends FlameGame
     _inputPhase = true;
     _inputStartTime = DateTime.now();
     onPhaseChanged?.call(false);
-    _copyCaption?.text = 'TAP THE SHAPES TO COPY!';
 
     // Brief pause before "your turn" VO so it doesn't overlap with last highlight
     await Future.delayed(const Duration(milliseconds: 400));
