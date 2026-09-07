@@ -43,6 +43,68 @@ function Write-Icon {
     }
 }
 
+# PWA maskable icons are cropped by the launcher's mask, so the background has to
+# run edge to edge while the artwork stays inside the 80%-diameter safe circle.
+# White padding would survive the crop and read as a border, so the ring outside
+# the artwork continues the source's own edge pixels instead.
+function Write-MaskableIcon {
+    param(
+        [string]$RelativePath,
+        [int]$Size,
+        [double]$ArtworkScale
+    )
+
+    $outputPath = Join-Path $appRoot $RelativePath
+    [System.IO.Directory]::CreateDirectory((Split-Path -Parent $outputPath)) | Out-Null
+    $bitmap = [System.Drawing.Bitmap]::new($Size, $Size)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $attributes = [System.Drawing.Imaging.ImageAttributes]::new()
+    try {
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $attributes.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)
+
+        $inner = [int][Math]::Floor($Size * $ArtworkScale)
+        $pad = [int][Math]::Floor(($Size - $inner) / 2)
+        $sw = $sourceImage.Width
+        $sh = $sourceImage.Height
+        # Thin strips of the source edge, stretched outward to fill the bleed ring.
+        $strip = [int][Math]::Max(2, [Math]::Floor($sw * 0.01))
+
+        # Corners.
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new(0, 0, $pad, $pad),
+            0, 0, $strip, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new($pad + $inner, 0, $Size - $pad - $inner, $pad),
+            $sw - $strip, 0, $strip, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new(0, $pad + $inner, $pad, $Size - $pad - $inner),
+            0, $sh - $strip, $strip, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage,
+            [System.Drawing.Rectangle]::new($pad + $inner, $pad + $inner, $Size - $pad - $inner, $Size - $pad - $inner),
+            $sw - $strip, $sh - $strip, $strip, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+
+        # Edge bands.
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new($pad, 0, $inner, $pad),
+            0, 0, $sw, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new($pad, $pad + $inner, $inner, $Size - $pad - $inner),
+            0, $sh - $strip, $sw, $strip, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new(0, $pad, $pad, $inner),
+            0, 0, $strip, $sh, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new($pad + $inner, $pad, $Size - $pad - $inner, $inner),
+            $sw - $strip, 0, $strip, $sh, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+
+        # Artwork, centred inside the safe circle.
+        $graphics.DrawImage($sourceImage, [System.Drawing.Rectangle]::new($pad, $pad, $inner, $inner),
+            0, 0, $sw, $sh, [System.Drawing.GraphicsUnit]::Pixel, $attributes)
+        $bitmap.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $attributes.Dispose()
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
 try {
     if ($sourceImage.Width -ne $sourceImage.Height) {
         throw 'The approved app icon must be square.'
@@ -67,8 +129,11 @@ try {
 
     foreach ($size in @(192, 512)) {
         Write-Icon "web/icons/Icon-$size.png" $size
-        # A 56% square fits entirely inside the PWA maskable 80% safe circle.
-        Write-Icon "web/icons/Icon-maskable-$size.png" $size 0.56
+        # The binding constraint is the wordmark's corners, which sit 1.244 half-widths
+        # from centre; at 0.62 they land just inside the 80% safe circle. The ring
+        # outside the artwork bleeds the source's edge pixels to every edge, so the
+        # launcher mask crops background rather than exposing padding.
+        Write-MaskableIcon "web/icons/Icon-maskable-$size.png" $size 0.62
     }
     Write-Icon 'web/favicon.png' 32
 }
