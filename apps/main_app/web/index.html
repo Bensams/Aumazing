@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -17,11 +17,13 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="aumazing">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -31,12 +33,24 @@
 
   <title>aumazing</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="ios-install.css">
 
   <!-- In-browser AI: onnxruntime-web bridge (see web/ort_bridge.mjs). Runs the
        on-device assessment models in the browser, no server required. -->
   <script type="module" src="ort_bridge.mjs"></script>
 </head>
 <body>
+  <aside id="ios-install-banner" class="ios-install-banner" aria-labelledby="ios-install-title" hidden>
+    <img class="ios-install-logo" src="aumazing-logo.png" width="88" height="56" alt="">
+    <div class="ios-install-copy">
+      <h2 id="ios-install-title">Add Aumazing to your Home Screen</h2>
+      <p><span id="ios-install-safari" hidden>Open this page in <strong>Safari</strong>. </span>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong> and <strong>Add</strong>. Keep <strong>Open as Web App</strong> on if shown.</p>
+    </div>
+    <button id="ios-install-dismiss" type="button" aria-label="Dismiss install instructions" title="Dismiss install instructions">
+      <img src="icons/dismiss.svg" width="20" height="20" alt="">
+    </button>
+  </aside>
+  <script src="ios-install.js"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
