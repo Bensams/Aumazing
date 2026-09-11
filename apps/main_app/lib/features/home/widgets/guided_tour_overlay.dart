@@ -231,20 +231,27 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
           // Sit under the spotlight, or above it, or — when a tall target
           // such as a full-height side panel leaves room for neither —
           // float over it; the ring still marks what is being described.
-          const estimatedHeight = 190.0;
+          const estimatedHeight = 230.0;
           final spaceBelow = constraints.maxHeight - hole.bottom - 12;
           final spaceAbove = hole.top - 12;
           double? top;
           double? bottom;
           if (spaceBelow >= estimatedHeight) {
-            top = hole.bottom + 12;
+            top = (hole.bottom + 12).clamp(
+              16.0,
+              (constraints.maxHeight - estimatedHeight - 16).clamp(
+                16.0,
+                double.infinity,
+              ),
+            );
           } else if (spaceAbove >= estimatedHeight) {
             bottom = constraints.maxHeight - hole.top + 12;
           } else {
-            top = ((constraints.maxHeight - estimatedHeight) / 2).clamp(
-              16.0,
-              (constraints.maxHeight - 16).clamp(16.0, double.infinity),
-            );
+            // Prefer a bottom-anchored card when neither side has enough
+            // measured room. Its intrinsic height is the source of truth;
+            // the old estimated-height centering could place Next below a
+            // short landscape viewport.
+            bottom = 16.0;
           }
           final left = (hole.center.dx - width / 2).clamp(
             16.0,

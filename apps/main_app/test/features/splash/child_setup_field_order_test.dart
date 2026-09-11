@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 
 import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart';
+import 'package:aumazing/core/child_profile_policy.dart';
 
 /// The first screen a parent ever sees asks for name, gender, then birth
 /// date. Gender is a two-tap choice; the birth date opens a modal picker, so
@@ -14,9 +16,7 @@ void main() {
   Future<void> pumpAt(WidgetTester tester, Size size) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      const MaterialApp(home: ChildProfileSetupScreen()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: ChildProfileSetupScreen()));
     await tester.pump();
   }
 
@@ -32,15 +32,47 @@ void main() {
     );
   }
 
+  Future<void> expectDateAndCalculatedAge(WidgetTester tester) async {
+    final button = find.byKey(const Key('birth-date-button'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    final dialog = tester.widget<DatePickerDialog>(
+      find.byType(DatePickerDialog),
+    );
+    final birthDate = dialog.initialDate!;
+    final localizations = MaterialLocalizations.of(tester.element(button));
+    await tester.tap(find.text(localizations.okButtonLabel));
+    await tester.pumpAndSettle();
+    final formattedDate = DateFormat.yMMMMd().format(birthDate);
+
+    expect(
+      find.descendant(of: button, matching: find.text(formattedDate)),
+      findsOneWidget,
+    );
+    expect(find.text('Calculated age'), findsOneWidget);
+    final age = calculateAgeYears(birthDate);
+    final ageText = find.text('$age ${age == 1 ? 'year' : 'years'} old');
+    expect(ageText, findsOneWidget);
+    expect(find.descendant(of: button, matching: ageText), findsNothing);
+    expect(
+      find.text('Age is calculated automatically from the birth date.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  }
+
   testWidgets('portrait asks gender before birth date', (tester) async {
     await pumpAt(tester, const Size(500, 1600));
     expectGenderAboveBirthDate(tester);
+    await expectDateAndCalculatedAge(tester);
   });
 
   testWidgets('landscape asks gender before birth date', (tester) async {
     // The wide layout builds a different column; it must not disagree.
     await pumpAt(tester, const Size(1400, 1000));
     expectGenderAboveBirthDate(tester);
+    await expectDateAndCalculatedAge(tester);
   });
 
   testWidgets('the name field still comes first', (tester) async {

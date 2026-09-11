@@ -77,7 +77,8 @@ class MyTurnYourTurnGame extends FlameGame
     required int totalResponseTimeMs,
     required Map<String, dynamic> extras,
     GameSessionMetrics? analytics,
-  }) onGameComplete;
+  })
+  onGameComplete;
 
   /// Notify Flutter layer: true = buddy's turn, false = child's turn
   final void Function(bool isBuddyTurn) onTurnChanged;
@@ -99,6 +100,7 @@ class MyTurnYourTurnGame extends FlameGame
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
+
   /// Immediate feedback on a correct turn. Taking a turn in the right order
   /// is a sequence, not a thing with a name, so this always carries
   /// [AnswerLabel.none] and the app stays quiet — the drop SFX is the
@@ -110,7 +112,11 @@ class MyTurnYourTurnGame extends FlameGame
   final VoidCallback? onPlayCelebrationVo;
   final VoidCallback? onPlayMyTurnVo;
   final VoidCallback? onPlayYourTurnVo;
-  final VoidCallback? onPlayWaitVo;
+
+  /// "Please wait" cue that opens the buddy's turn. Awaited when it returns a
+  /// Future so the buddy's move never auto-triggers in the middle of the cue
+  /// (see [_startBuddyTurn]); a plain void callback simply proceeds at once.
+  final FutureOr<void> Function()? onPlayWaitVo;
 
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -134,6 +140,54 @@ class MyTurnYourTurnGame extends FlameGame
 
   Timer? _noResponseTimer;
   int _hintCount = 0;
+
+  // ── Buddy-turn wait timing ───────────────────────────────────────────
+  // Predictable, difficulty-based waits (replacing the old random 1–5s) so
+  // every child gets a wait that is deliberately slow enough to practise
+  // patience but never unpredictably short. Easier tiers wait longer.
+  static const _buddyWaitEasyMs = 6000; // Easy: most patience-building
+  static const _buddyWaitMediumMs = 5000;
+  static const _buddyWaitHardMs = 4000;
+  // Assessment uses a single fixed wait so its impulse-control telemetry stays
+  // comparable across children and never adapts to performance.
+  static const _buddyWaitAssessmentMs = 5000;
+  // A one-off, bounded per-round grace added to the buddy wait after an early
+  // tap — extra settling time for a child who jumped. Practice only, so it
+  // never changes the fixed assessment interval.
+  static const _earlyTapWaitBonusMs = 2000;
+  // Floor for the idle "your turn" reminder so a child always gets a
+  // reasonable window to process before being nudged. Longer tiers are kept.
+  static const _reminderFloorMs = 10000;
+
+  /// Seconds left on the current buddy wait, counted down in [update] so it
+  /// pauses/resumes with the Flame engine (a raw Timer would keep running
+  /// while paused). `null` means no wait is in flight.
+  double? _buddyWaitRemaining;
+
+  /// Bumped whenever a buddy wait is (re)started or cancelled so a stale voice
+  /// cue completing after a teardown/round change cannot start a countdown.
+  int _buddyWaitToken = 0;
+
+  /// Extra buddy-wait time granted for the rest of this round after an early
+  /// tap (bounded to a single [_earlyTapWaitBonusMs]); reset every round.
+  int _roundWaitBonusMs = 0;
+
+  /// True for the assessment profile: it disables adaptive stepping so its
+  /// telemetry stays comparable, and here it also pins a fixed buddy wait and
+  /// suppresses the early-tap grace.
+  bool get _isAssessment => !profile.adaptiveSteppingEnabled;
+
+  /// The buddy wait for the current turn: a fixed interval in assessment, or a
+  /// difficulty-based interval (plus any earned early-tap grace) in practice.
+  int get _buddyWaitMs {
+    if (_isAssessment) return _buddyWaitAssessmentMs;
+    final base = switch (profile.level) {
+      1 => _buddyWaitEasyMs,
+      3 => _buddyWaitHardMs,
+      _ => _buddyWaitMediumMs,
+    };
+    return base + _roundWaitBonusMs;
+  }
 
   /// Hint/guidance policy for the selected difficulty tier (ABA prompt
   /// hierarchy - see [DifficultyProfile]).
@@ -160,9 +214,7 @@ class MyTurnYourTurnGame extends FlameGame
   static const Color _childColor = Color(0xFF43A047);
 
   /// Pool of buddy avatar candidates (matches the child avatar set).
-  static const _avatarPool = [
-    '🐻', '🐼', '🦊', '🐨', '🐸', '🦄', '🐙', '🐰',
-  ];
+  static const _avatarPool = ['🐻', '🐼', '🦊', '🐨', '🐸', '🦄', '🐙', '🐰'];
 
   /// Buddy's avatar — picked once at load from [_avatarPool], always different
   /// from the child's avatar so the two players are easy to tell apart.
@@ -176,8 +228,8 @@ class MyTurnYourTurnGame extends FlameGame
     await super.onLoad();
 
     // Pick a buddy avatar that differs from the child's chosen avatar.
-    final buddyOptions =
-        _avatarPool.where((e) => e != avatar).toList()..shuffle(_rng);
+    final buddyOptions = _avatarPool.where((e) => e != avatar).toList()
+      ..shuffle(_rng);
     if (buddyOptions.isNotEmpty) _buddyEmoji = buddyOptions.first;
 
     analyticsInitialize(
@@ -193,6 +245,8 @@ class MyTurnYourTurnGame extends FlameGame
 
   void _setupRound() {
     _cancelNoResponseTimer();
+    _cancelBuddyWait();
+    _roundWaitBonusMs = 0;
     for (final s in _slots) {
       s.removeFromParent();
     }
@@ -286,12 +340,11 @@ class MyTurnYourTurnGame extends FlameGame
 
   // ── Buddy's turn ─────────────────────────────────────────────────────
 
-  void _startBuddyTurn() {
+  Future<void> _startBuddyTurn() async {
     _isBuddyTurn = true;
     _cancelNoResponseTimer();
+    _cancelBuddyWait();
     onTurnChanged(true);
-    onPlayMyTurnVo?.call();
-    onPlayWaitVo?.call();
 
     for (final s in _slots) {
       s.inputEnabled = false;
@@ -300,13 +353,48 @@ class MyTurnYourTurnGame extends FlameGame
       p.interactive = false;
     }
 
-    // Variable delay (1–5s) to test impulse control.
-    final delayMs = 1000 + _rng.nextInt(4001);
-    analyticsAddRoundData('buddy_turn_delay_ms', delayMs);
-    Future.delayed(Duration(milliseconds: delayMs), () {
-      if (!isMounted) return;
-      _buddyPlays();
-    });
+    onPlayMyTurnVo?.call();
+
+    // Cue-safe start: hold the countdown until the "please wait" line finishes
+    // (when the callback reports completion) so the buddy never moves in the
+    // middle of the cue. A synchronous/void callback just proceeds at once.
+    final token = ++_buddyWaitToken;
+    final lifeToken = lifecycleToken;
+    final cue = onPlayWaitVo?.call();
+    if (cue is Future) await cue;
+    if (!isLifecycleTokenValid(lifeToken) ||
+        token != _buddyWaitToken ||
+        !isMounted ||
+        !_isBuddyTurn) {
+      return;
+    }
+
+    // Predictable, difficulty-based wait, counted down in [update] so it
+    // pauses and resumes with the engine.
+    final waitMs = _buddyWaitMs;
+    analyticsAddRoundData('buddy_turn_delay_ms', waitMs);
+    _buddyWaitRemaining = waitMs / 1000.0;
+  }
+
+  /// Stops any in-flight buddy wait and invalidates pending cue completions.
+  void _cancelBuddyWait() {
+    _buddyWaitRemaining = null;
+    _buddyWaitToken++;
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    final remaining = _buddyWaitRemaining;
+    if (remaining != null) {
+      final next = remaining - dt;
+      if (next <= 0) {
+        _buddyWaitRemaining = null;
+        _buddyPlays();
+      } else {
+        _buddyWaitRemaining = next;
+      }
+    }
   }
 
   void _buddyPlays() {
@@ -317,17 +405,20 @@ class MyTurnYourTurnGame extends FlameGame
     final piece = _buddyPieces.removeLast();
     onPlayDragSfx?.call();
 
-    piece.moveToTarget(slot.position + slot.size / 2, onDone: () {
-      if (!isMounted) return;
-      piece.removeFromParent();
-      slot.fill(color: _buddyColor, emoji: _buddyEmoji, isBuddy: true);
-      onPlayDropSfx?.call();
-      _turnsInRound++;
-      if (_checkRoundComplete()) return;
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (isMounted) _startChildTurn();
-      });
-    });
+    piece.moveToTarget(
+      slot.position + slot.size / 2,
+      onDone: () {
+        if (!isMounted) return;
+        piece.removeFromParent();
+        slot.fill(color: _buddyColor, emoji: _buddyEmoji, isBuddy: true);
+        onPlayDropSfx?.call();
+        _turnsInRound++;
+        if (_checkRoundComplete()) return;
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (isMounted) _startChildTurn();
+        });
+      },
+    );
   }
 
   // ── Child's turn ─────────────────────────────────────────────────────
@@ -399,8 +490,8 @@ class MyTurnYourTurnGame extends FlameGame
     if (_isBuddyTurn) return;
     final slot = _slots[index];
     if (slot.isFilled) return;
-    final piece = _selectedPiece ??
-        (_childPieces.isNotEmpty ? _childPieces.first : null);
+    final piece =
+        _selectedPiece ?? (_childPieces.isNotEmpty ? _childPieces.first : null);
     if (piece == null) return;
     _placeChildPiece(piece, slot);
   }
@@ -418,37 +509,43 @@ class MyTurnYourTurnGame extends FlameGame
     }
 
     onPlayDragSfx?.call();
-    piece.moveToTarget(slot.position + slot.size / 2, onDone: () {
-      if (!isMounted) return;
-      piece.removeFromParent();
-      slot.fill(color: _childColor, emoji: avatar, isBuddy: false);
-      _turnsInRound++;
-      _score++;
+    piece.moveToTarget(
+      slot.position + slot.size / 2,
+      onDone: () {
+        if (!isMounted) return;
+        piece.removeFromParent();
+        slot.fill(color: _childColor, emoji: avatar, isBuddy: false);
+        _turnsInRound++;
+        _score++;
 
-      onPlayDropSfx?.call();
-      onPlayCorrectSfx?.call();
-      onPlayCorrectVo?.call(AnswerLabel.none);
-      onCorrectMatch?.call();
+        onPlayDropSfx?.call();
+        onPlayCorrectSfx?.call();
+        onPlayCorrectVo?.call(AnswerLabel.none);
+        onCorrectMatch?.call();
 
-      _adaptive.recordCorrect();
-      _consecutiveIdleHints = 0;
+        _adaptive.recordCorrect();
+        _consecutiveIdleHints = 0;
 
-      analyticsRecordValidAction();
-      analyticsRecordCorrect(extraData: {
-        'slot_index': slot.slotIndex,
-        'turn_in_round': _turnsInRound,
-        'waited_for_turn': true,
-      });
-      if (_turnStartTime != null) {
-        _totalResponseTimeMs +=
-            DateTime.now().difference(_turnStartTime!).inMilliseconds;
-      }
+        analyticsRecordValidAction();
+        analyticsRecordCorrect(
+          extraData: {
+            'slot_index': slot.slotIndex,
+            'turn_in_round': _turnsInRound,
+            'waited_for_turn': true,
+          },
+        );
+        if (_turnStartTime != null) {
+          _totalResponseTimeMs += DateTime.now()
+              .difference(_turnStartTime!)
+              .inMilliseconds;
+        }
 
-      if (_checkRoundComplete()) return;
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (isMounted) _startBuddyTurn();
-      });
-    });
+        if (_checkRoundComplete()) return;
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (isMounted) _startBuddyTurn();
+        });
+      },
+    );
   }
 
   /// A slot tapped while input is disabled (buddy's turn) → impulse-control error.
@@ -467,13 +564,28 @@ class MyTurnYourTurnGame extends FlameGame
     onPlayWrongVo?.call();
     onWrongAnswer?.call();
     analyticsRecordOffTaskAction(actionType: 'early_tap_slot_buddy_turn');
-    analyticsRecordWrong(extraData: {
-      'error_type': 'impulse_control',
-      'turn_phase': 'buddy_turn',
-      'tap_target': 'slot',
-      'slot_index': index,
-    });
+    analyticsRecordWrong(
+      extraData: {
+        'error_type': 'impulse_control',
+        'turn_phase': 'buddy_turn',
+        'tap_target': 'slot',
+        'slot_index': index,
+      },
+    );
     slot.showEarlyTapWarning();
+
+    // Practice only: give the child a little extra settling time for the rest
+    // of this round after they jump. Bounded to one grace so the wait can
+    // never stack indefinitely, and never applied in assessment so its fixed
+    // interval stays comparable. Also stretch the wait already in flight so
+    // the child benefits on the very turn they jumped.
+    if (!_isAssessment && _roundWaitBonusMs == 0) {
+      _roundWaitBonusMs = _earlyTapWaitBonusMs;
+      if (_buddyWaitRemaining != null) {
+        _buddyWaitRemaining =
+            _buddyWaitRemaining! + _earlyTapWaitBonusMs / 1000.0;
+      }
+    }
   }
 
   bool _checkRoundComplete() {
@@ -497,16 +609,20 @@ class MyTurnYourTurnGame extends FlameGame
       analyticsCompleteSession();
       analyticsAddGameSpecificMetric('early_taps_total', _earlyTaps);
       analyticsAddGameSpecificMetric('hint_count', _hintCount);
-      analyticsAddGameSpecificMetric('avg_response_time_ms',
-          _totalResponseTimeMs / (_score > 0 ? _score : 1));
       analyticsAddGameSpecificMetric(
-          'impulse_control_score',
-          _earlyTaps == 0
-              ? 1.0
-              : 1.0 -
-                  (_earlyTaps / (_score + _earlyTaps)).clamp(0.0, 1.0));
-      analyticsAddGameSpecificMetric('turn_completion_rate',
-          _score / (totalRounds * _turnsPerSide));
+        'avg_response_time_ms',
+        _totalResponseTimeMs / (_score > 0 ? _score : 1),
+      );
+      analyticsAddGameSpecificMetric(
+        'impulse_control_score',
+        _earlyTaps == 0
+            ? 1.0
+            : 1.0 - (_earlyTaps / (_score + _earlyTaps)).clamp(0.0, 1.0),
+      );
+      analyticsAddGameSpecificMetric(
+        'turn_completion_rate',
+        _score / (totalRounds * _turnsPerSide),
+      );
 
       guardedDelay(const Duration(milliseconds: 600), () {
         onGameComplete(
@@ -541,9 +657,17 @@ class MyTurnYourTurnGame extends FlameGame
     _cancelNoResponseTimer();
     // Hard tier (or a spent Medium budget) waits longer and re-orients with
     // the "your turn" VO instead of revealing a slot.
-    final delay = (_tier.noHints || !_hintBudgetLeft)
+    final tierDelay = (_tier.noHints || !_hintBudgetLeft)
         ? _tier.reorientDelay
         : _tier.idleHintDelay;
+    // Never nudge before a reasonable processing floor: a reminder that lands
+    // too soon reads as impatience. Longer tiers (e.g. the 20s re-orient) are
+    // kept as-is; only the short 5s/8s idle hints are floored up to 10s. This
+    // stays a reminder, not a failure — no round ever ends on this timer.
+    final delayMs = tierDelay.inMilliseconds < _reminderFloorMs
+        ? _reminderFloorMs
+        : tierDelay.inMilliseconds;
+    final delay = Duration(milliseconds: delayMs);
     _noResponseTimer = Timer(delay, () {
       if (!isMounted || _isBuddyTurn) return;
       _showVisualGuide();
@@ -615,6 +739,7 @@ class MyTurnYourTurnGame extends FlameGame
   @override
   void onRemove() {
     _cancelNoResponseTimer();
+    _cancelBuddyWait();
     super.onRemove();
   }
 

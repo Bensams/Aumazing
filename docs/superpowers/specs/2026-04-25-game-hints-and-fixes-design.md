@@ -98,41 +98,59 @@ if (_isBuddyTurn) {
 
 #### 2.2.2 Variable Buddy Turn Duration
 
-**Problem:** [`_startBuddyTurn()`](packages/game_core/lib/src/games/my_turn_your_turn/my_turn_your_turn_game.dart:176) uses a fixed `Duration(milliseconds: 1200)`.
+**Problem:** `_startBuddyTurn()` originally used a fixed `Duration(milliseconds: 1200)`.
 
-**Solution:** Randomize the delay between 1000–5000 ms.
+> **Superseded (2026-09-10 UX audit, issue 5).** The random 1000–5000 ms wait
+> that first replaced the fixed delay could land too short and felt
+> unpredictable. The buddy wait is now an explicit, difficulty-based interval,
+> counted down in `update()` so it pauses/resumes with the engine and only
+> starts once the "please wait" cue reports completion. See the current values
+> below; the random-delay code that used to live here no longer applies.
 
-**New field:**
+**Current behaviour:** predictable, slower, difficulty-based waits:
+
+| Tier | Buddy wait |
+|---|---|
+| Easy | 6 s |
+| Medium | 5 s |
+| Hard | 4 s |
+| Assessment | 5 s (fixed, non-adaptive) |
+
+In practice only, the first early tap in a round adds a bounded +2 s of
+settling time for the rest of that round (applied to the in-flight wait too);
+assessment ignores it so its impulse-control telemetry stays comparable. The
+child idle reminder is floored to at least 10 s (longer tiers such as the 20 s
+re-orient are preserved) and remains a reminder — it never fails the game.
+
+**Changes to `_startBuddyTurn()`:**
 
 ```dart
-final math.Random _rng = math.Random();
-```
-
-**Changes to [`_startBuddyTurn()`](packages/game_core/lib/src/games/my_turn_your_turn/my_turn_your_turn_game.dart:176):**
-
-```dart
-void _startBuddyTurn() {
+Future<void> _startBuddyTurn() async {
   _isBuddyTurn = true;
+  _cancelNoResponseTimer();
+  _cancelBuddyWait();
   onTurnChanged(true);
+  for (final s in _slots) s.inputEnabled = false;
+  for (final p in _childPieces) p.interactive = false;
+
   onPlayMyTurnVo?.call();
-  onPlayWaitVo?.call();
 
-  for (final s in _slots) {
-    s.inputEnabled = false;
-  }
+  // Cue-safe: hold the countdown until the wait cue finishes.
+  final token = ++_buddyWaitToken;
+  final lifeToken = lifecycleToken;
+  final cue = onPlayWaitVo?.call();
+  if (cue is Future) await cue;
+  if (!isLifecycleTokenValid(lifeToken) ||
+      token != _buddyWaitToken || !isMounted || !_isBuddyTurn) return;
 
-  // NEW: Variable delay between 1000-5000ms to test impulse control
-  final delayMs = 1000 + _rng.nextInt(4001); // 1000..5000
-  analyticsAddRoundData('buddy_turn_delay_ms', delayMs);
-
-  Future.delayed(Duration(milliseconds: delayMs), () {
-    if (!isMounted) return;
-    _buddyPlays();
-  });
+  final waitMs = _buddyWaitMs; // difficulty-based (+ any early-tap grace)
+  analyticsAddRoundData('buddy_turn_delay_ms', waitMs);
+  _buddyWaitRemaining = waitMs / 1000.0; // counted down in update()
 }
 ```
 
-**Analytics integration:** Record the actual delay used per turn so XGBoost can correlate wait duration with early-tap frequency.
+**Analytics integration:** the actual wait used per turn is still recorded via
+`buddy_turn_delay_ms` so XGBoost can correlate wait duration with early taps.
 
 #### 2.2.3 Idle Timer + Visual Guide During Child Turn
 

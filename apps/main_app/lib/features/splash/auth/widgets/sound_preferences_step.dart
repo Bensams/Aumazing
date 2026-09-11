@@ -28,9 +28,9 @@ class SoundPreferences {
 
   /// English defaults, matching [ChildProfile]'s own defaults.
   factory SoundPreferences.initial() => SoundPreferences(
-        language: GameLanguage.english,
-        voicePackId: defaultVoicePackForLanguage(GameLanguage.english.slug).id,
-      );
+    language: GameLanguage.english,
+    voicePackId: defaultVoicePackForLanguage(GameLanguage.english.slug).id,
+  );
 
   final GameLanguage language;
   final String voicePackId;
@@ -140,9 +140,10 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
   /// and on-screen text can never drift apart.
   void _selectLanguage(GameLanguage language) {
     final current = voicePackById(_value.voicePackId);
-    final voicePackId = current != null && current.languageSlug == language.slug
-        ? current.id
-        : defaultVoicePackForLanguage(language.slug).id;
+    final voicePackId =
+        current != null && current.languageSlug == language.slug
+            ? current.id
+            : defaultVoicePackForLanguage(language.slug).id;
     widget.onChanged(
       _value.copyWith(language: language, voicePackId: voicePackId),
     );
@@ -156,11 +157,17 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
   void _setMusicEnabled(bool enabled) {
     widget.onChanged(_value.copyWith(musicEnabled: enabled));
     final audio = context.read<AudioService>();
-    audio.updateConfig(audio.config.copyWith(musicEnabled: enabled));
+    audio.updateConfig(
+      audio.config.copyWith(
+        musicEnabled: enabled,
+        musicVolume: _value.musicVolume,
+      ),
+    );
     if (enabled) {
       audio.playCategoryMusic(_value.musicCategory, restart: true);
     } else {
       audio.stopMusic();
+      setState(() => _previewPath = null);
     }
   }
 
@@ -172,7 +179,14 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
 
   Future<void> _selectMusicCategory(BgmCategory category) async {
     widget.onChanged(_value.copyWith(musicCategory: category.key));
+    if (!_value.musicEnabled) return;
     final audio = context.read<AudioService>();
+    audio.updateConfig(
+      audio.config.copyWith(
+        musicEnabled: _value.musicEnabled,
+        musicVolume: _value.musicVolume,
+      ),
+    );
     // restart: true so the parent hears the style they just tapped rather
     // than whatever is already looping.
     await audio.playCategoryMusic(category.key, restart: true);
@@ -184,9 +198,17 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
   /// style is selected, so a parent can listen through everything before
   /// committing their child to one.
   Future<void> _previewTrack(BgmCategory category, BgmTrack track) async {
-    await context.read<AudioService>().playCategoryTrack(category, track);
+    if (!_value.musicEnabled) return;
+    final audio = context.read<AudioService>();
+    audio.updateConfig(
+      audio.config.copyWith(
+        musicEnabled: _value.musicEnabled,
+        musicVolume: _value.musicVolume,
+      ),
+    );
+    await audio.playCategoryTrack(category, track);
     if (!mounted) return;
-    setState(() => _previewPath = category.trackPath(track));
+    setState(() => _previewPath = audio.currentTrack);
   }
 
   void _setSfxVolume(double volume) {
@@ -210,6 +232,37 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
       children: [
         _PrefsCard(
           children: [
+            const _SectionLabel('Background Music'),
+            const _HintText(
+              'Choose from six music styles. Tap a style to select it and '
+              'hear a preview. Turn music off for quiet play. You can change '
+              'your choice later in Settings → Audio.',
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _ToggleRow(
+              icon: Icons.music_note_rounded,
+              label: 'Play background music',
+              value: _value.musicEnabled,
+              onChanged: _setMusicEnabled,
+            ),
+            if (_value.musicEnabled) ...[
+              _SliderRow(
+                label: 'Music volume',
+                value: _value.musicVolume,
+                onChanged: _setMusicVolume,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+            ] else
+              const _HintText(
+                'Music is muted. Your chosen style is kept. Turn music on '
+                'to hear previews.',
+              ),
+            _buildMusicStylePicker(),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _PrefsCard(
+          children: [
             const _SectionLabel('Language'),
             const _HintText(
               'Sets the on-screen words and the language the app speaks in.',
@@ -225,9 +278,10 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
                     selected: _value.language == language,
                     selectedColor: AppColors.primaryPurple,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
-                      color: _value.language == language
-                          ? AppColors.white
-                          : AppColors.textPrimary,
+                      color:
+                          _value.language == language
+                              ? AppColors.white
+                              : AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                     onSelected: (_) => _selectLanguage(language),
@@ -246,32 +300,6 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
               'age.',
             ),
             _buildVoicePicker(),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _PrefsCard(
-          children: [
-            const _SectionLabel('Background Music'),
-            const SizedBox(height: AppSpacing.xs),
-            _ToggleRow(
-              icon: Icons.music_note_rounded,
-              label: 'Play background music',
-              value: _value.musicEnabled,
-              onChanged: _setMusicEnabled,
-            ),
-            if (_value.musicEnabled) ...[
-              _SliderRow(
-                label: 'Music volume',
-                value: _value.musicVolume,
-                onChanged: _setMusicVolume,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              _buildMusicStylePicker(),
-            ] else
-              const _HintText(
-                'Silence suits some children better. You can turn music on '
-                'later in Settings → Audio.',
-              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -303,8 +331,8 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
             _SliderRow(
               label: 'Prompt speed',
               value: _value.promptSpeed,
-              onChanged: (val) =>
-                  widget.onChanged(_value.copyWith(promptSpeed: val)),
+              onChanged:
+                  (val) => widget.onChanged(_value.copyWith(promptSpeed: val)),
               // Dragging is silent; the sample plays on release so a drag does
               // not stutter out ten half-cues.
               onChangeEnd: (_) => _playPromptSpeedSample(),
@@ -319,8 +347,9 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
               icon: Icons.chat_bubble_outline_rounded,
               label: 'Show instruction text',
               value: _value.showTextPrompts,
-              onChanged: (val) =>
-                  widget.onChanged(_value.copyWith(showTextPrompts: val)),
+              onChanged:
+                  (val) =>
+                      widget.onChanged(_value.copyWith(showTextPrompts: val)),
             ),
             const _HintText(
               'Turn off for pre-readers or children who find text busy. The '
@@ -424,8 +453,8 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
         ),
         const SizedBox(height: 2),
         const _HintText(
-          'One track from the chosen style plays each session, on repeat. '
-          'Tap a style to choose it, or ▸ to hear each track.',
+          'One track from the chosen style repeats each session. '
+          'Expand a style to preview individual tracks.',
         ),
         const SizedBox(height: AppSpacing.xs),
         for (final category in kBgmCategories) ...[
@@ -434,10 +463,12 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
             selected: category.key == _value.musicCategory,
             expanded: _expandedKey == category.key,
             onTap: () => _selectMusicCategory(category),
-            onToggleExpand: () => setState(
-              () => _expandedKey =
-                  _expandedKey == category.key ? null : category.key,
-            ),
+            onToggleExpand:
+                () => setState(
+                  () =>
+                      _expandedKey =
+                          _expandedKey == category.key ? null : category.key,
+                ),
           ),
           if (_expandedKey == category.key)
             Padding(
@@ -450,8 +481,13 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
                   for (final track in category.tracks)
                     _MusicTrackRow(
                       title: track.title,
-                      playing: _previewPath == category.trackPath(track),
-                      onTap: () => _previewTrack(category, track),
+                      playing:
+                          _value.musicEnabled &&
+                          _previewPath == category.trackPath(track),
+                      onTap:
+                          _value.musicEnabled
+                              ? () => _previewTrack(category, track)
+                              : null,
                     ),
                 ],
               ),
@@ -472,12 +508,13 @@ class _MusicTrackRow extends StatelessWidget {
 
   final String title;
   final bool playing;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: 'Preview $title',
       child: InkWell(
         onTap: onTap,
@@ -497,9 +534,10 @@ class _MusicTrackRow extends StatelessWidget {
                 child: Text(
                   title,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: playing
-                        ? AppColors.primaryPurple
-                        : AppColors.textPrimary,
+                    color:
+                        playing
+                            ? AppColors.primaryPurple
+                            : AppColors.textPrimary,
                     fontWeight: playing ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
@@ -589,9 +627,10 @@ class _MusicStyleOption extends StatelessWidget {
                 onPressed: onToggleExpand,
                 visualDensity: VisualDensity.compact,
                 iconSize: 20,
-                tooltip: expanded
-                    ? 'Hide ${category.label} tracks'
-                    : 'Hear ${category.label} tracks',
+                tooltip:
+                    expanded
+                        ? 'Hide ${category.label} tracks'
+                        : 'Hear ${category.label} tracks',
                 icon: Icon(
                   expanded
                       ? Icons.expand_less_rounded

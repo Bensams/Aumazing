@@ -100,6 +100,9 @@ class AppPrimaryButton extends StatefulWidget {
 }
 
 class _AppPrimaryButtonState extends State<AppPrimaryButton> {
+  // Clears 4.5:1 across every pastel button gradient, including the purple end.
+  static const _foregroundColor = Color(0xFF111827);
+
   bool _pressed = false;
   bool _focused = false;
 
@@ -173,10 +176,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                 borderRadius: AppRadius.button,
                 boxShadow: enabled ? AppShadows.interactive : null,
                 border: _focused && enabled
-                    ? Border.all(
-                        color: AppColors.white,
-                        width: 2,
-                      )
+                    ? Border.all(color: _foregroundColor, width: 2)
                     : null,
               ),
               child: Center(
@@ -186,7 +186,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                         width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          color: AppColors.white,
+                          color: _foregroundColor,
                         ),
                       )
                     // Icon and label stay a single centred group. The label
@@ -198,9 +198,11 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (widget.icon != null) ...[
-                            Icon(widget.icon,
-                                color: AppColors.white,
-                                size: AppPrimaryButton._iconSize),
+                            Icon(
+                              widget.icon,
+                              color: _foregroundColor,
+                              size: AppPrimaryButton._iconSize,
+                            ),
                             const SizedBox(width: AppPrimaryButton._iconGap),
                           ],
                           Flexible(
@@ -209,7 +211,9 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                             // scales instead of being cut off.
                             child: Text(
                               widget.label,
-                              style: AppTextStyles.buttonLarge,
+                              style: AppTextStyles.buttonLarge.copyWith(
+                                color: _foregroundColor,
+                              ),
                               textAlign: widget.textAlign,
                               softWrap: true,
                               maxLines: widget.maxLines,
@@ -225,4 +229,3 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
     );
   }
 }
-

@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
-
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../../core/child_profile_policy.dart';
@@ -33,8 +37,8 @@ class ChildProfileSetupScreen extends StatefulWidget {
   /// dismissed, and saving pops with the created [ChildProfile] instead of
   /// replacing the navigation stack with the dashboard.
   const ChildProfileSetupScreen.addAnother({super.key})
-      : initialErrorMessage = null,
-        isAdditionalChild = true;
+    : initialErrorMessage = null,
+      isAdditionalChild = true;
 
   final String? initialErrorMessage;
   final bool isAdditionalChild;
@@ -52,17 +56,25 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   DateTime? _selectedBirthDate;
   int _selectedAvatarIndex = 0;
   ChildSex? _selectedSex;
+
   /// Null until the parent chooses. Never defaulted, because a
   /// preselected card is a recommendation whether or not it is labelled
   /// as one (STAR-A1).
   ChildCharacter? _selectedCharacter;
+  bool _audioStateCaptured = false;
+  late final AudioService _previewAudio;
+  late final HapticService _previewHaptic;
+  AudioConfig? _originalAudioConfig;
+  HapticConfig? _originalHapticConfig;
+  bool _originalMusicPlaying = false;
+  String? _originalMusicTrack;
+  String? _originalMusicCategory;
   bool _isLoading = false;
-
   // Setup step tracking
-  int _currentStep = 0; // 0: basic info, 1: sound & voice, 2: rewards & limits
+  int _currentStep = 0; // 0: basic info, 1: music & voice, 2: rewards & limits
   static const _stepCount = 3;
 
-  /// Language, voice, music and prompt choices made on step 1.
+  /// Music, language, voice and prompt choices made on step 2.
   SoundPreferences _sound = SoundPreferences.initial();
 
   /// Game-screen background chosen here, or null to keep the preset theme.
@@ -102,6 +114,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    _captureActiveAudioState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final message = widget.initialErrorMessage;
       if (message != null && message.isNotEmpty) {
@@ -110,8 +123,46 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     });
   }
 
+  void _captureActiveAudioState() {
+    if (!widget.isAdditionalChild || _audioStateCaptured) return;
+    _audioStateCaptured = true;
+    final audio = context.read<AudioService>();
+    final haptic = context.read<HapticService>();
+    _previewAudio = audio;
+    _previewHaptic = haptic;
+    _originalAudioConfig = audio.config;
+    _originalHapticConfig = haptic.config;
+    _originalMusicPlaying = audio.isMusicPlaying;
+    _originalMusicTrack = audio.currentTrack;
+    _originalMusicCategory = audio.currentCategory;
+  }
+
+  Future<void> _restoreActiveAudioState() async {
+    if (!_audioStateCaptured) return;
+    _audioStateCaptured = false;
+    final audio = _previewAudio;
+    final haptic = _previewHaptic;
+    final config = _originalAudioConfig;
+    if (config != null) audio.updateConfig(config);
+    final hapticConfig = _originalHapticConfig;
+    if (hapticConfig != null) haptic.updateConfig(hapticConfig);
+    if (_originalMusicPlaying && _originalMusicTrack != null) {
+      await audio.playMusic(_originalMusicTrack!);
+      // playMusic has no category context: without putting the session
+      // category back, the service would report the last previewed style
+      // and the dashboard's category check would restart the track that
+      // just resumed.
+      audio.setCurrentCategory(_originalMusicCategory);
+    } else {
+      await audio.stopMusic();
+    }
+  }
+
   @override
   void dispose() {
+    if (widget.isAdditionalChild && _audioStateCaptured) {
+      unawaited(_restoreActiveAudioState());
+    }
     unlockParentOrientation();
     _scrollController.dispose();
     _nameFocusNode.dispose();
@@ -127,8 +178,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   Future<void> _saveProfile() async {
     // Only validate form if we're still on step 0 (form is mounted)
     // On step 1, validation already happened in _goToNextStep()
-    if (_currentStep == 0 && !(_formKey.currentState?.validate() ?? false)) return;
-    
+    if (_currentStep == 0 && !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
     // Checked in the order the fields are shown, so the error names the
     // first thing missing down the page rather than jumping past it.
     if (_selectedSex == null) {
@@ -161,9 +214,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         sex: _selectedSex,
         // Skipping picks at random rather than defaulting: a fixed
         // fallback would quietly make one character 'the normal one'.
-        characterId: (_selectedCharacter ??
-                (ChildCharacter.values..shuffle()).first)
-            .id,
+        characterId:
+            (_selectedCharacter ??
+                    ChildCharacter.values[
+                      Random().nextInt(ChildCharacter.values.length)
+                    ])
+                .id,
         musicEnabled: _sound.musicEnabled,
         musicVolume: _sound.musicVolume,
         musicCategory: _sound.musicCategory,
@@ -199,8 +255,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       // Save the daily screen-time limit chosen during setup (can be
       // changed later in Settings → Screen Time).
       await ScreenTimeService.instance.load(profile.id);
-      await ScreenTimeService.instance
-          .setLimitMinutes(_screenTimeLimitMinutes);
+      await ScreenTimeService.instance.setLimitMinutes(_screenTimeLimitMinutes);
       // The service holds one child at a time — hand it back to the child
       // still playing, so an added sibling's limit is not applied to them.
       if (widget.isAdditionalChild && previousActiveChildId != null) {
@@ -208,6 +263,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       }
 
       if (widget.isAdditionalChild) {
+        await _restoreActiveAudioState();
         if (mounted) Navigator.of(context).pop(profile);
         return;
       }
@@ -215,15 +271,16 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       if (mounted) {
         // Log audio state before navigation
         final audioService = context.read<AudioService>();
-        debugPrint('[ChildProfileSetupScreen] Before navigation: isMusicPlaying=${audioService.isMusicPlaying}');
+        debugPrint(
+          '[ChildProfileSetupScreen] Before navigation: isMusicPlaying=${audioService.isMusicPlaying}',
+        );
 
         // Use PageRouteBuilder for smoother transition that won't interrupt audio
         Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const HomeScreen(),
-            transitionsBuilder: (_, animation, __, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
+            transitionsBuilder: (_, animation, __, child) =>
+                FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 400),
           ),
           (_) => false,
@@ -302,26 +359,28 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         extendBodyBehindAppBar: true,
-        appBar: widget.isAdditionalChild
-            ? AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                foregroundColor: AppColors.primaryPurple,
-                title: Text(
-                  'Add Child',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.primaryPurple,
+        appBar:
+            widget.isAdditionalChild
+                ? AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  foregroundColor: AppColors.primaryPurple,
+                  title: Text(
+                    'Add Child',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.primaryPurple,
+                    ),
                   ),
-                ),
-              )
-            : null,
+                )
+                : null,
         body: GestureDetector(
           // Dismiss the keyboard when tapping empty space.
           onTap: () => _nameFocusNode.unfocus(),
           behavior: HitTestBehavior.translucent,
           child: Container(
-            decoration:
-                const BoxDecoration(gradient: AppGradients.parentSkyButter),
+            decoration: const BoxDecoration(
+              gradient: AppGradients.parentSkyButter,
+            ),
             child: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -336,9 +395,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                       bottom:
                           bottomInset > 0 ? bottomInset + 16 : AppSpacing.lg,
                     ),
-                    child: useSideBySide
-                        ? _buildLandscapeTwoColumn()
-                        : _buildPortraitColumn(),
+                    child:
+                        useSideBySide
+                            ? _buildLandscapeTwoColumn()
+                            : _buildPortraitColumn(),
                   );
                 },
               ),
@@ -479,8 +539,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             children: [
               const SizedBox(height: AppSpacing.sm),
               _buildAvatarPicker(),
-          const SizedBox(height: AppSpacing.lg),
-          _buildCharacterPicker(),
+              const SizedBox(height: AppSpacing.lg),
+              _buildCharacterPicker(),
               const SizedBox(height: AppSpacing.lg),
               _buildBackgroundSelector(),
               const SizedBox(height: AppSpacing.xl),
@@ -617,10 +677,12 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   /// recommendation (AAP/WHO, ASD-adjusted) is pre-selected and starred.
   Widget _buildScreenTimeSelector() {
     final birthDate = _selectedBirthDate;
-    final recommended = birthDate == null
-        ? null
-        : ScreenTimeService.recommendedMinutesForAge(
-            calculateAgeYears(birthDate));
+    final recommended =
+        birthDate == null
+            ? null
+            : ScreenTimeService.recommendedMinutesForAge(
+              calculateAgeYears(birthDate),
+            );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -651,30 +713,35 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               selected: _screenTimeLimitMinutes == null,
               selectedColor: AppColors.primaryPurple,
               labelStyle: AppTextStyles.bodySmall.copyWith(
-                color: _screenTimeLimitMinutes == null
-                    ? AppColors.white
-                    : AppColors.textPrimary,
+                color:
+                    _screenTimeLimitMinutes == null
+                        ? AppColors.white
+                        : AppColors.textPrimary,
               ),
-              onSelected: (_) => setState(() {
-                _screenTimeLimitMinutes = null;
-                _screenTimeTouched = true;
-              }),
+              onSelected:
+                  (_) => setState(() {
+                    _screenTimeLimitMinutes = null;
+                    _screenTimeTouched = true;
+                  }),
             ),
             for (final minutes in _screenTimeOptions)
               ChoiceChip(
                 label: Text(
-                    minutes == recommended ? '$minutes min ★' : '$minutes min'),
+                  minutes == recommended ? '$minutes min ★' : '$minutes min',
+                ),
                 selected: _screenTimeLimitMinutes == minutes,
                 selectedColor: AppColors.primaryPurple,
                 labelStyle: AppTextStyles.bodySmall.copyWith(
-                  color: _screenTimeLimitMinutes == minutes
-                      ? AppColors.white
-                      : AppColors.textPrimary,
+                  color:
+                      _screenTimeLimitMinutes == minutes
+                          ? AppColors.white
+                          : AppColors.textPrimary,
                 ),
-                onSelected: (_) => setState(() {
-                  _screenTimeLimitMinutes = minutes;
-                  _screenTimeTouched = true;
-                }),
+                onSelected:
+                    (_) => setState(() {
+                      _screenTimeLimitMinutes = minutes;
+                      _screenTimeTouched = true;
+                    }),
               ),
           ],
         ),
@@ -683,20 +750,21 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   }
 
   Widget _buildSoundStepHeader() => _buildStepHeader(
-        icon: Icons.hearing_rounded,
-        title: 'How should it sound?',
-        subtitle: 'Pick the language, voice and music your child is most '
-            'comfortable with. Everything here can be changed later in '
-            'Settings.',
-        step: 2,
-      );
+    icon: Icons.music_note_rounded,
+    title: 'Music, voice & sound',
+    subtitle:
+        'Choose music your child enjoys, then their language and '
+        'voice. You can mute music or change any choice later in '
+        'Settings.',
+    step: 2,
+  );
 
   Widget _buildRewardStepHeader() => _buildStepHeader(
-        icon: Icons.celebration_rounded,
-        title: 'Almost Done!',
-        subtitle: 'Choose how to celebrate when your child completes games',
-        step: 3,
-      );
+    icon: Icons.celebration_rounded,
+    title: 'Almost Done!',
+    subtitle: 'Choose how to celebrate when your child completes games',
+    step: 3,
+  );
 
   Widget _buildStepHeader({
     required IconData icon,
@@ -863,16 +931,16 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   Widget _buildBirthDateSelector() {
     final selectedBirthDate = _selectedBirthDate;
     final validation = validateBirthDate(selectedBirthDate);
-    final ageLabel =
+    final birthDateLabel =
         selectedBirthDate == null
             ? 'Select birth date'
-            : 'Age ${calculateAgeYears(selectedBirthDate)}';
+            : DateFormat.yMMMMd().format(selectedBirthDate);
+    final age =
+        selectedBirthDate == null ? null : calculateAgeYears(selectedBirthDate);
     final helperText =
         validation == ChildBirthDateValidation.futureDate
             ? 'Birth date cannot be in the future.'
-            : selectedBirthDate != null
-            ? '${selectedBirthDate.month}/${selectedBirthDate.day}/${selectedBirthDate.year}'
-            : "Select your child's birth date.";
+            : 'Age is calculated automatically from the birth date.';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -892,8 +960,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             borderRadius: BorderRadius.circular(12),
             onTap: _isLoading ? null : _pickBirthDate,
             child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.border),
@@ -907,7 +975,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      ageLabel,
+                      birthDateLabel,
                       style: AppTextStyles.titleMedium.copyWith(
                         color:
                             selectedBirthDate == null
@@ -929,11 +997,28 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         Text(
           helperText,
           style: AppTextStyles.bodySmall.copyWith(
-            color: validation == ChildBirthDateValidation.futureDate
-                ? AppColors.destructiveRed
-                : AppColors.mutedForeground,
+            color:
+                validation == ChildBirthDateValidation.futureDate
+                    ? AppColors.destructiveRed
+                    : AppColors.mutedForeground,
           ),
         ),
+        if (age != null &&
+            validation != ChildBirthDateValidation.futureDate) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Calculated age',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          Text(
+            '$age ${age == 1 ? 'year' : 'years'} old',
+            style: AppTextStyles.titleLarge.copyWith(
+              color: AppColors.foreground,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -986,9 +1071,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                   label: 'Prefer not to say',
                   accent: GamePalettes.neutral.primary,
                   selected: _selectedSex == ChildSex.preferNotToSay,
-                  onTap: _isLoading
-                      ? null
-                      : () => _selectSex(ChildSex.preferNotToSay),
+                  onTap:
+                      _isLoading
+                          ? null
+                          : () => _selectSex(ChildSex.preferNotToSay),
                 ),
               ),
             ],
@@ -1013,9 +1099,10 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionTitle(
-          title: name.isEmpty
-              ? 'Who will play along?'
-              : 'Who will play with $name?',
+          title:
+              name.isEmpty
+                  ? 'Who will play along?'
+                  : 'Who will play with $name?',
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
@@ -1105,12 +1192,13 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                     key: ValueKey<int>(index),
                     avatar: avatar,
                     selected: isSelected,
-                    onTap: _isLoading
-                        ? null
-                        : () {
-                            _nameFocusNode.unfocus();
-                            setState(() => _selectedAvatarIndex = index);
-                          },
+                    onTap:
+                        _isLoading
+                            ? null
+                            : () {
+                              _nameFocusNode.unfocus();
+                              setState(() => _selectedAvatarIndex = index);
+                            },
                   ),
                 );
               }),
@@ -1137,9 +1225,10 @@ class _AvatarCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? avatar.bgColor.withValues(alpha: 0.7)
-          : AppColors.inputFill,
+      color:
+          selected
+              ? avatar.bgColor.withValues(alpha: 0.7)
+              : AppColors.inputFill,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -1148,18 +1237,17 @@ class _AvatarCell extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected
-                  ? AppColors.primaryPurple.withValues(alpha: 0.5)
-                  : Colors.transparent,
+              color:
+                  selected
+                      ? AppColors.primaryPurple.withValues(alpha: 0.5)
+                      : Colors.transparent,
               width: 2.5,
             ),
           ),
           child: Center(
             child: Text(
               avatar.emoji,
-              style: TextStyle(
-                fontSize: selected ? 30 : 28,
-              ),
+              style: TextStyle(fontSize: selected ? 30 : 28),
             ),
           ),
         ),
