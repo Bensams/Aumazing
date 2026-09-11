@@ -84,4 +84,46 @@ void main() {
       lessThan(tester.getTopLeft(find.text('Gender')).dy),
     );
   });
+
+  testWidgets('birth date input inserts separators while typing', (
+    tester,
+  ) async {
+    await pumpAt(tester, const Size(500, 1600));
+    final button = find.byKey(const Key('birth-date-button'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    final localizations = MaterialLocalizations.of(tester.element(button));
+    final inputModeButton = find.byTooltip(
+      localizations.inputDateModeButtonLabel,
+    );
+    expect(inputModeButton, findsOneWidget);
+    await tester.tap(inputModeButton);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(DatePickerDialog);
+    final input = find.descendant(
+      of: dialog,
+      matching: find.byType(TextFormField),
+    );
+    expect(input, findsOneWidget);
+    await tester.enterText(input, '04212005');
+    await tester.pump();
+
+    expect(
+      find.descendant(of: input, matching: find.text('04/21/2005')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text(localizations.okButtonLabel));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: button,
+        matching: find.text(DateFormat.yMMMMd().format(DateTime(2005, 4, 21))),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

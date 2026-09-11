@@ -48,6 +48,170 @@ class ChildProfileSetupScreen extends StatefulWidget {
       _ChildProfileSetupScreenState();
 }
 
+/// Formats the compact date input used by the date picker as the user types.
+///
+/// Flutter's [InputDatePickerFormField] accepts the locale's date format but
+/// does not insert separators while text is being entered. Keeping this
+/// formatter independent from the picker lets the dialog retain its normal
+/// calendar and validation behavior while allowing a parent to enter digits
+/// such as `04212005` and see `04/21/2005`.
+class BirthDateInputFormatter extends TextInputFormatter {
+  const BirthDateInputFormatter();
+
+  /// Returns the formatted value for a text edit and keeps the cursor next to
+  /// the same digit after separators are inserted or removed.
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final rawText = newValue.text;
+    final digits = _digitsOnly(rawText);
+    final limitedDigits = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final formattedText = _formatDigits(limitedDigits);
+
+    final rawCursor = newValue.selection.extentOffset;
+    final cursorOffset =
+        rawCursor < 0
+            ? formattedText.length
+            : rawCursor.clamp(0, rawText.length);
+    final digitsBeforeCursor = _digitsOnly(rawText.substring(0, cursorOffset));
+    final formattedCursor = _formattedOffsetForDigitIndex(
+      formattedText,
+      digitsBeforeCursor.length.clamp(0, limitedDigits.length),
+    );
+
+    return TextEditingValue(
+      text: formattedText,
+      selection: TextSelection.collapsed(offset: formattedCursor),
+      composing: TextRange.empty,
+    );
+  }
+
+  static String _digitsOnly(String value) =>
+      value.replaceAll(RegExp(r'[^0-9]'), '');
+
+  static String _formatDigits(String digits) {
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) {
+      return '${digits.substring(0, 2)}/${digits.substring(2)}';
+    }
+    return '${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}';
+  }
+
+  static int _formattedOffsetForDigitIndex(String formatted, int digitIndex) {
+    if (digitIndex <= 0) return 0;
+    var seen = 0;
+    for (var index = 0; index < formatted.length; index++) {
+      if (_isDigit(formatted.codeUnitAt(index))) {
+        seen++;
+        if (seen == digitIndex) return index + 1;
+      }
+    }
+    return formatted.length;
+  }
+
+  static bool _isDigit(int codeUnit) => codeUnit >= 48 && codeUnit <= 57;
+}
+
+/// Adds [BirthDateInputFormatter] to the private editable field inside
+/// Flutter's [DatePickerDialog]. The public date-picker API exposes a builder
+/// and a mode-change callback, but not the input field's controller, so this
+/// small adapter binds to the descendant [EditableText] when input mode is
+/// shown.
+class _DatePickerInputFormatter extends StatefulWidget {
+  const _DatePickerInputFormatter({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<_DatePickerInputFormatter> createState() =>
+      _DatePickerInputFormatterState();
+}
+
+class _DatePickerInputFormatterState extends State<_DatePickerInputFormatter> {
+  static const _formatter = BirthDateInputFormatter();
+  TextEditingController? _controller;
+  TextEditingValue _lastValue = const TextEditingValue();
+  bool _updating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleBind();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DatePickerInputFormatter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.child, widget.child)) _scheduleBind();
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_handleChanged);
+    super.dispose();
+  }
+
+  void _scheduleBind() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _bindToEditableText();
+    });
+  }
+
+  /// Called by the date picker after it changes between calendar and input
+  /// modes. The field is created during that rebuild, so bind after the frame.
+  void bindAfterModeChange() => _scheduleBind();
+
+  void _bindToEditableText() {
+    TextEditingController? nextController;
+
+    void visit(Element element) {
+      if (element.widget case final EditableText editable) {
+        nextController = editable.controller;
+        return;
+      }
+      element.visitChildElements(visit);
+    }
+
+    context.visitChildElements(visit);
+    if (identical(nextController, _controller)) return;
+
+    _controller?.removeListener(_handleChanged);
+    _controller = nextController;
+    if (_controller == null) return;
+
+    _lastValue = _controller!.value;
+    _controller!.addListener(_handleChanged);
+  }
+
+  void _handleChanged() {
+    final controller = _controller;
+    if (controller == null || _updating) return;
+
+    final currentValue = controller.value;
+    final formatted = _formatter.formatEditUpdate(_lastValue, currentValue);
+    _lastValue = formatted;
+    if (formatted.text == currentValue.text &&
+        formatted.selection == currentValue.selection) {
+      return;
+    }
+
+    _updating = true;
+    controller.value = formatted;
+    _updating = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A mode toggle rebuilds the DatePickerDialog below this widget. Schedule
+    // a scan from every wrapper build as well as from the mode callback so a
+    // newly created input controller is picked up on the next frame.
+    _scheduleBind();
+    return widget.child;
+  }
+}
+
 class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -306,18 +470,24 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
     // within plausible human dates rather than a 2–6 year window.
     final firstDate = DateTime(today.year - 100, today.month, today.day);
     if (!mounted) return;
+    final inputFormatterKey = GlobalKey<_DatePickerInputFormatterState>();
     final pickedDate = await showDatePicker(
       context: currentContext,
       initialDate: initialDate.isAfter(today) ? today : initialDate,
       firstDate: firstDate,
       lastDate: today,
       helpText: 'Select birth date',
+      onDatePickerModeChange:
+          (_) => inputFormatterKey.currentState?.bindAfterModeChange(),
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
             padding: MediaQuery.of(context).padding.copyWith(bottom: 0),
           ),
-          child: child!,
+          child: _DatePickerInputFormatter(
+            key: inputFormatterKey,
+            child: child!,
+          ),
         );
       },
     );
