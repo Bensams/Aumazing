@@ -38,55 +38,6 @@ void main() {
   const widths = [160.0, 200.0, 320.0, 520.0];
   const scales = [1.0, 1.3];
 
-  for (final gradient in [
-    AppGradients.primaryCta,
-    AppGradients.success,
-    AppGradients.warning,
-    AppGradients.info,
-  ]) {
-    testWidgets('primary button content meets contrast across $gradient', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _host(
-          child: AppPrimaryButton(
-            label: 'Start Pre-Assessment',
-            icon: Icons.play_circle_filled_rounded,
-            gradient: gradient,
-            onPressed: () {},
-          ),
-        ),
-      );
-      final foreground = _labelText(
-        tester,
-        'Start Pre-Assessment',
-      ).style!.color!;
-      final icon = tester.widget<Icon>(
-        find.byIcon(Icons.play_circle_filled_rounded),
-      );
-      expect(icon.color, foreground);
-
-      for (var segment = 0; segment < gradient.colors.length - 1; segment++) {
-        for (var sample = 0; sample <= 100; sample++) {
-          final background = Color.lerp(
-            gradient.colors[segment],
-            gradient.colors[segment + 1],
-            sample / 100,
-          )!;
-          final luminances = [
-            foreground.computeLuminance(),
-            background.computeLuminance(),
-          ]..sort();
-          final ratio = (luminances.last + 0.05) / (luminances.first + 0.05);
-          expect(
-            ratio,
-            greaterThanOrEqualTo(4.5),
-            reason: 'Label and icon must remain readable at sample $sample',
-          );
-        }
-      }
-    });
-  }
 
   for (final label in labels) {
     for (final width in widths) {

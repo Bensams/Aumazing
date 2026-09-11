@@ -100,8 +100,6 @@ class AppPrimaryButton extends StatefulWidget {
 }
 
 class _AppPrimaryButtonState extends State<AppPrimaryButton> {
-  // Clears 4.5:1 across every pastel button gradient, including the purple end.
-  static const _foregroundColor = Color(0xFF111827);
 
   bool _pressed = false;
   bool _focused = false;
@@ -176,7 +174,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                 borderRadius: AppRadius.button,
                 boxShadow: enabled ? AppShadows.interactive : null,
                 border: _focused && enabled
-                    ? Border.all(color: _foregroundColor, width: 2)
+                    ? Border.all(color: AppColors.white, width: 2)
                     : null,
               ),
               child: Center(
@@ -186,7 +184,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                         width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          color: _foregroundColor,
+                          color: AppColors.white,
                         ),
                       )
                     // Icon and label stay a single centred group. The label
@@ -200,7 +198,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                           if (widget.icon != null) ...[
                             Icon(
                               widget.icon,
-                              color: _foregroundColor,
+                              color: AppColors.white,
                               size: AppPrimaryButton._iconSize,
                             ),
                             const SizedBox(width: AppPrimaryButton._iconGap),
@@ -211,9 +209,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                             // scales instead of being cut off.
                             child: Text(
                               widget.label,
-                              style: AppTextStyles.buttonLarge.copyWith(
-                                color: _foregroundColor,
-                              ),
+                              style: AppTextStyles.buttonLarge,
                               textAlign: widget.textAlign,
                               softWrap: true,
                               maxLines: widget.maxLines,
