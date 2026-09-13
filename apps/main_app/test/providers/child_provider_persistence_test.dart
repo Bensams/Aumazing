@@ -67,10 +67,7 @@ void main() {
   group('saving the selection', () {
     test('selecting a child saves it under this parent\'s key', () async {
       final harness = build(
-        children: [
-          child('a'),
-          child('b', createdAt: DateTime(2026, 2, 1)),
-        ],
+        children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
       );
       await harness.provider.loadProfile();
 
@@ -81,10 +78,7 @@ void main() {
 
     test('the default choice on first load is saved too', () async {
       final harness = build(
-        children: [
-          child('a'),
-          child('b', createdAt: DateTime(2026, 2, 1)),
-        ],
+        children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
       );
 
       await harness.provider.loadProfile();
@@ -108,10 +102,7 @@ void main() {
 
     test('deleting the active child saves the replacement', () async {
       final harness = build(
-        children: [
-          child('a'),
-          child('b', createdAt: DateTime(2026, 2, 1)),
-        ],
+        children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
       );
       await harness.provider.loadProfile();
 
@@ -161,10 +152,7 @@ void main() {
         'difficulty_override_b': 2,
       });
       final harness = build(
-        children: [
-          child('a'),
-          child('b', createdAt: DateTime(2026, 2, 1)),
-        ],
+        children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
       );
 
       await harness.provider.loadProfile();
@@ -176,10 +164,7 @@ void main() {
 
     test('no saved selection falls back to the oldest child', () async {
       final harness = build(
-        children: [
-          child('b', createdAt: DateTime(2026, 2, 1)),
-          child('a'),
-        ],
+        children: [child('b', createdAt: DateTime(2026, 2, 1)), child('a')],
       );
 
       await harness.provider.loadProfile();
@@ -190,10 +175,7 @@ void main() {
     test('a saved child that was deleted falls back and re-saves', () async {
       SharedPreferences.setMockInitialValues({'active_child_user-1': 'gone'});
       final harness = build(
-        children: [
-          child('a'),
-          child('b', createdAt: DateTime(2026, 2, 1)),
-        ],
+        children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
       );
 
       await harness.provider.loadProfile();
@@ -235,10 +217,7 @@ void main() {
       'an in-session selection survives a reload over a stale saved id',
       () async {
         final harness = build(
-          children: [
-            child('a'),
-            child('b', createdAt: DateTime(2026, 2, 1)),
-          ],
+          children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
         );
         await harness.provider.loadProfile();
         await harness.provider.selectChild('b');
@@ -420,9 +399,8 @@ class _FakeLocalDb extends LocalDbService {
     String? userId,
     bool includeDeleted = false,
   }) async {
-    final rows = userId == null
-        ? _children
-        : _children.where((c) => c.userId == userId);
+    final rows =
+        userId == null ? _children : _children.where((c) => c.userId == userId);
     return rows.toList().reversed.toList();
   }
 
@@ -474,6 +452,8 @@ class _FakeChildRepository extends ChildRepository {
     bool musicEnabled = true,
     double musicVolume = 0.5,
     String musicCategory = 'calm',
+    String? musicTrack,
+    List<String>? musicTracks,
     double sfxVolume = 0.7,
     bool vibrationEnabled = true,
     double promptSpeed = 1.0,
@@ -492,6 +472,11 @@ class _FakeChildRepository extends ChildRepository {
       sex: sex,
       rewardPreference: rewardPreference,
       useRandomReward: useRandomReward,
+      musicEnabled: musicEnabled,
+      musicVolume: musicVolume,
+      musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      musicTracks: musicTracks,
       createdAt: now,
       updatedAt: now,
     );

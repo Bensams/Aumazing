@@ -266,7 +266,14 @@ class _AudioSettingsScreen extends StatelessWidget {
                       audioService.config.copyWith(musicEnabled: val),
                     );
                     if (val) {
-                      audioService.playCategoryMusic(childProv.musicCategory);
+                      childProv.musicTracks != null
+                          ? audioService.playConfiguredMix(
+                            childProv.musicTracks!,
+                          )
+                          : audioService.playConfiguredMusic(
+                            categoryKey: childProv.musicCategory,
+                            trackPath: childProv.musicTrack,
+                          );
                     } else {
                       audioService.stopMusic();
                     }
@@ -1321,25 +1328,147 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
   /// Which category is expanded to show its individual tracks. Defaults to
   /// none, so the list opens as six calm choices rather than thirty.
   String? _expandedKey;
+  bool _customMixExpanded = false;
 
   /// Path of the track being auditioned, so the row can show it is playing.
   String? _previewPath;
+  final Set<String> _mixDraft = <String>{};
+  String _mixFallbackCategory = kDefaultBgmCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMixDraft();
+  }
+
+  void _syncMixDraft() {
+    final tracks = widget.childProv.musicTracks;
+    if (tracks == null) {
+      _mixDraft.clear();
+      if (widget.childProv.musicCategory != kCustomMixBgmCategory) {
+        _mixFallbackCategory = widget.childProv.musicCategory;
+      }
+      return;
+    }
+    _mixDraft
+      ..clear()
+      ..addAll(validBgmTrackPaths(tracks));
+  }
+
+  void _syncAudioPreviewConfig(AudioService audio) {
+    try {
+      audio.updateConfig(
+        audio.config.copyWith(
+          musicEnabled: true,
+          musicVolume: widget.childProv.musicVolume,
+        ),
+      );
+    } on NoSuchMethodError {
+      // Lightweight test hosts may only implement the playback calls.
+    }
+  }
 
   Future<void> _selectCategory(BgmCategory category) async {
-    await widget.childProv.updateComfortSettings(musicCategory: category.key);
+    final hadSpecificChoice =
+        widget.childProv.musicTrack != null ||
+        widget.childProv.musicTracks != null;
+    if (hadSpecificChoice) {
+      await widget.childProv.updateMusicSelection(
+        musicCategory: category.key,
+        clearTrack: true,
+        clearTracks: true,
+      );
+    } else {
+      await widget.childProv.updateComfortSettings(musicCategory: category.key);
+    }
+    _mixDraft.clear();
+    _mixFallbackCategory = category.key;
     if (!mounted) return;
     // restart: true so the parent hears the new style straight away rather
     // than only on the next session.
-    await context.read<AudioService>().playCategoryMusic(
-      category.key,
-      restart: true,
-    );
+    final audio = context.read<AudioService>();
+    if (!widget.childProv.musicEnabled) return;
+    _syncAudioPreviewConfig(audio);
+    await audio.playCategoryMusic(category.key, restart: true);
     if (!mounted) return;
-    setState(() => _previewPath = context.read<AudioService>().currentTrack);
+    setState(() => _previewPath = audio.currentTrack);
+  }
+
+  Future<void> _selectMusicTrack(BgmCategory category, BgmTrack track) async {
+    final path = category.trackPath(track);
+    _mixDraft.clear();
+    _mixFallbackCategory = category.key;
+    try {
+      await widget.childProv.updateMusicSelection(
+        musicCategory: category.key,
+        musicTrack: path,
+        clearTracks: true,
+      );
+    } on NoSuchMethodError {
+      await widget.childProv.updateComfortSettings(musicCategory: category.key);
+    }
+    if (!mounted || !widget.childProv.musicEnabled) return;
+    final audio = context.read<AudioService>();
+    _syncAudioPreviewConfig(audio);
+    try {
+      await audio.playConfiguredMusic(
+        categoryKey: category.key,
+        trackPath: path,
+        restart: true,
+      );
+    } on NoSuchMethodError {
+      await audio.playCategoryTrack(category, track);
+    }
+    if (mounted) setState(() => _previewPath = path);
+  }
+
+  Future<void> _toggleMixTrack(BgmCategory category, BgmTrack track) async {
+    final path = category.trackPath(track);
+    if (!_mixDraft.contains(path) && _mixDraft.length >= kMaxCustomMixTracks) {
+      return;
+    }
+    if (_mixDraft.isEmpty &&
+        widget.childProv.musicCategory != kCustomMixBgmCategory) {
+      _mixFallbackCategory = widget.childProv.musicCategory;
+    }
+    setState(() {
+      if (_mixDraft.contains(path)) {
+        _mixDraft.remove(path);
+      } else {
+        _mixDraft.add(path);
+      }
+    });
+    if (_mixDraft.length < kMinCustomMixTracks) {
+      try {
+        await widget.childProv.updateMusicSelection(
+          musicCategory: _mixFallbackCategory,
+          clearTrack: true,
+          clearTracks: true,
+        );
+      } on NoSuchMethodError {
+        await widget.childProv.updateComfortSettings(
+          musicCategory: _mixFallbackCategory,
+        );
+      }
+      return;
+    }
+    await widget.childProv.updateMusicSelection(
+      musicCategory: kCustomMixBgmCategory,
+      musicTracks: List.unmodifiable(_mixDraft.toList()),
+      clearTrack: true,
+    );
+    if (!mounted || !widget.childProv.musicEnabled) return;
+    final audio = context.read<AudioService>();
+    _syncAudioPreviewConfig(audio);
+    await audio.playConfiguredMix(_mixDraft.toList(), restart: true);
+    if (mounted) setState(() => _previewPath = audio.currentTrack);
   }
 
   Future<void> _previewTrack(BgmCategory category, BgmTrack track) async {
-    await context.read<AudioService>().playCategoryTrack(category, track);
+    if (!widget.childProv.musicEnabled) return;
+    final audio = context.read<AudioService>();
+    _syncAudioPreviewConfig(audio);
+    await audio.playCategoryTrack(category, track);
     if (!mounted) return;
     setState(() => _previewPath = category.trackPath(track));
   }
@@ -1347,6 +1476,7 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
   @override
   Widget build(BuildContext context) {
     final selectedKey = widget.childProv.musicCategory;
+    final mixSelected = widget.childProv.musicTracks != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1358,8 +1488,8 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
         ),
         const SizedBox(height: 2),
         Text(
-          'One track from the chosen style plays each session, on repeat. '
-          'Tap a style to choose it, or ▸ to hear each track.',
+          'Choose a style for category shuffle, or select one track. '
+          'Custom Mix lets you choose 3–5 tracks from any style.',
           style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.textSecondary,
             fontSize: 11,
@@ -1369,15 +1499,21 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
         for (final category in kBgmCategories) ...[
           _MusicCategoryOption(
             category: category,
-            selected: category.key == selectedKey,
+            selected: category.key == selectedKey && !mixSelected,
+            selectedTrack:
+                selectedKey == category.key
+                    ? bgmTrackByPath(
+                      widget.childProv.musicTrack ?? '',
+                    )?.$2.title
+                    : null,
             expanded: _expandedKey == category.key,
             onTap: () => _selectCategory(category),
             onToggleExpand:
-                () => setState(
-                  () =>
-                      _expandedKey =
-                          _expandedKey == category.key ? null : category.key,
-                ),
+                () => setState(() {
+                  _customMixExpanded = false;
+                  _expandedKey =
+                      _expandedKey == category.key ? null : category.key;
+                }),
           ),
           if (_expandedKey == category.key)
             Padding(
@@ -1389,67 +1525,170 @@ class _MusicCategoryPickerState extends State<_MusicCategoryPicker> {
                 children: [
                   for (final track in category.tracks)
                     _MusicTrackRow(
+                      key: ValueKey(
+                        'settings-bgm-track-${category.key}-${track.file}',
+                      ),
                       title: track.title,
+                      selected:
+                          selectedKey == category.key &&
+                          widget.childProv.musicTrack ==
+                              category.trackPath(track),
                       playing: _previewPath == category.trackPath(track),
-                      onTap: () => _previewTrack(category, track),
+                      onSelect: () => _selectMusicTrack(category, track),
+                      onPreview:
+                          widget.childProv.musicEnabled
+                              ? () => _previewTrack(category, track)
+                              : null,
                     ),
                 ],
               ),
             ),
         ],
+        const SizedBox(height: AppSpacing.sm),
+        _CustomMixOption(
+          selected: mixSelected,
+          expanded: _customMixExpanded,
+          count: _mixDraft.length,
+          onToggleExpand:
+              () => setState(() {
+                _expandedKey = null;
+                _customMixExpanded = !_customMixExpanded;
+              }),
+        ),
+        if (_customMixExpanded)
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.md, bottom: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_mixDraft.length} of $kMaxCustomMixTracks selected',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (_mixDraft.length < kMinCustomMixTracks)
+                  const SettingsHintText(
+                    'Select at least 3 tracks to save this mix.',
+                  ),
+                for (final category in kBgmCategories) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 2),
+                    child: Text(
+                      '${category.label} tracks',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  for (final track in category.tracks)
+                    _MusicTrackRow(
+                      key: ValueKey(
+                        'settings-bgm-mix-${category.key}-${track.file}',
+                      ),
+                      title: track.title,
+                      selected: _mixDraft.contains(category.trackPath(track)),
+                      playing: _previewPath == category.trackPath(track),
+                      onSelect: () => _toggleMixTrack(category, track),
+                      onPreview:
+                          widget.childProv.musicEnabled
+                              ? () => _previewTrack(category, track)
+                              : null,
+                    ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
 }
 
-/// One track inside an expanded style, with a preview control.
-///
-/// Previewing does not change which style is selected — a parent can listen
-/// through everything before committing to one.
+/// One track row has separate selection and audition controls.
 class _MusicTrackRow extends StatelessWidget {
   const _MusicTrackRow({
+    super.key,
     required this.title,
+    required this.selected,
     required this.playing,
-    required this.onTap,
+    required this.onSelect,
+    required this.onPreview,
   });
 
   final String title;
+  final bool selected;
   final bool playing;
-  final VoidCallback onTap;
+  final VoidCallback onSelect;
+  final VoidCallback? onPreview;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      button: true,
-      label: 'Preview $title',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
-          child: Row(
-            children: [
-              Icon(
-                playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
-                size: 18,
-                color:
-                    playing ? AppColors.primaryPurple : AppColors.textSecondary,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  title,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color:
-                        playing
-                            ? AppColors.primaryPurple
-                            : AppColors.textPrimary,
-                    fontWeight: playing ? FontWeight.w700 : FontWeight.w500,
+      container: true,
+      label: title,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onSelect,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 7,
+                    horizontal: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 18,
+                        color:
+                            selected
+                                ? AppColors.primaryPurple
+                                : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color:
+                                selected || playing
+                                    ? AppColors.primaryPurple
+                                    : AppColors.textPrimary,
+                            fontWeight:
+                                selected || playing
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            IconButton(
+              key: ValueKey('settings-bgm-preview-$title'),
+              onPressed: onPreview,
+              icon: Icon(
+                playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
+                size: 20,
+              ),
+              color: AppColors.primaryPurple,
+              tooltip: onPreview == null ? 'Music is muted' : 'Preview $title',
+              constraints: const BoxConstraints(
+                minWidth: kMinInteractiveDimension,
+                minHeight: kMinInteractiveDimension,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1462,6 +1701,7 @@ class _MusicCategoryOption extends StatelessWidget {
   const _MusicCategoryOption({
     required this.category,
     required this.selected,
+    required this.selectedTrack,
     required this.expanded,
     required this.onTap,
     required this.onToggleExpand,
@@ -1469,6 +1709,7 @@ class _MusicCategoryOption extends StatelessWidget {
 
   final BgmCategory category;
   final bool selected;
+  final String? selectedTrack;
   final bool expanded;
   final VoidCallback onTap;
   final VoidCallback onToggleExpand;
@@ -1476,6 +1717,7 @@ class _MusicCategoryOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      key: ValueKey('settings-bgm-category-${category.key}'),
       inMutuallyExclusiveGroup: true,
       selected: selected,
       button: true,
@@ -1520,6 +1762,17 @@ class _MusicCategoryOption extends StatelessWidget {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      selectedTrack == null
+                          ? 'Category shuffle: one track each session'
+                          : 'Selected track: $selectedTrack',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1539,13 +1792,95 @@ class _MusicCategoryOption extends StatelessWidget {
                 tooltip:
                     expanded
                         ? 'Hide ${category.label} tracks'
-                        : 'Hear ${category.label} tracks',
+                        : 'Show ${category.label} tracks',
                 icon: Icon(
                   expanded
                       ? Icons.expand_less_rounded
                       : Icons.expand_more_rounded,
                   color: AppColors.textSecondary,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Collapsed entry point for the cross-category custom mix picker.
+class _CustomMixOption extends StatelessWidget {
+  const _CustomMixOption({
+    required this.selected,
+    required this.expanded,
+    required this.count,
+    required this.onToggleExpand,
+  });
+
+  final bool selected;
+  final bool expanded;
+  final int count;
+  final VoidCallback onToggleExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Custom Mix, 3 to 5 tracks',
+      key: const ValueKey('settings-bgm-custom-mix-expand'),
+      child: GestureDetector(
+        onTap: onToggleExpand,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.lavenderLight : AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Custom Mix (3–5 tracks)',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      selected
+                          ? '$count tracks selected; one plays each session'
+                          : 'Choose 3–5 tracks from any music style',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 20,
+                  color: AppColors.primaryPurple,
+                ),
+              Icon(
+                expanded
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                color: AppColors.textSecondary,
               ),
             ],
           ),

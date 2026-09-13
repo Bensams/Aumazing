@@ -302,6 +302,7 @@ class AuthService {
   final Uuid _uuid = const Uuid();
   final SupabaseAuthClient _supabaseAuth;
   final GoogleAuthClient _googleAuth;
+  final String _googleWebClientId;
   bool _googleInitialized = false;
 
   // Guest mode support
@@ -322,10 +323,13 @@ class AuthService {
     GoogleAuthClient? googleAuth,
     LocalDbService? localDb,
     ProtectedStorage? protectedStorage,
+    String? googleWebClientId,
   }) : _supabaseAuth =
            supabaseAuth ??
            DefaultSupabaseAuthClient(Supabase.instance.client.auth),
        _googleAuth = googleAuth ?? DefaultGoogleAuthClient(),
+       _googleWebClientId =
+           googleWebClientId ?? SupabaseConfig.googleWebClientId,
        _localDb = localDb ?? localDbService,
        _protectedStorage = protectedStorage ?? ProtectedStorage();
 
@@ -615,10 +619,18 @@ class AuthService {
 
   // --- Google Sign-In (native, google_sign_in v7.x) ---
 
+
   Future<void> _ensureGoogleInitialized() async {
     if (_googleInitialized) return;
+    if (!kIsWeb && _googleWebClientId.isEmpty) {
+      debugPrint('[GoogleAuth] Missing GOOGLE_WEB_CLIENT_ID build configuration.');
+      throw AuthException(
+        'Google Sign-In is unavailable in this version of the app. '
+        'Please sign in with email.',
+      );
+    }
     await _googleAuth.initialize(
-      serverClientId: SupabaseConfig.googleWebClientId,
+      serverClientId: _googleWebClientId,
       clientId: Platform.isIOS ? SupabaseConfig.googleIosClientId : null,
     );
     _googleInitialized = true;

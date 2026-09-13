@@ -7,5 +7,6 @@ library shared_audio;
 export 'src/audio_config.dart';
 export 'src/audio_service.dart';
 export 'src/bgm_library.dart';
+export 'src/bgm_selection.dart';
 export 'src/voice_over_service.dart';
 export 'src/voice_pack.dart';

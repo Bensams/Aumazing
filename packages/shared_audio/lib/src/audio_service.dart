@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'audio_config.dart';
 import 'bgm_library.dart';
+import 'bgm_selection.dart';
 
 import 'web_music_player_stub.dart'
     if (dart.library.js_interop) 'web_music_player.dart';
@@ -261,6 +262,39 @@ class AudioService {
     final track = category.tracks[Random().nextInt(category.tracks.length)];
     _currentCategory = category.key;
     await playMusic(category.trackPath(track));
+  }
+
+  Future<void> playConfiguredMusic({
+    required String? categoryKey,
+    String? trackPath,
+    bool restart = false,
+  }) async {
+    if (!_config.musicEnabled) return;
+    final category = bgmCategoryOrDefault(categoryKey);
+    BgmTrack? selected;
+    for (final track in category.tracks) {
+      if (category.trackPath(track) == trackPath) selected = track;
+    }
+    if (selected == null)
+      return playCategoryMusic(categoryKey, restart: restart);
+    final path = category.trackPath(selected);
+    if (restart && _currentTrack == path && isMusicPlaying) await stopMusic();
+    _currentCategory = category.key;
+    await playMusic(path);
+  }
+
+  Future<void> playConfiguredMix(
+    List<String> trackPaths, {
+    bool restart = false,
+  }) async {
+    if (!_config.musicEnabled) return;
+    final valid = validBgmTrackPaths(trackPaths);
+    if (valid.isEmpty)
+      return playCategoryMusic(kDefaultBgmCategory, restart: restart);
+    final path = valid[Random().nextInt(valid.length)];
+    if (restart && _currentTrack == path && isMusicPlaying) await stopMusic();
+    _currentCategory = kCustomMixBgmCategory;
+    await playMusic(path);
   }
 
   /// Play one *named* track, for the settings preview.

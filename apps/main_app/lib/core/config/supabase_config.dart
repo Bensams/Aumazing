@@ -21,7 +21,7 @@ class SupabaseConfig {
   );
 
   /// Google OAuth **Web** client ID (not Android) — required by the
-  /// Supabase OAuth flow.
+  /// Supabase OAuth and native Android/iOS Google token exchange.
   static const String googleWebClientId =
       String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 

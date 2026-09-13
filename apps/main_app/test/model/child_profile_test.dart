@@ -90,8 +90,57 @@ void main() {
         updatedAt: DateTime(2026, 4, 21),
       );
 
-      expect(ChildProfile.fromMap(profile.toMap()).musicCategory,
-          'filipino_calm');
+      expect(
+        ChildProfile.fromMap(profile.toMap()).musicCategory,
+        'filipino_calm',
+      );
+    });
+
+    test('survives exact-track and Custom Mix map round trips', () {
+      const exact = 'bgm/gentle_playful/happy_marimba.ogg';
+      const mix = <String>[
+        'bgm/soft_relaxing/breathing_pad.ogg',
+        'bgm/nature_ambient/slow_ocean.ogg',
+        'bgm/filipino_calm/bamboo_breeze.ogg',
+      ];
+      final profile = ChildProfile(
+        id: 'child-1',
+        userId: 'parent-1',
+        displayName: 'Mika',
+        birthDate: DateTime(2022, 4, 20),
+        avatar: 'lion',
+        musicCategory: kCustomMixBgmCategory,
+        musicTrack: exact,
+        musicTracks: mix,
+        createdAt: DateTime(2026, 4, 21),
+        updatedAt: DateTime(2026, 4, 21),
+      );
+
+      final local = ChildProfile.fromMap(profile.toMap());
+      expect(local.musicTrack, exact);
+      expect(local.musicTracks, mix);
+
+      final cloud = ChildProfile.fromSupabase(profile.toSupabase());
+      expect(cloud.musicCategory, kCustomMixBgmCategory);
+      expect(cloud.musicTrack, exact);
+      expect(cloud.musicTracks, mix);
+    });
+
+    test('legacy rows keep null track choices for category shuffle', () {
+      final profile = ChildProfile.fromMap({
+        'id': 'legacy-child',
+        'user_id': 'parent-1',
+        'display_name': 'Legacy Child',
+        'avatar': 'lion',
+        'music_category': 'filipino_calm',
+        'created_at': '2026-04-21T00:00:00.000',
+        'updated_at': '2026-04-21T00:00:00.000',
+      });
+
+      expect(profile.musicTrack, isNull);
+      expect(profile.musicTracks, isNull);
+      expect(profile.toSupabase()['music_track'], isNull);
+      expect(profile.toSupabase()['music_tracks'], isNull);
     });
 
     test('copyWith leaves the category alone when not passed', () {
@@ -106,8 +155,7 @@ void main() {
         updatedAt: DateTime(2026, 4, 21),
       );
 
-      expect(profile.copyWith(musicVolume: 0.9).musicCategory,
-          'focus_minimal');
+      expect(profile.copyWith(musicVolume: 0.9).musicCategory, 'focus_minimal');
     });
   });
 }

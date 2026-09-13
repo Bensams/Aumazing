@@ -13,12 +13,7 @@ import '../../widgets/mascot.dart';
 import '../../widgets/mascot_host.dart';
 
 /// Game types available in the flow
-enum GameType {
-  matchIt,
-  copyMe,
-  doWhatISay,
-  myTurnYourTurn,
-}
+enum GameType { matchIt, copyMe, doWhatISay, myTurnYourTurn }
 
 /// Screen that manages a sequence of games with rewards between them
 /// Usage: GameFlowScreen(gameSequence: [GameType.copyMe, GameType.matchIt])
@@ -57,10 +52,7 @@ class GameFlowScreen extends StatefulWidget {
   /// Predefined mini flow: just 2 games
   factory GameFlowScreen.miniFlow({VoidCallback? onComplete}) {
     return GameFlowScreen(
-      gameSequence: const [
-        GameType.copyMe,
-        GameType.matchIt,
-      ],
+      gameSequence: const [GameType.copyMe, GameType.matchIt],
       flowContext: 'practice',
       onComplete: onComplete,
     );
@@ -87,9 +79,16 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final childProvider = context.read<ChildProvider>();
-      context
-          .read<AudioService>()
-          .playCategoryMusic(childProvider.musicCategory, restart: true);
+      childProvider.musicTracks != null
+          ? context.read<AudioService>().playConfiguredMix(
+            childProvider.musicTracks!,
+            restart: true,
+          )
+          : context.read<AudioService>().playConfiguredMusic(
+            categoryKey: childProvider.musicCategory,
+            trackPath: childProvider.musicTrack,
+            restart: true,
+          );
     });
   }
 
@@ -108,22 +107,23 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
 
     // Show reward overlay
     final childProvider = context.read<ChildProvider>();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: RewardOverlay.forChild(
-          profile: childProvider.profile!,
-          onComplete: () {
-            Navigator.of(dialogContext).pop(); // Close reward
-            _continueToNext(); // Continue to next game or finish
-          },
-          continueButtonText: _isLastGame ? 'Finish' : 'Next Game',
-        ),
-      ),
+      builder:
+          (dialogContext) => PopScope(
+            canPop: false,
+            child: RewardOverlay.forChild(
+              profile: childProvider.profile!,
+              onComplete: () {
+                Navigator.of(dialogContext).pop(); // Close reward
+                _continueToNext(); // Continue to next game or finish
+              },
+              continueButtonText: _isLastGame ? 'Finish' : 'Next Game',
+            ),
+          ),
     );
   }
 
@@ -196,66 +196,70 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
         // that have none of their own.
         showMascot: _currentGame != GameType.myTurnYourTurn,
         child: Stack(
-        children: [
-          // Current game
-          _buildCurrentGame(),
+          children: [
+            // Current game
+            _buildCurrentGame(),
 
-          // Progress indicator overlay
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            right: 16,
-            child: SafeArea(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(220),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(20),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Progress dots
-                    Row(
-                      children: List.generate(
-                        widget.gameSequence.length,
-                        (index) => Container(
-                          width: 10,
-                          height: 10,
-                          margin: const EdgeInsets.only(right: 6),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: index <= _currentGameIndex
-                                ? const Color(0xFF9B82C4)
-                                : const Color(0xFFE0E0E0),
+            // Progress indicator overlay
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              right: 16,
+              child: SafeArea(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(220),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(20),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Progress dots
+                      Row(
+                        children: List.generate(
+                          widget.gameSequence.length,
+                          (index) => Container(
+                            width: 10,
+                            height: 10,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color:
+                                  index <= _currentGameIndex
+                                      ? const Color(0xFF9B82C4)
+                                      : const Color(0xFFE0E0E0),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Game counter
-                    Expanded(
-                      child: Text(
-                        'Game ${_currentGameIndex + 1} of ${widget.gameSequence.length}: ${_getGameName(_currentGame)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF333333),
+                      const SizedBox(width: 12),
+                      // Game counter
+                      Expanded(
+                        child: Text(
+                          'Game ${_currentGameIndex + 1} of ${widget.gameSequence.length}: ${_getGameName(_currentGame)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF333333),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );

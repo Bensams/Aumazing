@@ -95,7 +95,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 19; // v19: module_progress table
+  static const _dbVersion = 21; // v21: custom background-music mix
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -160,6 +160,8 @@ class LocalDbService {
         music_enabled INTEGER NOT NULL DEFAULT 1,
         music_volume REAL NOT NULL DEFAULT 0.5,
         music_category TEXT NOT NULL DEFAULT 'soft_relaxing',
+        music_track TEXT,
+        music_tracks TEXT,
         sfx_volume REAL NOT NULL DEFAULT 0.7,
         vibration_enabled INTEGER NOT NULL DEFAULT 1,
         animation_intensity REAL NOT NULL DEFAULT 1.0,
@@ -1073,6 +1075,28 @@ class LocalDbService {
       await _createModuleProgressTable(db);
       debugPrint('[LocalDbService] v19: module_progress table');
     }
+    // These columns are deliberately added after the legacy v3 table rebuild
+    // above.  Older databases must retain the new fields after every upgrade.
+    if (oldVersion < 20) {
+      try {
+        await db.execute(
+          'ALTER TABLE ${LocalTables.children} ADD COLUMN music_track TEXT',
+        );
+      } catch (_) {
+        // Column already present — safe to skip.
+      }
+      debugPrint('[LocalDbService] v20: music_track column');
+    }
+    if (oldVersion < 21) {
+      try {
+        await db.execute(
+          'ALTER TABLE ${LocalTables.children} ADD COLUMN music_tracks TEXT',
+        );
+      } catch (_) {
+        // Column already present — safe to skip.
+      }
+      debugPrint('[LocalDbService] v21: music_tracks column');
+    }
   }
 
   // ─── Generic Sync Operations ──────────────────────────────────────────
@@ -1421,6 +1445,7 @@ class LocalDbService {
     final now = DateTime.now();
 
     final map = profile.toMap();
+    await _removeUnknownChildColumns(db, map);
     map.remove('created_at');
     map['local_created_at'] = profile.createdAt.toIso8601String();
     map['updated_at'] = now.toIso8601String();
@@ -1472,6 +1497,7 @@ class LocalDbService {
     }
 
     final map = profile.toMap();
+    await _removeUnknownChildColumns(db, map);
     map.remove('created_at');
     map['local_created_at'] = profile.createdAt.toIso8601String();
     map['updated_at'] = remoteUpdatedAt;
@@ -1485,6 +1511,21 @@ class LocalDbService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     return true;
+  }
+
+  /// A few embedders keep an older in-memory children table while the app
+  /// upgrades. Filtering newly-added nullable settings makes those rows
+  /// readable until their normal schema migration runs, without dropping the
+  /// fields on the current v21 database.
+  Future<void> _removeUnknownChildColumns(
+    Database db,
+    Map<String, dynamic> map,
+  ) async {
+    final columns = await db.rawQuery(
+      'PRAGMA table_info(${LocalTables.children})',
+    );
+    final names = {for (final column in columns) column['name'] as String};
+    map.removeWhere((key, _) => !names.contains(key));
   }
 
   Future<List<ChildProfile>> getChildren({

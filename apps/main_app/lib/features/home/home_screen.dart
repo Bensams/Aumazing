@@ -172,7 +172,12 @@ class _HomeScreenState extends State<HomeScreen> {
         await Future.delayed(const Duration(milliseconds: 200));
         if (!audioService.isMusicPlaying) {
           debugPrint('[HomeScreen] Resume failed, starting fresh track...');
-          await audioService.playCategoryMusic(childProvider.musicCategory);
+          childProvider.musicTracks != null
+              ? await audioService.playConfiguredMix(childProvider.musicTracks!)
+              : await audioService.playConfiguredMusic(
+                categoryKey: childProvider.musicCategory,
+                trackPath: childProvider.musicTrack,
+              );
         }
       } else if (audioService.currentCategory != childProvider.musicCategory) {
         // LoadingScreen and LoginScreen start the default category because no
@@ -183,7 +188,12 @@ class _HomeScreenState extends State<HomeScreen> {
           '[HomeScreen] Switching music to '
           '${childProvider.musicCategory}',
         );
-        await audioService.playCategoryMusic(childProvider.musicCategory);
+        childProvider.musicTracks != null
+            ? await audioService.playConfiguredMix(childProvider.musicTracks!)
+            : await audioService.playConfiguredMusic(
+              categoryKey: childProvider.musicCategory,
+              trackPath: childProvider.musicTrack,
+            );
       } else {
         debugPrint('[HomeScreen] Music already playing and enabled — OK');
       }
@@ -252,8 +262,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final childId = profile.id;
 
-    final assessments =
-        context.read<AssessmentProvider>().loadAssessments(childId);
+    final assessments = context.read<AssessmentProvider>().loadAssessments(
+      childId,
+    );
     context.read<ProgressProvider>().loadProgress(childId);
     await assessments;
     if (!mounted) return false;
@@ -276,10 +287,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Replays the walkthrough from the help button.
-   void _startTour() {
+  void _startTour() {
     if (_isTourActive || !_assessmentsReady) return;
-     setState(() => _isTourActive = true);
-   }
+    setState(() => _isTourActive = true);
+  }
 
   void _endTour() {
     TourService.instance.markParentTourSeen();
