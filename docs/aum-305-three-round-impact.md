@@ -1,6 +1,6 @@
 # AUM-305 — Reduce all game modes from 4 rounds to 3: impact analysis
 
-Branch: `claude/aum-305-three-round-flow` · Date: 2026-08-27
+Branch: `aum-305-three-round-flow` · Date: 2026-08-27
 Card: [AUM-305] [Investigation/Implementation] Reduce all game modes from 4 rounds to 3
 
 ## 1. What changed

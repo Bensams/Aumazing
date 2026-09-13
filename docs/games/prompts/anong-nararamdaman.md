@@ -1,6 +1,6 @@
 # Prompt — Ano'ng Nararamdaman? (emotion recognition)
 
-Paste everything inside the fence into a fresh Claude Code session in its own
+Paste everything inside the fence into a fresh agent session in its own
 worktree. Nothing needs filling in.
 
 This is the only one of the four that needs a genuinely new generated art set,

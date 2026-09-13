@@ -1,6 +1,6 @@
 # New-game prompt template
 
-Copy the block below into a fresh Claude Code session (or paste it as a task) and
+Copy the block below into a fresh agent session (or paste it as a task) and
 fill in the `<…>` placeholders to add a new child mini-game to Aumazing.
 
 The checklist is the *union* of everything the six existing games ended up

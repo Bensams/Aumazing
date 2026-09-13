@@ -1,6 +1,6 @@
 # Prompt — Kumusta! (greetings)
 
-Paste everything inside the fence into a fresh Claude Code session in its own
+Paste everything inside the fence into a fresh agent session in its own
 worktree. Nothing needs filling in.
 
 ````markdown

@@ -383,7 +383,7 @@ Check any new character's `point` against `bps_point` before shipping it.
   (9 costumes × 3 characters), `scripts/generate_costumes.py` and
   `.planning/phases/02.0-star-rewards/BACKLOG.md` live in a git **stash** —
   `stash@{0}^3`, commit `524f05e5`, "untracked files on
-  claude/voice-over-replay-callback". `.costume_cache/` is gitignored and the
+  aum-voice-over-replay-callback". `.costume_cache/` is gitignored and the
   art was swept up by a `git stash -u`, so a plain `ls` or a `git log` over the
   working tree finds nothing and it looks like the art was never made. It was:
 
