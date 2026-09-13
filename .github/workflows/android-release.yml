@@ -14,6 +14,8 @@ permissions:
 jobs:
   verify-and-package:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
     defaults:
       run:
         working-directory: apps/main_app
@@ -26,6 +28,12 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
+      - name: Verify Google Sign-In build configuration
+        run: |
+          if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "::error::Repository secret GOOGLE_WEB_CLIENT_ID must be set for Android release builds."
+            exit 1
+          fi
       - name: Analyze application
         # Infos are deprecation/style notices, not correctness issues, and
         # accumulate naturally as Flutter/packages evolve; only warnings and
@@ -38,14 +46,18 @@ jobs:
         # failing a different, nondeterministic set of tests each run.
         run: flutter test --concurrency=1
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID"
       - name: Build release app bundle
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID"
+      - name: Rename packages to aumazing
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/aumazing.apk
+          mv build/app/outputs/bundle/release/app-release.aab build/app/outputs/bundle/release/aumazing.aab
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: aumazing-android-release-${{ github.sha }}
           if-no-files-found: error
           path: |
-            apps/main_app/build/app/outputs/flutter-apk/app-release.apk
-            apps/main_app/build/app/outputs/bundle/release/app-release.aab
+            apps/main_app/build/app/outputs/flutter-apk/aumazing.apk
+            apps/main_app/build/app/outputs/bundle/release/aumazing.aab

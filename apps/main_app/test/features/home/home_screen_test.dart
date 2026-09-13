@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/core/services/sync_service.dart';
 import 'package:aumazing/features/home/home_screen.dart' show HomeScreen;
+import 'package:aumazing/features/pre_assessment/pre_assessment_intro_screen.dart'
+    show PreAssessmentIntroScreen;
 import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart'
     show ChildModeLobbyScreen;
 import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart'
@@ -206,6 +208,139 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   });
 
+  group('first assessment guidance', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v1': true,
+      });
+      TourService.instance.resetCache();
+    });
+
+    for (final size in [const Size(360, 800), const Size(960, 540)]) {
+      testWidgets(
+        'first step stays above secondary actions at $size with large text',
+        (tester) async {
+          await tester.binding.setSurfaceSize(size);
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(
+            _buildTestApp(
+              authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+              childProvider: _TestChildProvider(initialProfile: _profile),
+              textScaler: const TextScaler.linear(1.6),
+            ),
+          );
+          await _settleUi(tester);
+
+          final start = find.widgetWithText(
+            AppPrimaryButton,
+            'Start Pre-Assessment',
+          );
+          final card = find.ancestor(
+            of: find.text('Start here'),
+            matching: find.byType(AppCard),
+          );
+          expect(start, findsOneWidget);
+          expect(card, findsOneWidget);
+          expect(find.text('Pre-Assessment Needed'), findsNothing);
+          expect(
+            tester.getRect(card).bottom,
+            lessThan(tester.getTopLeft(find.text('Enter Child Mode')).dy),
+          );
+          expect(
+            tester.getRect(card).bottom,
+            lessThan(tester.getTopLeft(find.text('Therapy Directory')).dy),
+          );
+          await tester.ensureVisible(start);
+          expect(start.hitTestable(), findsOneWidget);
+          expect(tester.takeException(), isNull);
+
+          await tester.pump(const Duration(milliseconds: 700));
+        },
+      );
+    }
+
+    testWidgets('first assessment button opens the existing introduction', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+
+      await tester.tap(find.text('Start Pre-Assessment'));
+      await _settleUi(tester);
+      expect(find.byType(PreAssessmentIntroScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets(
+      'starts the tour on Start here only after delayed assessment loading',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        TourService.instance.resetCache();
+        final loadGate = Completer<void>();
+        await tester.binding.setSurfaceSize(const Size(960, 540));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(
+          _buildTestApp(
+            authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+            childProvider: _TestChildProvider(initialProfile: _profile),
+            assessmentProvider: _TestAssessmentProvider(loadGate: loadGate),
+          ),
+        );
+        await _settleUi(tester);
+
+        expect(find.textContaining('A quick tour'), findsNothing);
+        expect(find.text('Start Pre-Assessment'), findsNothing);
+
+        loadGate.complete();
+        await _settleUi(tester);
+        expect(find.textContaining('A quick tour'), findsOneWidget);
+
+        await tester.tap(find.text('Next'));
+        await _settleUi(tester);
+        expect(find.textContaining('Start the pre-assessment here'), findsOneWidget);
+        expect(find.text('Start Pre-Assessment'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('waits for assessment loading before offering the first step', (
+      tester,
+    ) async {
+      final loadGate = Completer<void>();
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: _TestAssessmentProvider(loadGate: loadGate),
+        ),
+      );
+      await _settleUi(tester);
+
+      expect(find.text('Start here'), findsNothing);
+      expect(find.text('Start Pre-Assessment'), findsNothing);
+      loadGate.complete();
+      await _settleUi(tester);
+      expect(find.text('Start here'), findsOneWidget);
+      expect(find.text('Start Pre-Assessment'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
+
   testWidgets(
     'skills snapshot is domain-first and uses the latest post-assessment',
     (tester) async {
@@ -256,6 +391,12 @@ void main() {
       expect(find.text('90% activity accuracy'), findsWidgets);
       expect(find.text('60% activity accuracy'), findsNothing);
       expect(find.text('Assessment Scores'), findsNothing);
+      expect(find.text('Start here'), findsNothing);
+      expect(find.text('Start Pre-Assessment'), findsNothing);
+      expect(
+        find.widgetWithText(AppPrimaryButton, 'Assessment'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
 
       await tester.pump(const Duration(milliseconds: 700));
@@ -349,7 +490,14 @@ void main() {
 
       expect(find.textContaining('A quick tour'), findsOneWidget);
 
-      // Step two spotlights the child panel.
+      // The first highlighted action explains where to begin.
+      await tester.tap(find.text('Next'));
+      await _settleUi(tester);
+      expect(
+        find.textContaining('Start the pre-assessment here'),
+        findsOneWidget,
+      );
+
       await tester.tap(find.text('Next'));
       await _settleUi(tester);
       expect(find.textContaining('quick stats'), findsOneWidget);
@@ -561,6 +709,7 @@ Widget _buildTestApp({
   ProgressProvider? progressProvider,
   Stream<SyncState>? syncStates,
   bool openChildMode = false,
+  TextScaler textScaler = TextScaler.noScaling,
 }) {
   return MultiProvider(
     providers: [
@@ -576,6 +725,11 @@ Widget _buildTestApp({
     ],
     child: MaterialApp(
       theme: AppTheme.light,
+      builder:
+          (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
       home: HomeScreen(
         authService: authService,
         syncStates: syncStates,
@@ -601,6 +755,8 @@ class _TestChildProvider extends ChildProvider {
   @override
   ChildProfile? get profile => _profile;
 
+  @override
+  bool get hasProfile => true;
   @override
   bool get musicEnabled => _musicEnabled;
 
@@ -633,6 +789,13 @@ class _TestChildProvider extends ChildProvider {
 }
 
 class _TestAssessmentProvider extends AssessmentProvider {
+  _TestAssessmentProvider({this.loadGate});
+
+  final Completer<void>? loadGate;
+
+  @override
+  bool get isLoading => loadGate != null && !loadGate!.isCompleted;
+
   @override
   bool get hasPreAssessment => false;
 
@@ -643,7 +806,12 @@ class _TestAssessmentProvider extends AssessmentProvider {
   int get recommendedLevel => 1;
 
   @override
-  Future<void> loadAssessments(String childId) async {}
+  Future<void> loadAssessments(String childId) async {
+    if (loadGate != null) {
+      await loadGate!.future;
+      notifyListeners();
+    }
+  }
 }
 
 class _DashboardAssessmentProvider extends AssessmentProvider {

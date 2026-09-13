@@ -108,3 +108,15 @@ packages/assets/audio/SFX/SoundFX/
 swarm.yaml
 tmp/
 tools/build_technical_document.py
+# Local agent/editor tooling config — kept on disk, never committed.
+# These are development-environment files, not part of the product.
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+**/.codex/
+**/.roo/
+**/.windsurf/
+.github/copilot-instructions.md
+tools/hermes/
+tools/gemini_router_adapter/

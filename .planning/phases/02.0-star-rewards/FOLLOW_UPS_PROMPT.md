@@ -10,8 +10,8 @@ implemented and in TESTING; these are the five items left. Work against `dev` â€
 
 ## Where things are
 
-- Branch `claude/star-shop-aum-246` off `dev`, commits `197ffc1` and `cc00048`.
-  Worktree at `.claude/worktrees/star-shop-impl`. Nothing is pushed; no PR yet.
+- Branch `aum-246-star-shop` off `dev`, commits `197ffc1` and `cc00048`.
+  Worktree at `worktrees/star-shop-impl`. Nothing is pushed; no PR yet.
 - 29 of 33 stories complete. `flutter analyze` clean, 615/615 tests pass.
 - Read `.planning/phases/02.0-star-rewards/BACKLOG.md` for the story detail and
   the reasoning behind the design constraints. Read `scripts/SPRITES.md` before

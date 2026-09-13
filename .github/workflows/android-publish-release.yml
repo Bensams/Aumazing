@@ -20,6 +20,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
     defaults:
       run:
         working-directory: apps/main_app
@@ -35,6 +37,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
 
+      - name: Verify Google Sign-In build configuration
+        run: |
+          if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "::error::Repository secret GOOGLE_WEB_CLIENT_ID must be set for Android release builds."
+            exit 1
+          fi
+
       - name: Decode release keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
@@ -48,7 +57,11 @@ jobs:
       - name: Build release APK
         run: |
           flutter build apk --release \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
             --dart-define=UNLOCK_PREMIUM_FEATURES=${{ inputs.unlock_premium }}
+
+      - name: Rename package to aumazing.apk
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/aumazing.apk
 
       - name: Remove keystore secrets from workspace
         if: always()
@@ -98,4 +111,4 @@ jobs:
             - App version: ${{ steps.meta.outputs.version }}
             - Source: ${{ github.ref_name }} @ ${{ github.sha }}
             - Premium: ${{ steps.meta.outputs.premium_label }}
-          files: apps/main_app/build/app/outputs/flutter-apk/app-release.apk
+          files: apps/main_app/build/app/outputs/flutter-apk/aumazing.apk

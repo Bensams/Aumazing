@@ -100,6 +100,7 @@ class AppPrimaryButton extends StatefulWidget {
 }
 
 class _AppPrimaryButtonState extends State<AppPrimaryButton> {
+
   bool _pressed = false;
   bool _focused = false;
 
@@ -173,10 +174,7 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                 borderRadius: AppRadius.button,
                 boxShadow: enabled ? AppShadows.interactive : null,
                 border: _focused && enabled
-                    ? Border.all(
-                        color: AppColors.white,
-                        width: 2,
-                      )
+                    ? Border.all(color: AppColors.white, width: 2)
                     : null,
               ),
               child: Center(
@@ -198,9 +196,11 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (widget.icon != null) ...[
-                            Icon(widget.icon,
-                                color: AppColors.white,
-                                size: AppPrimaryButton._iconSize),
+                            Icon(
+                              widget.icon,
+                              color: AppColors.white,
+                              size: AppPrimaryButton._iconSize,
+                            ),
                             const SizedBox(width: AppPrimaryButton._iconGap),
                           ],
                           Flexible(
@@ -225,4 +225,3 @@ class _AppPrimaryButtonState extends State<AppPrimaryButton> {
     );
   }
 }
-

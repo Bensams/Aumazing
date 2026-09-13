@@ -282,6 +282,15 @@ class AudioService {
   /// Compare against [BgmCategory.trackPath] to tell which track this is.
   String? get currentTrack => _currentTrack;
 
+  /// Re-associates the playing track with [categoryKey] without touching
+  /// playback. [playMusic] carries no category context and leaves the
+  /// bookkeeping alone, so a caller that resumes a session track after
+  /// category-aware previews (setup, settings) must put the category back
+  /// itself or the dashboard's category check restarts the track.
+  void setCurrentCategory(String? categoryKey) {
+    _currentCategory = categoryKey;
+  }
+
   // ── Sound Effects ──────────────────────────────────────────────────
 
   /// Play a one-shot sound effect from the shared_audio assets.

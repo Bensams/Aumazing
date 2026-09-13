@@ -71,7 +71,8 @@ class CopyMeGame extends FlameGame
     required int errorCount,
     required int totalResponseTimeMs,
     GameSessionMetrics? analytics,
-  }) onGameComplete;
+  })
+  onGameComplete;
 
   /// Optional callback fired on each individual correct tap in the sequence.
   /// Used by the Flutter layer to trigger haptic feedback during pre-assessment.
@@ -90,6 +91,7 @@ class CopyMeGame extends FlameGame
   final VoidCallback? onPlayDropSfx;
   final VoidCallback? onPlayLevelCompleteSfx;
   final VoidCallback? onPlayGameCompleteSfx;
+
   /// Immediate feedback on each correct tap: the shape the child just hit, so
   /// the app can name it back. Fires per tap rather than per completed
   /// sequence — the point of naming is to land while the child is still
@@ -99,17 +101,47 @@ class CopyMeGame extends FlameGame
   final VoidCallback? onPlayInstructionVo;
   final VoidCallback? onPlayTransitionVo;
   final VoidCallback? onPlayCelebrationVo;
+
   /// Voice-over for demo/watch phase ("Watch me first" / "My turn").
   ///
   /// Returns a future that completes when the line has finished if the caller
   /// can tell — the demo waits for it rather than for a fixed number of
   /// milliseconds. See [_playDemoSequence].
   final FutureOr<void> Function()? onPlayMyTurnVo;
+
   /// Voice-over for child input phase ("Your turn" / "Now you try")
   final VoidCallback? onPlayYourTurnVo;
+
   /// SFX callback for each sequence highlight during demo phase.
   /// Receives the 0-based position in the sequence.
   final void Function(int sequencePosition)? onPlaySequenceHighlightSfx;
+
+  // ── Completed-pattern hold timing ────────────────────────────────────
+  // How long the finished demo pattern stays on screen before it is cleared
+  // and the child's turn begins.
+  //
+  // The SPED teacher's audit found the pattern vanished before a child on the
+  // Easy tier had finished encoding it, so Easy holds it for a full three
+  // seconds. Medium, Hard and assessment keep the original brief hold: the
+  // shorter look is part of what those tiers measure, and assessment timing
+  // must stay comparable across children.
+  static const _patternHoldEasyMs = 3000;
+  static const _patternHoldDefaultMs = 700;
+
+  /// True for the assessment profile, which disables adaptive stepping so its
+  /// telemetry stays comparable; here it also pins the original hold.
+  bool get _isAssessment => !profile.adaptiveSteppingEnabled;
+
+  /// How long the completed pattern is held before the slots are cleared.
+  ///
+  /// Keyed off the *base* profile, not the adaptive tier: a mid-round
+  /// step-down changes hint support, not how long a demo is shown.
+  Duration get _patternHoldDuration => Duration(
+    milliseconds:
+        (!_isAssessment && profile.level == 1)
+            ? _patternHoldEasyMs
+            : _patternHoldDefaultMs,
+  );
 
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
@@ -152,14 +184,14 @@ class CopyMeGame extends FlameGame
 
   /// Notify Flutter layer about phase changes
   void Function(bool isDemoPhase)? onPhaseChanged;
-  
+
   /// Public method to trigger visual guide replay
   void replaySequenceAsVisualGuide() {
     if (_inputPhase && !_demonstrating) {
       _showSequentialVisualGuide();
     }
   }
-  
+
   /// Public method to show visual hints for entire sequence
   void showFullSequenceHints() {
     if (_inputPhase && !_demonstrating) {
@@ -216,10 +248,7 @@ class CopyMeGame extends FlameGame
     const rowGap = 50.0;
     final availH = gameH - kTopOverlayBand - 12;
 
-    var cardSize = math.min(
-      gameW / 5.4,
-      (availH - topPadding - rowGap) / 2,
-    );
+    var cardSize = math.min(gameW / 5.4, (availH - topPadding - rowGap) / 2);
     cardSize = cardSize.clamp(40.0, availH / 2);
 
     final gap = cardSize * 0.22;
@@ -333,9 +362,17 @@ class CopyMeGame extends FlameGame
       await Future.delayed(const Duration(milliseconds: 700));
     }
 
-    // Hold the finished pattern briefly, then clear it — the child copies it
-    // back from memory into the now-empty slots.
-    await Future.delayed(const Duration(milliseconds: 700));
+    // Hold the finished pattern, then clear it — the child copies it back from
+    // memory into the now-empty slots. Easy/practice gets the full three
+    // seconds the audit asked for; see [_patternHoldDuration]. Input stays
+    // disabled for the whole hold: the shapes are only re-enabled at the end
+    // of this method, and _onShapeTapped/_onShapeDragDropped still refuse
+    // while _demonstrating is true.
+    analyticsAddRoundData(
+      'pattern_hold_ms',
+      _patternHoldDuration.inMilliseconds,
+    );
+    await Future.delayed(_patternHoldDuration);
     if (!isMounted) return;
     for (final slot in _slots) {
       slot.clear();
@@ -384,7 +421,7 @@ class CopyMeGame extends FlameGame
     if (index == _sequence[_inputIndex]) {
       // Correct
       _adaptive.recordCorrect();
-        _shapes[index].showCorrect();
+      _shapes[index].showCorrect();
 
       // Drop the chosen shape into the next empty pattern slot so the child
       // sees the copy taking shape as they go.
@@ -399,11 +436,13 @@ class CopyMeGame extends FlameGame
       onCorrectMatch?.call();
 
       // Record correct response with details
-      analyticsRecordCorrect(extraData: {
-        'shape_index': index,
-        'sequence_position': _inputIndex,
-        'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
-      });
+      analyticsRecordCorrect(
+        extraData: {
+          'shape_index': index,
+          'sequence_position': _inputIndex,
+          'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
+        },
+      );
 
       _inputIndex++;
 
@@ -437,11 +476,15 @@ class CopyMeGame extends FlameGame
           analyticsCompleteSession();
 
           // Add game-specific metrics
-          analyticsAddGameSpecificMetric('avg_response_time_ms',
-            _totalResponseTimeMs / (_score > 0 ? _score : 1));
+          analyticsAddGameSpecificMetric(
+            'avg_response_time_ms',
+            _totalResponseTimeMs / (_score > 0 ? _score : 1),
+          );
           analyticsAddGameSpecificMetric('total_retries', _retries);
-          analyticsAddGameSpecificMetric('max_sequence_length',
-            totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1);
+          analyticsAddGameSpecificMetric(
+            'max_sequence_length',
+            totalRounds > 0 ? (totalRounds).clamp(1, 5) : 1,
+          );
 
           onPlayGameCompleteSfx?.call();
 
@@ -495,12 +538,14 @@ class CopyMeGame extends FlameGame
       }
 
       // Record wrong response with details
-      analyticsRecordWrong(extraData: {
-        'tapped_shape': _shapeData[index].$3,
-        'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
-        'sequence_position': _inputIndex,
-        'consecutive_errors': _consecutiveErrors,
-      });
+      analyticsRecordWrong(
+        extraData: {
+          'tapped_shape': _shapeData[index].$3,
+          'expected_shape': _shapeData[_sequence[_inputIndex]].$3,
+          'sequence_position': _inputIndex,
+          'consecutive_errors': _consecutiveErrors,
+        },
+      );
 
       // Sequence replay follows the tier: Easy replays after 2 errors,
       // Medium after 3 while the hint budget lasts, Hard never replays
@@ -532,9 +577,10 @@ class CopyMeGame extends FlameGame
     _cancelNoResponseTimer();
     // Hard tier (or a spent Medium budget) waits longer and re-orients with
     // the "your turn" VO instead of replaying the sequence.
-    final delay = (_tier.noHints || !_hintBudgetLeft)
-        ? _tier.reorientDelay
-        : _tier.idleHintDelay;
+    final delay =
+        (_tier.noHints || !_hintBudgetLeft)
+            ? _tier.reorientDelay
+            : _tier.idleHintDelay;
     _noResponseTimer = Timer(delay, () {
       if (!isMounted || !_inputPhase) return;
       if (_tier.noHints || !_hintBudgetLeft) {
@@ -553,23 +599,23 @@ class CopyMeGame extends FlameGame
     _noResponseTimer = null;
     _hideVisualHint();
   }
-  
+
   /// Show visual hints for the entire sequence at once
   void _showEntireSequenceHints() {
     if (!isMounted || !_inputPhase) return;
-    
+
     // Hide any existing hints first
     _hideVisualHint();
-    
+
     // Show hints for all shapes in the sequence
     for (final idx in _sequence) {
       _shapes[idx].showHint();
     }
-    
+
     // Record the full sequence hint prompt
     analyticsRecordPrompt(promptType: 'visual_guide_full_sequence_hint');
     analyticsRecordHint(hintType: 'full_sequence_visual');
-    
+
     // Auto-hide hints after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (isMounted && _inputPhase) {
@@ -577,51 +623,51 @@ class CopyMeGame extends FlameGame
       }
     });
   }
-  
+
   /// Enhanced visual guide that highlights shapes in correct sequence
   Future<void> _showSequentialVisualGuide() async {
     if (!isMounted || !_inputPhase) return;
-    
+
     // Temporarily disable input during visual guide
     for (final s in _shapes) {
       s.inputEnabled = false;
     }
-    
+
     // Hide any existing hints
     _hideVisualHint();
-    
+
     // Record the sequential visual guide prompt
     _hintsUsedThisRound++;
     analyticsRecordPrompt(promptType: 'visual_guide_sequential_highlight');
     analyticsRecordHint(hintType: 'sequential_visual_guide');
-    
+
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // Highlight each shape in the correct sequence with timing
     for (int i = 0; i < _sequence.length; i++) {
       if (!isMounted) return;
-      
+
       final idx = _sequence[i];
-      
+
       // Highlight the current shape in sequence
       _shapes[idx].highlight();
-      
+
       // Wait for highlight to complete before next one
       await Future.delayed(const Duration(milliseconds: 800));
-      
+
       // Brief pause between shapes
       if (i < _sequence.length - 1) {
         await Future.delayed(const Duration(milliseconds: 200));
       }
     }
-    
+
     if (!isMounted) return;
-    
+
     // Re-enable input after visual guide
     for (final s in _shapes) {
       s.inputEnabled = true;
     }
-    
+
     // Restart no-response timer
     _startNoResponseTimer();
   }

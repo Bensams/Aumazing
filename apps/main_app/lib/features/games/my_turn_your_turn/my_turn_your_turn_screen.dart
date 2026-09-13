@@ -73,6 +73,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
   late final DateTime _sessionStartTime;
   late final VoiceOverService _voiceOverService;
 
+  /// In-flight "My turn!" cue, awaited by [VoiceOverCue.wait]'s callback so
+  /// the buddy's countdown starts only after both turn-taking lines have
+  /// spoken (the game fires the two callbacks in the same breath).
+  Future<void>? _myTurnCue;
+
   @override
   void initState() {
     super.initState();
@@ -125,9 +130,24 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
       onPlayTransitionVo: () => _voiceOverService.playTransition(),
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
       // Game-specific voice-overs
-      onPlayMyTurnVo: () => _voiceOverService.play(VoiceOverCue.myTurn),
+      onPlayMyTurnVo:
+          () => _myTurnCue = _voiceOverService.play(
+            VoiceOverCue.myTurn,
+            awaitCompletion: true,
+          ),
       onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.yourTurn),
-      onPlayWaitVo: () => _voiceOverService.play(VoiceOverCue.wait),
+      onPlayWaitVo: () async {
+        // Let "My turn!" finish before "Wait" speaks, and skip the debounce:
+        // the two fire back-to-back, and the debounce would silently drop
+        // the wait cue and start the countdown while the first line is
+        // still talking.
+        await _myTurnCue;
+        await _voiceOverService.play(
+          VoiceOverCue.wait,
+          awaitCompletion: true,
+          skipDebounce: true,
+        );
+      },
       onCorrectMatch: () {
         // Trigger haptic on each correct child turn (but NOT star sparkle):
         // - Pre-assessment: use sensory controller's per-round config

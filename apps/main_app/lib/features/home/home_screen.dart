@@ -67,6 +67,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final AuthService _authService;
   bool _isLeftPanelExpanded = true;
+  bool _assessmentsReady = false;
 
   /// Portrait only: whether the child summary card is showing its details.
   bool _isSummaryExpanded = false;
@@ -251,8 +252,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final childId = profile.id;
 
-    context.read<AssessmentProvider>().loadAssessments(childId);
+    final assessments =
+        context.read<AssessmentProvider>().loadAssessments(childId);
     context.read<ProgressProvider>().loadProgress(childId);
+    await assessments;
+    if (!mounted) return false;
+    setState(() {
+      _assessmentsReady = true;
+    });
 
     await _maybeStartTour();
     if (!mounted) return false;
@@ -264,15 +271,15 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Runs the walkthrough automatically on the parent's first visit only.
   Future<void> _maybeStartTour() async {
     if (await TourService.instance.hasSeenParentTour()) return;
-    if (!mounted || _isTourActive) return;
+    if (!mounted || _isTourActive || !_assessmentsReady) return;
     setState(() => _isTourActive = true);
   }
 
   /// Replays the walkthrough from the help button.
-  void _startTour() {
-    if (_isTourActive) return;
-    setState(() => _isTourActive = true);
-  }
+   void _startTour() {
+    if (_isTourActive || !_assessmentsReady) return;
+     setState(() => _isTourActive = true);
+   }
 
   void _endTour() {
     TourService.instance.markParentTourSeen();
@@ -293,6 +300,19 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.waving_hand_rounded,
       ),
       TourStep(
+        targetKey: _assessmentButtonKey,
+        title:
+            context.read<AssessmentProvider>().hasPreAssessment
+                ? 'Assessment'
+                : 'Start here',
+        body:
+            context.read<AssessmentProvider>().hasPreAssessment
+                ? 'Review your child’s assessment results and recommended module here.'
+                : 'Start the pre-assessment here to find your child’s starting '
+                    'level and get a recommended module.',
+        icon: Icons.assessment_rounded,
+      ),
+      TourStep(
         targetKey: _childPanelKey,
         title: 'Your child',
         body: "Your child's name, age and quick stats live here.",
@@ -305,14 +325,6 @@ class _HomeScreenState extends State<HomeScreen> {
             "Tap this card to expand your child's quick stats and your "
             'account details.',
         icon: Icons.person_rounded,
-      ),
-      TourStep(
-        targetKey: _assessmentButtonKey,
-        title: 'Assessment',
-        body:
-            'Start the pre-assessment here to find your child\'s starting '
-            'level and get a recommended module.',
-        icon: Icons.assessment_rounded,
       ),
       TourStep(
         targetKey: _childModeKey,
@@ -665,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       IconButton(
                         icon: const Icon(Icons.help_outline_rounded),
                         tooltip: 'Dashboard guide',
-                        onPressed: _startTour,
+                        onPressed: _assessmentsReady ? _startTour : null,
                         color: AppColors.textSecondary,
                       ),
                       IconButton(
@@ -851,7 +863,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     IconButton(
                       icon: const Icon(Icons.help_outline_rounded),
                       tooltip: 'Dashboard guide',
-                      onPressed: _startTour,
+                      onPressed: _assessmentsReady ? _startTour : null,
                       color: AppColors.textSecondary,
                     ),
                     IconButton(
@@ -1051,20 +1063,55 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Action Buttons ──────────────────────────────────────────────────
 
   Widget _buildActionButtons() {
-    return Consumer<AssessmentProvider>(
-      builder: (context, assessProv, _) {
-        final assessment = AppPrimaryButton(
-          key: _assessmentButtonKey,
-          label:
-              assessProv.hasPreAssessment
-                  ? 'Assessment'
-                  : 'Start Pre-Assessment',
-          onPressed: _startPreAssessment,
-          icon:
-              assessProv.hasPreAssessment
-                  ? Icons.assessment_rounded
-                  : Icons.play_circle_filled_rounded,
-        );
+    return Consumer2<ChildProvider, AssessmentProvider>(
+      builder: (context, childProv, assessProv, _) {
+        final isLoading =
+            !_assessmentsReady ||
+            childProv.isLoading ||
+            !childProv.hasProfile ||
+            assessProv.isLoading;
+        final needsAssessment = !isLoading && !assessProv.hasPreAssessment;
+        final Widget assessment;
+        if (isLoading) {
+          assessment = _buildLoadingCard('Loading assessment…');
+        } else {
+          final button = AppPrimaryButton(
+            key: _assessmentButtonKey,
+            label: needsAssessment ? 'Start Pre-Assessment' : 'Assessment',
+            onPressed: _startPreAssessment,
+            icon:
+                needsAssessment
+                    ? Icons.play_circle_filled_rounded
+                    : Icons.assessment_rounded,
+          );
+          assessment =
+              needsAssessment
+                  ? AppCard(
+                    color: AppColors.lavenderLight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Start here',
+                          style: AppTextStyles.titleLarge.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'The pre-assessment helps find your child’s starting '
+                          'level and recommends a learning module.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        button,
+                      ],
+                    ),
+                  )
+                  : button;
+        }
         final childMode = _ActionCard(
           key: _childModeKey,
           icon: Icons.child_care_rounded,
@@ -1112,7 +1159,9 @@ class _HomeScreenState extends State<HomeScreen> {
             // Three across only when every label fits at once. Spare space
             // is shared proportionally, so the assessment CTA — the widest
             // label — keeps the largest column.
-            if (width >= assessmentMin + cardMin * 2 + gap * 2) {
+            if (!needsAssessment &&
+                !isLoading &&
+                width >= assessmentMin + cardMin * 2 + gap * 2) {
               // IntrinsicHeight keeps the three tiles the same height even
               // when one of them wraps its label.
               return IntrinsicHeight(
@@ -1389,64 +1438,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 return _buildLoadingCard('Loading assessment results…');
               }
               if (!assessProv.hasPreAssessment) {
-                return AppCard(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.statusWarningBg,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.info_outline_rounded,
-                          color: AppColors.statusWarningDark,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final title = Text(
-                                  'Pre-Assessment Needed',
-                                  style: AppTextStyles.titleMedium.copyWith(
-                                    color: AppColors.textPrimary,
-                                  ),
-                                );
-                                // The pill repeats the heading word for word. On a
-                                // narrow card there is no room for both, and the
-                                // heading already carries the message.
-                                if (constraints.maxWidth < 320) return title;
-                                return Row(
-                                  children: [
-                                    Expanded(child: title),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    const StatusPillBadge(
-                                      label: 'Pre-Assessment Needed',
-                                      level: StatusLevel.warning,
-                                      compact: true,
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Start the pre-assessment to determine your child\'s starting level and get a recommended learning module.',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+                return const SizedBox.shrink();
               }
 
               if (assessProv.nextCycleLocked) {

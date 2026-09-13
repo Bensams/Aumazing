@@ -23,7 +23,9 @@ Widget _host({
       child: MaterialApp(
         theme: AppTheme.light,
         home: Scaffold(
-          body: Center(child: SizedBox(width: width, child: child)),
+          body: Center(
+            child: SizedBox(width: width, child: child),
+          ),
         ),
       ),
     ),
@@ -35,6 +37,7 @@ void main() {
   // Narrow enough to force wrapping; wide enough for a single line.
   const widths = [160.0, 200.0, 320.0, 520.0];
   const scales = [1.0, 1.3];
+
 
   for (final label in labels) {
     for (final width in widths) {

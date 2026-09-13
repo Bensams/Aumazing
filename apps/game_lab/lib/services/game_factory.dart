@@ -262,6 +262,7 @@ class GameLabGameFactory {
         );
 
       case 'my_turn_your_turn':
+        Future<void>? myTurnCue;
         return MyTurnYourTurnGame(
           totalRounds: config.totalRounds,
           childId: config.childId,
@@ -303,16 +304,27 @@ class GameLabGameFactory {
             services.lastPlayedVo = 'letsTakeTurns';
           },
           // Game-specific VO
+          // The game fires my-turn and wait back-to-back; serialize them so
+          // "Wait" is not debounced into silence and the countdown only
+          // starts once both lines have spoken.
           onPlayMyTurnVo: () {
-            vo.play(VoiceOverCue.myTurn);
+            myTurnCue = vo.play(
+              VoiceOverCue.myTurn,
+              awaitCompletion: true,
+            );
             services.lastPlayedVo = 'myTurn';
           },
           onPlayYourTurnVo: () {
             vo.play(VoiceOverCue.yourTurn);
             services.lastPlayedVo = 'yourTurn';
           },
-          onPlayWaitVo: () {
-            vo.play(VoiceOverCue.wait);
+          onPlayWaitVo: () async {
+            await myTurnCue;
+            await vo.play(
+              VoiceOverCue.wait,
+              awaitCompletion: true,
+              skipDebounce: true,
+            );
             services.lastPlayedVo = 'wait';
           },
         );
