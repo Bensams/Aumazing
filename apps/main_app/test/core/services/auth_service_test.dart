@@ -62,6 +62,7 @@ void main() {
     final authService = AuthService(
       googleAuth: googleAuth,
       supabaseAuth: supabaseAuth,
+      googleWebClientId: 'test-web-client-id',
     );
     final guestId = authService.initializeGuestMode();
 
@@ -85,6 +86,7 @@ void main() {
     final authService = AuthService(
       googleAuth: googleAuth,
       supabaseAuth: supabaseAuth,
+      googleWebClientId: 'test-web-client-id',
     );
 
     final response = await authService.bindAnonymousWithGoogle();
@@ -96,6 +98,85 @@ void main() {
       idToken: 'google-id-token',
       accessToken: 'google-access-token',
     ));
+  });
+
+  test('native Google sign-in requires a web client ID before plugin setup',
+      () async {
+    final googleAuth = _FakeGoogleAuthClient();
+    final authService = AuthService(
+      googleAuth: googleAuth,
+      supabaseAuth: _FakeSupabaseAuthClient(),
+      googleWebClientId: '',
+    );
+
+    await expectLater(
+      authService.signInWithGoogle(),
+      throwsA(
+        isA<AuthException>().having(
+          (exception) => exception.message,
+          'message',
+          'Google Sign-In is unavailable in this version of the app. '
+              'Please sign in with email.',
+        ),
+      ),
+    );
+    expect(googleAuth.initializeCalls, isEmpty);
+  });
+
+  test('native anonymous Google binding requires a web client ID before setup',
+      () async {
+    final googleAuth = _FakeGoogleAuthClient();
+    final supabaseAuth = _FakeSupabaseAuthClient();
+    final authService = AuthService(
+      googleAuth: googleAuth,
+      supabaseAuth: supabaseAuth,
+      googleWebClientId: '',
+    );
+
+    await expectLater(
+      authService.bindAnonymousWithGoogle(),
+      throwsA(isA<AuthException>()),
+    );
+    expect(googleAuth.initializeCalls, isEmpty);
+    expect(supabaseAuth.linkIdentityWithIdTokenCalls, isEmpty);
+  });
+
+  test('configured Google sign-in exchanges supplied tokens', () async {
+    final googleAuth = _FakeGoogleAuthClient(
+      authenticateResult: const GoogleAuthTokens(
+        idToken: 'google-id-token',
+        accessToken: 'google-access-token',
+      ),
+    );
+    final supabaseAuth = _FakeSupabaseAuthClient();
+    final authService = AuthService(
+      googleAuth: googleAuth,
+      supabaseAuth: supabaseAuth,
+      googleWebClientId: 'test-web-client-id',
+    );
+
+    await authService.signInWithGoogle();
+
+    expect(supabaseAuth.signInWithIdTokenCalls.single, (
+      provider: OAuthProvider.google,
+      idToken: 'google-id-token',
+      accessToken: 'google-access-token',
+    ));
+  });
+
+  test('email sign-in delegates when Google client ID is absent', () async {
+    final supabaseAuth = _FakeSupabaseAuthClient();
+    final authService = AuthService(
+      supabaseAuth: supabaseAuth,
+      googleWebClientId: '',
+    );
+
+    await authService.signInWithEmail(
+      email: 'parent@example.com',
+      password: 'password123',
+    );
+
+    expect(supabaseAuth.signInWithPasswordCalls, hasLength(1));
   });
 
   test('email binding verification uses email-change OTP semantics', () async {
@@ -131,6 +212,7 @@ class _FakeGoogleAuthClient implements GoogleAuthClient {
   });
 
   final GoogleAuthTokens authenticateResult;
+  final initializeCalls = <({String? serverClientId, String? clientId})>[];
 
   @override
   Future<GoogleAuthTokens?> attemptLightweightAuthentication() async => null;
@@ -139,7 +221,9 @@ class _FakeGoogleAuthClient implements GoogleAuthClient {
   Future<GoogleAuthTokens> authenticate() async => authenticateResult;
 
   @override
-  Future<void> initialize({String? serverClientId, String? clientId}) async {}
+  Future<void> initialize({String? serverClientId, String? clientId}) async {
+    initializeCalls.add((serverClientId: serverClientId, clientId: clientId));
+  }
 }
 
 
@@ -159,7 +243,8 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
   final linkIdentityWithIdTokenCalls =
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
-
+  final signInWithPasswordCalls =
+      <({String email, String password})>[];
   late final AuthResponse response =
       linkResponse ?? AuthResponse(user: _currentUser);
   @override
@@ -213,7 +298,10 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     required String email,
     required String password,
     String? captchaToken,
-  }) => throw UnimplementedError();
+  }) async {
+    signInWithPasswordCalls.add((email: email, password: password));
+    return response;
+  }
 
   @override
   Future<AuthResponse> signUp({

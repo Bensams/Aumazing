@@ -25,16 +25,15 @@ void main() {
     String userId = 'user-1',
     DateTime? birthDate,
     DateTime? createdAt,
-  }) =>
-      ChildProfile(
-        id: id,
-        userId: userId,
-        displayName: name,
-        birthDate: birthDate ?? DateTime(2020, 1, 1),
-        avatar: '🐻',
-        createdAt: createdAt ?? DateTime(2026, 1, 1),
-        updatedAt: createdAt ?? DateTime(2026, 1, 1),
-      );
+  }) => ChildProfile(
+    id: id,
+    userId: userId,
+    displayName: name,
+    birthDate: birthDate ?? DateTime(2020, 1, 1),
+    avatar: '🐻',
+    createdAt: createdAt ?? DateTime(2026, 1, 1),
+    updatedAt: createdAt ?? DateTime(2026, 1, 1),
+  );
 
   ({ChildProvider provider, _FakeLocalDb db}) build({
     List<ChildProfile> children = const [],
@@ -42,9 +41,10 @@ void main() {
     bool guest = false,
   }) {
     final db = _FakeLocalDb(children);
-    final auth = guest
-        ? FakeAuthService.guest(userId)
-        : FakeAuthService.boundAccount(userId);
+    final auth =
+        guest
+            ? FakeAuthService.guest(userId)
+            : FakeAuthService.boundAccount(userId);
     return (
       provider: ChildProvider(
         localDb: db,
@@ -57,18 +57,21 @@ void main() {
 
   group('loading', () {
     test('loads every child of the parent, oldest first', () async {
-      final harness = build(children: [
-        child('b', name: 'Bea', createdAt: DateTime(2026, 3, 1)),
-        child('a', name: 'Ana', createdAt: DateTime(2026, 1, 1)),
-        child('c', name: 'Cyd', createdAt: DateTime(2026, 5, 1)),
-      ]);
+      final harness = build(
+        children: [
+          child('b', name: 'Bea', createdAt: DateTime(2026, 3, 1)),
+          child('a', name: 'Ana', createdAt: DateTime(2026, 1, 1)),
+          child('c', name: 'Cyd', createdAt: DateTime(2026, 5, 1)),
+        ],
+      );
 
       await harness.provider.loadProfile();
 
-      expect(
-        harness.provider.children.map((c) => c.displayName),
-        ['Ana', 'Bea', 'Cyd'],
-      );
+      expect(harness.provider.children.map((c) => c.displayName), [
+        'Ana',
+        'Bea',
+        'Cyd',
+      ]);
       // Not "whatever storage returned first" — the oldest profile.
       expect(harness.provider.profile?.id, 'a');
       expect(harness.provider.isActive('a'), isTrue);
@@ -113,8 +116,7 @@ void main() {
   });
 
   group('selecting a child', () {
-    test('switches the active child and reloads its own preferences',
-        () async {
+    test('switches the active child and reloads its own preferences', () async {
       SharedPreferences.setMockInitialValues({
         'theme_override_a': GameTheme.boy.slug,
         'language_a': 'ceb',
@@ -149,41 +151,50 @@ void main() {
       expect(harness.provider.activeChildId, 'a');
     });
 
-    test('per-child settings written for one child do not reach the other',
-        () async {
-      final harness = build(children: [child('a'), child('b')]);
-      await harness.provider.loadProfile();
-      await harness.provider.setDifficultyOverride(3);
-      await harness.provider.setLanguage(GameLanguage.cebuano);
+    test(
+      'per-child settings written for one child do not reach the other',
+      () async {
+        final harness = build(children: [child('a'), child('b')]);
+        await harness.provider.loadProfile();
+        await harness.provider.setDifficultyOverride(3);
+        await harness.provider.setLanguage(GameLanguage.cebuano);
 
-      await harness.provider.selectChild('b');
-      expect(harness.provider.difficultyOverride, isNull);
-      expect(harness.provider.language, GameLanguage.english);
+        await harness.provider.selectChild('b');
+        expect(harness.provider.difficultyOverride, isNull);
+        expect(harness.provider.language, GameLanguage.english);
 
-      await harness.provider.selectChild('a');
-      expect(harness.provider.difficultyOverride, 3);
-      expect(harness.provider.language, GameLanguage.cebuano);
-    });
+        await harness.provider.selectChild('a');
+        expect(harness.provider.difficultyOverride, 3);
+        expect(harness.provider.language, GameLanguage.cebuano);
+      },
+    );
   });
 
   group('adding a child', () {
-    test('adds a separate record without touching the existing child',
-        () async {
-      final harness = build(children: [child('a', name: 'Ana')]);
-      await harness.provider.loadProfile();
+    test(
+      'adds a separate record without touching the existing child',
+      () async {
+        final harness = build(children: [child('a', name: 'Ana')]);
+        await harness.provider.loadProfile();
 
-      final created = await harness.provider.addChild(
-        displayName: 'Bea',
-        birthDate: DateTime(2021, 6, 5),
-        avatar: '🦊',
-      );
+        final created = await harness.provider.addChild(
+          displayName: 'Bea',
+          birthDate: DateTime(2021, 6, 5),
+          avatar: '🦊',
+        );
 
-      expect(harness.provider.children.map((c) => c.displayName),
-          ['Ana', 'Bea']);
-      expect(created.id, isNot('a'));
-      expect(harness.db.children.map((c) => c.id), containsAll(['a', created.id]));
-      expect(harness.db.childById('a')!.displayName, 'Ana');
-    });
+        expect(harness.provider.children.map((c) => c.displayName), [
+          'Ana',
+          'Bea',
+        ]);
+        expect(created.id, isNot('a'));
+        expect(
+          harness.db.children.map((c) => c.id),
+          containsAll(['a', created.id]),
+        );
+        expect(harness.db.childById('a')!.displayName, 'Ana');
+      },
+    );
 
     test('does not take over the session unless the parent asks', () async {
       final harness = build(children: [child('a')]);
@@ -239,37 +250,41 @@ void main() {
       expect(harness.provider.children, hasLength(2));
     });
 
-    test("adding a child does not re-language the child still playing",
-        () async {
-      final harness = build(children: [child('a')]);
-      await harness.provider.loadProfile();
-      await harness.provider.setLanguage(GameLanguage.english);
+    test(
+      "adding a child does not re-language the child still playing",
+      () async {
+        final harness = build(children: [child('a')]);
+        await harness.provider.loadProfile();
+        await harness.provider.setLanguage(GameLanguage.english);
 
-      final created = await harness.provider.addChild(
-        displayName: 'Bea',
-        birthDate: DateTime(2021, 6, 5),
-        avatar: '🦊',
-      );
-      await harness.provider.applyInitialPreferences(
-        childId: created.id,
-        language: GameLanguage.cebuano,
-        voicePackId: 'ceb_lexianne',
-      );
+        final created = await harness.provider.addChild(
+          displayName: 'Bea',
+          birthDate: DateTime(2021, 6, 5),
+          avatar: '🦊',
+        );
+        await harness.provider.applyInitialPreferences(
+          childId: created.id,
+          language: GameLanguage.cebuano,
+          voicePackId: 'ceb_lexianne',
+        );
 
-      expect(harness.provider.language, GameLanguage.english);
+        expect(harness.provider.language, GameLanguage.english);
 
-      await harness.provider.selectChild(created.id);
-      expect(harness.provider.language, GameLanguage.cebuano);
-      expect(harness.provider.voicePack.id, 'ceb_lexianne');
-    });
+        await harness.provider.selectChild(created.id);
+        expect(harness.provider.language, GameLanguage.cebuano);
+        expect(harness.provider.voicePack.id, 'ceb_lexianne');
+      },
+    );
   });
 
   group('editing a child', () {
     test('edits only the intended child', () async {
-      final harness = build(children: [
-        child('a', name: 'Ana'),
-        child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
-      ]);
+      final harness = build(
+        children: [
+          child('a', name: 'Ana'),
+          child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
+        ],
+      );
       await harness.provider.loadProfile();
 
       final updated = await harness.provider.editChild(
@@ -301,8 +316,10 @@ void main() {
       final harness = build(children: [child('a')]);
       await harness.provider.loadProfile();
 
-      final updated =
-          await harness.provider.editChild('a', birthDate: DateTime(2014, 2, 2));
+      final updated = await harness.provider.editChild(
+        'a',
+        birthDate: DateTime(2014, 2, 2),
+      );
 
       expect(updated!.birthDate, DateTime(2014, 2, 2));
     });
@@ -310,10 +327,12 @@ void main() {
 
   group('deleting a child', () {
     test('deleting a non-active child leaves the active one alone', () async {
-      final harness = build(children: [
-        child('a', name: 'Ana'),
-        child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
-      ]);
+      final harness = build(
+        children: [
+          child('a', name: 'Ana'),
+          child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
+        ],
+      );
       await harness.provider.loadProfile();
 
       final outcome = await harness.provider.deleteChild('b');
@@ -326,10 +345,12 @@ void main() {
     });
 
     test('deleting the active child promotes another one', () async {
-      final harness = build(children: [
-        child('a', name: 'Ana'),
-        child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
-      ]);
+      final harness = build(
+        children: [
+          child('a', name: 'Ana'),
+          child('b', name: 'Bea', createdAt: DateTime(2026, 2, 1)),
+        ],
+      );
       await harness.provider.loadProfile();
 
       final outcome = await harness.provider.deleteChild('a');
@@ -339,8 +360,7 @@ void main() {
       expect(harness.provider.children.map((c) => c.id), ['b']);
     });
 
-    test('deleting the last child leaves the parent with no profile',
-        () async {
+    test('deleting the last child leaves the parent with no profile', () async {
       final harness = build(children: [child('a')]);
       await harness.provider.loadProfile();
 
@@ -351,89 +371,97 @@ void main() {
       expect(harness.provider.children, isEmpty);
     });
 
-    test('removes the deleted child\'s stored preferences and progress',
-        () async {
-      SharedPreferences.setMockInitialValues({
-        'theme_override_b': GameTheme.boy.slug,
-        'language_b': 'ceb',
-        'difficulty_override_b': 2,
-        'screen_time_limit_b': 30,
-        'ai_prediction_b': '{}',
-        'path_progress_b': <String>['match_it'],
-        'language_a': 'fil',
-      });
-      final harness = build(children: [
-        child('a'),
-        child('b', createdAt: DateTime(2026, 2, 1)),
-      ]);
-      await harness.provider.loadProfile();
+    test(
+      'removes the deleted child\'s stored preferences and progress',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'theme_override_b': GameTheme.boy.slug,
+          'language_b': 'ceb',
+          'difficulty_override_b': 2,
+          'screen_time_limit_b': 30,
+          'ai_prediction_b': '{}',
+          'path_progress_b': <String>['match_it'],
+          'language_a': 'fil',
+        });
+        final harness = build(
+          children: [child('a'), child('b', createdAt: DateTime(2026, 2, 1))],
+        );
+        await harness.provider.loadProfile();
 
-      await harness.provider.deleteChild('b');
+        await harness.provider.deleteChild('b');
 
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getKeys().where((k) => k.endsWith('_b')), isEmpty);
-      // The surviving child keeps everything.
-      expect(prefs.getString('language_a'), 'fil');
-    });
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getKeys().where((k) => k.endsWith('_b')), isEmpty);
+        // The surviving child keeps everything.
+        expect(prefs.getString('language_a'), 'fil');
+      },
+    );
 
-    test('a re-added child does not inherit the deleted child\'s settings',
-        () async {
-      SharedPreferences.setMockInitialValues({'difficulty_override_a': 3});
-      final harness = build(children: [child('a')]);
-      await harness.provider.loadProfile();
-      expect(harness.provider.difficultyOverride, 3);
+    test(
+      'a re-added child does not inherit the deleted child\'s settings',
+      () async {
+        SharedPreferences.setMockInitialValues({'difficulty_override_a': 3});
+        final harness = build(children: [child('a')]);
+        await harness.provider.loadProfile();
+        expect(harness.provider.difficultyOverride, 3);
 
-      await harness.provider.deleteChild('a');
-      final replacement = await harness.provider.addChild(
-        displayName: 'New',
-        birthDate: DateTime(2021, 1, 1),
-        avatar: '🐻',
-      );
+        await harness.provider.deleteChild('a');
+        final replacement = await harness.provider.addChild(
+          displayName: 'New',
+          birthDate: DateTime(2021, 1, 1),
+          avatar: '🐻',
+        );
 
-      expect(harness.provider.activeChildId, replacement.id);
-      expect(harness.provider.difficultyOverride, isNull);
-      expect(harness.provider.language, GameLanguage.english);
-    });
+        expect(harness.provider.activeChildId, replacement.id);
+        expect(harness.provider.difficultyOverride, isNull);
+        expect(harness.provider.language, GameLanguage.english);
+      },
+    );
   });
 
   group('offline behaviour', () {
-    test('creates, edits and deletes locally while offline, queued for sync',
-        () async {
-      final db = _FakeLocalDb([]);
-      final sync = _RecordingSyncService();
-      final provider = ChildProvider(
-        localDb: db,
-        authService: FakeAuthService.guest('guest_abc'),
-        // The real repository, with only the network call stubbed out — the
-        // offline path is local write first, sync request after.
-        childRepository: ChildRepository(
+    test(
+      'creates, edits and deletes locally while offline, queued for sync',
+      () async {
+        final db = _FakeLocalDb([]);
+        final sync = _RecordingSyncService();
+        final provider = ChildProvider(
           localDb: db,
           authService: FakeAuthService.guest('guest_abc'),
-          overrideSyncService: sync,
-        ),
-      );
-      await provider.loadProfile();
+          // The real repository, with only the network call stubbed out — the
+          // offline path is local write first, sync request after.
+          childRepository: ChildRepository(
+            localDb: db,
+            authService: FakeAuthService.guest('guest_abc'),
+            overrideSyncService: sync,
+          ),
+        );
+        await provider.loadProfile();
 
-      final created = await provider.addChild(
-        displayName: 'Ana',
-        birthDate: DateTime(2021, 1, 1),
-        avatar: '🐻',
-      );
-      expect(db.childById(created.id), isNotNull);
-      expect(db.pending[created.id], isTrue,
-          reason: 'a new child must be queued for the next sync');
+        final created = await provider.addChild(
+          displayName: 'Ana',
+          birthDate: DateTime(2021, 1, 1),
+          avatar: '🐻',
+        );
+        expect(db.childById(created.id), isNotNull);
+        expect(
+          db.pending[created.id],
+          isTrue,
+          reason: 'a new child must be queued for the next sync',
+        );
 
-      await provider.editChild(created.id, displayName: 'Anna');
-      expect(db.childById(created.id)!.displayName, 'Anna');
-      expect(db.pending[created.id], isTrue);
+        await provider.editChild(created.id, displayName: 'Anna');
+        expect(db.childById(created.id)!.displayName, 'Anna');
+        expect(db.pending[created.id], isTrue);
 
-      await provider.deleteChild(created.id);
-      expect(db.deleted, [created.id]);
-      expect(provider.children, isEmpty);
-      // Sync was asked for after each write; offline it is a no-op that the
-      // queued rows survive.
-      expect(sync.syncRequests, 3);
-    });
+        await provider.deleteChild(created.id);
+        expect(db.deleted, [created.id]);
+        expect(provider.children, isEmpty);
+        // Sync was asked for after each write; offline it is a no-op that the
+        // queued rows survive.
+        expect(sync.syncRequests, 3);
+      },
+    );
   });
 }
 
@@ -459,9 +487,8 @@ class _FakeLocalDb extends LocalDbService {
     String? userId,
     bool includeDeleted = false,
   }) async {
-    final rows = userId == null
-        ? _children
-        : _children.where((c) => c.userId == userId);
+    final rows =
+        userId == null ? _children : _children.where((c) => c.userId == userId);
     // Storage order is deliberately the opposite of creation order, so a test
     // that passes cannot be relying on "the first row".
     return rows.toList().reversed.toList();
@@ -494,10 +521,10 @@ class _FakeLocalDb extends LocalDbService {
 /// A repository writing straight to the fake table — no sync, no network.
 class _FakeChildRepository extends ChildRepository {
   _FakeChildRepository(this._db, this._userId)
-      : super(
-          localDb: _db,
-          authService: FakeAuthService(userId: _userId, loggedIn: true),
-        );
+    : super(
+        localDb: _db,
+        authService: FakeAuthService(userId: _userId, loggedIn: true),
+      );
 
   final _FakeLocalDb _db;
   final String _userId;
@@ -512,6 +539,8 @@ class _FakeChildRepository extends ChildRepository {
     bool musicEnabled = true,
     double musicVolume = 0.5,
     String musicCategory = 'calm',
+    String? musicTrack,
+    List<String>? musicTracks,
     double sfxVolume = 0.7,
     bool vibrationEnabled = true,
     double promptSpeed = 1.0,
@@ -530,6 +559,11 @@ class _FakeChildRepository extends ChildRepository {
       sex: sex,
       rewardPreference: rewardPreference,
       useRandomReward: useRandomReward,
+      musicEnabled: musicEnabled,
+      musicVolume: musicVolume,
+      musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      musicTracks: musicTracks,
       createdAt: now,
       updatedAt: now,
     );

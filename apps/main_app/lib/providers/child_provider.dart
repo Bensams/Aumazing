@@ -91,9 +91,8 @@ class ChildProvider extends ChangeNotifier {
   /// Selected voice-over pack — which recorded voice speaks the cues for the
   /// active language. Persisted locally per child; defaults to the language's
   /// default pack.
-  String _voicePackId = defaultVoicePackForLanguage(
-    GameLanguage.english.slug,
-  ).id;
+  String _voicePackId =
+      defaultVoicePackForLanguage(GameLanguage.english.slug).id;
   static const _voicePackKeyPrefix = 'voice_pack_';
 
   /// Parent's manual difficulty override (1 Easy / 2 Medium / 3 Hard). When
@@ -139,6 +138,8 @@ class ChildProvider extends ChangeNotifier {
   bool get musicEnabled => _profile?.musicEnabled ?? true;
   double get musicVolume => _profile?.musicVolume ?? 0.5;
   String get musicCategory => _profile?.musicCategory ?? kDefaultBgmCategory;
+  String? get musicTrack => _profile?.musicTrack;
+  List<String>? get musicTracks => _profile?.musicTracks;
   double get sfxVolume => _profile?.sfxVolume ?? 0.7;
   bool get vibrationEnabled => _profile?.vibrationEnabled ?? true;
   double get animationIntensity => _profile?.animationIntensity ?? 1.0;
@@ -298,9 +299,10 @@ class ChildProvider extends ChangeNotifier {
     }
     final prefs = await SharedPreferences.getInstance();
     final stored = voicePackById(prefs.getString('$_voicePackKeyPrefix$id'));
-    _voicePackId = stored != null && stored.languageSlug == _language.slug
-        ? stored.id
-        : defaultVoicePackForLanguage(_language.slug).id;
+    _voicePackId =
+        stored != null && stored.languageSlug == _language.slug
+            ? stored.id
+            : defaultVoicePackForLanguage(_language.slug).id;
   }
 
   // ── Graphics quality (heat / sensory) ─────────────────────────────────
@@ -438,6 +440,8 @@ class ChildProvider extends ChangeNotifier {
     bool musicEnabled = true,
     double musicVolume = 0.5,
     String musicCategory = kDefaultBgmCategory,
+    String? musicTrack,
+    List<String>? musicTracks,
     double sfxVolume = 0.7,
     bool vibrationEnabled = true,
     double promptSpeed = 1.0,
@@ -455,6 +459,8 @@ class ChildProvider extends ChangeNotifier {
       musicEnabled: musicEnabled,
       musicVolume: musicVolume,
       musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      musicTracks: musicTracks,
       sfxVolume: sfxVolume,
       vibrationEnabled: vibrationEnabled,
       promptSpeed: promptSpeed,
@@ -634,11 +640,10 @@ class ChildProvider extends ChangeNotifier {
   /// not depend on how storage happened to sort the rows. Children created in
   /// the same instant fall back to their ids, so the order is still stable.
   static List<ChildProfile> _sorted(List<ChildProfile> children) {
-    final sorted = [...children]
-      ..sort((a, b) {
-        final byCreation = a.createdAt.compareTo(b.createdAt);
-        return byCreation != 0 ? byCreation : a.id.compareTo(b.id);
-      });
+    final sorted = [...children]..sort((a, b) {
+      final byCreation = a.createdAt.compareTo(b.createdAt);
+      return byCreation != 0 ? byCreation : a.id.compareTo(b.id);
+    });
     return sorted;
   }
 
@@ -733,6 +738,47 @@ class ChildProvider extends ChangeNotifier {
 
     await _localDb.upsertChild(_profile!);
     _replaceInList(_profile!);
+    notifyListeners();
+  }
+
+  Future<void> updateMusicSelection({
+    String? musicCategory,
+    String? musicTrack,
+    List<String>? musicTracks,
+    bool clearTrack = false,
+    bool clearTracks = false,
+  }) async {
+    if (_profile == null) return;
+    _profile = _profile!.copyWith(
+      musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      clearMusicTrack: clearTrack,
+      musicTracks: musicTracks,
+      clearMusicTracks: clearTracks,
+    );
+    await _localDb.upsertChild(_profile!);
+    _replaceInList(_profile!);
+    notifyListeners();
+  }
+
+  Future<void> updateChildMusicSelection(
+    String childId, {
+    String? musicCategory,
+    String? musicTrack,
+    List<String>? musicTracks,
+  }) async {
+    final child = _childById(childId);
+    if (child == null) return;
+    final updated = child.copyWith(
+      musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      clearMusicTrack: musicTrack == null,
+      musicTracks: musicTracks,
+      clearMusicTracks: musicTracks == null,
+    );
+    await _localDb.upsertChild(updated);
+    _replaceInList(updated);
+    if (_profile?.id == childId) _profile = updated;
     notifyListeners();
   }
 
@@ -1022,9 +1068,10 @@ class ChildProvider extends ChangeNotifier {
     required String voicePackId,
   }) async {
     final pack = voicePackById(voicePackId);
-    final resolvedPackId = pack != null && pack.languageSlug == language.slug
-        ? pack.id
-        : defaultVoicePackForLanguage(language.slug).id;
+    final resolvedPackId =
+        pack != null && pack.languageSlug == language.slug
+            ? pack.id
+            : defaultVoicePackForLanguage(language.slug).id;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('$_languageKeyPrefix$childId', language.slug);

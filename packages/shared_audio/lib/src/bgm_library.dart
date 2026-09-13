@@ -47,13 +47,30 @@ class BgmCategory {
 
 /// The category used when a child has no stored preference.
 const String kDefaultBgmCategory = 'soft_relaxing';
+const String kCustomMixBgmCategory = 'custom_mix';
+
+Iterable<(BgmCategory, BgmTrack)> get allBgmTracks sync* {
+  for (final category in kBgmCategories) {
+    for (final track in category.tracks) yield (category, track);
+  }
+}
+
+BgmCategory? bgmCategoryForTrackPath(String path) {
+  for (final category in kBgmCategories) {
+    if (category.tracks.any((track) => category.trackPath(track) == path)) {
+      return category;
+    }
+  }
+  return null;
+}
 
 /// Every category available to the parent picker.
 const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'soft_relaxing',
     label: 'Soft & Relaxing',
-    description: 'Lowest-arousal category. Sustained, slow, almost motionless. For children who are easily over-stimulated, or for winding down after a session.',
+    description:
+        'Lowest-arousal category. Sustained, slow, almost motionless. For children who are easily over-stimulated, or for winding down after a session.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'breathing_pad.ogg', title: 'Breathing Pad'),
       BgmTrack(file: 'felt_piano_rest.ogg', title: 'Felt Piano Rest'),
@@ -65,7 +82,8 @@ const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'nature_ambient',
     label: 'Nature & Ambient',
-    description: 'Soft tonal music layered with steady natural texture. The constant broadband texture masks unpredictable household noise, which many sound-sensitive children find easier than silence.',
+    description:
+        'Soft tonal music layered with steady natural texture. The constant broadband texture masks unpredictable household noise, which many sound-sensitive children find easier than silence.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'forest_light.ogg', title: 'Forest Light'),
       BgmTrack(file: 'gentle_rainfall.ogg', title: 'Gentle Rainfall'),
@@ -77,7 +95,8 @@ const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'gentle_playful',
     label: 'Gentle Playful',
-    description: 'Mildly energising without becoming stimulating. Slightly brighter and more rhythmic, for children who disengage when music is too still. Still no percussive transients.',
+    description:
+        'Mildly energising without becoming stimulating. Slightly brighter and more rhythmic, for children who disengage when music is too still. Still no percussive transients.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'bouncy_pizzicato.ogg', title: 'Bouncy Pizzicato'),
       BgmTrack(file: 'happy_marimba.ogg', title: 'Happy Marimba'),
@@ -89,7 +108,8 @@ const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'lullaby_music_box',
     label: 'Lullaby & Music Box',
-    description: 'Familiar, highly predictable nursery timbres. Strongest cue for \'settle down\' — useful for transitions, calm corners and the end of a play session.',
+    description:
+        'Familiar, highly predictable nursery timbres. Strongest cue for \'settle down\' — useful for transitions, calm corners and the end of a play session.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'celesta_cradle.ogg', title: 'Celesta Cradle'),
       BgmTrack(file: 'cradle_piano.ogg', title: 'Cradle Piano'),
@@ -101,7 +121,8 @@ const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'focus_minimal',
     label: 'Focus & Minimal',
-    description: 'Deliberately uneventful. A steady, near-static bed with almost no melodic \'events\' to capture attention, so it supports on-task attention during matching, tracing and sorting activities.',
+    description:
+        'Deliberately uneventful. A steady, near-static bed with almost no melodic \'events\' to capture attention, so it supports on-task attention during matching, tracing and sorting activities.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'even_ground.ogg', title: 'Even Ground'),
       BgmTrack(file: 'patient_keys.ogg', title: 'Patient Keys'),
@@ -113,7 +134,8 @@ const List<BgmCategory> kBgmCategories = <BgmCategory>[
   BgmCategory(
     key: 'filipino_calm',
     label: 'Filipino Calm',
-    description: 'Culturally familiar tone colours for Filipino families, kept within the same calm envelope as the other categories. Pairs with the app\'s Tagalog and Cebuano voice-overs.',
+    description:
+        'Culturally familiar tone colours for Filipino families, kept within the same calm envelope as the other categories. Pairs with the app\'s Tagalog and Cebuano voice-overs.',
     tracks: <BgmTrack>[
       BgmTrack(file: 'bamboo_breeze.ogg', title: 'Bamboo Breeze'),
       BgmTrack(file: 'harana_evening.ogg', title: 'Harana Evening'),

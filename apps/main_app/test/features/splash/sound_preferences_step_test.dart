@@ -116,7 +116,7 @@ void main() {
     }
   });
 
-  testWidgets('auditioning a track does not change the chosen style', (
+  testWidgets('selecting a track persists it and speaker preview is separate', (
     tester,
   ) async {
     final audio = await pumpStep(tester);
@@ -126,15 +126,70 @@ void main() {
     );
     await tester.tap(find.byKey(ValueKey('bgm-expand-${other.key}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(other.tracks.first.title));
+    final track = other.tracks.first;
+    await tester.tap(find.text(track.title));
     await tester.pumpAndSettle();
 
-    expect(audio.lastTrackPlayed, other.trackPath(other.tracks.first));
+    expect(audio.lastTrackPlayed, other.trackPath(track));
     expect(
       valueOf(tester).musicCategory,
-      kDefaultBgmCategory,
-      reason: 'previewing must not commit the child to that style',
+      other.key,
+      reason: 'selecting a track must commit its category',
     );
+    expect(valueOf(tester).musicTrack, other.trackPath(track));
+
+    // The speaker button auditions another track without changing the saved
+    // exact choice.
+    await tester.tap(
+      find.byKey(ValueKey('bgm-preview-${other.tracks.last.title}')),
+    );
+    await tester.pumpAndSettle();
+    expect(audio.lastTrackPlayed, other.trackPath(other.tracks.last));
+    expect(valueOf(tester).musicTrack, other.trackPath(track));
+  });
+
+  testWidgets('custom mix accepts three to five tracks across styles', (
+    tester,
+  ) async {
+    final audio = await pumpStep(tester);
+    await tester.tap(find.byKey(const ValueKey('bgm-custom-mix-expand')));
+    await tester.pumpAndSettle();
+
+    final choices = <(BgmCategory, BgmTrack)>[
+      (kBgmCategories[0], kBgmCategories[0].tracks[0]),
+      (kBgmCategories[2], kBgmCategories[2].tracks[1]),
+      (kBgmCategories[5], kBgmCategories[5].tracks[2]),
+    ];
+    for (final (category, track) in choices) {
+      await tester.tap(
+        find.byKey(ValueKey('bgm-mix-track-${category.key}-${track.file}')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    expect(valueOf(tester).musicCategory, kCustomMixBgmCategory);
+    expect(valueOf(tester).musicTracks, hasLength(3));
+    expect(audio.lastTrackPlayed, isNotNull);
+
+    // A sixth selection is ignored once the five-track limit is reached.
+    for (final index in [3, 4]) {
+      final category = kBgmCategories[index];
+      final track = category.tracks.first;
+      await tester.tap(
+        find.byKey(ValueKey('bgm-mix-track-${category.key}-${track.file}')),
+      );
+      await tester.pumpAndSettle();
+    }
+    expect(valueOf(tester).musicTracks, hasLength(5));
+    final sixthCategory = kBgmCategories[1];
+    final sixthTrack = sixthCategory.tracks[1];
+    await tester.tap(
+      find.byKey(
+        ValueKey('bgm-mix-track-${sixthCategory.key}-${sixthTrack.file}'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(valueOf(tester).musicTracks, hasLength(5));
   });
 
   testWidgets(
@@ -218,16 +273,20 @@ void main() {
             ],
             child: MaterialApp(
               home: Builder(
-                builder: (context) => Scaffold(
-                  body: TextButton(
-                    onPressed: () => Navigator.of(context).push<ChildProfile>(
-                      MaterialPageRoute<ChildProfile>(
-                        builder: (_) => const ChildProfileSetupScreen.addAnother(),
+                builder:
+                    (context) => Scaffold(
+                      body: TextButton(
+                        onPressed:
+                            () => Navigator.of(context).push<ChildProfile>(
+                              MaterialPageRoute<ChildProfile>(
+                                builder:
+                                    (_) =>
+                                        const ChildProfileSetupScreen.addAnother(),
+                              ),
+                            ),
+                        child: const Text('Add child'),
                       ),
                     ),
-                    child: const Text('Add child'),
-                  ),
-                ),
               ),
             ),
           ),
@@ -266,9 +325,10 @@ void main() {
         await tapVisible(find.text('Go Back'));
         await tapVisible(find.text('Go Back'));
         await tapVisible(find.text('Continue'));
-        final restored = tester.widget<SoundPreferencesStep>(
-          find.byType(SoundPreferencesStep),
-        ).value;
+        final restored =
+            tester
+                .widget<SoundPreferencesStep>(find.byType(SoundPreferencesStep))
+                .value;
         expect(restored.musicCategory, style.key);
         expect(restored.musicEnabled, musicEnabled);
         expect(
@@ -289,7 +349,6 @@ void main() {
       timeout: const Timeout(Duration(seconds: 30)),
     );
   }
-
 
   testWidgets('lays out on a phone in portrait without overflowing', (
     tester,
@@ -364,8 +423,8 @@ class _FakeAudioService implements AudioService {
   @override
   Future<void> playCategoryMusic(
     String? categoryKey, {
-      bool restart = false,
-    }) async {
+    bool restart = false,
+  }) async {
     if (!config.musicEnabled) return;
     final category = bgmCategoryOrDefault(categoryKey);
     lastCategoryPlayed = category.key;
@@ -383,6 +442,40 @@ class _FakeAudioService implements AudioService {
   }
 
   @override
+  Future<void> playConfiguredMusic({
+    required String? categoryKey,
+    String? trackPath,
+    bool restart = false,
+  }) async {
+    if (!config.musicEnabled) return;
+    final match = trackPath == null ? null : bgmTrackByPath(trackPath);
+    if (match == null) {
+      await playCategoryMusic(categoryKey, restart: restart);
+      return;
+    }
+    category = match.$1.key;
+    lastCategoryPlayed = match.$1.key;
+    lastTrackPlayed = trackPath;
+    playing = true;
+    stopped = false;
+  }
+
+  @override
+  Future<void> playConfiguredMix(
+    List<String> trackPaths, {
+    bool restart = false,
+  }) async {
+    if (!config.musicEnabled) return;
+    final valid = validBgmTrackPaths(trackPaths);
+    if (valid.isEmpty) return;
+    category = kCustomMixBgmCategory;
+    lastCategoryPlayed = kCustomMixBgmCategory;
+    lastTrackPlayed = valid.first;
+    playing = true;
+    stopped = false;
+  }
+
+  @override
   String? get currentTrack => lastTrackPlayed;
 
   @override
@@ -390,6 +483,7 @@ class _FakeAudioService implements AudioService {
     stopped = true;
     playing = false;
   }
+
   @override
   AudioConfig config = AudioConfig.defaults;
 
@@ -430,6 +524,8 @@ class _SavingChildProvider extends ChangeNotifier implements ChildProvider {
     bool musicEnabled = true,
     double musicVolume = 0.5,
     String musicCategory = kDefaultBgmCategory,
+    String? musicTrack,
+    List<String>? musicTracks,
     double sfxVolume = 0.7,
     bool vibrationEnabled = true,
     double promptSpeed = 1.0,
@@ -449,6 +545,8 @@ class _SavingChildProvider extends ChangeNotifier implements ChildProvider {
       musicEnabled: musicEnabled,
       musicVolume: musicVolume,
       musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      musicTracks: musicTracks,
       createdAt: now,
       updatedAt: now,
     );

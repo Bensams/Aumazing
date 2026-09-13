@@ -380,13 +380,15 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         // fallback would quietly make one character 'the normal one'.
         characterId:
             (_selectedCharacter ??
-                    ChildCharacter.values[
-                      Random().nextInt(ChildCharacter.values.length)
-                    ])
+                    ChildCharacter.values[Random().nextInt(
+                      ChildCharacter.values.length,
+                    )])
                 .id,
         musicEnabled: _sound.musicEnabled,
         musicVolume: _sound.musicVolume,
         musicCategory: _sound.musicCategory,
+        musicTrack: _sound.musicTrack,
+        musicTracks: _sound.musicTracks,
         sfxVolume: _sound.sfxVolume,
         vibrationEnabled: _sound.vibrationEnabled,
         promptSpeed: _sound.promptSpeed,
@@ -443,8 +445,9 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
         Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const HomeScreen(),
-            transitionsBuilder: (_, animation, __, child) =>
-                FadeTransition(opacity: animation, child: child),
+            transitionsBuilder:
+                (_, animation, __, child) =>
+                    FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 400),
           ),
           (_) => false,

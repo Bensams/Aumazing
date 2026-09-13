@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:shared_audio/shared_audio.dart';
 
 import '../core/child_profile_policy.dart';
@@ -96,6 +97,8 @@ class ChildProfile {
   /// value (a profile written by a build that shipped a category this build
   /// does not have) falls back to the default rather than failing.
   final String musicCategory;
+  final String? musicTrack;
+  final List<String>? musicTracks;
   final double sfxVolume;
   final bool vibrationEnabled;
   final double animationIntensity;
@@ -140,6 +143,8 @@ class ChildProfile {
     this.musicEnabled = true,
     this.musicVolume = 0.5,
     this.musicCategory = kDefaultBgmCategory,
+    this.musicTrack,
+    this.musicTracks,
     this.sfxVolume = 0.7,
     this.vibrationEnabled = true,
     this.animationIntensity = 1.0,
@@ -178,14 +183,16 @@ class ChildProfile {
 
   /// Returns sensory settings as a map (used by scoring/assessment).
   Map<String, dynamic> get sensorySettingsMap => {
-        'music_enabled': musicEnabled,
-        'music_volume': musicVolume,
-        'music_category': musicCategory,
-        'sfx_volume': sfxVolume,
-        'vibration_enabled': vibrationEnabled,
-        'animation_intensity': animationIntensity,
-        'prompt_speed': promptSpeed,
-      };
+    'music_enabled': musicEnabled,
+    'music_volume': musicVolume,
+    'music_category': musicCategory,
+    'music_track': musicTrack,
+    'music_tracks': musicTracks,
+    'sfx_volume': sfxVolume,
+    'vibration_enabled': vibrationEnabled,
+    'animation_intensity': animationIntensity,
+    'prompt_speed': promptSpeed,
+  };
 
   ChildProfile copyWith({
     String? displayName,
@@ -197,6 +204,10 @@ class ChildProfile {
     bool? musicEnabled,
     double? musicVolume,
     String? musicCategory,
+    String? musicTrack,
+    bool clearMusicTrack = false,
+    List<String>? musicTracks,
+    bool clearMusicTracks = false,
     double? sfxVolume,
     bool? vibrationEnabled,
     double? animationIntensity,
@@ -223,11 +234,14 @@ class ChildProfile {
       musicEnabled: musicEnabled ?? this.musicEnabled,
       musicVolume: musicVolume ?? this.musicVolume,
       musicCategory: musicCategory ?? this.musicCategory,
+      musicTrack: clearMusicTrack ? null : musicTrack ?? this.musicTrack,
+      musicTracks: clearMusicTracks ? null : musicTracks ?? this.musicTracks,
       sfxVolume: sfxVolume ?? this.sfxVolume,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
       animationIntensity: animationIntensity ?? this.animationIntensity,
       promptSpeed: promptSpeed ?? this.promptSpeed,
-      sensoryPreferencesSet: sensoryPreferencesSet ?? this.sensoryPreferencesSet,
+      sensoryPreferencesSet:
+          sensoryPreferencesSet ?? this.sensoryPreferencesSet,
       rewardPreference: rewardPreference ?? this.rewardPreference,
       useRandomReward: useRandomReward ?? this.useRandomReward,
       characterId: characterId ?? this.characterId,
@@ -247,6 +261,8 @@ class ChildProfile {
     'music_enabled': musicEnabled ? 1 : 0,
     'music_volume': musicVolume,
     'music_category': musicCategory,
+    'music_track': musicTrack,
+    'music_tracks': musicTracks == null ? null : jsonEncode(musicTracks),
     'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled ? 1 : 0,
     'animation_intensity': animationIntensity,
@@ -288,14 +304,18 @@ class ChildProfile {
       sex: ChildSex.fromString(map['sex'] as String?),
       musicEnabled: (map['music_enabled'] ?? 1) == 1,
       musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
-      musicCategory:
-          (map['music_category'] as String?) ?? kDefaultBgmCategory,
+      musicCategory: (map['music_category'] as String?) ?? kDefaultBgmCategory,
+      musicTrack: map['music_track'] as String?,
+      musicTracks: _parseMusicTracks(map['music_tracks']),
       sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
       vibrationEnabled: (map['vibration_enabled'] ?? 1) == 1,
-      animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
+      animationIntensity:
+          (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
       promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
       sensoryPreferencesSet: (map['sensory_preferences_set'] ?? 0) == 1,
-      rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
+      rewardPreference: RewardPreference.fromString(
+        map['reward_preference'] as String?,
+      ),
       useRandomReward: (map['use_random_reward'] ?? 0) == 1,
       characterId: (map['character_id'] as String?) ?? 'bps',
       equippedCostume: (map['equipped_costume'] as String?) ?? 'none',
@@ -324,12 +344,16 @@ class ChildProfile {
     musicEnabled: map['music_enabled'] as bool? ?? true,
     musicVolume: (map['music_volume'] as num?)?.toDouble() ?? 0.5,
     musicCategory: (map['music_category'] as String?) ?? kDefaultBgmCategory,
+    musicTrack: map['music_track'] as String?,
+    musicTracks: _parseMusicTracks(map['music_tracks']),
     sfxVolume: (map['sfx_volume'] as num?)?.toDouble() ?? 0.7,
     vibrationEnabled: map['vibration_enabled'] as bool? ?? true,
     animationIntensity: (map['animation_intensity'] as num?)?.toDouble() ?? 1.0,
     promptSpeed: (map['prompt_speed'] as num?)?.toDouble() ?? 1.0,
     sensoryPreferencesSet: map['sensory_preferences_set'] as bool? ?? false,
-    rewardPreference: RewardPreference.fromString(map['reward_preference'] as String?),
+    rewardPreference: RewardPreference.fromString(
+      map['reward_preference'] as String?,
+    ),
     useRandomReward: map['use_random_reward'] as bool? ?? false,
     characterId: (map['character_id'] as String?) ?? 'bps',
     equippedCostume: (map['equipped_costume'] as String?) ?? 'none',
@@ -347,6 +371,10 @@ class ChildProfile {
     'music_enabled': musicEnabled,
     'music_volume': musicVolume,
     'music_category': musicCategory,
+    // Send nulls explicitly so switching back to category shuffle clears an
+    // older exact-track or Custom Mix value in Supabase.
+    'music_track': musicTrack,
+    'music_tracks': musicTracks,
     'sfx_volume': sfxVolume,
     'vibration_enabled': vibrationEnabled,
     'animation_intensity': animationIntensity,
@@ -359,4 +387,15 @@ class ChildProfile {
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
+
+  static List<String>? _parseMusicTracks(dynamic value) {
+    if (value is List) return value.whereType<String>().toList();
+    if (value is String && value.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is List) return decoded.whereType<String>().toList();
+      } catch (_) {}
+    }
+    return null;
+  }
 }

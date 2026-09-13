@@ -192,23 +192,25 @@ instrumental only, no vocals, steady unchanging tempo, very narrow dynamic range
 
 ## How it is wired into the app
 
-Implemented. The parent picks a **category**; the app picks one track from it per session and loops that track. Music never changes underneath a child mid-session — variety comes from the next session's pick.
+Implemented. The parent can choose a **category**, one exact track, or a **Custom Mix** of 3–5 tracks selected across all six categories. Category mode picks one track from that style per session; exact-track mode always uses the saved asset; Custom Mix picks one track from the saved set per session. The chosen track loops for the session, so music never changes underneath a child.
 
 | Piece | Where |
 |---|---|
 | Track list (generated) | `packages/shared_audio/lib/src/bgm_library.dart` |
-| Playback | `AudioService.playCategoryMusic()` |
-| Stored choice | `ChildProfile.musicCategory`, children table v16 |
+| Playback | `AudioService.playConfiguredMusic()` / `playConfiguredMix()` |
+| Stored choice | `ChildProfile.musicCategory`, optional `musicTrack`, and optional `musicTracks`; children table v16/v20/v21 |
 | Picker UI | Settings → Audio → Music Style |
 | Session pick | `GameFlowScreen.initState` (`restart: true`) |
 | Bundle guard | `packages/shared_audio/test/bgm_asset_bundle_test.dart` |
 
-Only a subset of the library ships, to keep the bundle down — 30 tracks (17.9 MB) out of 60. The rest stay here as masters; `tools/bgm_gen/install_bgm.py` chooses which ship and regenerates `bgm_library.dart`.
+Only a subset of the library ships, to keep the bundle down — 30 tracks (17.9 MB) out of 60. The rest stay here as masters; `tools/bgm_gen/install_bgm.py` chooses which ship and regenerates `bgm_library.dart`. Custom Mix can use any of the 30 shipped tracks, including tracks from different categories.
 
 Three behaviours are deliberate and easy to undo by accident:
 
 - **`playCategoryMusic` no-ops when the same category is already playing**, so rebuilds and lifecycle callbacks cannot restart the track mid-session. Only `restart: true` forces a new pick.
 - **Loading and login play the default category**, because no profile is loaded yet; `HomeScreen` switches to the child's own category once it is. That is the one mid-run change, and it lands before any game.
-- **The picker previews immediately** (`restart: true`). That is the exception to the rule above, and it is intentional: the parent is listening on purpose and needs to hear what they picked.
+- Selecting a category, exact track, or valid Custom Mix starts it immediately. The speaker control beside every track previews it without changing the saved choice. Preview playback is disabled while Music is muted, while selections still persist.
+
+- `musicTrack` is null for legacy profiles and for category shuffle mode. A Custom Mix stores its canonical paths in `musicTracks` and uses `custom_mix` as its category key. A mix must contain 3–5 valid bundled paths; retired or unknown paths are ignored safely.
 
 An unknown category key — a profile written by a build that shipped a category this build does not have — falls back to the default rather than leaving the child in silence.

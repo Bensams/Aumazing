@@ -25,15 +25,15 @@ class ChildRepository {
     LocalDbService? localDb,
     AuthService? authService,
     SyncService? overrideSyncService,
-  })  : _localDb = localDb ?? localDbService,
-        _authService = authService ?? AuthService(),
-        _syncService = overrideSyncService ?? syncService;
+  }) : _localDb = localDb ?? localDbService,
+       _authService = authService ?? AuthService(),
+       _syncService = overrideSyncService ?? syncService;
 
   /// Get the current effective user ID (authenticated or guest)
   String get _effectiveUserId {
     return _authService.currentUser?.id ??
-           _authService.currentGuestId ??
-           'guest';
+        _authService.currentGuestId ??
+        'guest';
   }
 
   // ─── CRUD Operations ──────────────────────────────────────────────────
@@ -50,6 +50,8 @@ class ChildRepository {
     bool musicEnabled = true,
     double musicVolume = 0.5,
     String musicCategory = kDefaultBgmCategory,
+    String? musicTrack,
+    List<String>? musicTracks,
     double sfxVolume = 0.7,
     bool vibrationEnabled = true,
     double promptSpeed = 1.0,
@@ -71,6 +73,8 @@ class ChildRepository {
       musicEnabled: musicEnabled,
       musicVolume: musicVolume,
       musicCategory: musicCategory,
+      musicTrack: musicTrack,
+      musicTracks: musicTracks,
       sfxVolume: sfxVolume,
       vibrationEnabled: vibrationEnabled,
       promptSpeed: promptSpeed,
@@ -83,11 +87,7 @@ class ChildRepository {
     );
 
     // Save locally first (always)
-    await _localDb.upsertChild(
-      child,
-      ownerId: userId,
-      markPending: true,
-    );
+    await _localDb.upsertChild(child, ownerId: userId, markPending: true);
 
     debugPrint('[ChildRepository] Child created locally: ${child.id}');
 
@@ -131,10 +131,7 @@ class ChildRepository {
       useRandomReward: useRandomReward,
     );
 
-    await _localDb.upsertChild(
-      updated,
-      markPending: true,
-    );
+    await _localDb.upsertChild(updated, markPending: true);
 
     debugPrint('[ChildRepository] Child updated: ${child.id}');
 
@@ -155,13 +152,12 @@ class ChildRepository {
       useRandomReward: useRandomReward,
     );
 
-    await _localDb.upsertChild(
-      updated,
-      markPending: true,
-    );
+    await _localDb.upsertChild(updated, markPending: true);
 
-    debugPrint('[ChildRepository] Reward preference updated for child: ${child.id} '
-        '(preference: ${rewardPreference.value}, random: $useRandomReward)');
+    debugPrint(
+      '[ChildRepository] Reward preference updated for child: ${child.id} '
+      '(preference: ${rewardPreference.value}, random: $useRandomReward)',
+    );
 
     // Trigger background sync (anonymous users are authenticated in Supabase)
     _syncService.syncNow();
@@ -189,9 +185,14 @@ class ChildRepository {
   /// Convert guest-created children to authenticated user ownership
   ///
   /// Called automatically when user signs in.
-  Future<void> backfillGuestChildren(String guestId, String authenticatedUserId) async {
+  Future<void> backfillGuestChildren(
+    String guestId,
+    String authenticatedUserId,
+  ) async {
     await _localDb.backfillGuestData(guestId, authenticatedUserId);
-    debugPrint('[ChildRepository] Guest children backfilled to: $authenticatedUserId');
+    debugPrint(
+      '[ChildRepository] Guest children backfilled to: $authenticatedUserId',
+    );
   }
 
   // ─── Sync Operations ──────────────────────────────────────────────────

@@ -90,6 +90,8 @@ void main() {
           'music_enabled': true,
           'music_volume': 0.5,
           'music_category': 'soft_relaxing',
+          'music_track': null,
+          'music_tracks': null,
           'sfx_volume': 0.7,
           'vibration_enabled': true,
           'animation_intensity': 1.0,
@@ -112,6 +114,8 @@ void main() {
           'music_enabled': true,
           'music_volume': 0.5,
           'music_category': 'soft_relaxing',
+          'music_track': null,
+          'music_tracks': null,
           'sfx_volume': 0.7,
           'vibration_enabled': true,
           'animation_intensity': 1.0,
@@ -386,60 +390,57 @@ void main() {
       },
     );
 
-    test(
-      'hydrateFromCloud drops a result it cannot expand rather than '
-      'inventing a placeholder',
-      () async {
-        final db = await localDb.database;
-        supabase.remoteRows[RemoteTables.assessmentRuns] = [
-          {
-            'id': 'run-empty',
-            'child_id': 'sync-child',
-            'assessment_type': 'pre_assessment',
-            'started_at': '2026-05-01T10:00:00.000',
-            'ended_at': '2026-05-01T10:15:00.000',
-            'completed': true,
-            'created_at': '2026-05-01T10:00:00.000',
-            'updated_at': '2026-05-01T10:15:00.000',
+    test('hydrateFromCloud drops a result it cannot expand rather than '
+        'inventing a placeholder', () async {
+      final db = await localDb.database;
+      supabase.remoteRows[RemoteTables.assessmentRuns] = [
+        {
+          'id': 'run-empty',
+          'child_id': 'sync-child',
+          'assessment_type': 'pre_assessment',
+          'started_at': '2026-05-01T10:00:00.000',
+          'ended_at': '2026-05-01T10:15:00.000',
+          'completed': true,
+          'created_at': '2026-05-01T10:00:00.000',
+          'updated_at': '2026-05-01T10:15:00.000',
+        },
+      ];
+      supabase.remoteRows[RemoteTables.assessmentResults] = [
+        // No per_game: nothing says which games this summarised.
+        {
+          'id': 'run-empty',
+          'assessment_run_id': 'run-empty',
+          'child_id': 'sync-child',
+          'assessment_date': '2026-05-01',
+          'summary_json': const <String, dynamic>{},
+          'created_at': '2026-05-01T10:15:00.000',
+          'updated_at': '2026-05-01T10:15:00.000',
+        },
+        // No hydrated run: its local FK could not be satisfied anyway.
+        {
+          'id': 'orphan',
+          'assessment_run_id': 'run-that-was-never-pulled',
+          'child_id': 'sync-child',
+          'assessment_date': '2026-05-01',
+          'summary_json': {
+            'per_game': [
+              {'game_id': 'match_it', 'score': 1, 'total_items': 1},
+            ],
           },
-        ];
-        supabase.remoteRows[RemoteTables.assessmentResults] = [
-          // No per_game: nothing says which games this summarised.
-          {
-            'id': 'run-empty',
-            'assessment_run_id': 'run-empty',
-            'child_id': 'sync-child',
-            'assessment_date': '2026-05-01',
-            'summary_json': const <String, dynamic>{},
-            'created_at': '2026-05-01T10:15:00.000',
-            'updated_at': '2026-05-01T10:15:00.000',
-          },
-          // No hydrated run: its local FK could not be satisfied anyway.
-          {
-            'id': 'orphan',
-            'assessment_run_id': 'run-that-was-never-pulled',
-            'child_id': 'sync-child',
-            'assessment_date': '2026-05-01',
-            'summary_json': {
-              'per_game': [
-                {'game_id': 'match_it', 'score': 1, 'total_items': 1},
-              ],
-            },
-            'created_at': '2026-05-01T10:15:00.000',
-            'updated_at': '2026-05-01T10:15:00.000',
-          },
-        ];
+          'created_at': '2026-05-01T10:15:00.000',
+          'updated_at': '2026-05-01T10:15:00.000',
+        },
+      ];
 
-        await service.hydrateFromCloud();
+      await service.hydrateFromCloud();
 
-        // The old mapper wrote a game_id 'unknown', type 'pre', score 0 row
-        // for each of these, which then showed up in the parent's history as
-        // an assessment the child never sat.
-        expect(await db.query(LocalTables.assessmentResults), isEmpty);
-        // The run itself still hydrates, so the play is not lost.
-        expect(await db.query(LocalTables.assessmentRuns), hasLength(1));
-      },
-    );
+      // The old mapper wrote a game_id 'unknown', type 'pre', score 0 row
+      // for each of these, which then showed up in the parent's history as
+      // an assessment the child never sat.
+      expect(await db.query(LocalTables.assessmentResults), isEmpty);
+      // The run itself still hydrates, so the play is not lost.
+      expect(await db.query(LocalTables.assessmentRuns), hasLength(1));
+    });
 
     test('hydrateFromCloud never resurrects a child deleted locally', () async {
       // Deleted on this device; the cloud row lives on until the deletion
