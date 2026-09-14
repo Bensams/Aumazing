@@ -28,7 +28,9 @@ class CreditsDialog extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.white.withValues(alpha: 0.96),
               borderRadius: AppRadius.card,
-              border: Border.all(color: AppColors.primaryPurple.withValues(alpha: 0.15)),
+              border: Border.all(
+                color: AppColors.primaryPurple.withValues(alpha: 0.15),
+              ),
               boxShadow: const [
                 BoxShadow(color: Colors.black12, blurRadius: 24),
               ],
@@ -66,7 +68,7 @@ class CreditsDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 32),
                       const _Divider(),
-                      
+
                       // 2. Capstone Team & Characters
                       const _SectionTitle('PROJECT PROPONENTS & DEVELOPERS'),
                       const _PersonCard(
@@ -93,46 +95,82 @@ class CreditsDialog extends StatelessWidget {
                       // 3. Expert Validators & Practitioners
                       const _SectionTitle('EXPERT VALIDATORS & PRACTITIONERS'),
                       const _ValidatorCard(
+                        name: "Ma'am Mary Ann Palima",
+                        role: 'SPED Teacher & Capstone Client',
+                        description:
+                            'Served as the capstone client and provided SPED practitioner guidance during the project validation.',
+                      ),
+                      const _ValidatorCard(
                         name: 'Mrs. Lea Famor',
                         role: 'SPED Teacher & Educational Evaluator',
-                        description: 'Evaluated learning module structure and provided domain validation on game appropriateness.',
+                        description:
+                            'Evaluated learning module structure and provided domain validation on game appropriateness.',
                       ),
                       const _ValidatorCard(
                         name: 'Mrs. Merrie Grace Domasin Bordaje',
-                        role: 'Pre-Assessment Games & Focus Development Contributor',
-                        description: 'Contributed the four pre-assessment games and identified focus development areas for children, including communication, social interaction, and play skills.',
+                        role:
+                            'Pre-Assessment Games & Focus Development Contributor',
+                        description:
+                            'Contributed the four pre-assessment games and identified focus development areas for children, including communication, social interaction, and play skills.',
                       ),
                       const _ValidatorCard(
                         name: 'Kenneth Ray',
                         role: 'ASD Practitioner & Behavioral Consultant',
-                        description: 'Practitioner experienced with ASD children; provided initial user interaction and behavioral feedback.',
+                        description:
+                            'Practitioner experienced with ASD children; provided initial user interaction and behavioral feedback.',
                       ),
                       const SizedBox(height: 12),
                       const _Divider(),
 
                       // 4. Institutional & Capstone Details
                       const _SectionTitle('INSTITUTIONAL & CAPSTONE DETAILS'),
-                      const _DetailRow('Institution:', 'Assumption College of Davao'),
-                      const _DetailRow('Department:', 'Faculty of Information Technology'),
-                      const _DetailRow('Degree / Track:', 'BS in Information Technology (BSIT 2026)'),
-                      const _DetailRow('Capstone Adviser:', 'Ms. Christine Marie D. Ordaneza, LPT'),
+                      const _DetailRow(
+                        'Institution:',
+                        'Assumption College of Davao',
+                      ),
+                      const _DetailRow(
+                        'Department:',
+                        'Faculty of Information Technology',
+                      ),
+                      const _DetailRow(
+                        'Degree / Track:',
+                        'BS in Information Technology (BSIT 2026)',
+                      ),
+                      const _DetailRow(
+                        'Capstone Adviser:',
+                        'Ms. Christine Marie D. Ordaneza, LPT',
+                      ),
                       const _DetailRow('Panel Chair:', 'Roselyn M. Biala, MIT'),
                       const SizedBox(height: 24),
                       const _Divider(),
 
                       // 5. System Architecture & Tech Stack
-                      const _SectionTitle('SYSTEM ARCHITECTURE & CORE TECHNOLOGIES'),
-                      const _BulletPoint('Mobile & Game Layer: Flutter & Flame 2D Engine'),
-                      const _BulletPoint('AI Engine: FastAPI & XGBoost Classifier (Cloud-hosted telemetry assessment)'),
-                      const _BulletPoint('Local & Cloud Data: SQLite (Offline-First) & Supabase (PostgreSQL)'),
-                      const _BulletPoint('Services: Proximity LBS (Haversine Formula + Google Maps) & PayMongo Gateway'),
+                      const _SectionTitle(
+                        'SYSTEM ARCHITECTURE & CORE TECHNOLOGIES',
+                      ),
+                      const _BulletPoint(
+                        'Mobile & Game Layer: Flutter & Flame 2D Engine',
+                      ),
+                      const _BulletPoint(
+                        'AI Engine: FastAPI & XGBoost Classifier (Cloud-hosted telemetry assessment)',
+                      ),
+                      const _BulletPoint(
+                        'Local & Cloud Data: SQLite (Offline-First) & Supabase (PostgreSQL)',
+                      ),
+                      const _BulletPoint(
+                        'Services: Proximity LBS (Haversine Formula + Google Maps) & PayMongo Gateway',
+                      ),
                       const SizedBox(height: 24),
                       const _Divider(),
 
                       // 6. Art, Sound & Sensory Design
                       const _SectionTitle('ART, AUDIO & SENSORY DESIGN'),
-                      const _BulletPoint('Mini-games: Copy Me, Match It, Do What I Say, My Turn Your Turn'),
-                      const _BulletPoint('Low-sensory UI palettes, adaptive audio suites, voice-over queues, and gentle animations.'),
+                      const _BulletPoint(
+                        'Mini-games: Copy Me, Match It, Do What I Say, My Turn Your Turn',
+                      ),
+                      const _BulletPoint(
+                        'Low-sensory UI palettes, adaptive audio suites, voice-over queues, and gentle animations.',
+                      ),
                       const SizedBox(height: 24),
                       const _Divider(),
 
@@ -141,21 +179,35 @@ class CreditsDialog extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.destructiveSoftRed.withValues(alpha: 0.15),
+                          color: AppColors.destructiveSoftRed.withValues(
+                            alpha: 0.15,
+                          ),
                           borderRadius: AppRadius.button,
-                          border: Border.all(color: AppColors.destructiveRed.withValues(alpha: 0.15)),
+                          border: Border.all(
+                            color: AppColors.destructiveRed.withValues(
+                              alpha: 0.15,
+                            ),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Icon(Icons.info_outline, size: 16, color: AppColors.destructiveRed.withValues(alpha: 0.9)),
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: AppColors.destructiveRed.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'DISCLAIMER',
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.destructiveRed.withValues(alpha: 0.9),
+                                    color: AppColors.destructiveRed.withValues(
+                                      alpha: 0.9,
+                                    ),
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -180,7 +232,10 @@ class CreditsDialog extends StatelessWidget {
                   right: 8,
                   child: IconButton(
                     tooltip: 'Close credits',
-                    icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppColors.textSecondary,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -216,10 +271,7 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 24),
-    child: Container(
-      height: 1,
-      color: AppColors.border,
-    ),
+    child: Container(height: 1, color: AppColors.border),
   );
 }
 
@@ -247,16 +299,19 @@ class _PersonCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.primaryPurple.withValues(alpha: 0.05),
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.primaryPurple.withValues(alpha: 0.1)),
+            border: Border.all(
+              color: AppColors.primaryPurple.withValues(alpha: 0.1),
+            ),
           ),
           child: ClipOval(
             child: Image.asset(
               'packages/shared_ui/assets/costumes/$asset',
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.person,
-                color: AppColors.primaryPurple.withValues(alpha: 0.3),
-              ),
+              errorBuilder:
+                  (_, __, ___) => Icon(
+                    Icons.person,
+                    color: AppColors.primaryPurple.withValues(alpha: 0.3),
+                  ),
             ),
           ),
         ),

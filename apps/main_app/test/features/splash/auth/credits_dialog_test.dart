@@ -11,12 +11,17 @@ void main() {
     expect(find.text('PROJECT PROPONENTS & DEVELOPERS'), findsOneWidget);
     expect(find.text('EXPERT VALIDATORS & PRACTITIONERS'), findsOneWidget);
     expect(find.text('INSTITUTIONAL & CAPSTONE DETAILS'), findsOneWidget);
-    expect(find.text('SYSTEM ARCHITECTURE & CORE TECHNOLOGIES'), findsOneWidget);
+    expect(
+      find.text('SYSTEM ARCHITECTURE & CORE TECHNOLOGIES'),
+      findsOneWidget,
+    );
     expect(find.text('ART, AUDIO & SENSORY DESIGN'), findsOneWidget);
     expect(find.text('DISCLAIMER'), findsOneWidget);
     expect(find.text('Benedict Paul S. Samson'), findsOneWidget);
     expect(find.text('Ruel Jr. A. Mendio'), findsOneWidget);
     expect(find.text('Alexandra Mendoza'), findsOneWidget);
+    expect(find.text("Ma'am Mary Ann Palima"), findsOneWidget);
+    expect(find.text('SPED Teacher & Capstone Client'), findsOneWidget);
     expect(find.text('Mrs. Lea Famor'), findsOneWidget);
     expect(find.text('Mrs. Merrie Grace Domasin Bordaje'), findsOneWidget);
     expect(find.text('Kenneth Ray'), findsOneWidget);
