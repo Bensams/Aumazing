@@ -70,15 +70,8 @@ class DefaultGoogleAuthClient implements GoogleAuthClient {
       );
     }
 
-    final scopes = ['email', 'profile'];
-    final authorization =
-        await googleUser.authorizationClient.authorizationForScopes(scopes) ??
-        await googleUser.authorizationClient.authorizeScopes(scopes);
-
-    return GoogleAuthTokens(
-      idToken: idToken,
-      accessToken: authorization.accessToken,
-    );
+    // Supabase native ID-token sign-in does not require a second authorization prompt.
+    return GoogleAuthTokens(idToken: idToken);
   }
 }
 
@@ -835,10 +828,16 @@ class AuthService {
   Future<void> signOut() async {
     final isAnonymous = currentUser?.isAnonymous == true;
 
-    try {
-      await GoogleSignIn.instance.disconnect();
-    } catch (e) {
-      debugPrint('Google sign-out cleanup: $e');
+    // Web login uses Supabase's OAuth redirect rather than the native Google
+    // plugin. Calling the plugin's browser implementation here can touch the
+    // GIS SDK after its page state has gone away, so only run this cleanup on
+    // native platforms.
+    if (!kIsWeb) {
+      try {
+        await GoogleSignIn.instance.disconnect();
+      } catch (e) {
+        debugPrint('Google sign-out cleanup: $e');
+      }
     }
 
     if (isAnonymous) {
@@ -850,7 +849,18 @@ class AuthService {
       // Fully revoke the session for bound (non-anonymous) accounts and
       // clear the stored guest token so a fresh guest account is created
       // next time.
-      await _supabaseAuth.signOut(scope: SignOutScope.global);
+      // GoTrue removes the browser's local session before making the remote
+      // revoke request. If that request is blocked or temporarily offline,
+      // local sign-out has still succeeded and must not strand the user on the
+      // dashboard.
+      try {
+        await _supabaseAuth.signOut(scope: SignOutScope.global);
+      } catch (e) {
+        debugPrint(
+          '[AuthService] Remote sign-out revoke failed; local session '
+          'was cleared: $e',
+        );
+      }
       await clearStoredGuestSession();
       debugPrint('[AuthService] Bound user signed out with global scope');
     }

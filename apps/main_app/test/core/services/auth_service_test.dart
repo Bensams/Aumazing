@@ -1,5 +1,7 @@
 import 'package:aumazing/core/services/auth_service.dart';
+import 'package:aumazing/core/services/protected_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
@@ -141,12 +143,9 @@ void main() {
     expect(supabaseAuth.linkIdentityWithIdTokenCalls, isEmpty);
   });
 
-  test('configured Google sign-in exchanges supplied tokens', () async {
+  test('configured Google sign-in forwards ID token without access token', () async {
     final googleAuth = _FakeGoogleAuthClient(
-      authenticateResult: const GoogleAuthTokens(
-        idToken: 'google-id-token',
-        accessToken: 'google-access-token',
-      ),
+      authenticateResult: const GoogleAuthTokens(idToken: 'google-id-token'),
     );
     final supabaseAuth = _FakeSupabaseAuthClient();
     final authService = AuthService(
@@ -160,7 +159,7 @@ void main() {
     expect(supabaseAuth.signInWithIdTokenCalls.single, (
       provider: OAuthProvider.google,
       idToken: 'google-id-token',
-      accessToken: 'google-access-token',
+      accessToken: null,
     ));
   });
 
@@ -190,6 +189,28 @@ void main() {
 
     expect(supabaseAuth.lastOtpType, OtpType.emailChange);
     expect(supabaseAuth.lastOtpEmail, 'parent@example.com');
+  });
+
+  test('bound sign-out completes local cleanup when remote revoke fails', () async {
+    SharedPreferences.setMockInitialValues({'guest_established': true});
+    final storage = _RecordingProtectedStorage();
+    final supabaseAuth = _FakeSupabaseAuthClient(
+      currentUser: _boundUser('bound-user'),
+      signOutError: Exception('browser revoke unavailable'),
+    );
+    final authService = AuthService(
+      supabaseAuth: supabaseAuth,
+      protectedStorage: storage,
+    );
+
+    await expectLater(authService.signOut(), completes);
+
+    expect(supabaseAuth.signOutScopes, [SignOutScope.global]);
+    expect(storage.deletedKeys, ['guest_refresh_token', 'guest_user_id']);
+    expect(
+      (await SharedPreferences.getInstance()).getBool('guest_established'),
+      isNull,
+    );
   });
 
 }
@@ -232,13 +253,16 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
     User? currentUser,
     this.updateUserResponse,
     this.linkResponse,
+    this.signOutError,
   }) : _currentUser = currentUser;
 
   final UserResponse? updateUserResponse;
   final AuthResponse? linkResponse;
+  final Object? signOutError;
   User? _currentUser;
   OtpType? lastOtpType;
   String? lastOtpEmail;
+  final signOutScopes = <SignOutScope>[];
   final signInWithIdTokenCalls =
       <({OAuthProvider provider, String idToken, String? accessToken})>[];
   final linkIdentityWithIdTokenCalls =
@@ -365,5 +389,17 @@ class _FakeSupabaseAuthClient implements SupabaseAuthClient {
       throw UnimplementedError();
 
   @override
-  Future<void> signOut({SignOutScope scope = SignOutScope.global}) async {}
+  Future<void> signOut({SignOutScope scope = SignOutScope.global}) async {
+    signOutScopes.add(scope);
+    if (signOutError != null) throw signOutError!;
+  }
+}
+
+class _RecordingProtectedStorage extends ProtectedStorage {
+  final deletedKeys = <String>[];
+
+  @override
+  Future<void> delete(String key) async {
+    deletedKeys.add(key);
+  }
 }
