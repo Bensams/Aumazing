@@ -430,7 +430,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _signOut() async {
-    await _authService.signOut();
+    try {
+      await _authService.signOut();
+    } catch (e, stackTrace) {
+      // The auth client clears its local session before attempting remote
+      // revocation. Keep the UI transition reliable if a browser request or
+      // local storage operation still fails after that point.
+      debugPrint('[HomeScreen] Sign-out cleanup failed: $e');
+      debugPrint('[HomeScreen] Sign-out stack trace: $stackTrace');
+    }
     if (mounted) {
       context.read<ChildProvider>().clear();
       context.read<AssessmentProvider>().clear();
