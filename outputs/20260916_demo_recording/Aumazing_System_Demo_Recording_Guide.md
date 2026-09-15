@@ -15,7 +15,7 @@ Use one fictional demonstration child throughout the main story, for example **D
 ## Before Recording
 
 - [ ] Prepare a dedicated demonstration account with fictional profile details. Keep passwords, verification codes, and personal notifications outside the recording.
-- [ ] Choose the installed app for the main demonstration if you need native vibration or on-device analysis. The browser demo can demonstrate the interface, but its analysis route and Premium access differ.
+- [ ] Choose the installed app for the main demonstration if you need native vibration. Both the native build and the browser build can run the four bundled models locally; the browser uses ONNX Runtime Web through its WebAssembly bridge. Premium access can still differ by build.
 - [ ] Capture the fresh-account and profile-setup segment before completing assessments. Returning users may enter Child Mode automatically.
 - [ ] Rehearse exiting Child Mode through the parent gate. The gate may use **Word Code** or **My Own PIN**, depending on the account's settings.
 - [ ] Complete the pre-assessment and the current My Path using the demonstration child. Record those stages as you go. Then record the post-assessment and comparison.
@@ -171,9 +171,9 @@ Point to one actual result and its related recommendation. Use the values on scr
 
 **If asked how the analysis works:**
 
-> Supported native builds try the on-device model first, followed by the cloud prediction service and rubric scoring if needed. The parent-facing narrative can also use a summarization service, with a local summary available when that service is unavailable. The displayed result should be described according to the analysis source shown for that run.
+> The app tries the local model first, followed by the cloud prediction service and rubric scoring if needed. Native builds use the platform ONNX runtime; the browser uses ONNX Runtime Web through WebAssembly. The parent-facing narrative can also use a summarization service, with a local summary available when that service is unavailable. The displayed result should be described according to the analysis source shown for that run.
 
-The browser does not run the native on-device model. A model-confidence value is confidence in that analysis, not a probability that the child has autism.
+A model-confidence value is confidence in that analysis, not a probability that the child has autism.
 
 **Stop here:** One recommendation has been explained and the viewer can see **Go to My Path**.
 
