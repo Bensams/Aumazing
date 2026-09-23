@@ -18,11 +18,50 @@ three native-only plugins handled per platform so they don't break the browser.
 cd apps/main_app
 flutter pub get
 flutter build web --base-href /app/ --dart-define-from-file=env/dev.json
+dart run tool/build_offline_web.dart
 ```
 
 Output lands in `apps/main_app/build/web/`. Deploy it under the front page at
 `Aumazing-Front-Page/app/` (the front page links to `app/` — see its `index.html`
 "Try in Browser" buttons).
+
+**Always run `tool/build_offline_web.dart` after `flutter build web`.** Skipping
+it does not break the app, but it silently becomes online-only again (see below).
+
+## Offline play (AUM-334)
+
+Once opened online, the web app keeps working with no connection:
+
+- `web/offline_sw.js` is a service worker. On install it saves the **core**
+  files (app shell, engine, code, models, fonts, pictures, startup videos —
+  about 85 MB) into a cache named after the build version, and only takes
+  over once the whole core is saved. **Lazy** files (game voice lines, sound
+  effects, music) are saved the first time they play, and `web/offline.js`
+  downloads the rest in the background about 20 s after launch (not when the
+  browser asks to save data).
+- `tool/build_offline_web.dart` writes `offline_manifest.json` (every file with
+  a content hash, split into core and lazy) and stamps the build version into
+  `offline_sw.js`. After a deploy only files whose hash changed are downloaded
+  again; saved audio carries over.
+- A new version takes over only after every tab or Home Screen instance of the
+  old one has closed, so files never change under a child mid-game.
+- `web/flutter_bootstrap.js` loads CanvasKit from `canvaskit/` in the build
+  instead of Google's CDN, and the Nunito/Poppins files google_fonts would
+  download are bundled under `packages/shared_ui/assets/google_fonts/`.
+- Parents see what is saved, and can save everything at once, under
+  **Settings → Offline Play** (web only).
+
+Still online-only: sign-in, cloud sync (progress is saved locally and uploaded
+later), therapy-center map tiles and premium checkout.
+
+On iPhone/iPad, Safari may clear a website's saved files after about 7 days
+without use, **unless it has been added to the Home Screen** — which the
+install banner asks for.
+
+To test locally, serve `build/web` under `/app/` over `http://127.0.0.1`
+(service workers need HTTPS or localhost), open it once, wait for
+Settings → Offline Play to report the app ready, then stop the server and
+reload.
 
 ## ⚠️ The sqlite3.wasm version gotcha
 
