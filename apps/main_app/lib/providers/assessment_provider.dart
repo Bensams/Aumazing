@@ -13,7 +13,6 @@ import '../model/gameplay_session.dart';
 import '../model/support_profile.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../model/area_level.dart';
-import '../services/ai_assessment_service.dart';
 import '../services/ai_prediction_fallback_service.dart';
 import '../services/entitlement_service.dart';
 import '../services/local_recommendation_rules.dart';
@@ -22,7 +21,6 @@ import '../services/research_consent_service.dart';
 import '../services/support_profile_builder.dart';
 import '../services/assessment_completeness.dart';
 import '../services/assessment_service.dart';
-import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
 
@@ -311,7 +309,7 @@ class AssessmentProvider extends ChangeNotifier {
       // with a real model prediction in the background now that we may be
       // back online. Fire-and-forget: the dashboard renders with the rubric
       // result and refreshes via notifyListeners() if the upgrade lands.
-      unawaited(upgradeRubricPredictionIfOnline(childId));
+      unawaited(upgradeRubricPrediction(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] loadAssessments error: $e');
     } finally {
@@ -435,15 +433,16 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Upgrades a rubric-synthesized prediction to a real model prediction.
   ///
-  /// When an assessment finishes offline, [predictWithAI] falls back to
-  /// labels derived from the rubric (`modelSource == 'rubric_based'`) and
-  /// that fallback would otherwise stick forever. Called on dashboard open
-  /// ([loadAssessments]): when online, it re-runs the prediction over the
-  /// original run's persisted sessions and replaces the stored fallback.
-  /// No-op when the stored prediction already came from a real model, when
-  /// still offline, or when the run's sessions can't be found. Path progress
-  /// is kept — the upgrade refines levels, it isn't a new assessment.
-  Future<void> upgradeRubricPredictionIfOnline(String childId) async {
+  /// When the on-device model could not run at assessment time,
+  /// [predictWithAI] falls back to labels derived from the rubric
+  /// (`modelSource == 'rubric_based'`) and that fallback would otherwise
+  /// stick forever. Called on dashboard open ([loadAssessments]): it re-runs
+  /// the on-device model over the original run's persisted sessions and
+  /// replaces the stored fallback. No-op when the stored prediction already
+  /// came from the model, when the model is still unavailable, or when the
+  /// run's sessions can't be found. Path progress is kept — the upgrade
+  /// refines levels, it isn't a new assessment.
+  Future<void> upgradeRubricPrediction(String childId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getString(_aiPredictionSourceKey(childId)) != 'rubric_based') {
@@ -451,7 +450,6 @@ class AssessmentProvider extends ChangeNotifier {
       }
       final runId = prefs.getString(_aiPredictionRunKey(childId));
       if (runId == null) return;
-      if (!await connectivityService.checkConnectivity()) return;
 
       final sessions =
           (await _localDb.getGameSessions(
@@ -460,7 +458,6 @@ class AssessmentProvider extends ChangeNotifier {
       if (sessions.isEmpty) return;
 
       final onDevice = OnDeviceAiAssessmentService();
-      final service = AiAssessmentService();
       try {
         final prediction = await const AiPredictionFallbackService().predict(
           onDevice:
@@ -468,17 +465,11 @@ class AssessmentProvider extends ChangeNotifier {
                 childId: childId,
                 sessions: sessions,
               ),
-          cloud:
-              () => service.predictFromSessions(
-                childId: childId,
-                sessions: sessions,
-              ),
           rubric: () async => null,
         );
-        final modelSource =
-            prediction?.onDevice == true ? 'xgboost_onnx' : 'xgboost';
-        // Still unreachable — keep the rubric fallback and retry on the
-        // next dashboard open.
+        const modelSource = 'xgboost_onnx';
+        // Model still unavailable — keep the rubric fallback and retry on
+        // the next dashboard open.
         if (prediction == null) return;
         // The parent may have switched children while the model ran — the
         // upgraded prediction then belongs to a child no longer on screen,
@@ -514,7 +505,6 @@ class AssessmentProvider extends ChangeNotifier {
         notifyListeners();
       } finally {
         onDevice.dispose();
-        service.dispose();
       }
     } catch (e) {
       debugPrint('[AssessmentProvider] upgradeRubricPrediction failed: $e');
@@ -1350,13 +1340,13 @@ class AssessmentProvider extends ChangeNotifier {
     }
   }
 
-  /// Predict developmental profile using the AI Assessment API.
+  /// Predict developmental profile using the on-device XGBoost model.
   ///
   /// Predicts from the *current run's* sessions only — practice play and
   /// abandoned runs are filtered out — and attributes the result to that
   /// run's type: a post-assessment prediction labels the post results and
-  /// never rewrites the pre-assessment ones. Returns null if the API is
-  /// unreachable, allowing the caller to fall back to rule-based scoring.
+  /// never rewrites the pre-assessment ones. Falls back to rubric-derived
+  /// labels when the model is unavailable.
   Future<AiAssessmentResponse?> predictWithAI(
     String childId, {
     String? assessmentType,
@@ -1376,10 +1366,9 @@ class AssessmentProvider extends ChangeNotifier {
       return null;
     }
     final onDevice = OnDeviceAiAssessmentService();
-    final service = AiAssessmentService();
     try {
-      // Prefer the injected generator in focused tests; production keeps the
-      // on-device, cloud, and rubric fallback chain unchanged.
+      // Prefer the injected generator in focused tests; production runs the
+      // on-device model with rubric scoring as the fallback.
       var modelSource = 'xgboost_onnx';
       var rubricUsed = false;
       final prediction = _predictionGeneratorOverride != null
@@ -1393,11 +1382,6 @@ class AssessmentProvider extends ChangeNotifier {
                     childId: childId,
                     sessions: runSessionList,
                   ),
-              cloud:
-                  () => service.predictFromSessions(
-                    childId: childId,
-                    sessions: runSessionList,
-                  ),
               rubric: () async {
                 if (_rubricResult == null) return null;
                 rubricUsed = true;
@@ -1406,13 +1390,11 @@ class AssessmentProvider extends ChangeNotifier {
             );
       if (prediction?.onDevice == true) {
         debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
-      } else if (prediction != null && !rubricUsed) {
-        modelSource = 'xgboost';
       }
 
       // Last resort: synthesize the prediction from the rubric labels so a
       // completed assessment ALWAYS yields area levels and a learning path,
-      // even when the ONNX assets fail and no cloud server exists.
+      // even when the ONNX assets fail to load.
       if (rubricUsed) {
         modelSource = 'rubric_based';
         debugPrint(
@@ -1480,7 +1462,6 @@ class AssessmentProvider extends ChangeNotifier {
       return null;
     } finally {
       onDevice.dispose();
-      service.dispose();
       // Clear sessions now that both finalization and AI prediction are done
       _currentSessions.clear();
     }
@@ -1488,8 +1469,7 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Builds an [AiAssessmentResponse] from rubric labels (Strength=2,
   /// Emerging=1, Needs Support=0) with locally derived module details —
-  /// the offline fallback when neither the ONNX model nor a cloud API is
-  /// available.
+  /// the fallback when the on-device ONNX model is unavailable.
   AiAssessmentResponse _predictionFromRubric(RubricResult rubric) {
     int perf(PerformanceLabel label) => switch (label) {
       PerformanceLabel.strength => 2,

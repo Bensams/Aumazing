@@ -25,9 +25,6 @@ enum AssessmentResultPresentation {
 /// The display labels are fixed terminology — both presentations show the
 /// same string for the same source.
 enum AssessmentAnalysisSource {
-  /// Cloud AI model (XGBoost API).
-  cloudAi('AI Analysis'),
-
   /// On-device ONNX model.
   onDeviceAi('On-Device AI'),
 
@@ -56,7 +53,6 @@ abstract final class AssessmentLabels {
   static const recommendedSettings = 'Recommended Settings';
   static const recommendedActivities = 'Recommended Activities';
   static const progressSinceFirst = 'Progress Since the First Assessment';
-  static const aiAnalysis = 'AI Analysis';
   static const aiSummary = 'AI Summary';
   static const onDeviceAi = 'On-Device AI';
   static const ruleBased = 'Rule-Based';

@@ -460,9 +460,9 @@ class _PreAssessmentProgressScreenState
 
       if (!mounted) return;
 
-      // Call AI Assessment API for XGBoost-based prediction. It runs before
+      // Run the on-device XGBoost prediction. It runs before
       // any reload, because the prediction needs this run's sessions.
-      debugPrint('[PreAssessment] Calling AI Assessment API...');
+      debugPrint('[PreAssessment] Running on-device AI prediction...');
       final aiResponse =
           await assessProv.predictWithAI(childId, assessmentType: 'pre');
 

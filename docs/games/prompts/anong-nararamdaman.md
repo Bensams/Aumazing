@@ -103,9 +103,6 @@ end-to-end first — game logic in `packages/game_core`, screen wrapper in
 
 ## Implementation checklist
 Follow `docs/new-game-prompt-template.md` steps 1–6 verbatim, plus:
-- `ai_assessment/app/rules.py`: add
-  `{"game_id": "anong_nararamdaman", "name": "Ano'ng Nararamdaman?"}` to
-  `AREA_MODULE_MAP["social"]` and to `AREA_MODULE_MAP["communication"]`.
 - Migration `supabase/migrations/<YYYYMMDD>_add_anong_nararamdaman_game.sql`
   following `20260810_add_anong_susunod_game.sql` (note its SQL-escaped
   apostrophe: `'Ano''ng Susunod?'` — you need the same for `Ano''ng

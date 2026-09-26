@@ -107,9 +107,6 @@ it is the direct ancestor of this game — then `anong_susunod`. Game logic in
 
 ## Implementation checklist
 Follow `docs/new-game-prompt-template.md` steps 1–6 verbatim, plus:
-- `ai_assessment/app/rules.py`: add
-  `{"game_id": "tulong_kaibigan", "name": "Tulong, Kaibigan!"}` to
-  `AREA_MODULE_MAP["social"]` and to `AREA_MODULE_MAP["communication"]`.
 - Migration `supabase/migrations/<YYYYMMDD>_add_tulong_kaibigan_game.sql`
   following `20260810_add_hintay_game.sql`: `games` row (sort_order 12),
   `game_skill_categories` → `social_interaction` 1.0 and `communication` 0.5,

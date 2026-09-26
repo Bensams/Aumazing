@@ -1,4 +1,4 @@
-/// A structured module recommendation from the AI Assessment API.
+/// A structured module recommendation from the on-device AI assessment.
 ///
 /// Each recommendation includes the game identifier, display name,
 /// and the starting difficulty level the child should begin at.

@@ -1,12 +1,12 @@
 import 'area_level.dart';
 import 'module_recommendation.dart';
 
-/// Response model from the AI Assessment API's /predict-from-sessions endpoint.
+/// Prediction produced by the on-device XGBoost (ONNX) model, or synthesized
+/// from rubric labels when the model is unavailable.
 ///
-/// Maps to the Python PreAssessmentResponse schema in ai_assessment/app/schemas.py.
 /// Path B (May 2026): the canonical AI output is now [areaLevels] (per-area
 /// ordinal predictions). The legacy [predictedProfile] / [confidence] fields
-/// are still populated by the API for backwards compatibility (dual-response).
+/// are still populated for backwards compatibility.
 class AiAssessmentResponse {
   final String predictedProfile;
   final double confidence;
@@ -29,7 +29,8 @@ class AiAssessmentResponse {
   final Map<String, AreaLevel> areaLevels;
 
   /// True when this prediction was produced by the on-device ONNX model
-  /// (vs. the cloud API). Used to surface an "On-Device AI" indicator.
+  /// (vs. a rubric-derived fallback). Used to surface an "On-Device AI"
+  /// indicator.
   final bool onDevice;
 
   const AiAssessmentResponse({

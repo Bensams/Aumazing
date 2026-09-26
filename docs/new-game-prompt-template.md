@@ -81,7 +81,6 @@ the replacement screen in its own `MascotHost`.
 - `apps/main_app/lib/services/active_games_service.dart`: add
   `'<Title Case Name>': '<id>'` to `_titleToGameId`.
 - `apps/main_app/lib/services/recommendation_filter.dart`: same title→id entry.
-- `ai_assessment/app/rules.py`: add `{"game_id": "<id>", "name": "<Name>"}`.
 - Voice-over: reuse an existing `VoiceOverCue` if one fits; only add a new cue
   (and the recorded assets) if none does — say which you chose and why.
 

@@ -419,9 +419,9 @@ class GameRegistry {
       logoAsset: _logo('hintay'),
       // Tagged Play Skills because the enum carries no `attention` value yet
       // (it mirrors `skill_categories.slug` in Supabase, so adding one needs a
-      // migration first). The attention routing lives in the AI service, where
-      // `rules.py` already has an `attention` area and now recommends this game
-      // for it.
+      // migration first). The attention routing lives in
+      // `LocalRecommendationRules.attentionGameIds`, which recommends this
+      // game for the `attention` area.
       categories: [SkillCategory.playSkills],
       gradientColors: [
         const Color(0xFFE8DEFA),

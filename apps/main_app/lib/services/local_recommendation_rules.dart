@@ -3,16 +3,13 @@ import 'package:game_core/game_core.dart';
 import '../model/area_level.dart';
 import '../model/module_recommendation.dart';
 
-/// Local port of the cloud recommender's rule-based module selection
-/// (ai_assessment/app/rules.py) — pure functions with no app-state
-/// dependencies, so the on-device AI can produce the same `module_details`,
-/// starting levels, and summary text a cloud response would. No server
-/// needed.
+/// Rule-based module selection for the on-device AI — pure functions with no
+/// app-state dependencies that turn per-area levels into `module_details`,
+/// starting levels, and summary text. No server needed.
 class LocalRecommendationRules {
   const LocalRecommendationRules._();
 
-  /// Area keys in server order (rules.py `_AREA_ORDER`) — keeps on-device
-  /// output identical to the cloud recommender's ordering.
+  /// Canonical area order — drives module and summary ordering.
   static const List<String> areaOrder = [
     'communication',
     'social',
@@ -28,12 +25,11 @@ class LocalRecommendationRules {
     'social': SkillCategory.socialInteraction,
   };
 
-  /// Games recommended for attention concerns (mirrors the cloud
-  /// recommender's AREA_MODULE_MAP entry in rules.py, including hintay,
-  /// the newest attention game).
+  /// Games recommended for attention concerns, including hintay, the newest
+  /// attention game.
   static const List<String> attentionGameIds = ['hintay', 'do_what_i_say', 'match_it'];
 
-  /// Human-readable focus fragments per area (rules.py AREA_SUMMARY).
+  /// Human-readable focus fragments per area.
   static const Map<String, String> areaSummary = {
     'communication': 'imitation and verbal instruction skills',
     'social': 'turn-taking and social interaction',
@@ -109,8 +105,7 @@ class LocalRecommendationRules {
     return byGame.values.toList();
   }
 
-  /// Parent-facing summary sentence for the assessment result (mirrors
-  /// rules.py `_build_summary`).
+  /// Parent-facing summary sentence for the assessment result.
   static String buildSummaryText(Map<String, AreaLevel> areaLevels) {
     final needs = [
       for (final area in areaOrder)

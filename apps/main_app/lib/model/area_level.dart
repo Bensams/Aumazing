@@ -1,10 +1,9 @@
-/// Per-area ordinal prediction returned by the AI Assessment API.
+/// Per-area ordinal prediction produced by the on-device AI model.
 ///
 /// Path B (per-area ordinal design, May 2026) — each child receives one
 /// `AreaLevel` per skill area: communication, social, play, attention.
-/// Maps to the Python `AreaLevel` schema in `ai_assessment/app/schemas.py`.
 class AreaLevel {
-  /// Snake-case label as returned by the API:
+  /// Snake-case label:
   /// 'needs_support' | 'emerging' | 'strength'.
   final String level;
 

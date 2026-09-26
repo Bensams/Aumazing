@@ -53,7 +53,7 @@ class AssessmentResult {
   /// Source of assessment labels.
   ///
   /// - `'rubric_based'` — scored by the local rubric engine only.
-  /// - `'xgboost'`      — scored/confirmed by the AI Assessment API (XGBoost model).
+  /// - `'xgboost_onnx'` — scored by the on-device XGBoost (ONNX) model.
   final String? modelSource;
 
   /// Whether this row can be used for XGBoost training.
@@ -100,10 +100,8 @@ class AssessmentResult {
     return (score / total).clamp(0.0, 1.0);
   }
 
-  /// Whether this result was assessed by the AI (XGBoost) model — either the
-  /// cloud API (`'xgboost'`) or the on-device ONNX model (`'xgboost_onnx'`).
-  bool get isAiAssessed =>
-      modelSource == 'xgboost' || modelSource == 'xgboost_onnx';
+  /// Whether this result was assessed by the on-device XGBoost (ONNX) model.
+  bool get isAiAssessed => modelSource == 'xgboost_onnx';
 
   /// Whether this result was assessed by the on-device ONNX model.
   bool get isOnDeviceAssessed => modelSource == 'xgboost_onnx';

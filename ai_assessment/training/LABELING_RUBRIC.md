@@ -84,7 +84,7 @@ Then `attention_level` is determined by the **count of elevated markers** (0–4
 
 ### 4.3 Tie-breaks
 
-The rubric is deterministic; no tie-break is needed for the per-area labels themselves. The legacy `predicted_profile` derivation (used only for backwards compatibility with old Flutter clients) follows a separate priority order documented in `app/rules.py` and is **not** part of this rubric.
+The rubric is deterministic; no tie-break is needed for the per-area labels themselves. The legacy `predicted_profile` derivation (used only for backwards compatibility with old Flutter clients) follows a separate priority order in the app's on-device response builder (`OnDeviceAiAssessmentService`) and is **not** part of this rubric.
 
 ---
 
@@ -154,7 +154,7 @@ The child's accuracies are all in the Emerging band, but four behavioral markers
 
 ## 6. Mapping to recommended modules
 
-This is downstream of the rubric — included here for completeness only. The recommendation engine (`app/rules.py`) suggests a module for **every area not labeled Strength**, with starting difficulty driven by the level:
+This is downstream of the rubric — included here for completeness only. The recommendation engine (`LocalRecommendationRules` in the Flutter app) suggests a module for **every area not labeled Strength**, with starting difficulty driven by the level:
 
 | Area | Module(s) |
 |---|---|
@@ -214,8 +214,8 @@ The rubric was authored by the proponents based on the following constructs and 
 | Attention marker thresholds | `ATTN_IDLE_THRESHOLD`, `ATTN_INVALID_TOUCH_THRESHOLD`, `ATTN_RESPONSE_TIME_THRESHOLD`, `ATTN_PROMPT_DEP_THRESHOLD` in `training/generate_training_data.py` |
 | Marker-count rule (3+ → NS, 2 → Emerging, ≤1 → Strength) | `ATTN_NEEDS_SUPPORT_MIN_MARKERS`, `ATTN_EMERGING_MIN_MARKERS` in same file |
 | Label derivation function | `derive_labels()` in `training/generate_training_data.py` |
-| Module mapping | `AREA_MODULE_MAP` in `app/rules.py` |
-| Level → starting difficulty | `LEVEL_TO_STARTING_LEVEL` in `app/rules.py` |
+| Module mapping | `LocalRecommendationRules.deriveModuleDetails` |
+| Level → starting difficulty | `LocalRecommendationRules` |
 | Database storage | `assessment_results.{communication,social,play,attention}_level` columns added by `supabase/migrations/20260512_per_area_levels.sql` |
 
 If you change a threshold in this document, you **must** update the matching constant in `generate_training_data.py` and regenerate the dataset + retrain the model. The rubric and the code are intentionally redundant so the panel can audit either side independently.

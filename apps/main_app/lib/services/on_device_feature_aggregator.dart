@@ -5,9 +5,9 @@ import '../model/gameplay_session.dart';
 /// Transforms raw [GameplaySession] records into the 12 XGBoost features the
 /// on-device model expects.
 ///
-/// This is an exact Dart port of `ai_assessment/app/feature_aggregator.py` so
-/// on-device inference produces the same feature vector as the cloud service.
-/// Keep the two in sync if either changes.
+/// Feature names and order must match `assets/models/feature_names.json`,
+/// which `ai_assessment/training/export_onnx.py` copies from the trained
+/// model. Retrain and re-export if a feature changes.
 class OnDeviceFeatureAggregator {
   const OnDeviceFeatureAggregator();
 

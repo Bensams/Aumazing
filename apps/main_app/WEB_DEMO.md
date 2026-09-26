@@ -8,7 +8,7 @@ three native-only plugins handled per platform so they don't break the browser.
 
 | Plugin | Problem on web | Fix |
 |---|---|---|
-| `onnxruntime` | Uses `dart:ffi` — won't even compile for web | On-device AI service split behind a conditional export (`on_device_ai_assessment_service.dart` → `_native.dart` / `_web.dart`). The web stub returns `null`, so prediction falls through to the cloud API / rubric path the app already has. |
+| `onnxruntime` | Uses `dart:ffi` — won't even compile for web | On-device AI service split behind a conditional export (`on_device_ai_assessment_service.dart` → `_native.dart` / `_web.dart`). The web stub returns `null`, so prediction falls through to the rubric path the app already has. |
 | `sqflite` | No database factory on web | `core/services/db_web_factory.dart` installs `databaseFactoryFfiWebNoWebWorker` on web (WASM SQLite on the main thread, persisted in IndexedDB). No-op on mobile/desktop. |
 | `webview_flutter` | No web implementation | Premium checkout opens the URL in a new browser tab via `url_launcher` on web instead of the in-app WebView. |
 
@@ -93,7 +93,7 @@ build, so keeping the correct one in `web/` is enough.
   **Continue as Guest** — the full app works in guest mode. The console
   `SyntaxError: Unexpected token '...'` comes from Google Identity Services
   probing and is non-fatal.
-- **On-device AI**: disabled on web (see above); predictions use the cloud API
-  (`AI_API_URL`) or rubric scoring instead.
+- **On-device AI**: disabled on web (see above); predictions use rubric scoring
+  instead.
 - **Persistence** is per-browser (IndexedDB), so a different browser / cleared
   site data starts fresh — fine for a try-it demo.

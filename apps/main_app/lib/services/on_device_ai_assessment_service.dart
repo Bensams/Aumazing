@@ -5,7 +5,7 @@
 /// therefore cannot compile for the web. When targeting the browser, the
 /// conditional export below swaps in a stub
 /// ([on_device_ai_assessment_service_web.dart]) that reports the model as
-/// unavailable, so the caller falls back to the cloud API / rubric scoring.
+/// unavailable, so the caller falls back to rubric scoring.
 ///
 /// Both files expose the same `OnDeviceAiAssessmentService` API, so no call site
 /// needs to know which platform it is running on.

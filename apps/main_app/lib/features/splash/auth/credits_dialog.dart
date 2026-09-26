@@ -152,7 +152,7 @@ class CreditsDialog extends StatelessWidget {
                         'Mobile & Game Layer: Flutter & Flame 2D Engine',
                       ),
                       const _BulletPoint(
-                        'AI Engine: FastAPI & XGBoost Classifier (Cloud-hosted telemetry assessment)',
+                        'AI Engine: On-Device XGBoost Classifier (ONNX Runtime telemetry assessment)',
                       ),
                       const _BulletPoint(
                         'Local & Cloud Data: SQLite (Offline-First) & Supabase (PostgreSQL)',

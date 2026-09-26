@@ -22,7 +22,7 @@ import 'on_device_feature_aggregator.dart';
 ///   - `level_names.json`   — {"0":"Needs Support","1":"Emerging","2":"Strength"}
 ///
 /// If the assets are missing (e.g. before the model is exported), [predict]
-/// returns null so the caller can fall back to the cloud API / rubric scoring.
+/// returns null so the caller can fall back to rubric scoring.
 class OnDeviceAiAssessmentService {
   OnDeviceAiAssessmentService({this.aggregator = const OnDeviceFeatureAggregator()});
 
@@ -190,8 +190,7 @@ class OnDeviceAiAssessmentService {
         : areaLevels.values.map((a) => a.confidence).reduce((a, b) => a + b) /
             areaLevels.length;
 
-    // Local port of the cloud recommender: same module details, starting
-    // levels, and summary text — fully offline.
+    // Module details, starting levels, and summary text — fully offline.
     final moduleDetails = LocalRecommendationRules.deriveModuleDetails(
       areaLevels,
       featureValues: features,

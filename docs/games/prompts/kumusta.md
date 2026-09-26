@@ -88,8 +88,6 @@ end-to-end first — game logic in `packages/game_core`, screen wrapper in
 
 ## Implementation checklist
 Follow `docs/new-game-prompt-template.md` steps 1–6 verbatim, plus:
-- `ai_assessment/app/rules.py`: add `{"game_id": "kumusta", "name": "Kumusta!"}`
-  to `AREA_MODULE_MAP["social"]` (which currently holds one game).
 - Migration `supabase/migrations/<YYYYMMDD>_add_kumusta_game.sql` following
   `20260810_add_hintay_game.sql`: `games` row (sort_order 10),
   `game_skill_categories` → `social_interaction` weight 1.0, and a

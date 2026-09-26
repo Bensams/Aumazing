@@ -17,25 +17,22 @@ void main() {
   test('uses on-device first', () async {
     final result = await const AiPredictionFallbackService().predict(
       onDevice: () async => response('device'),
-      cloud: () async => response('cloud'),
       rubric: () async => response('rubric'),
     );
     expect(result?.predictedProfile, 'device');
   });
 
-  test('falls back to cloud after on-device failure', () async {
+  test('falls back to rubric after on-device failure', () async {
     final result = await const AiPredictionFallbackService().predict(
       onDevice: () async => throw StateError('missing model'),
-      cloud: () async => response('cloud'),
       rubric: () async => response('rubric'),
     );
-    expect(result?.predictedProfile, 'cloud');
+    expect(result?.predictedProfile, 'rubric');
   });
 
-  test('falls back to rubric after both AI tiers fail', () async {
+  test('falls back to rubric when on-device returns nothing', () async {
     final result = await const AiPredictionFallbackService().predict(
       onDevice: () async => null,
-      cloud: () async => throw StateError('offline'),
       rubric: () async => response('rubric'),
     );
     expect(result?.predictedProfile, 'rubric');
