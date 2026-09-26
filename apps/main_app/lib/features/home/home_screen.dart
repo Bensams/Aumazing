@@ -22,6 +22,7 @@ import '../../services/parent_skill_summary_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
+import 'widgets/overall_gameplay_summary_card.dart';
 import '../premium/premium_upgrade_screen.dart';
 import '../history/parent_history_screen.dart';
 import 'gameplay_report_screen.dart';
@@ -621,6 +622,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: AppSpacing.md),
       KeyedSubtree(key: _scoresKey, child: _buildProgressSection()),
       const SizedBox(height: AppSpacing.md),
+      _buildOverallGameplaySummary(),
       _buildAdvancedTrends(),
       KeyedSubtree(key: _recentActivityKey, child: _buildRecentActivity()),
     ];
@@ -1725,6 +1727,51 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Overall gameplay summary (Gemini or on-device) ──────────────────
+
+  /// One summary across every assessment cycle and the recommended
+  /// activities, with questions for the therapist. Hidden until the child has
+  /// an assessment, like the Skills Snapshot above it.
+  Widget _buildOverallGameplaySummary() {
+    return Consumer3<ChildProvider, AssessmentProvider, ProgressProvider>(
+      builder: (context, childProv, assessProv, progressProv, _) {
+        final profile = childProv.profile;
+        if (profile == null ||
+            assessProv.isLoading ||
+            assessProv.preResults.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final path =
+            assessProv.nextCycleLocked
+                ? const <LearningPathEntry>[]
+                : LearningPathService.fromContext(
+                  context,
+                  activeGameIds: ActiveGamesService.instance.cachedActiveGameIds,
+                );
+        final attempts = assessProv.pathAttempts;
+        final totalTries = attempts.values.fold<int>(
+          0,
+          (sum, r) => sum + r.attempts,
+        );
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: OverallGameplaySummaryCard(
+            childId: profile.id,
+            pathGameIds: [for (final e in path) e.game.id],
+            pathAttempts: attempts,
+            languageCode: childProv.language.slug,
+            // New sessions, a new assessment or a new path try all mean a
+            // record the summary has not seen yet.
+            refreshToken:
+                '${progressProv.recentSessions.length}|'
+                '${assessProv.preResults.length}|'
+                '${assessProv.postResults.length}|$totalTries',
           ),
         );
       },
