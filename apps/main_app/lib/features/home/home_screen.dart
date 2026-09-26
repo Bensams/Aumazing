@@ -485,18 +485,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _pushChildFacing(const ChildModeLobbyScreen());
   }
 
-  /// True when the child has finished every step of the learning path and
-  /// hasn't taken the post-assessment yet — time to measure improvement.
+  /// True when the post-assessment is waiting: the child has finished every
+  /// step of the learning path (or has already started the post-assessment)
+  /// and hasn't completed it yet.
+  ///
+  /// Finishing the path's last game already offers the child the
+  /// post-assessment, so this is the fallback for a child who chose the lobby
+  /// instead, or left a run before it finished.
   bool _postAssessmentReady(AssessmentProvider assessProv) {
-    if (assessProv.aiPrediction == null) return false;
     if (assessProv.hasPostAssessment) return false;
+    // A run the child already started stays reachable here even if the
+    // path underneath it has since changed.
+    if (assessProv.postAssessmentInProgress) return true;
+    if (assessProv.aiPrediction == null) return false;
     final path = LearningPathService.fromContext(
       context,
       activeGameIds: ActiveGamesService.instance.cachedActiveGameIds,
     );
-    if (path.isEmpty) return false;
-    final done = assessProv.pathCompletedGameIds;
-    return path.every((e) => done.contains(e.game.id));
+    return LearningPathService.postAssessmentDue(
+      path,
+      assessProv.pathCompletedGameIds,
+      hasPostAssessment: assessProv.hasPostAssessment,
+    );
   }
 
   /// Opens the child lobby directly on the AI-recommended learning path
@@ -1653,13 +1663,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: AppColors.primaryPurple,
                         ),
                         content: Text(
-                          'Learning path complete! Measure the progress with '
-                          'a post-assessment.',
+                          assessProv.postAssessmentInProgress
+                              ? 'Post-assessment started but not finished. '
+                                  'Continue where the child left off.'
+                              : 'Learning path complete! Measure the progress '
+                                  'with a post-assessment.',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        label: 'Start Post-Assessment',
+                        label:
+                            assessProv.postAssessmentInProgress
+                                ? 'Continue Post-Assessment'
+                                : 'Start Post-Assessment',
                         icon: Icons.play_arrow_rounded,
                         onPressed:
                             () => _pushChildFacing(

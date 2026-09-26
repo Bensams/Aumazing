@@ -267,6 +267,7 @@ class AssessmentProvider extends ChangeNotifier {
       _pathCompleted = {};
       _pathAttempts = {};
       _pathVictoryShownSignature = null;
+      _postAssessmentInProgress = false;
     }
     _loadedChildId = childId;
     _isLoading = true;
@@ -306,6 +307,7 @@ class AssessmentProvider extends ChangeNotifier {
       await _restorePathProgress(childId);
       await _restorePathAttempts(childId);
       await _restorePathVictory(childId);
+      await checkPostAssessmentInProgress(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
       // with a real model prediction in the background now that we may be
@@ -656,6 +658,49 @@ class AssessmentProvider extends ChangeNotifier {
     required String childId,
     required String type,
     DateTime? now,
+  }) => _lookUpResumableRun(
+    childId: childId,
+    type: type,
+    now: now,
+    closeStale: true,
+  );
+
+  /// Whether [childId] started a post-assessment and left it before it
+  /// finished — a run [findResumableRun] would offer to pick back up.
+  ///
+  /// Kept current by [loadAssessments], so the parent dashboard can say
+  /// "Continue" rather than "Start" for it.
+  bool get postAssessmentInProgress => _postAssessmentInProgress;
+  bool _postAssessmentInProgress = false;
+
+  /// Re-reads [postAssessmentInProgress] for [childId].
+  ///
+  /// Read-only, unlike [findResumableRun]: it runs on every dashboard reload,
+  /// so it must never close a stale run as a side effect — that stays with
+  /// the post-assessment screen, where the parent is actually asked.
+  Future<void> checkPostAssessmentInProgress(
+    String childId, {
+    DateTime? now,
+  }) async {
+    final run = await _lookUpResumableRun(
+      childId: childId,
+      type: 'post',
+      now: now,
+      closeStale: false,
+    );
+    // A switch to another child while the lookup ran — not this child's flag.
+    if (_loadedChildId != null && _loadedChildId != childId) return;
+    final inProgress = run != null;
+    if (inProgress == _postAssessmentInProgress) return;
+    _postAssessmentInProgress = inProgress;
+    notifyListeners();
+  }
+
+  Future<OpenAssessmentRun?> _lookUpResumableRun({
+    required String childId,
+    required String type,
+    required bool closeStale,
+    DateTime? now,
   }) async {
     try {
       final open = await _assessmentService.openAssessmentRun(childId);
@@ -669,7 +714,7 @@ class AssessmentProvider extends ChangeNotifier {
       if ((now ?? DateTime.now()).difference(open.startedAt) > resumeWindow) {
         // Too old to describe the child sitting down today. Close it here so
         // stale open runs cannot pile up unanswered.
-        await _assessmentService.abandonOpenRuns(childId);
+        if (closeStale) await _assessmentService.abandonOpenRuns(childId);
         return null;
       }
 
@@ -1621,6 +1666,7 @@ class AssessmentProvider extends ChangeNotifier {
     _pathCompleted = {};
     _pathAttempts = {};
     _pathVictoryShownSignature = null;
+    _postAssessmentInProgress = false;
     // Invalidate any load still in flight: its child is no longer loaded,
     // so its late writes are discarded rather than resurrected (AUM-160).
     _loadedChildId = null;
