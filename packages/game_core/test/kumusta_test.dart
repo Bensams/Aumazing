@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/src/config/difficulty_profile.dart';
 import 'package:game_core/src/games/kumusta/buddy_art_cache.dart';
+import 'package:game_core/src/games/kumusta/components/buddy.dart';
 import 'package:game_core/src/games/kumusta/components/greeting_button.dart';
 import 'package:game_core/src/games/kumusta/greetings.dart';
 import 'package:game_core/src/games/kumusta/kumusta_game.dart';
@@ -194,6 +195,113 @@ void main() {
     expect((result['extras'] as Map)['unprompted_greetings'], 2,
         reason: 'greeting back without a prompt is the target skill and the '
             'number a clinician reads first');
+  });
+
+  group('drag and drop', () {
+    Offset buddyCentre(KumustaGame g) {
+      final rect = g.children.whereType<Buddy>().single.toRect();
+      return rect.center;
+    }
+
+    /// Drags [card] to [to] in steps, as a finger would, and lets go.
+    Future<void> dragCard(
+      WidgetTester tester,
+      GreetingButton card,
+      Offset to,
+    ) async {
+      final gesture = await tester.startGesture(centreOf(card));
+      await tester.pump(const Duration(milliseconds: 50));
+      final from = centreOf(card);
+      for (var i = 1; i <= 8; i++) {
+        await gesture.moveTo(Offset.lerp(from, to, i / 8)!);
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    testWidgets('handing the right card to the buddy answers the round',
+        (tester) async {
+      final (game, offered, completions) = await boot(tester, totalRounds: 1);
+      await untilOffered(tester, offered);
+
+      final card = cardsOf(game).firstWhere((c) => c.greeting == offered.last);
+      await dragCard(tester, card, buddyCentre(game));
+
+      for (var i = 0; i < 60 && completions.isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(completions, hasLength(1),
+          reason: 'a drag onto the buddy is a full answer, like a tap');
+      final result = completions.single;
+      expect(result['score'], 1);
+      expect(result['errorCount'], 0);
+      expect((result['extras'] as Map)['drag_answers'], 1);
+      expect((result['extras'] as Map)['unprompted_greetings'], 1);
+    });
+
+    testWidgets('the wrong card handed over is a wrong greeting, not an end',
+        (tester) async {
+      var wrongs = 0;
+      final (game, offered, completions) =
+          await boot(tester, totalRounds: 1, onWrong: () => wrongs++);
+      await untilOffered(tester, offered);
+
+      final wrongCard =
+          cardsOf(game).firstWhere((c) => c.greeting != offered.last);
+      final home = wrongCard.position.clone();
+      await dragCard(tester, wrongCard, buddyCentre(game));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(wrongs, 1);
+      expect(completions, isEmpty);
+      expect(wrongCard.position.distanceTo(home), lessThan(1),
+          reason: 'the card goes back to its slot — nothing is taken away');
+    });
+
+    testWidgets('a card let go away from the buddy just goes home',
+        (tester) async {
+      var wrongs = 0;
+      final (game, offered, completions) =
+          await boot(tester, totalRounds: 1, onWrong: () => wrongs++);
+      await untilOffered(tester, offered);
+
+      final card = cardsOf(game).firstWhere((c) => c.greeting == offered.last);
+      final home = card.position.clone();
+      // Sideways along the bottom edge, well clear of the buddy.
+      await dragCard(tester, card, Offset(4, game.size.y - 4));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(wrongs, 0, reason: 'missing the buddy is a slip, not an error');
+      expect(completions, isEmpty);
+      expect(card.position.distanceTo(home), lessThan(1));
+
+      // And the round is still answerable by tap.
+      await tester.tapAt(centreOf(card));
+      for (var i = 0; i < 60 && completions.isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(completions, hasLength(1));
+      expect((completions.single['extras'] as Map)['drag_answers'], 0);
+    });
+
+    testWidgets('a wobbly tap is still a tap', (tester) async {
+      final (game, offered, completions) = await boot(tester, totalRounds: 1);
+      await untilOffered(tester, offered);
+
+      final card = cardsOf(game).firstWhere((c) => c.greeting == offered.last);
+      final gesture = await tester.startGesture(centreOf(card));
+      await tester.pump(const Duration(milliseconds: 40));
+      await gesture.moveBy(const Offset(6, 4)); // under the tap slop
+      await tester.pump(const Duration(milliseconds: 40));
+      await gesture.up();
+
+      for (var i = 0; i < 60 && completions.isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(completions, hasLength(1));
+      expect((completions.single['extras'] as Map)['drag_answers'], 0);
+    });
   });
 
   GreetingButton buttonFor(Greeting greeting) => GreetingButton(

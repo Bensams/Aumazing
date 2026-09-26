@@ -37,6 +37,12 @@ import '../shared/game_lifecycle_guard.dart';
 /// * **Nothing is ever removed.** A wrong tap bounces the card back and the
 ///   buddy re-offers the same greeting. No card is disabled, dimmed, or taken
 ///   away, so a child who taps to explore never shrinks the board.
+///
+/// The child answers by **tapping** a card or by **dragging it onto the
+/// buddy** — handing the greeting over. Both are the same answer, scored and
+/// timed the same way; the drag is there for the children who reach for the
+/// character, never required. A card let go anywhere else simply glides home:
+/// missing the buddy is a motor slip, not a wrong greeting.
 class KumustaGame extends FlameGame
     with GameLifecycleGuard, TapCallbacks, EnhancedGameplayAnalyticsMixin {
   KumustaGame({
@@ -147,6 +153,10 @@ class KumustaGame extends FlameGame
   /// The prompt rung each scored round was answered from. 0 means the child
   /// greeted back with no help at all — the number a therapist reads first.
   final List<int> _promptLevels = [];
+
+  /// Scored answers given by dragging the card to the buddy rather than
+  /// tapping it. Reported so a therapist can see which way the child chose.
+  int _dragAnswers = 0;
 
   /// Tier-3 second turns offered, and how many the child opened without
   /// needing a prompt.
@@ -395,6 +405,9 @@ class KumustaGame extends FlameGame
         color: _cardColors[greeting] ?? const Color(0xFF7EC8E3),
         position: Vector2.zero(),
         size: Vector2.all(1),
+        onTapped: _onCardTapped,
+        onDropped: _onCardDropped,
+        claimsPoint: (button, point) => identical(_cardAt(point), button),
       );
       _buttons.add(button);
       add(button);
@@ -415,9 +428,12 @@ class KumustaGame extends FlameGame
     final top = _rowTop + (_rowHeight - side) / 2;
 
     for (var i = 0; i < _buttons.length; i++) {
-      _buttons[i]
+      final button = _buttons[i]
         ..size = Vector2.all(side)
-        ..position = Vector2(left + i * (side + gap), top);
+        ..homePosition = Vector2(left + i * (side + gap), top);
+      // A card in the child's hand stays under their finger; it glides to
+      // its new slot when let go.
+      if (!button.isDragging) button.position = button.homePosition.clone();
     }
   }
 
@@ -527,45 +543,83 @@ class KumustaGame extends FlameGame
 
   // ── Answering ────────────────────────────────────────────────────────
 
+  /// The card that owns [point], or null. Where the generous hit boxes of two
+  /// neighbours overlap, the nearer centre wins, so an inflated box never
+  /// hands a tap to the wrong card.
+  GreetingButton? _cardAt(Vector2 point) => _buttons
+      .where((b) => b.containsPointGenerous(point))
+      .fold<GreetingButton?>(null, (best, b) {
+    if (best == null) return b;
+    return b.centre.distanceTo(point) < best.centre.distanceTo(point)
+        ? b
+        : best;
+  });
+
+  /// Taps on a card are delivered to the card itself (see [GreetingButton]),
+  /// so this only ever sees taps on empty canvas.
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
     if (!_awaitingAnswer) return;
-
     final point = event.localPosition;
-    final hit = _buttons
-        .where((b) => b.containsPointGenerous(point))
-        .fold<GreetingButton?>(null, (best, b) {
-      if (best == null) return b;
-      // Overlapping generous bounds: keep whichever centre is nearer, so the
-      // inflated hit boxes never hand a tap to the wrong neighbour.
-      return b.centre.distanceTo(point) < best.centre.distanceTo(point)
-          ? b
-          : best;
-    });
+    if (_cardAt(point) != null) return;
+    // Logged for the touch-pattern features, but it is not an error:
+    // exploring the screen is not a wrong greeting.
+    analyticsRecordTouch(Offset(point.x, point.y), isValid: false);
+    analyticsRecordOffTaskAction(actionType: 'tap_off_target');
+  }
 
-    if (hit == null) {
-      // A tap on empty canvas. Logged for the touch-pattern features, but it
-      // is not an error: exploring the screen is not a wrong greeting.
-      analyticsRecordTouch(Offset(point.x, point.y), isValid: false);
-      analyticsRecordOffTaskAction(actionType: 'tap_off_target');
+  void _onCardTapped(GreetingButton button, DateTime pressedAt) {
+    if (!_awaitingAnswer || !_buttons.contains(button)) return;
+    _answer(button, at: button.centre, pressedAt: pressedAt, dragged: false);
+  }
+
+  /// A dragged card was let go. On the buddy it is an answer, exactly as a
+  /// tap would be; anywhere else it glides home and nothing is scored.
+  void _onCardDropped(
+      GreetingButton button, Vector2 dropCenter, DateTime pressedAt) {
+    button.returnHome();
+    if (!_awaitingAnswer || !_buttons.contains(button)) return;
+
+    if (!_landsOnBuddy(dropCenter)) {
+      analyticsRecordTouch(Offset(dropCenter.x, dropCenter.y), isValid: false);
+      analyticsRecordOffTaskAction(actionType: 'drop_off_target');
       return;
     }
+    _answer(button, at: dropCenter, pressedAt: pressedAt, dragged: true);
+  }
 
-    analyticsRecordTouch(Offset(point.x, point.y), isValid: true);
+  /// Whether a card released at [point] was handed to the buddy.
+  ///
+  /// Generous for the same reason the cards are: a child who carries the card
+  /// up to the character and lets go a little wide has still handed it over.
+  bool _landsOnBuddy(Vector2 point) {
+    final buddy = _buddy;
+    if (buddy == null) return false;
+    final rect = buddy.toRect().inflate(buddy.size.x * 0.25);
+    return rect.contains(Offset(point.x, point.y));
+  }
+
+  void _answer(
+    GreetingButton button, {
+    required Vector2 at,
+    required DateTime pressedAt,
+    required bool dragged,
+  }) {
+    analyticsRecordTouch(Offset(at.x, at.y), isValid: true);
 
     // On the child's own turn there is no wrong answer: they are choosing
     // which greeting to offer, and the buddy will return whichever it is.
     if (_inReturnTurn) {
-      _target = hit.greeting;
-      _resolveCorrect(hit);
+      _target = button.greeting;
+      _resolveCorrect(button, pressedAt: pressedAt, dragged: dragged);
       return;
     }
 
-    if (hit.greeting == _target) {
-      _resolveCorrect(hit);
+    if (button.greeting == _target) {
+      _resolveCorrect(button, pressedAt: pressedAt, dragged: dragged);
     } else {
-      _resolveWrong(hit);
+      _resolveWrong(button);
     }
   }
 
@@ -600,13 +654,21 @@ class KumustaGame extends FlameGame
     }
   }
 
-  void _resolveCorrect(GreetingButton button) {
+  void _resolveCorrect(
+    GreetingButton button, {
+    required DateTime pressedAt,
+    required bool dragged,
+  }) {
     _awaitingAnswer = false;
     _clearPrompts();
 
+    // Timed to the moment the finger came down, not the release: for a drag
+    // that is when the child responded, and the carry to the buddy is motor
+    // time, not social latency. Never negative, for a press that began just
+    // before the offer landed.
     final rt = _offeredAt == null
         ? 0
-        : DateTime.now().difference(_offeredAt!).inMilliseconds;
+        : math.max(0, pressedAt.difference(_offeredAt!).inMilliseconds);
     // Only the *response* turn is scored. The child's own turn is a bonus
     // exchange counted in `initiated_greetings`; folding it into the score
     // would make a harder tier look like a higher one.
@@ -617,6 +679,7 @@ class KumustaGame extends FlameGame
       _responseTimes.add(rt);
       _totalResponseTimeMs += rt;
       _score++;
+      if (dragged) _dragAnswers++;
       _promptLevels.add(_hintsUsedThisRound);
       if (!_promptedThisRound) _unpromptedRounds++;
     }
@@ -627,6 +690,7 @@ class KumustaGame extends FlameGame
       'response_time_ms': rt,
       'prompted': _promptedThisRound,
       'turn': _inReturnTurn ? 'child_initiated' : 'child_response',
+      'input': dragged ? 'drag' : 'tap',
     });
     _adaptive.recordCorrect();
 
@@ -723,6 +787,9 @@ class KumustaGame extends FlameGame
         'unprompted_greetings': _unpromptedRounds,
         'initiated_greetings': _initiatedGreetings,
         'wrong_greetings': _wrongGreetings,
+        // Answers handed to the buddy by drag rather than tapped. Either is a
+        // full answer; this only records which way the child chose.
+        'drag_answers': _dragAnswers,
         'hint_count': _hintCount,
         // How quickly the child answered a social bid, timed from the buddy
         // finishing its gesture. Emitted under both names: the shared
