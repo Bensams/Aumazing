@@ -109,6 +109,13 @@ class _HomeScreenState extends State<HomeScreen> {
   final _screenTimeKey = GlobalKey();
   final _recentActivityKey = GlobalKey();
   final _historyKey = GlobalKey();
+  final _helpWideKey = GlobalKey();
+  final _helpPortraitKey = GlobalKey();
+  final _panelToggleKey = GlobalKey();
+  final _syncBannerKey = GlobalKey();
+  final _premiumKey = GlobalKey();
+  final _gameplaySummaryKey = GlobalKey();
+  final _trendsKey = GlobalKey();
 
   /// Horizontal padding the "Start here" card falls back to when the roomy
   /// [AppSpacing.lg] would squeeze the assessment label past its line
@@ -380,10 +387,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// The walkthrough itself: one short sentence per control, in the order a
-  /// parent meets them. Steps whose target is missing (wrong layout, card
-  /// hidden) are skipped by the overlay, so both keys of a pair can be
-  /// listed and only the mounted one is shown.
+  /// parent meets them on screen — except the assessment, which comes right
+  /// after the welcome because it is where a new parent should begin. Steps
+  /// whose target is missing (wrong
+  /// layout, a card this child's state hides, the Premium banner for a
+  /// Premium parent) are skipped by the overlay, so both keys of a pair can
+  /// be listed and only the mounted one is shown.
+  ///
+  /// Every control and card on the dashboard has a step here. A feature
+  /// added to the dashboard without one is invisible to a parent who relies
+  /// on the tour, so add its step alongside it.
   List<TourStep> _tourSteps() {
+    final hasPre = context.read<AssessmentProvider>().hasPreAssessment;
+    final isPremium = EntitlementService.instance.isPremium;
     return [
       const TourStep(
         title: 'Welcome',
@@ -394,13 +410,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       TourStep(
         targetKey: _assessmentButtonKey,
-        title:
-            context.read<AssessmentProvider>().hasPreAssessment
-                ? 'Assessment'
-                : 'Start here',
+        title: hasPre ? 'Assessment' : 'Start here',
         body:
-            context.read<AssessmentProvider>().hasPreAssessment
-                ? 'Review your child’s assessment results and recommended module here.'
+            hasPre
+                ? 'Review your child’s assessment results and recommended '
+                    'module here.'
                 : 'Start the pre-assessment here to find your child’s starting '
                     'level and get a recommended module.',
         icon: Icons.assessment_rounded,
@@ -408,8 +422,16 @@ class _HomeScreenState extends State<HomeScreen> {
       TourStep(
         targetKey: _childPanelKey,
         title: 'Your child',
-        body: "Your child's name, age and quick stats live here.",
+        body:
+            "Your child's name, age and quick stats: games played, "
+            'sessions and assessments.',
         icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _panelToggleKey,
+        title: 'More room',
+        body: 'Collapse this panel for a wider view; tap again to bring it back.',
+        icon: Icons.chevron_left_rounded,
       ),
       TourStep(
         targetKey: _summaryCardKey,
@@ -418,6 +440,14 @@ class _HomeScreenState extends State<HomeScreen> {
             "Tap this card to expand your child's quick stats and your "
             'account details.',
         icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _syncBannerKey,
+        title: 'Sync status',
+        body:
+            'Progress is saved on this device first. This banner shows when '
+            'something is still waiting to sync to your account.',
+        icon: Icons.cloud_sync_rounded,
       ),
       TourStep(
         targetKey: _childModeKey,
@@ -442,6 +472,22 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.location_on_rounded,
       ),
       TourStep(
+        targetKey: _premiumKey,
+        title: 'Premium',
+        body:
+            'Upgrade for the interactive therapy locator, skill trends and a '
+            'fresh recommendation after every assessment.',
+        icon: Icons.star_rounded,
+      ),
+      TourStep(
+        targetKey: _historyKey,
+        title: 'History & Progress',
+        body:
+            'Every assessment, My Path step and practice session your child '
+            'has played, in one place.',
+        icon: Icons.history_rounded,
+      ),
+      TourStep(
         targetKey: _screenTimeKey,
         title: 'Screen time',
         body: "Today's play time against the daily limit you set in Settings.",
@@ -452,37 +498,59 @@ class _HomeScreenState extends State<HomeScreen> {
         title: 'Recommended module',
         body:
             'The activity your child should work on next — tap it to open '
-            'that learning path straight away.',
+            'that learning path. When the path is done, the post-assessment '
+            'appears here to measure progress.',
         icon: Icons.recommend_rounded,
       ),
       TourStep(
         targetKey: _scoresKey,
-        title: 'Assessment scores',
-        body: 'How your child scored on each assessment activity.',
+        title: 'Skills snapshot',
+        body:
+            'How your child is doing in each of the four domains, from the '
+            'latest assessment.',
         icon: Icons.bar_chart_rounded,
+      ),
+      TourStep(
+        targetKey: _gameplaySummaryKey,
+        title: 'Overall summary',
+        body:
+            'One written summary of the assessments and My Path, with '
+            'questions you can bring to a therapist.',
+        icon: Icons.summarize_rounded,
+      ),
+      TourStep(
+        targetKey: _trendsKey,
+        title: 'Advanced trends',
+        body:
+            isPremium
+                ? 'Skill changes from pre- to post-assessment appear here '
+                    'once a post-assessment is done.'
+                : 'Skill changes across assessment cycles — unlock them with '
+                    'Premium.',
+        icon: Icons.insights_rounded,
       ),
       TourStep(
         targetKey: _recentActivityKey,
         title: 'Recent activity',
         body:
             'The last few sessions your child played, with score and time '
-            'spent.',
+            'spent. Tap one to open its full gameplay report.',
         icon: Icons.history_rounded,
       ),
       TourStep(
         targetKey: _settingsWideKey,
         title: 'Settings',
         body:
-            'Set the parent PIN, screen-time limit, sounds and profile '
-            'details here.',
+            'Set the parent PIN, screen-time limit, sounds, narrator voice '
+            'and profile details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
         targetKey: _settingsPortraitKey,
         title: 'Settings',
         body:
-            'Set the parent PIN, screen-time limit, sounds and profile '
-            'details here.',
+            'Set the parent PIN, screen-time limit, sounds, narrator voice '
+            'and profile details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
@@ -501,11 +569,16 @@ class _HomeScreenState extends State<HomeScreen> {
             'saved.',
         icon: Icons.logout_rounded,
       ),
-      const TourStep(
+      TourStep(
+        targetKey: _helpWideKey,
         title: 'That\'s it',
-        body:
-            'You can replay this tour any time from the ? button at the '
-            'top of the dashboard.',
+        body: 'Replay this tour any time from this ? button.',
+        icon: Icons.help_outline_rounded,
+      ),
+      TourStep(
+        targetKey: _helpPortraitKey,
+        title: 'That\'s it',
+        body: 'Replay this tour any time from this ? button.',
         icon: Icons.help_outline_rounded,
       ),
     ];
@@ -715,9 +788,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       // Hides itself when online with nothing pending, so it only costs
       // space when there is genuinely something to say.
-      const SyncStatusBanner(),
+      KeyedSubtree(key: _syncBannerKey, child: const SyncStatusBanner()),
       _buildActionButtons(),
-      _buildPremiumBanner(),
+      KeyedSubtree(key: _premiumKey, child: _buildPremiumBanner()),
       KeyedSubtree(key: _historyKey, child: _buildHistoryEntry()),
       _buildScreenTimeStatus(),
       const SizedBox(height: AppSpacing.md),
@@ -725,8 +798,11 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: AppSpacing.md),
       KeyedSubtree(key: _scoresKey, child: _buildProgressSection()),
       const SizedBox(height: AppSpacing.md),
-      _buildOverallGameplaySummary(),
-      _buildAdvancedTrends(),
+      KeyedSubtree(
+        key: _gameplaySummaryKey,
+        child: _buildOverallGameplaySummary(),
+      ),
+      KeyedSubtree(key: _trendsKey, child: _buildAdvancedTrends()),
       KeyedSubtree(key: _recentActivityKey, child: _buildRecentActivity()),
     ];
   }
@@ -799,6 +875,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       IconButton(
+                        key: _helpPortraitKey,
                         icon: const Icon(Icons.help_outline_rounded),
                         tooltip: 'Dashboard guide',
                         onPressed: _assessmentsReady ? _startTour : null,
@@ -985,6 +1062,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     IconButton(
+                      key: _helpWideKey,
                       icon: const Icon(Icons.help_outline_rounded),
                       tooltip: 'Dashboard guide',
                       onPressed: _assessmentsReady ? _startTour : null,
@@ -1039,6 +1117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
+                    key: _panelToggleKey,
                     icon: Icon(
                       _isLeftPanelExpanded
                           ? Icons.chevron_left_rounded

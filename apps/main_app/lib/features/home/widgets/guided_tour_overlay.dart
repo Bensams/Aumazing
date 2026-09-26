@@ -202,7 +202,14 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay>
     if (target is! RenderBox || self is! RenderBox) return null;
     if (!target.hasSize || !self.hasSize) return null;
     final topLeft = target.localToGlobal(Offset.zero, ancestor: self);
-    return topLeft & target.size;
+    // Keep the spotlight, its padding and the ring on screen: a card taller
+    // than the viewport, or one scrolled hard against the bottom edge, would
+    // otherwise push the ring past the edge where the parent cannot see it.
+    const margin = _padding + 4;
+    final visible = (Offset.zero & self.size).deflate(margin);
+    final rect = (topLeft & target.size).intersect(visible);
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
   }
 
   /// Layout shifts under the overlay — an orientation change, a card that
@@ -223,7 +230,9 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay>
           fresh == null
               ? current != null
               : current == null ||
-                  (fresh.center - current.center).distance > 0.5;
+                  (fresh.center - current.center).distance > 0.5 ||
+                  (fresh.size.width - current.size.width).abs() > 0.5 ||
+                  (fresh.size.height - current.size.height).abs() > 0.5;
       if (moved) setState(() => _rect = fresh);
     });
   }
@@ -495,6 +504,11 @@ class _TourCard extends StatelessWidget {
 }
 
 /// Paints the dimming scrim with a rounded hole punched out of it.
+///
+/// The hole is an even-odd fill of one path holding both the screen and the
+/// target, not a `Path.combine` difference: the web renderer drew the
+/// combined path as a solid scrim, so the "spotlit" control came out exactly
+/// as dim as everything around it and only the ring marked it.
 class _SpotlightPainter extends CustomPainter {
   const _SpotlightPainter(this.hole);
 
@@ -509,12 +523,13 @@ class _SpotlightPainter extends CustomPainter {
       canvas.drawRect(screen, scrim);
       return;
     }
-    final path = Path.combine(
-      PathOperation.difference,
-      Path()..addRect(screen),
-      Path()
-        ..addRRect(RRect.fromRectAndRadius(target, const Radius.circular(14))),
-    );
+    final path =
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(screen)
+          ..addRRect(
+            RRect.fromRectAndRadius(target, const Radius.circular(14)),
+          );
     canvas.drawPath(path, scrim);
   }
 

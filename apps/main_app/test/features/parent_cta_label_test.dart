@@ -94,7 +94,7 @@ void main() {
     // would cover the very CTAs these tests measure. Marking it seen keeps
     // the surface under test the plain dashboard.
     SharedPreferences.setMockInitialValues({
-      'parent_dashboard_tour_seen_v1': true,
+      'parent_dashboard_tour_seen_v2': true,
     });
   });
 

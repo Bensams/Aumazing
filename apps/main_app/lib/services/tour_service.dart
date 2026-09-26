@@ -15,7 +15,7 @@ class TourService {
 
   /// Bump the suffix when the dashboard changes enough that returning
   /// parents deserve the tour again.
-  static const _parentTourKey = 'parent_dashboard_tour_seen_v1';
+  static const _parentTourKey = 'parent_dashboard_tour_seen_v2';
 
   bool? _cached;
 

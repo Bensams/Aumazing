@@ -138,6 +138,79 @@ void main() {
     expect(taps, 0);
   });
 
+  testWidgets('the spotlight leaves the target undimmed', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(buildHarness(onFinish: () {}));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('The first control.'), findsOneWidget);
+
+    // The scrim must cover the screen but not the control it points at —
+    // the regression was a scrim painted straight over the spotlit target.
+    final target = tester.getCenter(find.byKey(firstKey));
+    final scrim = find.byWidgetPredicate(
+      (w) => w is CustomPaint && w.painter.runtimeType.toString() ==
+          '_SpotlightPainter',
+    );
+    expect(
+      scrim,
+      paints..path(
+        includes: const [Offset(400, 500)],
+        excludes: [target],
+      ),
+    );
+  });
+
+  testWidgets('a target running off the bottom keeps its ring on screen', (
+    tester,
+  ) async {
+    final tallKey = GlobalKey();
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 450,
+                height: 400,
+                child: SizedBox(key: tallKey),
+              ),
+              GuidedTourOverlay(
+                steps: [
+                  TourStep(targetKey: tallKey, title: 'Tall', body: 'Tall.'),
+                ],
+                onFinish: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final ring = tester.getRect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).border != null,
+      ).first,
+    );
+    expect(ring.bottom, lessThanOrEqualTo(600));
+    expect(ring.left, greaterThanOrEqualTo(0));
+    expect(ring.right, lessThanOrEqualTo(800));
+  });
+
   group('an action step', () {
     final targetKey = GlobalKey();
 

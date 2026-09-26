@@ -211,7 +211,7 @@ void main() {
   group('first assessment guidance', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
     });
@@ -345,7 +345,7 @@ void main() {
     'skills snapshot is domain-first and uses the latest post-assessment',
     (tester) async {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
@@ -512,11 +512,92 @@ void main() {
     },
   );
 
+  testWidgets('the tour covers every feature on the dashboard', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    TourService.instance.resetCache();
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        childProvider: _TestChildProvider(initialProfile: _profile),
+        assessmentProvider: _DashboardAssessmentProvider(
+          pre: [
+            _dashboardResult(
+              type: 'pre',
+              runId: 'run-pre',
+              gameId: 'copy_me',
+              score: 6,
+              errors: 4,
+              communication: 'Emerging',
+            ),
+          ],
+          post: const [],
+        ),
+      ),
+    );
+    await _settleUi(tester);
+    expect(find.textContaining('A quick tour'), findsOneWidget);
+
+    // Walk to the end, noting every step title the parent is shown.
+    // Sign out sits inside the collapsed summary card on a phone, so there
+    // the tour explains it through the "Your child" step instead.
+    final seen = <String>[];
+    String currentTitle() {
+      final card = find.ancestor(
+        of: find.text('Skip'),
+        matching: find.byType(Column),
+      );
+      final texts =
+          find
+              .descendant(of: card.first, matching: find.byType(Text))
+              .evaluate()
+              .map((e) => (e.widget as Text).data)
+              .whereType<String>();
+      return texts.first;
+    }
+
+    var guard = 0;
+    while (find.text('Done').evaluate().isEmpty && guard++ < 40) {
+      seen.add(currentTitle());
+      await tester.tap(find.text('Next'));
+      await _settleUi(tester);
+    }
+    seen.add(currentTitle());
+
+    expect(
+      seen,
+      containsAll(<String>[
+        'Your child',
+        'Assessment',
+        'Child mode',
+        'Therapy directory',
+        'Premium',
+        'History & Progress',
+        'Recommended module',
+        'Skills snapshot',
+        'Overall summary',
+        'Advanced trends',
+        'Recent activity',
+        'Settings',
+        "That's it",
+      ]),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Done'));
+    await _settleUi(tester);
+    await tester.pump(const Duration(milliseconds: 700));
+  });
+
   testWidgets('the help button replays the tour for a parent who has seen it', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'parent_dashboard_tour_seen_v1': true,
+      'parent_dashboard_tour_seen_v2': true,
     });
     TourService.instance.resetCache();
 
@@ -721,7 +802,7 @@ void main() {
       // Tour already seen: a returning parent, so the dashboard must not
       // try to run onboarding on top of the auto-launched lobby.
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
@@ -758,7 +839,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
