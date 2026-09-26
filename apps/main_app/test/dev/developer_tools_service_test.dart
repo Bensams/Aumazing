@@ -427,8 +427,8 @@ void main() {
       expect(done.gameId, path.first.game.id);
       expect(provider.pathCompletedGameIds, {path.first.game.id});
       expect(done.remaining, path.length - 1);
-      // Recorded as practice, and therefore attached to no assessment run.
-      final practice = sessionsWith('practice');
+      // Recorded as a path play, and therefore attached to no assessment run.
+      final practice = sessionsWith('recommended_module');
       expect(practice, hasLength(1));
       expect(practice.single.assessmentRunId, isNull);
       expect(practice.single.gameId, path.first.game.id);
@@ -456,7 +456,7 @@ void main() {
           path.map((e) => e.game.id).toSet(),
         );
         expect(
-          sessionsWith('practice'),
+          sessionsWith('recommended_module'),
           hasLength(path.length),
           reason: 'one session per module, never a repeat',
         );
@@ -468,7 +468,7 @@ void main() {
           service.completeNextModule(provider: provider, childId: 'child-1'),
           throwsA(isA<DeveloperToolsException>()),
         );
-        expect(sessionsWith('practice'), hasLength(path.length));
+        expect(sessionsWith('recommended_module'), hasLength(path.length));
       },
     );
 
@@ -497,7 +497,7 @@ void main() {
         DeveloperToolsService.assessmentGameIds.toSet(),
       );
       expect(
-        sessionsWith('practice').every((s) => s.assessmentRunId == null),
+        sessionsWith('recommended_module').every((s) => s.assessmentRunId == null),
         isTrue,
       );
     });

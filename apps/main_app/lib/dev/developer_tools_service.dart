@@ -264,12 +264,14 @@ class DeveloperToolsService {
     ),
   ];
 
-  /// A solid practice run, used when a learning-path module is completed.
+  /// A solid path run, used when a learning-path module is completed. It
+  /// clears the Strength cutoffs with room to spare, because a path step only
+  /// unlocks the next one on a Strength (see PathMastery).
   static const practiceSpec = SyntheticGameSpec(
     gameId: '', // filled in per module
-    score: 8,
+    score: 9,
     totalItems: 10,
-    errorCount: 2,
+    errorCount: 1,
     avgResponseTimeMs: 2600,
     retryCount: 1,
     hintCount: 1,
@@ -451,10 +453,11 @@ class DeveloperToolsService {
 
   /// Completes exactly one module: the first incomplete step of the path.
   ///
-  /// The practice session goes through [AssessmentProvider.recordGameSession]
-  /// with context `practice`, which is what marks and persists path progress —
-  /// no private state and no direct SharedPreferences write. Pressing again
-  /// therefore advances to the next step rather than duplicating this one.
+  /// The session goes through [AssessmentProvider.recordGameSession] with
+  /// the path's own context (`recommended_module`) and a Strength-level
+  /// result, which is what marks and persists path progress — no private
+  /// state and no direct SharedPreferences write. Pressing again therefore
+  /// advances to the next step rather than duplicating this one.
   Future<CompletedModule> completeNextModule({
     required AssessmentProvider provider,
     required String childId,
@@ -478,7 +481,7 @@ class DeveloperToolsService {
     final session = await provider.recordGameSession(
       childId: childId,
       gameId: next.game.id,
-      context: 'practice',
+      context: AssessmentProvider.recommendedModuleContext,
       score: practiceSpec.score,
       totalItems: practiceSpec.totalItems,
       errorCount: practiceSpec.errorCount,

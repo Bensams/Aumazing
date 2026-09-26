@@ -251,6 +251,40 @@ void main() {
   );
 
 
+  testWidgets(
+    'a path game below Strength locks Next and asks for another try',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(const _LobbyWithGame(), pathCompleted: const {}),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('finish'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('gameEndNeedsStrength')), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.byKey(const ValueKey('gameEndLockedNext')), findsOneWidget);
+      // The next step is shown locked, never offered by name.
+      expect(find.text('Copy Me'), findsNothing);
+
+      // Tapping the locked step does nothing.
+      await tester.tap(
+        find.byKey(const ValueKey('gameEndLockedNext')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Try again'), findsOneWidget);
+      expect(PendingPathLaunch.take(), isNull);
+
+      await tester.tap(find.text('Lobby'));
+      await tester.pumpAndSettle();
+      expect(find.text('play'), findsOneWidget);
+    },
+  );
+
   testWidgets('path Lobby pops home without parking a launch', (tester) async {
     await tester.pumpWidget(_wrap(const _LobbyWithGame()));
     await tester.pump();
@@ -416,6 +450,7 @@ Widget _wrap(
   bool nextCycleLocked = false,
   AiAssessmentResponse prediction = _prediction,
   ProgressProvider? progressProvider,
+  Set<String> pathCompleted = const {'match_it'},
 }) {
   return MultiProvider(
     providers: [
@@ -427,6 +462,7 @@ Widget _wrap(
             (_) => _TestAssessmentProvider(
               nextCycleLocked: nextCycleLocked,
               prediction: prediction,
+              pathCompleted: pathCompleted,
             ),
       ),
       ChangeNotifierProvider<StarsProvider>(
@@ -469,7 +505,10 @@ class _TestAssessmentProvider extends AssessmentProvider {
   _TestAssessmentProvider({
     required this.nextCycleLocked,
     required this.prediction,
+    this.pathCompleted = const {'match_it'},
   });
+
+  final Set<String> pathCompleted;
 
   @override
   final bool nextCycleLocked;
@@ -480,13 +519,14 @@ class _TestAssessmentProvider extends AssessmentProvider {
   AiAssessmentResponse? get aiPrediction => prediction;
 
   @override
-  Set<String> get pathCompletedGameIds => const {'match_it'};
+  Set<String> get pathCompletedGameIds => pathCompleted;
 
   @override
   bool get hasPreAssessment => true;
 
   @override
   Future<void> loadAssessments(String childId) async {}
+
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {

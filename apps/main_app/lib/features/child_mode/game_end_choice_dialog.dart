@@ -110,12 +110,16 @@ class GameEndChoiceDialog {
     if (!context.mounted) return;
 
     var pathNext = LearningPathService.nextOnPath(path, currentGameId);
+    // The next step the child has not unlocked yet: this path game has not
+    // earned a Strength, so it must be played again before moving on.
+    LearningPathEntry? lockedNext;
     if (pathNext != null) {
-      // Sequential unlock: only offer the next step if it's actually open
-      // (it normally is — finishing the current game just unlocked it).
+      // Sequential unlock: only offer the next step if it's actually open —
+      // it opens once the current step earns a Strength.
       final completed = context.read<AssessmentProvider>().pathCompletedGameIds;
       final nextIndex = path.indexWhere((e) => e.game.id == pathNext!.game.id);
       if (!LearningPathService.isUnlocked(path, nextIndex, completed)) {
+        lockedNext = pathNext;
         pathNext = null;
       }
     }
@@ -139,6 +143,8 @@ class GameEndChoiceDialog {
               nextGameIcon: next?.icon,
               nextGameLogo: next?.logoAsset,
               nextGameName: next?.name,
+              lockedNextIcon: lockedNext?.game.icon,
+              lockedNextLogo: lockedNext?.game.logoAsset,
             ),
           ),
     );
@@ -361,6 +367,8 @@ class _GameEndChoiceContent extends StatelessWidget {
     required this.nextGameIcon,
     required this.nextGameLogo,
     required this.nextGameName,
+    this.lockedNextIcon,
+    this.lockedNextLogo,
   });
 
   final GamePalette palette;
@@ -370,8 +378,89 @@ class _GameEndChoiceContent extends StatelessWidget {
   final String? nextGameLogo;
   final String? nextGameName;
 
+  /// The next path step, shown locked because this step has not earned a
+  /// Strength yet; null when nothing is locked.
+  final IconData? lockedNextIcon;
+  final String? lockedNextLogo;
+
+  bool get _needsStrength => lockedNextIcon != null;
+
   @override
   Widget build(BuildContext context) {
+    final buttons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Back to the lobby
+        Flexible(
+          child: _ChoiceButton(
+            background: AppColors.white,
+            borderColor: palette.primary.withValues(alpha: 0.4),
+            iconColor: palette.primary,
+            icon: Icons.home_rounded,
+            label: 'Lobby',
+            labelColor: palette.primary,
+            onTap: () => Navigator.of(context).pop(_EndChoice.lobby),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        // Play the same game again — sits between Lobby and Next so the
+        // familiar choice is the easiest one to reach. While the next step is
+        // locked it is the only way forward, so it takes the filled style.
+        Flexible(
+          child: _ChoiceButton(
+            key: const ValueKey('gameEndAgain'),
+            background: _needsStrength ? palette.primary : AppColors.white,
+            borderColor: palette.primary,
+            iconColor: _needsStrength ? palette.onPrimary : palette.primary,
+            icon: currentGameIcon ?? Icons.replay_rounded,
+            logoAsset: currentGameLogo,
+            badgeIcon: Icons.replay_rounded,
+            label: _needsStrength ? 'Try again' : 'Again',
+            labelColor: _needsStrength ? palette.onPrimary : palette.primary,
+            onTap: () => Navigator.of(context).pop(_EndChoice.again),
+          ),
+        ),
+        // Play the next game
+        if (nextGameIcon != null) ...[
+          const SizedBox(width: AppSpacing.lg),
+          Flexible(
+            child: _ChoiceButton(
+              background: palette.primary,
+              borderColor: palette.primary,
+              iconColor: palette.onPrimary,
+              icon: nextGameIcon!,
+              logoAsset: nextGameLogo,
+              badgeIcon: Icons.play_arrow_rounded,
+              label: nextGameName ?? 'Next',
+              labelColor: palette.onPrimary,
+              onTap: () => Navigator.of(context).pop(_EndChoice.next),
+            ),
+          ),
+        ] else if (_needsStrength) ...[
+          // The next step, visibly locked: the child sees there is more to
+          // come and that playing this game again opens it.
+          const SizedBox(width: AppSpacing.lg),
+          Flexible(
+            child: Opacity(
+              key: const ValueKey('gameEndLockedNext'),
+              opacity: 0.45,
+              child: _ChoiceButton(
+                background: AppColors.white,
+                borderColor: AppColors.mutedForeground,
+                iconColor: AppColors.mutedForeground,
+                icon: lockedNextIcon!,
+                logoAsset: lockedNextLogo,
+                badgeIcon: Icons.lock_rounded,
+                label: 'Locked',
+                labelColor: AppColors.mutedForeground,
+                onTap: null,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -388,56 +477,41 @@ class _GameEndChoiceContent extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Back to the lobby
-            Flexible(
-              child: _ChoiceButton(
-                background: AppColors.white,
-                borderColor: palette.primary.withValues(alpha: 0.4),
-                iconColor: palette.primary,
-                icon: Icons.home_rounded,
-                label: 'Lobby',
-                labelColor: palette.primary,
-                onTap: () => Navigator.of(context).pop(_EndChoice.lobby),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            // Play the same game again — sits between Lobby and Next so the
-            // familiar choice is the easiest one to reach.
-            Flexible(
-              child: _ChoiceButton(
-                background: AppColors.white,
-                borderColor: palette.primary,
-                iconColor: palette.primary,
-                icon: currentGameIcon ?? Icons.replay_rounded,
-                logoAsset: currentGameLogo,
-                badgeIcon: Icons.replay_rounded,
-                label: 'Again',
-                labelColor: palette.primary,
-                onTap: () => Navigator.of(context).pop(_EndChoice.again),
-              ),
-            ),
-            // Play the next game
-            if (nextGameIcon != null) ...[
-              const SizedBox(width: AppSpacing.lg),
-              Flexible(
-                child: _ChoiceButton(
-                  background: palette.primary,
-                  borderColor: palette.primary,
-                  iconColor: palette.onPrimary,
-                  icon: nextGameIcon!,
-                  logoAsset: nextGameLogo,
-                  badgeIcon: Icons.play_arrow_rounded,
-                  label: nextGameName ?? 'Next',
-                  labelColor: palette.onPrimary,
-                  onTap: () => Navigator.of(context).pop(_EndChoice.next),
-                ),
-              ),
-            ],
-          ],
-        ),
+        child:
+            _needsStrength
+                ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Picture-first nudge: a star beside the line says "earn
+                    // the star to open the next game" for a child who cannot
+                    // read it yet; the voice of the dialog is the layout.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFC83D),
+                          size: 32,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            'Almost! Play again to unlock the next game.',
+                            key: const ValueKey('gameEndNeedsStrength'),
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: palette.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    buttons,
+                  ],
+                )
+                : buttons,
       ),
     );
   }
@@ -447,6 +521,7 @@ class _GameEndChoiceContent extends StatelessWidget {
 /// text, high contrast).
 class _ChoiceButton extends StatelessWidget {
   const _ChoiceButton({
+    super.key,
     required this.background,
     required this.borderColor,
     required this.iconColor,
@@ -469,7 +544,7 @@ class _ChoiceButton extends StatelessWidget {
   final IconData? badgeIcon;
   final String label;
   final Color labelColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

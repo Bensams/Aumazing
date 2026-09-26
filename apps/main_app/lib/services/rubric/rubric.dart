@@ -6,3 +6,4 @@ export 'rubric_thresholds.dart';
 export 'sensory_label_analyzer.dart';
 export 'recommendation_service.dart';
 export 'xgboost_export_service.dart';
+export 'path_mastery.dart';

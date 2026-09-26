@@ -265,6 +265,7 @@ class AssessmentProvider extends ChangeNotifier {
       _preSnapshot = null;
       _postSnapshot = null;
       _pathCompleted = {};
+      _pathAttempts = {};
       _pathVictoryShownSignature = null;
     }
     _loadedChildId = childId;
@@ -303,6 +304,7 @@ class AssessmentProvider extends ChangeNotifier {
       await _restoreSupportProfile(childId);
       await _restoreSnapshots(childId);
       await _restorePathProgress(childId);
+      await _restorePathAttempts(childId);
       await _restorePathVictory(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
@@ -840,16 +842,76 @@ class AssessmentProvider extends ChangeNotifier {
       if (analytics != null) _currentRunAnalytics[gameId] = analytics;
     }
 
-    // Non-assessment completions advance the learning path (sequential
-    // unlock). Tested on `isAssessment` rather than on the literal
-    // 'practice': a step opened from the path map records itself as
-    // 'recommended_module' (see SessionOrigin), and comparing to the literal
-    // would have stopped the path advancing the moment it was labelled.
-    if (!isAssessment) {
-      await markPathGameCompleted(childId, gameId);
+    // A play of a learning-path step advances the path (sequential unlock)
+    // only when it earns a Strength; anything below that keeps the next step
+    // locked so the child plays this one again. Every path play is counted,
+    // so the parent can see how many tries a step took. Free practice from
+    // the lobby ('practice') neither counts as a try nor unlocks a step.
+    if (context == recommendedModuleContext) {
+      final label = const PathMastery().labelFor(session);
+      await _recordPathAttempt(childId, gameId, label, session.endedAt);
+      if (label == PerformanceLabel.strength) {
+        await markPathGameCompleted(childId, gameId);
+      }
     }
     notifyListeners();
     return session;
+  }
+
+  /// The recorded context of a play launched from the learning path (see
+  /// SessionOrigin).
+  static const recommendedModuleContext = 'recommended_module';
+
+  // ── Learning-path attempts (tries until Strength) ──────────────────────
+
+  /// Per path game: how many times it was played and which try first earned
+  /// a Strength.
+  Map<String, PathAttemptRecord> get pathAttempts =>
+      Map.unmodifiable(_pathAttempts);
+  Map<String, PathAttemptRecord> _pathAttempts = {};
+
+  /// The label of the most recent path play of [gameId], or null.
+  String? lastPathLabel(String gameId) => _pathAttempts[gameId]?.lastLabel;
+
+  static String _pathAttemptsKey(String childId) => 'path_attempts_$childId';
+
+  Future<void> _recordPathAttempt(
+    String childId,
+    String gameId,
+    PerformanceLabel label,
+    DateTime at,
+  ) async {
+    final previous =
+        _pathAttempts[gameId] ??
+        PathAttemptRecord(gameId: gameId, attempts: 0, lastLabel: '');
+    _pathAttempts = {..._pathAttempts, gameId: previous.next(label, at)};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _pathAttemptsKey(childId),
+        jsonEncode([for (final r in _pathAttempts.values) r.toMap()]),
+      );
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persist path attempts failed: $e');
+    }
+  }
+
+  Future<void> _restorePathAttempts(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (childId != _loadedChildId) return; // switched away mid-restore
+      final raw = prefs.getString(_pathAttemptsKey(childId));
+      final list = raw == null ? const [] : jsonDecode(raw) as List;
+      _pathAttempts = {
+        for (final item in list)
+          if (item is Map)
+            item['game_id'] as String: PathAttemptRecord.fromMap(
+              Map<String, dynamic>.from(item),
+            ),
+      };
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restore path attempts failed: $e');
+    }
   }
 
   // ── Learning-path progress (sequential unlock) ─────────────────────────
@@ -931,6 +993,8 @@ class AssessmentProvider extends ChangeNotifier {
   /// path, so the child starts the new sequence from step 1.
   Future<void> _resetPathProgress(String childId) async {
     _pathCompleted = {};
+    // Tries are counted per path: a new recommendation starts its own count.
+    _pathAttempts = {};
     // A fresh recommendation starts fresh: the previous path's victory no
     // longer applies, and the new path's (different signature) has not been
     // celebrated yet. Clearing the stored signature is belt-and-suspenders on
@@ -939,6 +1003,7 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_pathProgressKey(childId));
+      await prefs.remove(_pathAttemptsKey(childId));
       await prefs.remove(_pathVictoryKey(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] reset path progress failed: $e');
@@ -1554,6 +1619,7 @@ class AssessmentProvider extends ChangeNotifier {
     // Path progress is per child and restored on load; dropping it here stops
     // one child's completed steps showing under another after a switch.
     _pathCompleted = {};
+    _pathAttempts = {};
     _pathVictoryShownSignature = null;
     // Invalidate any load still in flight: its child is no longer loaded,
     // so its late writes are discarded rather than resurrected (AUM-160).

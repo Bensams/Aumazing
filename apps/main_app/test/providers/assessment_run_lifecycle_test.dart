@@ -716,4 +716,88 @@ void main() {
       expect(prefs.getString('assessment_snapshot_post_child-1'), isNull);
     });
   });
+
+  group('learning path unlocks only on a Strength', () {
+    const path = AssessmentProvider.recommendedModuleContext;
+
+    test('a path play below Strength keeps the step locked', () async {
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: path,
+        score: 5,
+        totalItems: 10,
+      );
+
+      expect(provider.pathCompletedGameIds, isNot(contains('trace_it')));
+      final record = provider.pathAttempts['trace_it']!;
+      expect(record.attempts, 1);
+      expect(record.reachedStrength, isFalse);
+      expect(record.lastLabel, 'Emerging');
+    });
+
+    test('counts every try until the Strength that unlocks the step',
+        () async {
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: path,
+        score: 4,
+        startedAt: DateTime(2026, 8, 1, 9),
+      );
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: path,
+        score: 6,
+        startedAt: DateTime(2026, 8, 1, 10),
+      );
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: path,
+        score: 9,
+        startedAt: DateTime(2026, 8, 1, 11),
+      );
+
+      expect(provider.pathCompletedGameIds, contains('trace_it'));
+      final record = provider.pathAttempts['trace_it']!;
+      expect(record.attemptsToStrength, 3);
+      expect(record.retries, 2);
+
+      // A replay after the Strength is still counted, but the number of
+      // tries it took is kept.
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: path,
+        score: 2,
+        startedAt: DateTime(2026, 8, 1, 12),
+      );
+      expect(provider.pathAttempts['trace_it']!.attempts, 4);
+      expect(provider.pathAttempts['trace_it']!.attemptsToStrength, 3);
+      expect(provider.pathCompletedGameIds, contains('trace_it'));
+    });
+
+    test('free practice neither counts as a try nor unlocks a step', () async {
+      await _play(
+        provider,
+        gameId: 'trace_it',
+        context: 'practice',
+        score: 10,
+      );
+
+      expect(provider.pathCompletedGameIds, isEmpty);
+      expect(provider.pathAttempts, isEmpty);
+    });
+
+    test('tries survive a reload of the child', () async {
+      await provider.loadAssessments('child-1');
+      await _play(provider, gameId: 'trace_it', context: path, score: 3);
+
+      final restored = AssessmentProvider(assessmentService: _FakeGateway());
+      await restored.loadAssessments('child-1');
+      expect(restored.pathAttempts['trace_it']?.attempts, 1);
+    });
+  });
 }
