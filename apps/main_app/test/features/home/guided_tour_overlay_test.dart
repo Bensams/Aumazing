@@ -137,4 +137,138 @@ void main() {
     await tester.pumpAndSettle();
     expect(taps, 0);
   });
+
+  group('an action step', () {
+    final targetKey = GlobalKey();
+
+    Widget buildPrompt({
+      required VoidCallback onAction,
+      required VoidCallback onFinish,
+    }) {
+      return MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  key: targetKey,
+                  width: 200,
+                  height: 60,
+                  child: const Text('Start'),
+                ),
+              ),
+              GuidedTourOverlay(
+                steps: [
+                  TourStep(
+                    targetKey: targetKey,
+                    title: 'Start the pre-assessment',
+                    body: 'Find your child’s strengths.',
+                    tags: const ['Communication', 'Play Skills'],
+                    actionLabel: 'Start now',
+                    dismissLabel: 'Later',
+                    onAction: onAction,
+                  ),
+                ],
+                onFinish: onFinish,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // The ring pulses for as long as the prompt is up, so these pump fixed
+    // frames rather than waiting for the animation to settle.
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('reads as a prompt: its own labels, tags, and no counter', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(buildPrompt(onAction: () {}, onFinish: () {}));
+      await settle(tester);
+
+      expect(find.text('Start now'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+      expect(find.text('Communication'), findsOneWidget);
+      expect(find.text('Play Skills'), findsOneWidget);
+      expect(find.text('Next'), findsNothing);
+      expect(find.text('Skip'), findsNothing);
+      expect(find.text('1 of 1'), findsNothing);
+    });
+
+    testWidgets('the action button closes the overlay, then runs the action', (
+      tester,
+    ) async {
+      final events = <String>[];
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        buildPrompt(
+          onAction: () => events.add('action'),
+          onFinish: () => events.add('finish'),
+        ),
+      );
+      await settle(tester);
+
+      await tester.tap(find.text('Start now'));
+      await settle(tester);
+      expect(events, ['finish', 'action']);
+    });
+
+    testWidgets('tapping the spotlighted control runs the action', (
+      tester,
+    ) async {
+      var actions = 0;
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        buildPrompt(onAction: () => actions++, onFinish: () {}),
+      );
+      await settle(tester);
+
+      await tester.tapAt(tester.getCenter(find.byKey(targetKey)));
+      await settle(tester);
+      expect(actions, 1);
+    });
+
+    testWidgets('Later, or a tap elsewhere, dismisses without the action', (
+      tester,
+    ) async {
+      var actions = 0;
+      var finished = 0;
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        buildPrompt(onAction: () => actions++, onFinish: () => finished++),
+      );
+      await settle(tester);
+
+      await tester.tap(find.text('Later'));
+      await settle(tester);
+      expect(finished, 1);
+      expect(actions, 0);
+
+      // A fresh overlay, not the dismissed one.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        buildPrompt(onAction: () => actions++, onFinish: () => finished++),
+      );
+      await settle(tester);
+      await tester.tapAt(const Offset(20, 580));
+      await settle(tester);
+      expect(actions, 0);
+    });
+  });
 }

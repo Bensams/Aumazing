@@ -9,6 +9,10 @@ class TourStep {
     required this.body,
     this.targetKey,
     this.icon,
+    this.tags = const [],
+    this.actionLabel,
+    this.onAction,
+    this.dismissLabel,
   });
 
   /// Two or three words naming the control.
@@ -23,6 +27,23 @@ class TourStep {
   final GlobalKey? targetKey;
 
   final IconData? icon;
+
+  /// Short labels shown as chips under [body] — for a step that names a few
+  /// things at once, such as the four skill areas an assessment covers.
+  final List<String> tags;
+
+  /// Turns the step into a call to action: the primary button reads this
+  /// instead of Next / Done, and pressing it — or tapping the spotlighted
+  /// control itself — ends the overlay and runs [onAction].
+  final String? actionLabel;
+
+  final VoidCallback? onAction;
+
+  /// Replaces "Skip" on the secondary button, e.g. "Later" for a prompt the
+  /// parent can come back to.
+  final String? dismissLabel;
+
+  bool get hasAction => actionLabel != null && onAction != null;
 }
 
 /// A coach-mark tour: dims the screen, cuts a hole around one control at a
@@ -32,6 +53,10 @@ class TourStep {
 /// so a single step list can serve both the landscape and the portrait
 /// dashboard, and cards that only appear in some states (premium banner,
 /// screen-time meter) never leave the parent staring at an empty spotlight.
+///
+/// A step with an action ([TourStep.actionLabel]) is a prompt rather than an
+/// explanation: its ring pulses to draw the eye, and the spotlighted control
+/// stays tappable through the scrim.
 class GuidedTourOverlay extends StatefulWidget {
   const GuidedTourOverlay({
     super.key,
@@ -48,7 +73,8 @@ class GuidedTourOverlay extends StatefulWidget {
   State<GuidedTourOverlay> createState() => _GuidedTourOverlayState();
 }
 
-class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
+class _GuidedTourOverlayState extends State<GuidedTourOverlay>
+    with SingleTickerProviderStateMixin {
   /// Index into [widget.steps]; null until the first step is measured.
   int? _index;
 
@@ -61,10 +87,22 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
   static const _padding = 8.0;
   static const _cardWidth = 380.0;
 
+  /// Drives the pulsing ring on an action step. Only runs while one is shown.
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _goTo(0));
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
   }
 
   /// Whether [step] can be shown right now — a step with a target that is
@@ -108,6 +146,11 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
       _index = i;
       _rect = _rectFor(widget.steps[i]);
     });
+    if (widget.steps[i].hasAction) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+    }
   }
 
   /// Walks backwards to the previous showable step.
@@ -125,7 +168,30 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
   void _finish() {
     if (_finished) return;
     _finished = true;
+    _pulse.stop();
     widget.onFinish();
+  }
+
+  /// Closes the overlay first, so whatever [TourStep.onAction] opens is not
+  /// covered by the scrim, then runs the action.
+  void _runAction(TourStep step) {
+    if (_finished) return;
+    _finish();
+    step.onAction!();
+  }
+
+  /// A tap on the scrim advances; on an action step, a tap on the
+  /// spotlighted control itself does what that control would have done.
+  void _onScrimTap(Offset position) {
+    final i = _index;
+    if (i == null) return;
+    final step = widget.steps[i];
+    final hole = _rect?.inflate(_padding);
+    if (step.hasAction && hole != null && hole.contains(position)) {
+      _runAction(step);
+      return;
+    }
+    _goTo(i + 1);
   }
 
   Rect? _rectFor(TourStep step) {
@@ -180,7 +246,8 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: i == null ? null : () => _goTo(i + 1),
+                onTapUp:
+                    i == null ? null : (d) => _onScrimTap(d.localPosition),
                 child: CustomPaint(
                   painter: _SpotlightPainter(hole),
                   child: const SizedBox.expand(),
@@ -196,6 +263,32 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.white, width: 2),
                     ),
+                  ),
+                ),
+              ),
+            if (hole != null && step != null && step.hasAction)
+              Positioned.fromRect(
+                rect: hole.inflate(10),
+                child: IgnorePointer(
+                  child: ListenableBuilder(
+                    listenable: _pulse,
+                    builder: (context, _) {
+                      final t = Curves.easeInOut.transform(_pulse.value);
+                      return Transform.scale(
+                        scale: 0.96 + 0.06 * t,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.white.withValues(
+                                alpha: 0.9 - 0.6 * t,
+                              ),
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -219,7 +312,10 @@ class _GuidedTourOverlayState extends State<GuidedTourOverlay> {
             position: widget.steps.take(index + 1).where(_isVisible).length,
             total: widget.steps.where(_isVisible).length,
             isLast: !widget.steps.skip(index + 1).any(_isVisible),
-            onNext: () => _goTo(index + 1),
+            onNext:
+                step.hasAction
+                    ? () => _runAction(step)
+                    : () => _goTo(index + 1),
             onBack: widget.steps.take(index).any(_isVisible) ? _goBack : null,
             onSkip: _finish,
           );
@@ -321,12 +417,15 @@ class _TourCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                '$position of $total',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.mutedForeground,
+              // A single-step prompt is not a tour; "1 of 1" would only
+              // suggest there is more to come.
+              if (total > 1)
+                Text(
+                  '$position of $total',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -336,6 +435,32 @@ class _TourCard extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
+          if (step.tags.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tag in step.tags)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.lavenderLight,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      tag,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -344,7 +469,7 @@ class _TourCard extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                 ),
-                child: const Text('Skip'),
+                child: Text(step.dismissLabel ?? 'Skip'),
               ),
               const Spacer(),
               if (onBack != null)
@@ -357,8 +482,8 @@ class _TourCard extends StatelessWidget {
                 ),
               const SizedBox(width: AppSpacing.xs),
               AppPrimaryButton(
-                label: isLast ? 'Done' : 'Next',
-                width: 120,
+                label: step.actionLabel ?? (isLast ? 'Done' : 'Next'),
+                width: step.actionLabel == null ? 120 : 150,
                 onPressed: onNext,
               ),
             ],

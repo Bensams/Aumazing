@@ -45,9 +45,16 @@ class HomeScreen extends StatefulWidget {
     this.authService,
     this.syncStates,
     this.openChildMode = false,
+    this.parentVoiceOverFactory,
   });
 
   final AuthService? authService;
+
+  /// Builds the narrator that speaks the pre-assessment prompt to the parent.
+  ///
+  /// Injectable so a widget test can observe the cue without a platform audio
+  /// player; production gets an adult narrator in the child's language.
+  final VoiceOverService Function(BuildContext context)? parentVoiceOverFactory;
 
   /// Sync-state feed the dashboard refreshes on. Defaults to the live
   /// [syncService]; injectable so a test can land a synced pass without a
@@ -75,6 +82,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Whether the guided tour is currently dimming the dashboard.
   bool _isTourActive = false;
+
+  /// Whether the "start the pre-assessment" prompt is spotlighting the
+  /// assessment button. Shown when the tour ends — finished or skipped — for
+  /// a child with no pre-assessment yet.
+  bool _isStartPromptActive = false;
+
+  /// Speaks the start prompt. Built on first use, so a parent who never sees
+  /// the prompt never holds audio players for it.
+  VoiceOverService? _parentVoiceOver;
 
   // Tour targets. Landscape and portrait draw different widgets for the
   // same thing, so each has its own key; the tour skips whichever pair is
@@ -212,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _syncSubscription?.cancel();
+    _parentVoiceOver?.dispose();
     unlockParentOrientation();
     super.dispose();
   }
@@ -300,7 +317,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _endTour() {
     TourService.instance.markParentTourSeen();
-    if (mounted) setState(() => _isTourActive = false);
+    if (!mounted) return;
+    setState(() => _isTourActive = false);
+    _maybePromptPreAssessment();
+  }
+
+  // ── Pre-assessment prompt ───────────────────────────────────────────
+
+  /// After the tour — whether the parent walked through it or skipped it —
+  /// point at the one thing a new parent should do next, and say it aloud.
+  /// Nothing to prompt once a pre-assessment exists.
+  void _maybePromptPreAssessment() {
+    if (!mounted || _isStartPromptActive || !_assessmentsReady) return;
+    if (context.read<AssessmentProvider>().hasPreAssessment) return;
+    setState(() => _isStartPromptActive = true);
+    _speakStartPrompt();
+  }
+
+  void _speakStartPrompt() {
+    final voiceOver = _parentVoiceOver ??=
+        (widget.parentVoiceOverFactory ?? _defaultParentVoiceOver)(context);
+    unawaited(voiceOver.play(VoiceOverCue.parentStartPreAssessment));
+  }
+
+  /// An adult narrator in the child's language, at its natural pace: the
+  /// prompt-speed setting slows speech for the child, not for the parent.
+  static VoiceOverService _defaultParentVoiceOver(BuildContext context) {
+    final childProvider = context.read<ChildProvider>();
+    return VoiceOverService(
+      languageCode: parentVoiceFolder(childProvider.voiceAssetFolder),
+    );
+  }
+
+  /// The prompt closed — "Later", a tap outside, or starting the assessment.
+  void _endStartPrompt() {
+    unawaited(_parentVoiceOver?.stop());
+    if (mounted) setState(() => _isStartPromptActive = false);
+  }
+
+  /// The prompt's single step: the assessment button, spotlighted, with the
+  /// four skill areas the assessment reports on.
+  List<TourStep> _startPromptSteps() {
+    return [
+      TourStep(
+        targetKey: _assessmentButtonKey,
+        title: 'Start the pre-assessment',
+        body:
+            'Start the pre-assessment to discover your child’s strengths in '
+            'four domains.',
+        icon: Icons.play_circle_filled_rounded,
+        tags: const [
+          'Communication',
+          'Play Skills',
+          'Social Interaction',
+          'Attention & Focus',
+        ],
+        actionLabel: 'Start now',
+        dismissLabel: 'Later',
+        onAction: _startPreAssessment,
+      ),
+    ];
   }
 
   /// The walkthrough itself: one short sentence per control, in the order a
@@ -552,8 +628,20 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          // Keyed apart: the prompt follows the tour in the same slot, and
+          // reusing the tour's finished state would close it on arrival.
           if (_isTourActive)
-            GuidedTourOverlay(steps: _tourSteps(), onFinish: _endTour),
+            GuidedTourOverlay(
+              key: const ValueKey('dashboard-tour'),
+              steps: _tourSteps(),
+              onFinish: _endTour,
+            )
+          else if (_isStartPromptActive)
+            GuidedTourOverlay(
+              key: const ValueKey('start-assessment-prompt'),
+              steps: _startPromptSteps(),
+              onFinish: _endStartPrompt,
+            ),
         ],
       ),
     );

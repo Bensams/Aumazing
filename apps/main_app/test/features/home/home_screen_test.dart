@@ -581,6 +581,139 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   });
 
+  group('pre-assessment prompt after the tour', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      TourService.instance.resetCache();
+    });
+
+    Future<_RecordingVoiceOver> skipTour(
+      WidgetTester tester, {
+      AssessmentProvider? assessmentProvider,
+    }) async {
+      final narrator = _RecordingVoiceOver();
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: assessmentProvider,
+          parentVoiceOverFactory: (_) => narrator,
+        ),
+      );
+      await _settleUi(tester);
+      expect(find.textContaining('A quick tour'), findsOneWidget);
+
+      await tester.tap(find.text('Skip'));
+      await _settleUi(tester);
+      return narrator;
+    }
+
+    testWidgets('skipping the tour points at the assessment and says so', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      expect(
+        find.textContaining('discover your child’s strengths'),
+        findsOneWidget,
+      );
+      for (final domain in [
+        'Communication',
+        'Play Skills',
+        'Social Interaction',
+        'Attention & Focus',
+      ]) {
+        expect(find.text(domain), findsOneWidget);
+      }
+      expect(narrator.played, [VoiceOverCue.parentStartPreAssessment]);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('finishing the tour prompts too', (tester) async {
+      final narrator = _RecordingVoiceOver();
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          parentVoiceOverFactory: (_) => narrator,
+        ),
+      );
+      await _settleUi(tester);
+
+      var guard = 0;
+      while (find.text('Done').evaluate().isEmpty && guard++ < 20) {
+        await tester.tap(find.text('Next'));
+        await _settleUi(tester);
+      }
+      await tester.tap(find.text('Done'));
+      await _settleUi(tester);
+
+      expect(find.text('Start now'), findsOneWidget);
+      expect(narrator.played, [VoiceOverCue.parentStartPreAssessment]);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('Start now opens the pre-assessment introduction', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      await tester.tap(find.text('Start now'));
+      await _settleUi(tester);
+      expect(find.byType(PreAssessmentIntroScreen), findsOneWidget);
+      expect(narrator.stops, greaterThan(0));
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('Later leaves the dashboard usable and stops the voice', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      await tester.tap(find.text('Later'));
+      await _settleUi(tester);
+      expect(find.text('Start now'), findsNothing);
+      expect(narrator.stops, greaterThan(0));
+      expect(find.text('Start Pre-Assessment').hitTestable(), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('no prompt once a pre-assessment exists', (tester) async {
+      final narrator = await skipTour(
+        tester,
+        assessmentProvider: _DashboardAssessmentProvider(
+          pre: [
+            _dashboardResult(
+              type: 'pre',
+              runId: 'pre-1',
+              gameId: 'match_it',
+              score: 8,
+              errors: 2,
+              communication: 'Emerging',
+            ),
+          ],
+          post: const [],
+        ),
+      );
+
+      expect(find.text('Start now'), findsNothing);
+      expect(narrator.played, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
+
   group('returning users open in child mode (AUM-306)', () {
     testWidgets('openChildMode pushes the child lobby over the dashboard', (
       tester,
@@ -710,6 +843,7 @@ Widget _buildTestApp({
   Stream<SyncState>? syncStates,
   bool openChildMode = false,
   TextScaler textScaler = TextScaler.noScaling,
+  VoiceOverService Function(BuildContext context)? parentVoiceOverFactory,
 }) {
   return MultiProvider(
     providers: [
@@ -734,6 +868,9 @@ Widget _buildTestApp({
         authService: authService,
         syncStates: syncStates,
         openChildMode: openChildMode,
+        // Never a platform player in a widget test.
+        parentVoiceOverFactory:
+            parentVoiceOverFactory ?? (_) => _RecordingVoiceOver(),
       ),
     ),
   );
@@ -884,6 +1021,28 @@ class _TestProgressProvider extends ProgressProvider {
   @override
   Future<void> loadProgress(String childId) async {
     progressLoads.add(childId);
+  }
+}
+
+/// Records the cues asked for instead of reaching a platform player.
+class _RecordingVoiceOver extends VoiceOverService {
+  _RecordingVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  final List<VoiceOverCue> played = [];
+  int stops = 0;
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {
+    played.add(cue);
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
   }
 }
 

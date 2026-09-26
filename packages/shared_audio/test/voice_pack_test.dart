@@ -99,6 +99,33 @@ void main() {
     });
   });
 
+  group('parentVoiceFolder', () {
+    test('keeps an adult narrator the parent chose', () {
+      expect(parentVoiceFolder('en_adult_man'), 'en_adult_man');
+      expect(parentVoiceFolder('tl_adult_woman'), 'tl_adult_woman');
+    });
+
+    test('never addresses a parent in a young or child voice', () {
+      expect(parentVoiceFolder('en_child_girl'), 'en_adult_woman');
+      expect(parentVoiceFolder('tl_young_boy'), 'tl_adult_woman');
+      expect(parentVoiceFolder('ceb_child_boy'), 'ceb_adult_woman');
+    });
+
+    test('the untiered human pack hands over to its language default', () {
+      expect(parentVoiceFolder('ceb_lexianne'), 'ceb_adult_woman');
+    });
+
+    test('every pack resolves to an adult one', () {
+      for (final pack in kVoicePacks) {
+        final folder = parentVoiceFolder(pack.assetFolder);
+        expect(voicePackByAssetFolder(folder)?.tier, 'adult',
+            reason: '${pack.id} resolved to $folder');
+        expect(voicePackByAssetFolder(folder)?.languageSlug,
+            pack.languageSlug);
+      }
+    });
+  });
+
   group('fallbackVoiceFolder', () {
     test('alternate pack falls back to its language default', () {
       expect(fallbackVoiceFolder('ceb_lexianne'), 'ceb_adult_woman');
