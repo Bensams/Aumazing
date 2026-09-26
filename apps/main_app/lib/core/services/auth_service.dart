@@ -301,6 +301,10 @@ class AuthService {
   // Guest mode support
   static String? _guestId;
 
+  // Share a returning guest's in-flight cloud upgrade across startup and
+  // connectivity callbacks so the browser cannot mint duplicate sessions.
+  static Future<AuthResponse>? _guestUpgradeInFlight;
+
   // SharedPreferences keys for guest session persistence
   static const _guestRefreshTokenKey = 'guest_refresh_token';
   static const _guestUserIdKey = 'guest_user_id';
@@ -488,6 +492,21 @@ class AuthService {
     }
 
     return response;
+  }
+
+  /// Ensures an established local guest has a Supabase session, sharing an
+  /// in-flight request when startup and connectivity recovery overlap.
+  Future<AuthResponse> ensureCloudGuestSession() {
+    final inFlight = _guestUpgradeInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = signInAnonymouslyOrReuse();
+    _guestUpgradeInFlight = future;
+    return future.whenComplete(() {
+      if (identical(_guestUpgradeInFlight, future)) {
+        _guestUpgradeInFlight = null;
+      }
+    });
   }
 
   /// Clear the stored guest refresh token and user ID.

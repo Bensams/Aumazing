@@ -427,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen>
       // account for sync. A failure here (e.g. offline) never blocks guest use.
       if (_authService.currentUser == null) {
         try {
-          await _authService.signInAnonymouslyOrReuse();
+          await _authService.ensureCloudGuestSession();
         } catch (e) {
           debugPrint('Guest cloud upgrade skipped (offline): $e');
         }

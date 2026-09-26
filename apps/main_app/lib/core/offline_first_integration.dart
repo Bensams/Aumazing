@@ -27,6 +27,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/research_consent_service.dart';
+import '../services/active_games_service.dart';
+import '../services/therapy_center_service.dart';
 import 'repositories/child_repository.dart';
 import 'repositories/assessment_repository.dart';
 import 'services/auth_service.dart';
@@ -65,7 +67,10 @@ class OfflineFirstIntegration {
     //     retries every few seconds against an unreachable host, throwing an
     //     unhandled AuthRetryableFetchException each time (log spam + battery).
     _applyAutoRefreshPolicy(connectivityService.isOnline);
-    connectivityService.onConnectivityChanged.listen(_applyAutoRefreshPolicy);
+    connectivityService.onConnectivityChanged.listen((online) {
+      _applyAutoRefreshPolicy(online);
+      if (online) _upgradeEstablishedGuest(auth);
+    });
 
     // 3. Initialize sync service (listens for connectivity changes)
     await syncService.initialize();
@@ -97,6 +102,16 @@ class OfflineFirstIntegration {
     }
   }
 
+  /// Retry a browser guest's cloud upgrade after a temporary offline start.
+  static Future<void> _upgradeEstablishedGuest(AuthService auth) async {
+    if (auth.isLoggedIn || !await auth.isGuestEstablished()) return;
+    try {
+      await auth.ensureCloudGuestSession();
+    } catch (e) {
+      debugPrint('[OfflineFirst] guest cloud upgrade deferred: $e');
+    }
+  }
+
   /// Handle authentication state changes
   static void _onAuthStateChanged(AuthState state, AuthService auth) {
     switch (state.event) {
@@ -104,6 +119,11 @@ class OfflineFirstIntegration {
         final userId = state.session?.user.id;
         if (userId != null) {
           debugPrint('[OfflineFirst] User signed in: $userId');
+
+          // A catalog query made before guest authentication can return an
+          // empty RLS-filtered result. Retry it with the authenticated role.
+          ActiveGamesService.instance.invalidateCache();
+          TherapyCenterService.instance.invalidateCache();
 
           // 1. Backfill guest data if needed
           if (auth.isGuestMode) {

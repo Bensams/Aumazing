@@ -30,6 +30,12 @@ class TherapyCenterService {
     _memoryCache = null;
   }
 
+  /// Discard a catalog loaded before authentication so the next read can
+  /// retry with the authenticated Supabase role.
+  void invalidateCache() {
+    _memoryCache = null;
+  }
+
   /// Loads active centers: Supabase first, falling back to the last
   /// successful fetch when offline.
   Future<List<TherapyCenter>> getCenters({bool forceRefresh = false}) async {
