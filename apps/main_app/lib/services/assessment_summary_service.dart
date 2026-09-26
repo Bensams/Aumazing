@@ -9,15 +9,17 @@ class AssessmentSummary {
 
   final String text;
 
-  /// True when Gemini produced [text]; false when it's the local fallback.
+  /// True when an AI model (Gemini, or Groq when Gemini is at its limit)
+  /// produced [text]; false when it's the local fallback.
   final bool isAi;
 }
 
 /// Produces a warm, plain-language summary of an assessment result.
 ///
-/// Calls the `summarize-assessment` Edge Function (Gemini, key held in
-/// Vault). Best-effort by design: on NO internet, timeout, a missing key,
-/// quota, or any error, it returns the provided local [fallback] instead —
+/// Calls the `summarize-assessment` Edge Function (Gemini, falling back to
+/// Groq when Gemini is rate-limited; keys held in Vault). Best-effort by
+/// design: on NO internet, timeout, missing keys, both providers at quota,
+/// or any error, it returns the provided local [fallback] instead —
 /// the parent always sees a summary. Successful AI summaries are cached
 /// per result so repeat views (and offline re-opens) are instant and free.
 class AssessmentSummaryService {
@@ -27,7 +29,8 @@ class AssessmentSummaryService {
 
   static final AssessmentSummaryService instance = AssessmentSummaryService();
 
-  static const _timeout = Duration(seconds: 12);
+  /// Covers the whole server-side chain: Gemini, then Groq (10 s each).
+  static const _timeout = Duration(seconds: 25);
 
   /// Builds a summary for one assessment.
   ///

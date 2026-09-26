@@ -1,21 +1,21 @@
 // Generates a warm, plain-language summary of a child's assessment result
-// using Google Gemini (free tier). JWT-verified; the Gemini API key is read
-// from Supabase Vault and never reaches the app. Data minimization: only
-// skill levels, scores, and recommendation names are sent — never the
-// child's name or any identifier.
+// using Google Gemini (free tier), with Groq as the fallback when Gemini is
+// rate-limited or failing (see ../_shared/llm.ts). JWT-verified; both API
+// keys are read from Supabase Vault and never reach the app. Data
+// minimization: only skill levels, scores, and recommendation names are
+// sent — never the child's name or any identifier.
 //
-// The app treats this as best-effort: on ANY failure here (missing key,
-// Gemini error, quota, timeout) it falls back to the built-in rubric
+// The app treats this as best-effort: when both providers fail (missing
+// keys, errors, quota, timeout) it falls back to the built-in rubric
 // summary, so the parent always sees something.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { generateWithFallback } from '../_shared/llm.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
 };
-
-const GEMINI_MODEL = 'gemini-2.5-flash';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -39,13 +39,6 @@ Deno.serve(async (req: Request) => {
       await userClient.auth.getUser();
     if (userError || !userData.user) {
       return json({ error: 'unauthorized' }, 401);
-    }
-
-    const { data: apiKey } = await admin.rpc('get_vault_secret', {
-      secret_name: 'GEMINI_API_KEY',
-    });
-    if (!apiKey) {
-      return json({ error: 'summarizer not configured' }, 503);
     }
 
     const body = await req.json().catch(() => ({}));
@@ -140,41 +133,16 @@ Deno.serve(async (req: Request) => {
       ].join('\n');
     }
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300,
-            // gemini-2.5-flash spends output tokens on internal "thinking";
-            // a 3-sentence summary needs none, so disable it (also faster).
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-          ],
-        }),
-      },
-    );
-
-    if (!geminiResponse.ok) {
-      const errBody = await geminiResponse.text();
-      console.error('gemini error', geminiResponse.status, errBody.slice(0, 300));
+    const result = await generateWithFallback(admin, prompt, {
+      temperature: 0.7,
+      maxTokens: 300,
+    });
+    const summary = result?.text.trim();
+    if (!result || !summary) {
       return json({ error: 'summarizer unavailable' }, 502);
     }
 
-    const geminiData = await geminiResponse.json();
-    const summary = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text
-      ?.trim();
-    if (!summary) {
-      return json({ error: 'empty summary' }, 502);
-    }
-
-    return json({ summary });
+    return json({ summary, provider: result.provider });
   } catch (e) {
     console.error('summarize-assessment failed', e);
     return json({ error: 'internal error' }, 500);
