@@ -94,6 +94,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final _recentActivityKey = GlobalKey();
   final _historyKey = GlobalKey();
 
+  /// Horizontal padding the "Start here" card falls back to when the roomy
+  /// [AppSpacing.lg] would squeeze the assessment label past its line
+  /// budget. Padding is cheaper to lose than the label itself.
+  static const double _tightCardPadding = AppSpacing.sm;
+
   /// Re-queries the dashboard when a sync pass lands rows.
   ///
   /// Progress is read once per child load, so a sync that finished while the
@@ -1092,46 +1097,55 @@ class _HomeScreenState extends State<HomeScreen> {
             !childProv.hasProfile ||
             assessProv.isLoading;
         final needsAssessment = !isLoading && !assessProv.hasPreAssessment;
-        final Widget assessment;
-        if (isLoading) {
-          assessment = _buildLoadingCard('Loading assessment…');
-        } else {
+        final assessmentLabel =
+            assessProv.hasPreAssessment ? 'Assessment' : 'Start Pre-Assessment';
+
+        // The "Start here" lead-in card wraps the CTA, so the card's own
+        // horizontal padding is width the button cannot use. On a narrow
+        // phone at a large text scale that padding is the difference
+        // between the label reading in full and being clipped, so the
+        // tight arrangement gives up padding rather than text.
+        Widget buildAssessment({required bool tight}) {
+          if (isLoading) return _buildLoadingCard('Loading assessment…');
           final button = AppPrimaryButton(
             key: _assessmentButtonKey,
-            label: needsAssessment ? 'Start Pre-Assessment' : 'Assessment',
+            label: assessmentLabel,
             onPressed: _startPreAssessment,
             icon:
                 needsAssessment
                     ? Icons.play_circle_filled_rounded
                     : Icons.assessment_rounded,
+            compact: tight,
           );
-          assessment =
-              needsAssessment
-                  ? AppCard(
-                    color: AppColors.lavenderLight,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Start here',
-                          style: AppTextStyles.titleLarge.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'The pre-assessment helps find your child’s starting '
-                          'level and recommends a learning module.',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        button,
-                      ],
-                    ),
-                  )
-                  : button;
+          if (!needsAssessment) return button;
+          return AppCard(
+            color: AppColors.lavenderLight,
+            padding: EdgeInsets.symmetric(
+              horizontal: tight ? _tightCardPadding : AppSpacing.lg,
+              vertical: AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Start here',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'The pre-assessment helps find your child’s starting '
+                  'level and recommends a learning module.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                button,
+              ],
+            ),
+          );
         }
         final childMode = _ActionCard(
           key: _childModeKey,
@@ -1158,15 +1172,26 @@ class _HomeScreenState extends State<HomeScreen> {
         // What each action needs to read in full, measured from its own
         // label at the ambient text scale. A fixed 540 breakpoint clipped
         // "Start Pre-Assessment" once the tablet sidebar had taken its
-        // share of the width.
-        final assessmentMin = AppPrimaryButton.minWidthFor(
-          context,
-          label:
-              assessProv.hasPreAssessment
-                  ? 'Assessment'
-                  : 'Start Pre-Assessment',
-          icon: Icons.play_circle_filled_rounded,
-        );
+        // share of the width. The wrapping card's padding counts too:
+        // measuring the bare button and then rendering it inside the
+        // "Start here" card understated the requirement by that padding
+        // and clipped the label on a narrow phone at 1.3x text scale.
+        double assessmentMinFor({required bool tight}) {
+          final cardPadding =
+              needsAssessment
+                  ? (tight ? _tightCardPadding : AppSpacing.lg) * 2
+                  : 0.0;
+          return AppPrimaryButton.minWidthFor(
+                context,
+                label: assessmentLabel,
+                icon: Icons.play_circle_filled_rounded,
+                compact: tight,
+              ) +
+              cardPadding;
+        }
+
+        final assessmentMin = assessmentMinFor(tight: false);
+        final assessmentMinTight = assessmentMinFor(tight: true);
         final cardMin = _ActionCard.minWidthFor(
           context,
           labels: const ['Enter Child Mode', 'Therapy Directory'],
@@ -1177,19 +1202,25 @@ class _HomeScreenState extends State<HomeScreen> {
             const gap = AppSpacing.md;
             final width = constraints.maxWidth;
 
+            // Only tighten when the roomy arrangement will not fit, so the
+            // CTA surrenders padding before it surrenders text.
+            final tight = width < assessmentMin;
+            final assessment = buildAssessment(tight: tight);
+            final ctaMin = tight ? assessmentMinTight : assessmentMin;
+
             // Three across only when every label fits at once. Spare space
             // is shared proportionally, so the assessment CTA — the widest
             // label — keeps the largest column.
             if (!needsAssessment &&
                 !isLoading &&
-                width >= assessmentMin + cardMin * 2 + gap * 2) {
+                width >= ctaMin + cardMin * 2 + gap * 2) {
               // IntrinsicHeight keeps the three tiles the same height even
               // when one of them wraps its label.
               return IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(flex: assessmentMin.round(), child: assessment),
+                    Expanded(flex: ctaMin.round(), child: assessment),
                     const SizedBox(width: gap),
                     Expanded(flex: cardMin.round(), child: childMode),
                     const SizedBox(width: gap),
@@ -1201,7 +1232,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Two columns: the long CTA takes a full-width row of its own
             // and the two shorter cards pair up beneath it.
-            if (width >= cardMin * 2 + gap && width >= assessmentMin) {
+            if (width >= cardMin * 2 + gap && width >= ctaMin) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

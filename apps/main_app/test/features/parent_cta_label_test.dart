@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -87,6 +89,15 @@ Future<void> _settleUi(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() {
+    // The dashboard runs its guided tour on a parent's first visit, which
+    // would cover the very CTAs these tests measure. Marking it seen keeps
+    // the surface under test the plain dashboard.
+    SharedPreferences.setMockInitialValues({
+      'parent_dashboard_tour_seen_v1': true,
+    });
+  });
+
   group('parent dashboard', () {
     for (final entry
         in {
@@ -187,6 +198,9 @@ Widget _wrapDashboard({double textScale = 1.0}) {
 Widget _wrapScreen(Widget screen, {double textScale = 1.0}) {
   return MultiProvider(
     providers: [
+      // Read by the dashboard once a child profile resolves, to sync the
+      // child's persisted audio settings.
+      Provider<AudioService>(create: (_) => _SilentAudioService()),
       ChangeNotifierProvider<ChildProvider>(
         create: (_) => _TestChildProvider(),
       ),
@@ -209,6 +223,43 @@ Widget _wrapScreen(Widget screen, {double textScale = 1.0}) {
       home: screen,
     ),
   );
+}
+
+/// Stands in for the real service, which wraps every playback call in a
+/// four-second timeout. With no audio platform under the widget tester those
+/// timers outlive the test and trip the pending-timer invariant, so this
+/// double reports music already playing and no-ops the rest.
+class _SilentAudioService extends AudioService {
+  @override
+  bool get isMusicPlaying => true;
+
+  @override
+  String? get currentCategory => null;
+
+  @override
+  void updateConfig(AudioConfig config) {}
+
+  @override
+  Future<void> resumeMusic() async {}
+
+  @override
+  Future<void> stopMusic() async {}
+
+  @override
+  Future<void> playConfiguredMusic({
+    required String? categoryKey,
+    String? trackPath,
+    bool restart = false,
+  }) async {}
+
+  @override
+  Future<void> playConfiguredMix(
+    List<String> trackPaths, {
+    bool restart = false,
+  }) async {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _TestChildProvider extends ChildProvider {

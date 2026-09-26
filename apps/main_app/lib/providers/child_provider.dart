@@ -124,7 +124,11 @@ class ChildProvider extends ChangeNotifier {
 
   ChildProfile? get profile => _profile;
   bool get isLoading => _isLoading;
-  bool get hasProfile => _profile != null;
+
+  /// Derived from [profile] rather than the backing field so the two can
+  /// never disagree: a subclass that supplies a profile by overriding
+  /// [profile] would otherwise still report `false` here.
+  bool get hasProfile => profile != null;
 
   /// All of the parent's children, oldest first. Empty until [loadProfile].
   List<ChildProfile> get children => List.unmodifiable(_children);
