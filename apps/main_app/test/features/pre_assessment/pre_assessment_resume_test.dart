@@ -8,6 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:aumazing/core/services/auth_service.dart';
+import 'package:aumazing/features/pre_assessment/learn_first_screen.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_progress_screen.dart';
 import 'package:aumazing/features/pre_assessment/sensory/sensory_consent_dialog.dart';
 import 'package:aumazing/model/child_profile.dart';
@@ -51,19 +52,25 @@ void main() {
     }
   }
 
-  Widget app(AssessmentProvider provider) => MultiProvider(
-    providers: [
-      ChangeNotifierProvider<ChildProvider>(create: (_) => _TestChildProvider()),
-      ChangeNotifierProvider<AssessmentProvider>.value(value: provider),
-      Provider<AudioService>(create: (_) => _FakeAudioService()),
-    ],
-    child: MaterialApp(
-      theme: AppTheme.light,
-      home: const PreAssessmentProgressScreen(
-        sensoryConsentResult: SensoryConsentResult.declined,
-      ),
-    ),
-  );
+  Widget app(AssessmentProvider provider, {bool learnFirst = false}) =>
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ChildProvider>(
+            create: (_) => _TestChildProvider(),
+          ),
+          ChangeNotifierProvider<AssessmentProvider>.value(value: provider),
+          Provider<AudioService>(create: (_) => _FakeAudioService()),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: PreAssessmentProgressScreen(
+            sensoryConsentResult: SensoryConsentResult.declined,
+            // The familiarisation step has its own tests; most here are about
+            // resume.
+            showLearnFirst: learnFirst,
+          ),
+        ),
+      );
 
   testWidgets('an interrupted run is offered back to the parent', (
     tester,
@@ -131,6 +138,85 @@ void main() {
     expect(find.text('Play!'), findsOneWidget);
     expect(find.text('Game 1 of 4'), findsOneWidget);
   });
+
+  group("Let's learn first", () {
+    setUp(() {
+      LearnFirstScreen.debugVoiceOverFactory = (_) => _SilentVoiceOver();
+    });
+    tearDown(() => LearnFirstScreen.debugVoiceOverFactory = null);
+
+    Future<void> pumpUntilLearnFirst(WidgetTester tester) async {
+      for (var i = 0; i < 40; i++) {
+        if (find.byType(LearnFirstScreen).evaluate().isNotEmpty) return;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+      }
+    }
+
+    testWidgets('a new run opens with it, before the first game', (
+      tester,
+    ) async {
+      final provider = _ScriptedAssessmentProvider();
+      await tester.pumpWidget(app(provider, learnFirst: true));
+      await pumpFrames(tester);
+      await pumpUntilLearnFirst(tester);
+
+      expect(find.byType(LearnFirstScreen), findsOneWidget);
+      expect(
+        provider.startAttempts,
+        1,
+        reason: 'the run exists before the step, so the log can name it',
+      );
+
+      // Let the route finish sliding in; taps are ignored mid-transition.
+      await pumpFrames(tester);
+      await tester.tap(find.byKey(const Key('learnFirst.skip')));
+      await pumpFrames(tester);
+      await pumpUntilPlayable(tester);
+      expect(find.text('Play!'), findsOneWidget);
+      expect(find.text('Game 1 of 4'), findsOneWidget);
+
+      late List<Map<String, dynamic>> entries;
+      await tester.runAsync(() async {
+        entries = await LearnFirstLog.instance.entriesFor('child-1');
+      });
+      expect(entries, hasLength(1));
+      expect(entries.single['assessment_type'], 'pre');
+      expect(entries.single['completed'], isFalse);
+    });
+
+    testWidgets('a resumed run does not repeat it', (tester) async {
+      final provider = _ScriptedAssessmentProvider(resumable: _openRun());
+      await tester.pumpWidget(app(provider, learnFirst: true));
+      await pumpFrames(tester);
+      await tester.tap(find.text(ResumeAssessmentDialog.continueLabel));
+      await pumpFrames(tester);
+      await pumpUntilPlayable(tester);
+
+      expect(find.byType(LearnFirstScreen), findsNothing);
+      expect(find.text('Play!'), findsOneWidget);
+    });
+  });
+}
+
+/// A narrator that never reaches a platform player.
+class _SilentVoiceOver extends VoiceOverService {
+  _SilentVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {}
+
+  @override
+  Future<void> playCorrectPraise() async {}
+
+  @override
+  Future<void> stop() async {}
 }
 
 OpenAssessmentRun _openRun({

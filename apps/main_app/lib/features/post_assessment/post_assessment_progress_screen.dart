@@ -17,6 +17,7 @@ import 'post_assessment_handoff_screen.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/mascot_host.dart';
 import '../../widgets/resume_assessment_dialog.dart';
+import '../pre_assessment/learn_first_screen.dart';
 
 /// Orchestrates the sequential post-assessment game flow.
 ///
@@ -31,7 +32,13 @@ class PostAssessmentProgressScreen extends StatefulWidget {
     super.key,
     this.skipToFinish = false,
     this.voiceOverFactory,
+    this.showLearnFirst = true,
   });
+
+  /// Whether a new run opens with the "Let's learn first" familiarisation
+  /// step. Always on in the app; off in tests that are about something else,
+  /// so they do not have to walk through it first.
+  final bool showLearnFirst;
 
   /// Test seam: supplies the child hand-off narrator without platform audio.
   @visibleForTesting
@@ -167,7 +174,32 @@ class _PostAssessmentProgressScreenState
       _finishAssessment();
       return;
     }
+    // The same step as before the pre-assessment, so a pre -> post change
+    // can never be put down to one run having had it and the other not.
+    if (widget.showLearnFirst && _alreadyPlayed.isEmpty) {
+      await _runLearnFirst();
+      if (!mounted) return;
+    }
     _startCountdown();
+  }
+
+  /// Runs the familiarisation step for a new run and logs how it went.
+  ///
+  /// Only a fresh run gets it: a resumed run already had it before it was
+  /// interrupted, and repeating it mid-assessment would put unscored exposure
+  /// between scored games.
+  Future<void> _runLearnFirst() async {
+    final outcome = await LearnFirstScreen.show(
+      context,
+      assessmentType: 'post',
+    );
+    if (!mounted) return;
+    await LearnFirstLog.instance.record(
+      childId: _childId,
+      assessmentRunId: context.read<AssessmentProvider>().currentAssessmentRunId,
+      assessmentType: 'post',
+      outcome: outcome,
+    );
   }
 
   /// The first activity of the run that has no session yet.

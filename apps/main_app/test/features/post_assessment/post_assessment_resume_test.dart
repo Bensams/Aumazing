@@ -36,7 +36,8 @@ void main() {
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: const PostAssessmentProgressScreen(),
+      // The familiarisation step has its own tests; these are about resume.
+      home: const PostAssessmentProgressScreen(showLearnFirst: false),
     ),
   );
 
