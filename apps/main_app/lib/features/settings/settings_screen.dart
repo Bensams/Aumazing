@@ -2076,6 +2076,63 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
   // app's own games run 3–7 minutes, so these map to roughly 1–4 games.
   static const _sessionOptions = [5, 10, 15, 20, 30];
 
+  /// Bounds for a limit the parent types in themselves. The presets cover the
+  /// common cases; these let a family match a therapist's plan exactly (a
+  /// 40-minute day, a 12-minute sitting). The daily ceiling is four hours —
+  /// well past any guidance, but a parent may have a reason, and the
+  /// recommendation line still says what the guidance is.
+  static const _customDailyRange = (min: 5, max: 240);
+  static const _customSessionRange = (min: 1, max: 120);
+
+  /// Asks for a custom number of minutes and applies it with [apply].
+  Future<void> _pickCustom({
+    required String title,
+    required int? current,
+    required int fallback,
+    required ({int min, int max}) range,
+    required Future<void> Function(int minutes) apply,
+  }) async {
+    final minutes = await showDialog<int>(
+      context: context,
+      builder:
+          (_) => _CustomMinutesDialog(
+            title: title,
+            initial: (current ?? fallback).clamp(range.min, range.max),
+            min: range.min,
+            max: range.max,
+          ),
+    );
+    if (minutes != null) await apply(minutes);
+  }
+
+  /// The "Custom" chip that sits after a row of presets. Selected, and
+  /// showing its value, whenever the limit in force is not one of [presets].
+  Widget _customChip({
+    required Key key,
+    required int? current,
+    required List<int> presets,
+    required VoidCallback onTap,
+  }) {
+    final isCustom = current != null && !presets.contains(current);
+    return ChoiceChip(
+      key: key,
+      avatar: Icon(
+        Icons.edit_rounded,
+        size: 16,
+        color: isCustom ? AppColors.white : AppColors.textPrimary,
+      ),
+      label: Text(isCustom ? 'Custom: $current min' : 'Custom…'),
+      selected: isCustom,
+      selectedColor: AppColors.primaryPurple,
+      labelStyle: AppTextStyles.bodySmall.copyWith(
+        color: isCustom ? AppColors.white : AppColors.textPrimary,
+      ),
+      // Tapping a selected custom chip edits the value rather than doing
+      // nothing, so the parent can nudge 40 to 45 without leaving it.
+      onSelected: (_) => onTap(),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2220,6 +2277,19 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                         ),
                         onSelected: (_) => screenTime.setLimitMinutes(minutes),
                       ),
+                    _customChip(
+                      key: const Key('screenTime.customDaily'),
+                      current: limit,
+                      presets: _options,
+                      onTap:
+                          () => _pickCustom(
+                            title: 'Custom daily limit',
+                            current: limit,
+                            fallback: recommended ?? 30,
+                            range: _customDailyRange,
+                            apply: screenTime.setLimitMinutes,
+                          ),
+                    ),
                   ],
                 ),
                 if (recommended != null) ...[
@@ -2292,6 +2362,19 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                         onSelected:
                             (_) => screenTime.setSessionLimitMinutes(minutes),
                       ),
+                    _customChip(
+                      key: const Key('screenTime.customSession'),
+                      current: sessionLimit,
+                      presets: _sessionOptions,
+                      onTap:
+                          () => _pickCustom(
+                            title: 'Custom session limit',
+                            current: sessionLimit,
+                            fallback: 15,
+                            range: _customSessionRange,
+                            apply: screenTime.setSessionLimitMinutes,
+                          ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -2307,6 +2390,105 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
               ],
             );
           },
+        ),
+      ],
+    );
+  }
+}
+
+/// Picks a whole number of minutes between [min] and [max].
+///
+/// Big − / + buttons for small adjustments, a slider for large ones, and the
+/// value itself shown large — the parent is often holding a child with the
+/// other arm, so nothing here needs typing.
+class _CustomMinutesDialog extends StatefulWidget {
+  const _CustomMinutesDialog({
+    required this.title,
+    required this.initial,
+    required this.min,
+    required this.max,
+  });
+
+  final String title;
+  final int initial;
+  final int min;
+  final int max;
+
+  @override
+  State<_CustomMinutesDialog> createState() => _CustomMinutesDialogState();
+}
+
+class _CustomMinutesDialogState extends State<_CustomMinutesDialog> {
+  late int _minutes = widget.initial;
+
+  /// One minute at a time for short limits, five once the value is large
+  /// enough that single minutes would mean a lot of tapping.
+  int get _step => _minutes >= 30 ? 5 : 1;
+
+  void _nudge(int direction) {
+    setState(() {
+      _minutes = (_minutes + direction * _step).clamp(widget.min, widget.max);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton.filledTonal(
+                key: const Key('customMinutes.decrease'),
+                tooltip: 'Less',
+                onPressed: _minutes > widget.min ? () => _nudge(-1) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                ScreenTimeService.formatDuration(_minutes * 60),
+                key: const Key('customMinutes.value'),
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              IconButton.filledTonal(
+                key: const Key('customMinutes.increase'),
+                tooltip: 'More',
+                onPressed: _minutes < widget.max ? () => _nudge(1) : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          Slider(
+            value: _minutes.toDouble(),
+            min: widget.min.toDouble(),
+            max: widget.max.toDouble(),
+            divisions: widget.max - widget.min,
+            label: '$_minutes min',
+            onChanged: (v) => setState(() => _minutes = v.round()),
+          ),
+          Text(
+            'Between ${widget.min} and ${widget.max} minutes.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('customMinutes.save'),
+          onPressed: () => Navigator.of(context).pop(_minutes),
+          child: const Text('Save'),
         ),
       ],
     );
