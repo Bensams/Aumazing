@@ -4,9 +4,10 @@
 //   dart run tool/build_offline_web.dart            # defaults to build/web
 //
 // Writes offline_manifest.json — every build file with a content hash, split
-// into "core" (precached when the app is installed) and "lazy" (cached on
-// first use or by the background download) — and stamps the build's version
-// into offline_sw.js so browsers pick up the new service worker.
+// into "core" (needed to start) and "lazy" (game audio), plus each file's size
+// — and stamps the build's version into offline_sw.js so browsers pick up the
+// new service worker. The loading page (web/offline.js) reads the manifest to
+// save every file a child needs before the app starts.
 //
 // Must run after every web build, or the service worker never installs and
 // the app is online-only again.
@@ -24,8 +25,8 @@ const serviceWorkerFile = 'offline_sw.js';
 enum OfflineTier { core, lazy, skip }
 
 /// The CanvasKit builds the default (non-wasm) renderer loads: the generic one
-/// and the smaller one Chromium browsers get. The skwasm/wimp variants are
-/// only used by `--wasm` builds.
+/// and the smaller one Chromium browsers get. The skwasm/wimp/experimental
+/// variants are only used by `--wasm` builds, so they are never saved.
 const _coreCanvasKit = {
   'canvaskit/canvaskit.js',
   'canvaskit/canvaskit.wasm',
@@ -34,8 +35,8 @@ const _coreCanvasKit = {
 };
 
 const _lazyPrefixes = [
-  // Voice lines, sound effects and music: most of the build's weight, and a
-  // game only needs its own. Cached as played, then by the background fill.
+  // Voice lines, sound effects and music. The loading page saves the ones a
+  // child needs; other languages' voices follow in the background.
   'assets/packages/shared_audio/',
   'audio_fallback/',
 ];
@@ -52,7 +53,7 @@ OfflineTier classify(String path) {
     return OfflineTier.skip;
   }
   if (path.startsWith('canvaskit/')) {
-    return _coreCanvasKit.contains(path) ? OfflineTier.core : OfflineTier.lazy;
+    return _coreCanvasKit.contains(path) ? OfflineTier.core : OfflineTier.skip;
   }
   if (_lazyPrefixes.any(path.startsWith)) return OfflineTier.lazy;
   // The splash and login-background videos play on every launch.
@@ -69,8 +70,12 @@ OfflineTier classify(String path) {
 }
 
 /// Builds the manifest from build-relative paths mapped to their content
-/// hashes. The version changes exactly when some file's content does.
-Map<String, Object> buildManifest(Map<String, String> hashes) {
+/// hashes, and their sizes in bytes when known. The version changes exactly
+/// when some file's content does.
+Map<String, Object> buildManifest(
+  Map<String, String> hashes, {
+  Map<String, int> sizes = const {},
+}) {
   final core = <String, String>{};
   final lazy = <String, String>{};
   final paths = hashes.keys.toList()..sort();
@@ -89,7 +94,15 @@ Map<String, Object> buildManifest(Map<String, String> hashes) {
       if (classify(path) != OfflineTier.skip) '$path ${hashes[path]}',
   ].join('\n');
   final version = sha256.convert(utf8.encode(fingerprint)).toString().substring(0, 16);
-  return {'version': version, 'core': core, 'lazy': lazy};
+  return {
+    'version': version,
+    'core': core,
+    'lazy': lazy,
+    'sizes': {
+      for (final path in [...core.keys, ...lazy.keys])
+        if (sizes[path] != null) path: sizes[path]!,
+    },
+  };
 }
 
 Future<void> main(List<String> args) async {
@@ -118,7 +131,7 @@ Future<void> main(List<String> args) async {
     sizes[path] = bytes.length;
   }
 
-  final manifest = buildManifest(hashes);
+  final manifest = buildManifest(hashes, sizes: sizes);
   File('${buildDir.path}/$manifestFile').writeAsStringSync(jsonEncode(manifest));
   worker.writeAsStringSync(source.replaceAll(versionPlaceholder, manifest['version']! as String));
 

@@ -10,6 +10,8 @@
 //
 // - install:  precache every core file (app shell, engine, code, models,
 //             fonts, pictures) into a cache named after the build version.
+//             On a first visit the loading page (offline.js) has usually
+//             saved them already, so this only confirms they are there.
 //             Files whose hash is unchanged are copied from the previous
 //             version's cache instead of downloaded again, and lazy files
 //             (voice lines, music) already cached carry over too.
@@ -18,7 +20,8 @@
 //             requests get a proper 206 so Safari can play cached sound.
 // - activate: only once no page runs the old version (no skipWaiting), so a
 //             child mid-game never has old and new files mixed under them.
-// - message:  the page asks for status or for every lazy file (offline.js).
+// - message:  the loading page asks which build version is running, so it
+//             checks and fills that version's cache (offline.js).
 
 const VERSION = '__AUMAZING_OFFLINE_VERSION__';
 const CACHE_PREFIX = 'aumazing-offline-';
@@ -98,11 +101,6 @@ async function fromOlderCache(key, rev) {
     if (res && res.headers.get(REV_HEADER) === rev) return res;
   }
   return null;
-}
-
-async function isCached(cache, path, rev) {
-  const hit = await cache.match(cacheKey(path));
-  return !!hit && hit.headers.get(REV_HEADER) === rev;
 }
 
 // The cached response for [path] at revision [rev], fetching it if needed.
@@ -242,56 +240,8 @@ async function partial(res, range) {
   });
 }
 
-async function status() {
-  const manifest = await loadManifest();
-  const cache = await caches.open(CACHE_NAME);
-  const count = async (files) => {
-    let n = 0;
-    for (const [path, rev] of Object.entries(files)) {
-      if (await isCached(cache, path, rev)) n++;
-    }
-    return n;
-  };
-  return {
-    version: VERSION,
-    coreTotal: Object.keys(manifest.core).length,
-    coreCached: await count(manifest.core),
-    lazyTotal: Object.keys(manifest.lazy).length,
-    lazyCached: await count(manifest.lazy),
-  };
-}
-
-async function cacheAll(report) {
-  const manifest = await loadManifest();
-  const cache = await caches.open(CACHE_NAME);
-  const missing = [];
-  for (const [path, rev] of Object.entries(manifest.files)) {
-    if (!(await isCached(cache, path, rev))) missing.push([path, rev]);
-  }
-  const total = missing.length;
-  let done = 0;
-  report({ done, total });
-  // Low concurrency: this runs while a child may be playing.
-  const failed = await pool(missing, 2,
-    ([path, rev]) => ensureCached(cache, path, rev),
-    () => report({ done: ++done, total }));
-  return { done, total, failed };
-}
-
 self.addEventListener('message', (event) => {
   const port = event.ports && event.ports[0];
-  if (!port || !event.data) return;
-  const reply = (type, data) => port.postMessage(Object.assign({ type }, data));
-  let work;
-  switch (event.data.type) {
-    case 'status':
-      work = status().then((s) => reply('result', s));
-      break;
-    case 'cache-all':
-      work = cacheAll((p) => reply('progress', p)).then((r) => reply('result', r));
-      break;
-    default:
-      return;
-  }
-  event.waitUntil(work.catch((e) => reply('error', { message: String(e && e.message || e) })));
+  if (!port || !event.data || event.data.type !== 'version') return;
+  port.postMessage({ type: 'result', version: VERSION, cache: CACHE_NAME });
 });

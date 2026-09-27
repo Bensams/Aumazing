@@ -25,13 +25,11 @@ void main() {
       }
     });
 
-    test('game audio, music and unused engine variants are lazy', () {
+    test('game audio, music and on-demand pages are lazy', () {
       for (final path in [
         'assets/packages/shared_audio/assets/audio/en/hello.mp3',
         'audio_fallback/bg_music.mp3',
         'assets/packages/shared_ui/assets/seed_cards/audio/en/cat.mp3',
-        'canvaskit/skwasm.wasm',
-        'canvaskit/wimp.wasm',
         'ios-install-guide.png',
         'assets/NOTICES',
       ]) {
@@ -39,8 +37,12 @@ void main() {
       }
     });
 
-    test('the worker, its manifest and debug symbols are never cached', () {
+    test('the worker, its manifest, debug symbols and wasm-only engine '
+        'variants are never cached', () {
       for (final path in [
+        'canvaskit/skwasm.wasm',
+        'canvaskit/wimp.wasm',
+        'canvaskit/experimental_webparagraph/canvaskit.wasm',
         'offline_sw.js',
         'offline_manifest.json',
         'version.json',
@@ -65,6 +67,23 @@ void main() {
       final manifest = buildManifest(hashes);
       expect(manifest['core'], {'index.html': 'aaa', 'main.dart.js': 'bbb'});
       expect(manifest['lazy'], {'audio_fallback/bg_music.mp3': 'ccc'});
+    });
+
+    test('records the size of every cached file for the loading page', () {
+      final manifest = buildManifest(
+        hashes,
+        sizes: {
+          'index.html': 10,
+          'main.dart.js': 20,
+          'audio_fallback/bg_music.mp3': 30,
+          'version.json': 40,
+        },
+      );
+      expect(manifest['sizes'], {
+        'index.html': 10,
+        'main.dart.js': 20,
+        'audio_fallback/bg_music.mp3': 30,
+      });
     });
 
     test('version changes only when cached content changes', () {
