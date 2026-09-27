@@ -431,6 +431,8 @@ class _PreAssessmentProgressScreenState
 
     final assessProv = context.read<AssessmentProvider>();
     final childId = _childId;
+    // Captured now: finishing closes the run and forgets its id.
+    final runId = assessProv.currentAssessmentRunId;
 
     try {
       // -- Sensory preference analysis --------------------------------
@@ -524,6 +526,8 @@ class _PreAssessmentProgressScreenState
             results: snapshot.results.isNotEmpty ? snapshot.results : _results,
             profile: profile,
             aiResponse: aiResponse,
+            childId: childId,
+            assessmentRunId: runId,
           ),
         ),
       );

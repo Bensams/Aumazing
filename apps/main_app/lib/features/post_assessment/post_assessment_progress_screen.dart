@@ -354,6 +354,8 @@ class _PostAssessmentProgressScreenState
 
     final assessProv = context.read<AssessmentProvider>();
     final childId = _childId;
+    // Captured now: finishing closes the run and forgets its id.
+    final runId = assessProv.currentAssessmentRunId;
 
     try {
       // Saves post results per game and computes the improvement summary.
@@ -410,6 +412,8 @@ class _PostAssessmentProgressScreenState
             improvement: improvement,
             nextModulePremiumRequired: nextModulePremiumRequired,
             voiceOverFactory: widget.voiceOverFactory,
+            childId: childId,
+            assessmentRunId: runId,
           ),
         ),
       );

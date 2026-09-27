@@ -10,6 +10,7 @@ import '../../services/assessment_summary_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../child_mode/open_my_path.dart';
 import '../pre_assessment/assessment_result_view.dart';
+import '../questionnaire/parent_questionnaire_comparison_card.dart';
 
 /// Parent-facing post-assessment results.
 ///
@@ -113,6 +114,13 @@ class PostAssessmentResultScreen extends StatelessWidget {
             showTherapyRecommendation: true,
             nextModulePremiumRequired: nextModulePremiumRequired,
             summaryService: summaryService,
+            // The parent's own before/after view, beside the measured change.
+            comparisonExtra:
+                childProv.profile?.id == null
+                    ? null
+                    : ParentQuestionnaireComparisonCard(
+                      childId: childProv.profile!.id,
+                    ),
             onContinue:
                 () => Navigator.of(context).popUntil((route) => route.isFirst),
             onOpenLearningPath: () => openMyPath(context),

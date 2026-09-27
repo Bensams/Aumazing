@@ -95,7 +95,7 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
   static const _dbName = 'aumazing_offline.db';
-  static const _dbVersion = 21; // v21: custom background-music mix
+  static const _dbVersion = 22; // v22: questionnaire assessment_run_id
 
   /// Records failing more than this many upload attempts are quarantined:
   /// excluded from pending queries/counts so they stop driving the retry
@@ -317,6 +317,7 @@ class LocalDbService {
       CREATE TABLE ${LocalTables.caregiverQuestionnaires} (
         id TEXT PRIMARY KEY,
         child_id TEXT NOT NULL,
+        assessment_run_id TEXT,
         questionnaire_type TEXT NOT NULL,
         responses TEXT NOT NULL,
         completed_at TEXT,
@@ -1096,6 +1097,19 @@ class LocalDbService {
         // Column already present — safe to skip.
       }
       debugPrint('[LocalDbService] v21: music_tracks column');
+    }
+    if (oldVersion < 22) {
+      // The parent questionnaire is answered against a specific assessment
+      // run, so its pre and post answers pair with that run's results.
+      try {
+        await db.execute(
+          'ALTER TABLE ${LocalTables.caregiverQuestionnaires} '
+          'ADD COLUMN assessment_run_id TEXT',
+        );
+      } catch (_) {
+        // Column already present — safe to skip.
+      }
+      debugPrint('[LocalDbService] v22: questionnaire assessment_run_id');
     }
   }
 
@@ -1995,6 +2009,45 @@ class LocalDbService {
       'local_created_at': now.toIso8601String(),
       'owner_id': ownerId,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Store a parent questionnaire. [responses] is the JSON-encodable answer
+  /// record (template id/version/status, per-item answers, domain scores).
+  Future<void> insertCaregiverQuestionnaire({
+    required String id,
+    required String childId,
+    required String? assessmentRunId,
+    required String questionnaireType,
+    required Map<String, dynamic> responses,
+    String? ownerId,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(LocalTables.caregiverQuestionnaires, {
+      'id': id,
+      'child_id': childId,
+      'assessment_run_id': assessmentRunId,
+      'questionnaire_type': questionnaireType,
+      'responses': jsonEncode(responses),
+      'completed_at': now,
+      'sync_status': SyncStatus.pending.value,
+      'updated_at': now,
+      'local_created_at': now,
+      'owner_id': ownerId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Every stored questionnaire for [childId], newest first.
+  Future<List<Map<String, dynamic>>> getCaregiverQuestionnaires(
+    String childId,
+  ) async {
+    final db = await database;
+    return db.query(
+      LocalTables.caregiverQuestionnaires,
+      where: 'child_id = ? AND deleted_at IS NULL',
+      whereArgs: [childId],
+      orderBy: 'completed_at DESC',
+    );
   }
 
   /// Get the latest sensory consent record for a child.

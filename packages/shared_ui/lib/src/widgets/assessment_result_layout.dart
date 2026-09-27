@@ -45,6 +45,7 @@ class AssessmentResultLayout extends StatefulWidget {
     this.celebrationDuration = const Duration(milliseconds: 3000),
     this.background,
     this.headerAction,
+    this.comparisonExtra,
   });
 
   /// The canonical result data. The same instance drives both modes.
@@ -85,6 +86,11 @@ class AssessmentResultLayout extends StatefulWidget {
 
   /// Optional action beside the analysis source in the result header.
   final Widget? headerAction;
+
+  /// An extra comparison card placed right after the game-measured progress
+  /// cards — used for the parent's own before/after questionnaire, which
+  /// belongs next to the change the games measured.
+  final Widget? comparisonExtra;
 
   @override
   State<AssessmentResultLayout> createState() => _AssessmentResultLayoutState();
@@ -214,6 +220,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
         ),
       if (progress != null && progress.hasAreas)
         AssessmentProgressCard(progress: progress, dense: _dense),
+      if (widget.comparisonExtra case final extra?) extra,
       if (model.hasAreas || model.sensoryObservations.isNotEmpty)
         AssessmentProfileCard(model: model, dense: _dense),
       if (model.games.isNotEmpty)
