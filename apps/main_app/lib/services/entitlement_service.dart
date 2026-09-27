@@ -56,15 +56,27 @@ class EntitlementService extends ChangeNotifier {
   /// behaviour for a purchase that never happened.
   int _simulatedProfileSlots = 0;
 
+  /// When the paid Premium period ends (`entitlements.expires_at`), or null
+  /// for an entitlement with no end. Each payment buys 30 days, so Premium
+  /// lapses on this date even offline, from the cached value.
+  DateTime? _premiumUntil;
+
+  bool get _periodActive =>
+      _premiumUntil == null || DateTime.now().isBefore(_premiumUntil!);
+
   /// The effective entitlement every gate in the app reads.
   bool get isPremium =>
       PremiumAccessConfig.unlockedForEveryone ||
       _developerPremiumOverride ||
       _simulatedPurchasePremium ||
-      _isPremium;
+      isRealPremium;
 
-  /// The genuine entitlement, ignoring any developer override.
-  bool get isRealPremium => _isPremium;
+  /// The genuine entitlement, ignoring any developer override: paid for, and
+  /// its period not yet over.
+  bool get isRealPremium => _isPremium && _periodActive;
+
+  /// When the current Premium period ends, if it has an end.
+  DateTime? get premiumUntil => _premiumUntil;
 
   /// Whether the in-memory developer override is currently forcing Premium.
   bool get isDeveloperPremiumOverrideActive => _developerPremiumOverride;
@@ -153,18 +165,18 @@ class EntitlementService extends ChangeNotifier {
   /// inside an `assert` so it does nothing in profile or release builds, and
   /// it writes no cache or backend state.
   @visibleForTesting
-  void debugSetRealPremium(bool value) {
+  void debugSetRealPremium(bool value, {DateTime? until}) {
     assert(() {
-      if (_isPremium != value) {
-        _isPremium = value;
-        notifyListeners();
-      }
+      _isPremium = value;
+      _premiumUntil = until;
+      notifyListeners();
       return true;
     }());
   }
 
   static String _cacheKey(String userId) => 'entitlement_premium_$userId';
   static String _slotsKey(String userId) => 'entitlement_profile_slots_$userId';
+  static String _untilKey(String userId) => 'entitlement_premium_until_$userId';
 
   /// Call once after Supabase.initialize: loads the current state and
   /// reloads whenever the signed-in user changes (login, logout, guest
@@ -181,6 +193,7 @@ class EntitlementService extends ChangeNotifier {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       _isPremium = false;
+      _premiumUntil = null;
       _extraProfileSlots = 0;
       _loadedUserId = null;
       notifyListeners();
@@ -190,6 +203,7 @@ class EntitlementService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isPremium = prefs.getBool(_cacheKey(user.id)) ?? false;
+      _premiumUntil = DateTime.tryParse(prefs.getString(_untilKey(user.id)) ?? '');
       _extraProfileSlots = prefs.getInt(_slotsKey(user.id)) ?? 0;
       notifyListeners();
     } catch (_) {}
@@ -233,17 +247,26 @@ class EntitlementService extends ChangeNotifier {
       final row =
           await Supabase.instance.client
               .from('entitlements')
-              .select('is_premium')
+              .select('is_premium, expires_at')
               .eq('user_id', user.id)
               .maybeSingle();
       final premium = row?['is_premium'] == true;
-      if (premium != _isPremium || _loadedUserId != user.id) {
+      final until = DateTime.tryParse(row?['expires_at'] as String? ?? '');
+      if (premium != _isPremium ||
+          until != _premiumUntil ||
+          _loadedUserId != user.id) {
         _isPremium = premium;
+        _premiumUntil = until;
         _loadedUserId = user.id;
         notifyListeners();
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_cacheKey(user.id), premium);
+      if (until == null) {
+        await prefs.remove(_untilKey(user.id));
+      } else {
+        await prefs.setString(_untilKey(user.id), until.toIso8601String());
+      }
       return true;
     } catch (e) {
       debugPrint('[Entitlement] refresh failed (keeping cache): $e');
@@ -272,11 +295,35 @@ class EntitlementService extends ChangeNotifier {
       final reachedBackend = await refresh();
       if (reachedBackend) {
         confirmed = true;
-        if (_isPremium) return true;
+        if (isRealPremium) return true;
       }
       if (!DateTime.now().isBefore(deadline)) break;
       await Future.delayed(pollInterval);
     }
-    return confirmed && _isPremium;
+    return confirmed && isRealPremium;
   }
+
+  /// Waits for a purchased child-profile slot (AUM-349) to reach the backend:
+  /// true once the account's real slot count rises above [above]. As with
+  /// [waitForActivation], only the signature-verified webhook adds a slot, so
+  /// the checkout's success redirect alone never counts.
+  Future<bool> waitForProfileSlot({
+    required int above,
+    Duration timeout = const Duration(seconds: 60),
+    Duration pollInterval = const Duration(seconds: 2),
+  }) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return false;
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      await _refreshProfileSlots(user.id);
+      if (_extraProfileSlots > above) return true;
+      if (!DateTime.now().isBefore(deadline)) return false;
+      await Future.delayed(pollInterval);
+    }
+  }
+
+  /// The purchased (not simulated) slot count, for comparing before and
+  /// after a checkout.
+  int get realExtraProfileSlots => _extraProfileSlots;
 }

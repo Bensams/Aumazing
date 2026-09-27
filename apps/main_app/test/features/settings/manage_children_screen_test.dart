@@ -1,7 +1,9 @@
 import 'package:aumazing/core/services/local_db_service.dart';
 import 'package:aumazing/core/config/payment_simulation_config.dart';
 import 'package:aumazing/features/premium/mock_paymongo_checkout_screen.dart';
+import 'package:aumazing/features/premium/profile_slot_checkout.dart';
 import 'package:aumazing/features/settings/manage_children_screen.dart';
+import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart';
 import 'package:aumazing/services/entitlement_service.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
@@ -11,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_auth.dart';
@@ -38,8 +41,9 @@ void main() {
 
   Future<ChildProvider> pumpScreen(
     WidgetTester tester,
-    List<ChildProfile> children,
-  ) async {
+    List<ChildProfile> children, {
+    ProfileSlotCheckout? checkout,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(900, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -61,8 +65,11 @@ void main() {
             create: (_) => ProgressProvider(),
           ),
           Provider<AudioService>(create: (_) => _FakeAudioService()),
+          Provider<HapticService>.value(value: HapticService()),
         ],
-        child: const MaterialApp(home: ManageChildrenScreen()),
+        child: MaterialApp(
+          home: ManageChildrenScreen(profileSlotCheckout: checkout),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -196,21 +203,57 @@ void main() {
       expect(checkout.planLabel, contains('Extra child profile'));
     });
 
-    testWidgets('without the simulated checkout nothing is charged', (
+    testWidgets('a real build sells the slot through PayMongo (AUM-349)', (
       tester,
     ) async {
       PaymentSimulationConfig.debugAvailableOverride = false;
       entitlement.debugSetRealPremium(true);
-      await pumpScreen(tester, [
-        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
-      ]);
+      int? askedWith;
+      await pumpScreen(
+        tester,
+        [child('a', 'Ana', createdAt: DateTime(2026, 1, 1))],
+        checkout: (context, {required slotsBefore}) async {
+          askedWith = slotsBefore;
+          return ProfileSlotPurchase.added;
+        },
+      );
       await tapAdd(tester);
       await tester.tap(find.text('Continue to payment'));
       await tester.pumpAndSettle();
 
       expect(find.byType(MockPaymongoCheckoutScreen), findsNothing);
-      expect(find.textContaining('once in-app payments'), findsOneWidget);
+      // The purchase is judged against the real slots held before it.
+      expect(askedWith, 0);
+      // A confirmed slot goes straight on to setting up the child.
+      expect(find.byType(ChildProfileSetupScreen), findsOneWidget);
+      // Dispose the setup screen so its audio restore runs, then let the
+      // audio backstop timers finish.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
     });
+
+    for (final (result, message) in [
+      (ProfileSlotPurchase.pending, 'Payment received'),
+      (ProfileSlotPurchase.premiumRequired, 'need an active Premium'),
+      (ProfileSlotPurchase.failed, 'Could not start the payment'),
+    ]) {
+      testWidgets('a ${result.name} purchase adds no child', (tester) async {
+        PaymentSimulationConfig.debugAvailableOverride = false;
+        entitlement.debugSetRealPremium(true);
+        await pumpScreen(
+          tester,
+          [child('a', 'Ana', createdAt: DateTime(2026, 1, 1))],
+          checkout: (context, {required slotsBefore}) async => result,
+        );
+        await tapAdd(tester);
+        await tester.tap(find.text('Continue to payment'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ChildProfileSetupScreen), findsNothing);
+        expect(find.textContaining(message), findsOneWidget);
+      });
+    }
 
     testWidgets('children already on the account are never taken away', (
       tester,

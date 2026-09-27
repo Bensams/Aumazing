@@ -18,7 +18,9 @@ void main() {
     test('reports a return to a checkout this browser started', () async {
       await WebCheckoutReturn.markStarted();
       WebCheckoutReturn.debugOutcome = 'success';
-      expect(await WebCheckoutReturn.takeOutcome(), 'success');
+      final result = (await WebCheckoutReturn.takeOutcome())!;
+      expect(result.paid, isTrue);
+      expect(result.profileSlot, isFalse);
       // Once only.
       expect(await WebCheckoutReturn.takeOutcome(), isNull);
     });
@@ -39,6 +41,15 @@ void main() {
       );
     });
 
+    test('remembers an extra-profile checkout and its slot count', () async {
+      await WebCheckoutReturn.markStarted(product: 'profile_slot', slotsBefore: 2);
+      WebCheckoutReturn.debugOutcome = 'cancelled';
+      final result = (await WebCheckoutReturn.takeOutcome())!;
+      expect(result.paid, isFalse);
+      expect(result.profileSlot, isTrue);
+      expect(result.slotsBefore, 2);
+    });
+
     test('ignores unknown outcomes', () async {
       await WebCheckoutReturn.markStarted();
       WebCheckoutReturn.debugOutcome = 'maybe';
@@ -47,9 +58,13 @@ void main() {
   });
 
   group('WebCheckoutReturnBanner', () {
-    Widget app(Future<bool> Function() wait) => MaterialApp(
+    Widget app(
+      Future<bool> Function() wait, {
+      Future<bool> Function(int above)? waitForSlot,
+    }) => MaterialApp(
       home: WebCheckoutReturnBanner(
         waitForActivation: wait,
+        waitForProfileSlot: waitForSlot,
         child: const Scaffold(body: Text('home')),
       ),
     );
@@ -92,6 +107,30 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('Payment received'), findsOneWidget);
+    });
+
+    testWidgets('an extra profile waits for the slot, not for Premium', (
+      tester,
+    ) async {
+      await tester.runAsync(
+        () => WebCheckoutReturn.markStarted(product: 'profile_slot', slotsBefore: 1),
+      );
+      WebCheckoutReturn.debugOutcome = 'success';
+      int? above;
+      await tester.pumpWidget(
+        app(
+          () async => fail('must not wait for Premium'),
+          waitForSlot: (value) async {
+            above = value;
+            return true;
+          },
+        ),
+      );
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      await tester.pump();
+      expect(above, 1);
+      expect(find.text('Extra child profile added 🎉'), findsOneWidget);
     });
 
     testWidgets('reports a cancelled payment, then hides by itself', (
