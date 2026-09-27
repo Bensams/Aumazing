@@ -1,5 +1,8 @@
 import 'package:aumazing/core/services/local_db_service.dart';
+import 'package:aumazing/core/config/payment_simulation_config.dart';
+import 'package:aumazing/features/premium/mock_paymongo_checkout_screen.dart';
 import 'package:aumazing/features/settings/manage_children_screen.dart';
+import 'package:aumazing/services/entitlement_service.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
@@ -121,6 +124,109 @@ void main() {
     expect(find.byType(Dialog), findsWidgets);
     expect(find.byKey(const Key('confirm-delete-child')), findsNothing);
     expect(provider.children, hasLength(2));
+  });
+
+  group('profile allowance (AUM-343)', () {
+    final entitlement = EntitlementService.instance;
+
+    setUp(() {
+      entitlement.debugSetRealPremium(false);
+      entitlement.debugSetExtraProfileSlots(0);
+      entitlement.clearSimulatedPurchase();
+    });
+    tearDown(() {
+      entitlement.debugSetRealPremium(false);
+      entitlement.debugSetExtraProfileSlots(0);
+      PaymentSimulationConfig.debugAvailableOverride = null;
+    });
+
+    Future<void> tapAdd(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const Key('add-child-button')));
+      await tester.tap(find.byKey(const Key('add-child-button')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('says how many profiles are in use', (tester) async {
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      expect(find.textContaining('Profiles: 1 of 1.'), findsOneWidget);
+    });
+
+    testWidgets('a second child on the free plan asks for Premium', (
+      tester,
+    ) async {
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      await tapAdd(tester);
+
+      expect(find.byKey(const Key('needs-premium-dialog')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('needs-premium-dialog')),
+          matching: find.textContaining('₱30.00 each'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('needs-premium-dialog')), findsNothing);
+    });
+
+    testWidgets('Premium with every slot used offers one for ₱30', (
+      tester,
+    ) async {
+      PaymentSimulationConfig.debugAvailableOverride = true;
+      entitlement.debugSetRealPremium(true);
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      await tapAdd(tester);
+
+      expect(find.byKey(const Key('buy-profile-dialog')), findsOneWidget);
+      await tester.tap(find.text('Continue to payment'));
+      await tester.pumpAndSettle();
+
+      // The clearly-labelled simulated checkout, for the one-time price.
+      final checkout = tester.widget<MockPaymongoCheckoutScreen>(
+        find.byType(MockPaymongoCheckoutScreen),
+      );
+      expect(checkout.amountLabel, '₱30.00');
+      expect(checkout.planLabel, contains('Extra child profile'));
+    });
+
+    testWidgets('without the simulated checkout nothing is charged', (
+      tester,
+    ) async {
+      PaymentSimulationConfig.debugAvailableOverride = false;
+      entitlement.debugSetRealPremium(true);
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      await tapAdd(tester);
+      await tester.tap(find.text('Continue to payment'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MockPaymongoCheckoutScreen), findsNothing);
+      expect(find.textContaining('once in-app payments'), findsOneWidget);
+    });
+
+    testWidgets('children already on the account are never taken away', (
+      tester,
+    ) async {
+      // Three children, free plan: all three are listed and usable; only
+      // adding a fourth is gated.
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+        child('b', 'Bea', createdAt: DateTime(2026, 2, 1)),
+        child('c', 'Cai', createdAt: DateTime(2026, 3, 1)),
+      ]);
+      expect(find.text('Ana'), findsOneWidget);
+      expect(find.text('Bea'), findsOneWidget);
+      expect(find.text('Cai'), findsOneWidget);
+      expect(find.textContaining('Profiles: 3 of 3.'), findsOneWidget);
+    });
   });
 }
 
