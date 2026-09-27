@@ -45,6 +45,17 @@ class EntitlementService extends ChangeNotifier {
   /// the honest behaviour for a purchase that never happened.
   bool _simulatedPurchasePremium = false;
 
+  /// Extra child-profile slots bought on top of the one free profile
+  /// (pre-final defense note: one profile per account, ₱30 per additional
+  /// profile, Premium only). Read from `entitlements.extra_profile_slots`,
+  /// which only the payment webhook may write, and cached like Premium.
+  int _extraProfileSlots = 0;
+
+  /// Slots bought through the simulated checkout. In memory only, like
+  /// [_simulatedPurchasePremium]: a restart drops them, which is the honest
+  /// behaviour for a purchase that never happened.
+  int _simulatedProfileSlots = 0;
+
   /// The effective entitlement every gate in the app reads.
   bool get isPremium =>
       PremiumAccessConfig.unlockedForEveryone ||
@@ -72,6 +83,42 @@ class EntitlementService extends ChangeNotifier {
       '(real entitlement unchanged: $_isPremium)',
     );
     notifyListeners();
+  }
+
+  /// Extra child-profile slots the account can use, beyond the free one.
+  ///
+  /// Real slots plus simulated ones. Builds that unlock everything
+  /// ([PremiumAccessConfig.unlockedForEveryone]) or run with the developer
+  /// Premium override get no profile limit at all.
+  int get extraProfileSlots => _extraProfileSlots + _simulatedProfileSlots;
+
+  /// Whether profile slots are not limited in this build or session.
+  bool get unlimitedProfiles =>
+      PremiumAccessConfig.unlockedForEveryone || _developerPremiumOverride;
+
+  /// Records one extra profile slot a simulated checkout "sold".
+  ///
+  /// Gated exactly like [grantSimulatedPurchase]: a build that cannot show the
+  /// mock checkout cannot honour its result either.
+  void grantSimulatedProfileSlot() {
+    if (!PaymentSimulationConfig.isAvailable) return;
+    _simulatedProfileSlots++;
+    debugPrint(
+      '[Entitlement] Simulated profile slot granted — NOT a real payment '
+      '(real slots unchanged: $_extraProfileSlots)',
+    );
+    notifyListeners();
+  }
+
+  /// Test seam: sets the genuine slot count as a backend read would.
+  @visibleForTesting
+  void debugSetExtraProfileSlots(int value) {
+    assert(() {
+      _extraProfileSlots = value;
+      _simulatedProfileSlots = 0;
+      notifyListeners();
+      return true;
+    }());
   }
 
   /// Whether a simulated purchase is currently standing in for Premium.
@@ -117,6 +164,7 @@ class EntitlementService extends ChangeNotifier {
   }
 
   static String _cacheKey(String userId) => 'entitlement_premium_$userId';
+  static String _slotsKey(String userId) => 'entitlement_profile_slots_$userId';
 
   /// Call once after Supabase.initialize: loads the current state and
   /// reloads whenever the signed-in user changes (login, logout, guest
@@ -133,6 +181,7 @@ class EntitlementService extends ChangeNotifier {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       _isPremium = false;
+      _extraProfileSlots = 0;
       _loadedUserId = null;
       notifyListeners();
       return;
@@ -141,9 +190,34 @@ class EntitlementService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isPremium = prefs.getBool(_cacheKey(user.id)) ?? false;
+      _extraProfileSlots = prefs.getInt(_slotsKey(user.id)) ?? 0;
       notifyListeners();
     } catch (_) {}
     await refresh();
+    await _refreshProfileSlots(user.id);
+  }
+
+  /// Reads the purchased profile-slot count on its own, so a backend that
+  /// does not have the `extra_profile_slots` column yet leaves the Premium
+  /// read above untouched and simply keeps the cached (or zero) count.
+  Future<void> _refreshProfileSlots(String userId) async {
+    try {
+      final row =
+          await Supabase.instance.client
+              .from('entitlements')
+              .select('extra_profile_slots')
+              .eq('user_id', userId)
+              .maybeSingle();
+      final slots = (row?['extra_profile_slots'] as num?)?.toInt() ?? 0;
+      if (slots != _extraProfileSlots) {
+        _extraProfileSlots = slots;
+        notifyListeners();
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_slotsKey(userId), slots);
+    } catch (e) {
+      debugPrint('[Entitlement] profile-slot read failed (keeping cache): $e');
+    }
   }
 
   /// Re-reads the entitlement from Supabase (RLS: own row only).
