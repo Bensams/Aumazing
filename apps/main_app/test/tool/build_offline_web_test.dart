@@ -55,6 +55,26 @@ void main() {
     });
   });
 
+  test('offlineFontUrls picks Roboto, emoji and symbol fonts only', () {
+    final urls = offlineFontUrls(
+      canvasKitFonts: "String _robotoUrl =\n"
+          "    '\${configuration.fontFallbackBaseUrl}roboto/v32/KFOm-Abc.woff2';",
+      fallbackData: '''
+    'Noto Color Emoji 0',
+    'notocoloremoji/v32/Yq6P-a.0.woff2',
+    'Noto Sans Symbols 2 0',
+    'notosanssymbols2/v24/I_uy-b.woff2',
+    'Noto Sans JP 0',
+    'notosansjp/v52/-F6j-c.0.woff2',
+''',
+    );
+    expect(urls, [
+      'notocoloremoji/v32/Yq6P-a.0.woff2',
+      'notosanssymbols2/v24/I_uy-b.woff2',
+      'roboto/v32/KFOm-Abc.woff2',
+    ]);
+  });
+
   group('buildManifest', () {
     final hashes = {
       'index.html': 'aaa',

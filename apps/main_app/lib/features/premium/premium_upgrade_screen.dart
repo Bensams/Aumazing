@@ -14,6 +14,7 @@ import '../../providers/child_provider.dart';
 import '../../services/entitlement_service.dart';
 import '../settings/bind_account_modal.dart';
 import 'mock_paymongo_checkout_screen.dart';
+import 'web_checkout_return.dart';
 
 /// Premium upgrade screen (freemium model, PayMongo sandbox).
 ///
@@ -165,8 +166,10 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       _error = null;
     });
     try {
-      final response = await Supabase.instance.client.functions
-          .invoke('create-checkout');
+      final response = await Supabase.instance.client.functions.invoke(
+        'create-checkout',
+        body: kIsWeb ? {'return_url': WebCheckoutReturn.returnUrl} : null,
+      );
       final data = response.data as Map<String, dynamic>?;
       final checkoutUrl = data?['checkout_url'] as String?;
       if (checkoutUrl == null) {
@@ -174,26 +177,23 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       }
       if (!mounted) return;
 
-      // webview_flutter has no web implementation, so on the web the checkout
-      // opens in a new browser tab and we poll the backend for activation.
-      // On mobile/desktop it stays in the in-app WebView, which can detect the
-      // success/cancel redirects itself.
-      final bool paid;
+      // webview_flutter has no web implementation. The web app leaves for
+      // PayMongo in this same tab — a new tab opened after the network wait
+      // above is blocked as a pop-up by mobile Safari — and PayMongo brings
+      // the parent back with `?payment=…`, where WebCheckoutReturnBanner
+      // finishes the upgrade. On Android/iOS checkout stays in the in-app
+      // WebView, which detects the success/cancel redirects itself.
       if (kIsWeb) {
-        await launchUrl(
-          Uri.parse(checkoutUrl),
-          webOnlyWindowName: '_blank',
-        );
-        paid = true;
-      } else {
-        paid = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (_) =>
-                    _CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
-              ),
-            ) ??
-            false;
+        await WebCheckoutReturn.markStarted();
+        await launchUrl(Uri.parse(checkoutUrl), webOnlyWindowName: '_self');
+        return;
       }
+      final paid = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => _CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
+            ),
+          ) ??
+          false;
       if (!mounted) return;
 
       if (paid == true) {

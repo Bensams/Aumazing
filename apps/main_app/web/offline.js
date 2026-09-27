@@ -17,6 +17,9 @@
   const CACHE_PREFIX = 'aumazing-offline-';
   const REV_HEADER = 'x-aumazing-rev';
   const MANIFEST_PATH = 'offline_manifest.json';
+  // Shared with offline_sw.js: Flutter's engine fonts (Roboto, emoji,
+  // symbols), downloaded from fonts.gstatic.com.
+  const FONT_CACHE = 'aumazing-fonts';
   const BASE = new URL('.', document.baseURI);
 
   const FOREGROUND_CONCURRENCY = 8;
@@ -171,6 +174,26 @@
     return langs;
   }
 
+  // Engine fonts to save before play: without them a child offline sees
+  // crossed-out boxes wherever a game draws an object as an emoji.
+  async function missingFonts(manifest) {
+    const base = manifest.fontBaseUrl;
+    if (!base || !Array.isArray(manifest.fonts)) return [];
+    const cache = await caches.open(FONT_CACHE);
+    const missing = [];
+    for (const path of manifest.fonts) {
+      const url = base + path;
+      if (!(await cache.match(url))) missing.push(url);
+    }
+    return missing;
+  }
+
+  async function saveFont(url) {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+    await (await caches.open(FONT_CACHE)).put(url, res);
+  }
+
   // Splits the build into files to save before play ([now]) and after the
   // app has started ([later]). Music the browser cannot play, and pages only
   // opened on request, are left out entirely.
@@ -297,7 +320,9 @@
     const cache = await caches.open(cacheName);
     const { now, later } = plan(manifest);
 
-    let missing = await missingFrom(cache, now);
+    // Fonts ride along with the build's files, as [url, null] entries.
+    const fonts = (await missingFonts(manifest)).map((url) => [url, null]);
+    let missing = (await missingFrom(cache, now)).concat(fonts);
     if (missing.length > 0 && navigator.onLine) {
       const older = await olderCachesThan(cacheName);
       const total = now.reduce((sum, f) => sum + sizeOf(f), 0);
@@ -310,7 +335,8 @@
       const startNow = () => { takeOver(); startApp(); };
       const offer = setTimeout(() => ui.offerStart(startNow), OFFER_START_AFTER_MS);
 
-      const saveFile = ([path, rev]) => save(cache, older, path, rev);
+      const saveFile = ([path, rev]) =>
+        rev === null ? saveFont(path) : save(cache, older, path, rev);
       const counted = (file) => { done += sizeOf(file); ui.progress(done, total); };
       for (let attempt = 0; attempt < 3 && missing.length > 0 && !started; attempt++) {
         missing = await pool(missing, FOREGROUND_CONCURRENCY, saveFile, (file) => {
