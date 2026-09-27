@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../questionnaire/parent_questionnaire_screen.dart';
+import '../questionnaire/questionnaire_template_repository.dart';
 import 'post_assessment_result_screen.dart';
 
 /// Screen shown to the child after all post-assessment games are complete.
@@ -25,7 +26,12 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
     this.childId,
     this.assessmentRunId,
     this.showQuestionnaire = true,
+    this.templateRepository,
   });
+
+  /// Where the questionnaire's active template comes from. Injectable for
+  /// tests; the app uses the shared repository.
+  final QuestionnaireTemplateRepository? templateRepository;
 
   /// The child and the finished run, so the parent questionnaire is stored
   /// against them. The run id is captured before the run is closed.
@@ -58,16 +64,24 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
 
   /// The same questionnaire as after the pre-assessment, answered before the
   /// comparison is shown, so the parent's view of change is their own.
-  void _afterVerification(BuildContext context) {
+  Future<void> _afterVerification(BuildContext context) async {
     final childId = this.childId;
     if (!showQuestionnaire || childId == null) {
       _showResults(context);
       return;
     }
+    // The practitioner-authored template when one is active, else the
+    // bundled draft. Bounded by a short timeout, so the hand-off never
+    // stalls on a slow connection.
+    final template = await (templateRepository ??
+            QuestionnaireTemplateRepository.instance)
+        .templateFor('post');
+    if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder:
             (_) => ParentQuestionnaireScreen(
+              template: template,
               assessmentType: 'post',
               childId: childId,
               assessmentRunId: assessmentRunId,

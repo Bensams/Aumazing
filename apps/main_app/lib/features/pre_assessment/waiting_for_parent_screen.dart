@@ -6,6 +6,7 @@ import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../questionnaire/parent_questionnaire_screen.dart';
+import '../questionnaire/questionnaire_template_repository.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -25,7 +26,12 @@ class WaitingForParentScreen extends StatelessWidget {
     this.childId,
     this.assessmentRunId,
     this.showQuestionnaire = true,
+    this.templateRepository,
   });
+
+  /// Where the questionnaire's active template comes from. Injectable for
+  /// tests; the app uses the shared repository.
+  final QuestionnaireTemplateRepository? templateRepository;
 
   /// The child and the finished run, so the parent questionnaire is stored
   /// against them. The run id is captured before the run is closed.
@@ -58,16 +64,24 @@ class WaitingForParentScreen extends StatelessWidget {
 
   /// The parent has the device: their questionnaire first, before any result
   /// is on screen, then the summary.
-  void _afterVerification(BuildContext context) {
+  Future<void> _afterVerification(BuildContext context) async {
     final childId = this.childId;
     if (!showQuestionnaire || childId == null) {
       _showSummary(context);
       return;
     }
+    // The practitioner-authored template when one is active, else the
+    // bundled draft. Bounded by a short timeout, so the hand-off never
+    // stalls on a slow connection.
+    final template = await (templateRepository ??
+            QuestionnaireTemplateRepository.instance)
+        .templateFor('pre');
+    if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder:
             (_) => ParentQuestionnaireScreen(
+              template: template,
               assessmentType: 'pre',
               childId: childId,
               assessmentRunId: assessmentRunId,
