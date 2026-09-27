@@ -10,7 +10,9 @@
 --
 -- Relies on public.is_admin() (present in the live project).
 --
--- NOT YET APPLIED to the live project — review, then apply.
+-- Applied to the live project on 2026-09-28, followed by
+-- 20260928_questionnaire_template_reword_resets_validation.sql and
+-- 20260928_practitioner_function_grants.sql.
 
 -- ── Practitioners ────────────────────────────────────────────────────────
 

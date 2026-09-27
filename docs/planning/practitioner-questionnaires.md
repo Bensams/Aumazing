@@ -8,14 +8,14 @@ parents in pre-assessment."*
 
 | Piece | Where | Status |
 |---|---|---|
-| `practitioners` table: apply → admin approves | `supabase/migrations/20260927_practitioner_questionnaires.sql` | **written, not applied** |
-| `questionnaire_templates` table + access rules | same migration | **written, not applied** |
+| `practitioners` table: apply → admin approves | `supabase/migrations/20260927_practitioner_questionnaires.sql` | applied 2026-09-28 |
+| `questionnaire_templates` table + access rules | same migration, plus the two `20260928_*` follow-ups | applied 2026-09-28 |
 | App reads the active template, caches it for offline use, falls back to the bundled draft | `apps/main_app/lib/features/questionnaire/questionnaire_template_repository.dart` | done |
 | Parent questionnaire screen and pre/post comparison | AUM-341 | done |
 | Practitioner self-service authoring screen | — | phase 2 |
 
-Until the migration is applied the app behaves exactly as before: the query
-fails, nothing is cached, and the bundled draft is shown.
+Until an admin activates a template the app behaves exactly as before:
+nothing is active, nothing is cached, and the bundled draft is shown.
 
 ## Access rules
 
@@ -27,14 +27,15 @@ fails, nothing is cached, and the bundled draft is shown.
   may also enter one on a practitioner's behalf.
 - **Only an admin** can make a template active or mark it `validated`. When a
   practitioner edits the text of an active template, it is taken out of use
-  until an admin re-activates it, so parents never see unreviewed wording.
+  and returned to `draft` until an admin re-activates it, so parents never
+  see unreviewed wording.
 - **At most one template is active per assessment type** (`pre`, `post`,
   `both`).
 - **Parents and guests** can only read the active template.
 
 ## Operating it (phase 1, admin SQL)
 
-1. Apply the migration (Supabase dashboard → SQL, or `supabase db push`).
+1. The migrations are already applied to the live project (2026-09-28).
 
 2. The practitioner signs in to the app once, so they have a user id. They
    apply as a practitioner:
