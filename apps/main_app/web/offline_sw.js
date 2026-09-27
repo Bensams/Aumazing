@@ -20,6 +20,10 @@
 //             requests get a proper 206 so Safari can play cached sound.
 // - activate: only once no page runs the old version (no skipWaiting), so a
 //             child mid-game never has old and new files mixed under them.
+// - fonts:    Flutter's engine downloads Roboto and fallback fonts (emoji,
+//             symbols) from fonts.gstatic.com. Those are served from a
+//             separate, long-lived cache: the loading page saves the ones the
+//             app can need, and any other is saved the first time it loads.
 // - message:  the loading page asks which build version is running, so it
 //             checks and fills that version's cache (offline.js).
 
@@ -29,6 +33,9 @@ const CACHE_NAME = CACHE_PREFIX + VERSION;
 const REV_HEADER = 'x-aumazing-rev';
 const SCOPE = new URL(self.registration.scope);
 const MANIFEST_PATH = 'offline_manifest.json';
+// Engine fonts are versioned in their URLs, so this cache outlives builds.
+const FONT_CACHE = 'aumazing-fonts';
+const FONT_ORIGIN = 'https://fonts.gstatic.com';
 
 // Never cached: the worker and its manifest must always come from the
 // network, and version.json is how Flutter tooling probes for a new build.
@@ -171,6 +178,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  if (req.url.startsWith(FONT_ORIGIN + '/s/')) {
+    event.respondWith(font(req));
+    return;
+  }
   const path = relPath(req.url);
   // Cross-origin traffic (Supabase, map tiles, checkout) is left alone.
   if (path === null || PASSTHROUGH.has(path)) return;
@@ -204,6 +215,15 @@ async function respond(req, path) {
   }
   const range = req.headers.get('range');
   return range ? partial(res, range) : res;
+}
+
+async function font(req) {
+  const cache = await caches.open(FONT_CACHE);
+  const hit = await cache.match(req.url);
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res.ok) await cache.put(req.url, res.clone());
+  return res;
 }
 
 async function partial(res, range) {

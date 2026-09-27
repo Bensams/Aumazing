@@ -18,6 +18,7 @@ import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
 import 'providers/stars_provider.dart';
+import 'features/premium/web_checkout_return.dart';
 import 'services/entitlement_service.dart';
 import 'services/parent_pin_service.dart';
 import 'services/rubric/rubric_threshold_service.dart';
@@ -77,6 +78,10 @@ Future<void> main() async {
     '--dart-define-from-file=env/dev.json '
     '(copy env/dev.example.json and fill in the values).',
   );
+
+  // Web: note how a Premium checkout ended (`?payment=`) before anything
+  // else reads the address, and tidy it out of the address bar.
+  WebCheckoutReturn.captureFromUrl();
 
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
@@ -194,7 +199,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 builder:
                     (context, child) => DeveloperToolsOverlay.wrap(
                       context,
-                      RotateToPlayGate(child: child),
+                      RotateToPlayGate(
+                        child: WebCheckoutReturnBanner(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
+                      ),
                     ),
                 home: const AumazingSplashScreen(),
               ),

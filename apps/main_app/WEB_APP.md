@@ -1,29 +1,36 @@
-# Aumazing — Web demo
+# Aumazing — web app
 
-The app now builds and runs in a browser as a **demo**. This is the full app
-(guest mode, local DB, games, assessments) running on Flutter web, with the
-three native-only plugins handled per platform so they don't break the browser.
+The web app is the full Aumazing app running on Flutter web, with the same
+features as the Android app: guest mode and accounts, games, pre- and
+post-assessments with on-device AI, the parent dashboard and reports,
+Premium, and offline play. Where a plugin has no browser version, the web app
+uses a browser equivalent:
 
-## What was changed for web
-
-| Plugin | Problem on web | Fix |
+| Area | On Android | On the web |
 |---|---|---|
-| `onnxruntime` | Uses `dart:ffi` — won't even compile for web | On-device AI service split behind a conditional export (`on_device_ai_assessment_service.dart` → `_native.dart` / `_web.dart`). The web stub returns `null`, so prediction falls through to the rubric path the app already has. |
-| `sqflite` | No database factory on web | `core/services/db_web_factory.dart` installs `databaseFactoryFfiWebNoWebWorker` on web (WASM SQLite on the main thread, persisted in IndexedDB). No-op on mobile/desktop. |
-| `webview_flutter` | No web implementation | Premium checkout opens the URL in a new browser tab via `url_launcher` on web instead of the in-app WebView. |
+| On-device AI (`onnxruntime`) | Native ONNX Runtime | `onnxruntime-web` (WASM) through `web/ort_bridge.mjs`, behind the conditional export in `on_device_ai_assessment_service.dart` — the same models, no server |
+| Local database (`sqflite`) | SQLite | `core/services/db_web_factory.dart` installs `databaseFactoryFfiWebNoWebWorker` (WASM SQLite, persisted in IndexedDB) |
+| Premium checkout (`webview_flutter`) | In-app WebView | Same tab: `create-checkout` gets the app's own address as `return_url`, PayMongo returns with `?payment=success` or `?payment=cancelled`, and `WebCheckoutReturnBanner` confirms the upgrade once the backend activates it |
+| PDF reports and gameplay export | Temporary file + share sheet | Built in memory (`XFile.fromData`); the browser opens its share sheet, or downloads the files where sharing files is not supported |
+| Google sign-in | Native Google Sign-In | Supabase OAuth redirect |
+| Offline play | Everything ships in the APK | The loading page saves every file before play (below) |
 
-## Building the demo
+Premium is gated exactly as on Android: the web app no longer unlocks it for
+everyone.
+
+## Building
 
 ```bash
 cd apps/main_app
 flutter pub get
-flutter build web --base-href /app/ --dart-define-from-file=env/dev.json
+flutter build web --base-href /Aumazing-Front-Page/app/ --dart-define-from-file=env/dev.json
 dart run tool/build_offline_web.dart
 ```
 
 Output lands in `apps/main_app/build/web/`. Deploy it under the front page at
-`Aumazing-Front-Page/app/` (the front page links to `app/` — see its `index.html`
-"Try in Browser" buttons).
+`Aumazing-Front-Page/app/` (the front page links to `app/` — see its
+`index.html` "Use in Browser" buttons). The base href must match the path the
+site is served from, or every file 404s.
 
 **Always run `tool/build_offline_web.dart` after `flutter build web`.** Skipping
 it does not break the app, but it silently becomes online-only again (see below).
@@ -60,6 +67,12 @@ works with no connection:
 - `web/flutter_bootstrap.js` loads CanvasKit from `canvaskit/` in the build
   instead of Google's CDN, and the Nunito/Poppins files google_fonts would
   download are bundled under `packages/shared_ui/assets/google_fonts/`.
+- Flutter's engine still downloads Roboto and its fallback fonts (emoji,
+  symbols) from `fonts.gstatic.com`. The build tool lists the ones the app can
+  need (read from the Flutter SDK's engine sources), the loading page saves
+  them into the `aumazing-fonts` cache, and the service worker serves them from
+  there — otherwise games that draw objects as emoji show crossed-out boxes
+  offline.
 
 Still online-only: sign-in, cloud sync (progress is saved locally and uploaded
 later), therapy-center map tiles and premium checkout.
@@ -95,14 +108,16 @@ Do **not** re-run `sqflite_common_ffi_web:setup` without re-applying this, or th
 web DB will break again. `flutter build web` copies `web/sqlite3.wasm` into the
 build, so keeping the correct one in `web/` is enough.
 
-## Demo caveats (expected, not bugs)
+## Browser notes
 
-- **Google Sign-In**: needs `GOOGLE_WEB_CLIENT_ID` set and the serving origin
-  added to the OAuth client's authorized JavaScript origins. Until then, use
-  **Continue as Guest** — the full app works in guest mode. The console
+- **Google sign-in** needs the site's address in the Supabase auth redirect
+  allow-list and the Google OAuth client's authorized origins. The console
   `SyntaxError: Unexpected token '...'` comes from Google Identity Services
-  probing and is non-fatal.
-- **On-device AI**: disabled on web (see above); predictions use rubric scoring
-  instead.
-- **Persistence** is per-browser (IndexedDB), so a different browser / cleared
-  site data starts fresh — fine for a try-it demo.
+  probing and is harmless.
+- **Checkout return addresses** are allow-listed in `create-checkout`
+  (`ALLOWED_RETURN_ORIGINS`, default the GitHub Pages site; localhost is always
+  allowed for development).
+- **Data** lives in this browser (IndexedDB) until the parent signs in and
+  syncs; a different browser or cleared site data starts from the cloud copy.
+- **iPhone/iPad**: add the app to the Home Screen so Safari keeps its saved
+  files; vibration is not available in iOS browsers.

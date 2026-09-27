@@ -2,13 +2,23 @@
 //
 // Called by the app (authenticated; JWT verified by the platform). Creates
 // a hosted checkout session on PayMongo, records a pending payment row, and
-// returns the checkout URL for the in-app WebView. The PayMongo secret key
-// never ships in the app — it lives only in this function's secrets.
+// returns the checkout URL. The PayMongo secret key never ships in the app —
+// it lives only in this function's secrets.
+//
+// The Android/iOS app opens checkout in an in-app WebView that watches for the
+// sentinel URLs below. The web app instead sends the parent to checkout in the
+// same browser tab, so it passes `return_url` (its own address) and PayMongo
+// brings the parent back there with `?payment=success` or
+// `?payment=cancelled`.
 //
 // Secrets required (supabase secrets set ...):
 //   PAYMONGO_SECRET_KEY  — sk_test_... (sandbox)
+// Optional:
+//   ALLOWED_RETURN_ORIGINS — comma-separated origins the web app may return
+//     to (default: the GitHub Pages site, plus localhost for development).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { allowedReturnUrl, withOutcome } from "../_shared/return_url.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,6 +33,8 @@ const PREMIUM_AMOUNT_CENTAVOS = 14900;
 // resolve to a real page.
 const SUCCESS_URL = "https://aumazing.app/payment/success";
 const CANCEL_URL = "https://aumazing.app/payment/cancel";
+
+const DEFAULT_RETURN_ORIGINS = ["https://bensams.github.io"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -53,6 +65,19 @@ Deno.serve(async (req) => {
     return json({ error: "not authenticated" }, 401);
   }
 
+  const body = await req.json().catch(() => ({}));
+  const allowedOrigins = (Deno.env.get("ALLOWED_RETURN_ORIGINS") ?? "")
+    .split(",").map((o) => o.trim()).filter(Boolean);
+  const returnUrl = allowedReturnUrl(
+    body?.return_url,
+    allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_RETURN_ORIGINS,
+  );
+  if (body?.return_url !== undefined && returnUrl === null) {
+    return json({ error: "return_url not allowed" }, 400);
+  }
+  const successUrl = returnUrl ? withOutcome(returnUrl, "success") : SUCCESS_URL;
+  const cancelUrl = returnUrl ? withOutcome(returnUrl, "cancelled") : CANCEL_URL;
+
   const secretKey = Deno.env.get("PAYMONGO_SECRET_KEY");
   if (!secretKey) {
     console.error("PAYMONGO_SECRET_KEY is not set");
@@ -82,8 +107,8 @@ Deno.serve(async (req) => {
             payment_method_types: ["card", "gcash", "grab_pay", "paymaya"],
             description:
               "Aumazing Premium — 30 days of access, no auto-renewal (sandbox)",
-            success_url: SUCCESS_URL,
-            cancel_url: CANCEL_URL,
+            success_url: successUrl,
+            cancel_url: cancelUrl,
             send_email_receipt: false,
             metadata: { user_id: user.id },
           },

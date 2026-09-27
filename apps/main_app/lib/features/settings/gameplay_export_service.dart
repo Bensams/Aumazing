@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -24,18 +26,18 @@ class GameplayExportService {
 
   static const schemaVersion = '1.0';
 
-  Future<List<File>> exportAndShare({required String childId}) async {
+  /// Builds the three files and opens the share sheet. Returns the shared
+  /// files — written to a temporary folder on a device, or held in memory in
+  /// the browser, which has no file system (there the browser shares them, or
+  /// downloads them where sharing files is not supported).
+  Future<List<XFile>> exportAndShare({required String childId}) async {
     final sessions = await _localDb.getGameSessions(childId: childId);
-    final directory = await getTemporaryDirectory();
     final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
     final participantId = _participantId(childId);
     final base = 'aumazing_gameplay_${participantId}_$stamp';
 
-    final csvFile = File('${directory.path}/$base.csv');
-    final jsonFile = File('${directory.path}/$base.json');
-    final pdfFile = File('${directory.path}/$base.pdf');
-    await csvFile.writeAsString(_csv(participantId, sessions));
-    await jsonFile.writeAsString(
+    final csv = utf8.encode(_csv(participantId, sessions));
+    final json = utf8.encode(
       const JsonEncoder.withIndent('  ').convert({
         'schema_version': schemaVersion,
         'exported_at_utc': 'EXPORT_TIME',
@@ -47,18 +49,28 @@ class GameplayExportService {
           .replaceFirst('"SESSIONS"',
               jsonEncode(sessions.map((s) => _sessionMap(participantId, s)).toList())),
     );
-    await pdfFile.writeAsBytes(await _pdf(participantId, sessions));
+    final pdf = await _pdf(participantId, sessions);
 
+    final files = [
+      await _file('$base.csv', csv, 'text/csv'),
+      await _file('$base.json', json, 'application/json'),
+      await _file('$base.pdf', pdf, 'application/pdf'),
+    ];
     await Share.shareXFiles(
-      [
-        XFile(csvFile.path, mimeType: 'text/csv'),
-        XFile(jsonFile.path, mimeType: 'application/json'),
-        XFile(pdfFile.path, mimeType: 'application/pdf'),
-      ],
+      files,
       subject: 'Aumazing gameplay export and summary',
       text: 'Aumazing export. The PDF is a human-readable summary; CSV and JSON are the data files.',
     );
-    return [csvFile, jsonFile, pdfFile];
+    return files;
+  }
+
+  static Future<XFile> _file(String name, List<int> bytes, String mimeType) async {
+    final data = Uint8List.fromList(bytes);
+    if (kIsWeb) return XFile.fromData(data, name: name, mimeType: mimeType);
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/$name');
+    await file.writeAsBytes(data);
+    return XFile(file.path, mimeType: mimeType);
   }
 
   Future<List<int>> _pdf(String participantId, List<GameplaySession> sessions) async {

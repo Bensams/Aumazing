@@ -7,7 +7,7 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 /// The SharedWorker-based factory (`databaseFactoryFfiWeb`) requires the
 /// `sqflite_sw.js` worker to instantiate, which fails in some embedded browser
 /// engines. The no-worker path has no such dependency, still persists to the
-/// browser (IndexedDB), and is more than enough for the web demo.
+/// browser (IndexedDB), and is more than enough for the web app.
 void initPlatformDatabaseFactory() {
   databaseFactory = databaseFactoryFfiWebNoWebWorker;
 }

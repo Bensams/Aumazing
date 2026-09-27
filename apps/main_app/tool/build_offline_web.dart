@@ -18,6 +18,56 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 const versionPlaceholder = '__AUMAZING_OFFLINE_VERSION__';
+
+/// Where Flutter's web engine downloads its fonts from at run time: Roboto
+/// (the default text font) on every start, and fallback fonts — emoji,
+/// symbols — the first time a glyph needs one.
+const fontBaseUrl = 'https://fonts.gstatic.com/s/';
+
+/// Fallback font families the app can need offline. Games draw objects as
+/// emoji until (or instead of) their picture cards, so without these a child
+/// offline sees crossed-out boxes.
+const _offlineFontFamilies = [
+  'notocoloremoji/',
+  'notosanssymbols/',
+  'notosanssymbols2/',
+  'notosansmath/',
+];
+
+/// The engine's font URLs (relative to [fontBaseUrl]) the loading page saves
+/// for offline use, read from this Flutter SDK's own engine sources so they
+/// always match the engine that ships in the build.
+List<String> offlineFontUrls({
+  required String canvasKitFonts,
+  required String fallbackData,
+}) {
+  final urls = <String>{};
+  final roboto = RegExp(r"roboto/v\d+/[\w-]+\.woff2").firstMatch(canvasKitFonts);
+  if (roboto != null) urls.add(roboto.group(0)!);
+  for (final match in RegExp(r"'([a-z0-9]+/v\d+/[^']+\.woff2)'").allMatches(fallbackData)) {
+    final url = match.group(1)!;
+    if (_offlineFontFamilies.any(url.startsWith)) urls.add(url);
+  }
+  return urls.toList()..sort();
+}
+
+/// Reads [offlineFontUrls] from the Flutter SDK running this tool.
+List<String> _sdkFontUrls() {
+  // dart lives at <flutter>/bin/cache/dart-sdk/bin/dart.
+  final flutterRoot = File(Platform.resolvedExecutable).parent.parent.parent.parent.parent;
+  final engine = '${flutterRoot.path}/bin/cache/flutter_web_sdk/lib/_engine/engine';
+  final fonts = File('$engine/canvaskit/fonts.dart');
+  final fallback = File('$engine/font_fallback_data.dart');
+  if (!fonts.existsSync() || !fallback.existsSync()) {
+    stderr.writeln('Flutter web engine sources not found under $engine — '
+        'fonts will only be saved as they are first used.');
+    return const [];
+  }
+  return offlineFontUrls(
+    canvasKitFonts: fonts.readAsStringSync(),
+    fallbackData: fallback.readAsStringSync(),
+  );
+}
 const manifestFile = 'offline_manifest.json';
 const serviceWorkerFile = 'offline_sw.js';
 
@@ -131,7 +181,9 @@ Future<void> main(List<String> args) async {
     sizes[path] = bytes.length;
   }
 
-  final manifest = buildManifest(hashes, sizes: sizes);
+  final manifest = buildManifest(hashes, sizes: sizes)
+    ..['fontBaseUrl'] = fontBaseUrl
+    ..['fonts'] = _sdkFontUrls();
   File('${buildDir.path}/$manifestFile').writeAsStringSync(jsonEncode(manifest));
   worker.writeAsStringSync(source.replaceAll(versionPlaceholder, manifest['version']! as String));
 
@@ -141,5 +193,6 @@ Future<void> main(List<String> args) async {
   final lazy = manifest['lazy']! as Map<String, String>;
   stdout.writeln('Offline build ${manifest['version']}: '
       '${core.length} core files (${megabytes(core)} MB), '
-      '${lazy.length} lazy files (${megabytes(lazy)} MB).');
+      '${lazy.length} lazy files (${megabytes(lazy)} MB), '
+      '${(manifest['fonts']! as List).length} engine fonts.');
 }
