@@ -20,6 +20,8 @@ import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart';
 import 'package:aumazing/features/post_assessment/post_assessment_progress_screen.dart';
+import 'package:aumazing/features/pre_assessment/learn_first_screen.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:aumazing/features/premium/premium_upgrade_screen.dart';
 import 'package:aumazing/services/assessment_service.dart';
 final _profile = ChildProfile(
@@ -106,11 +108,15 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     ParentVerificationDialog.pinDelegate = null;
     PendingPathLaunch.take();
+    // Starting the post-assessment opens the "Let's learn first" step; keep
+    // its narrator off the platform audio player.
+    LearnFirstScreen.debugVoiceOverFactory = (_) => _SilentVoiceOver();
   });
 
   tearDown(() {
     ParentVerificationDialog.pinDelegate = null;
     PendingPathLaunch.take();
+    LearnFirstScreen.debugVoiceOverFactory = null;
   });
 
   testWidgets('path Next parks the launch and pops home instead of swapping', (
@@ -666,4 +672,22 @@ class _TestPinDelegate implements ParentPinDelegate {
 
   @override
   Future<bool> onForgotPin(BuildContext context) async => false;
+}
+
+/// A narrator that never reaches a platform player.
+class _SilentVoiceOver extends VoiceOverService {
+  _SilentVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {}
+
+  @override
+  Future<void> playCorrectPraise() async {}
+
+  @override
+  Future<void> stop() async {}
 }
