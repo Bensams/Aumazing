@@ -1,0 +1,14 @@
+run_index,context,overall_accuracy,overall_avg_response_time,overall_task_completion_rate,overall_retry_count,overall_hint_count,overall_prompt_dependency_score,overall_idle_time_seconds,overall_invalid_touch_count,copy_me_accuracy,match_it_accuracy,my_turn_your_turn_accuracy,do_what_i_say_accuracy
+1,pre_assessment,0.95,8.575667,1.0,0.25,1.25,0.3125,28.0,0.75,0.8,1.0,1.0,1.0
+2,pre_assessment,0.879545,2.902903,1.0,0.5,0.25,0.027778,8.75,1.25,0.8,0.9,0.818182,1.0
+3,pre_assessment,0.639583,3.275,1.0,2.0,2.25,0.216667,11.5,4.75,0.6,0.666667,0.625,0.666667
+4,post_assessment,0.9375,13.741167,1.0,0.25,2.5,0.777778,40.25,0.25,0.75,1.0,1.0,1.0
+5,pre_assessment,0.929545,2.479618,1.0,0.25,0.25,0.027778,7.25,0.25,1.0,0.9,0.818182,1.0
+6,post_assessment,0.902083,2.325,1.0,0.75,0.75,0.077083,4.5,2.0,0.9,0.916667,0.875,0.916667
+7,pre_assessment,0.839744,4.707444,1.0,0.5,0.25,0.0625,12.5,0.25,0.666667,1.0,0.692308,1.0
+8,pre_assessment,0.892857,4.266063,1.0,0.5,0.25,0.0625,9.75,0.25,0.571429,1.0,1.0,1.0
+9,pre_assessment,0.954545,2.14316,1.0,0.0,0.25,0.027778,9.75,0.5,1.0,1.0,0.818182,1.0
+10,post_assessment,1.0,2.132139,1.0,0.0,0.0,0.0,4.25,0.0,1.0,1.0,1.0,1.0
+11,pre_assessment,0.9375,3.317056,1.0,0.0,0.0,0.0,8.25,0.25,1.0,1.0,1.0,0.75
+12,pre_assessment,1.0,3.335882,1.0,0.0,0.0,0.0,9.0,0.0,1.0,1.0,1.0,1.0
+13,pre_assessment,0.8125,2.702278,1.0,0.75,0.25,0.0625,4.0,0.5,0.5,1.0,0.75,1.0
