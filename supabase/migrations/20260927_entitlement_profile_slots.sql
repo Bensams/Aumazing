@@ -8,9 +8,9 @@
 -- server-side verification — never by the client. The existing RLS on
 -- entitlements (select own row; no client writes) already covers it.
 --
--- NOT YET APPLIED to the live project. Apply together with the webhook change
--- that increments it on a verified one-time "extra profile" payment. Until
--- then the app treats a missing column as zero purchased slots.
+-- Applied to the live project on 2026-09-28. The payment webhook does not yet
+-- increment it on a verified one-time "extra profile" payment, so every
+-- account reads 0 purchased slots until that change ships.
 
 ALTER TABLE public.entitlements
   ADD COLUMN IF NOT EXISTS extra_profile_slots integer NOT NULL DEFAULT 0
