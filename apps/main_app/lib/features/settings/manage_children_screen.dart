@@ -14,6 +14,7 @@ import '../../services/child_switch_service.dart';
 import '../../services/entitlement_service.dart';
 import '../premium/mock_paymongo_checkout_screen.dart';
 import '../premium/premium_upgrade_screen.dart';
+import '../premium/profile_slot_checkout.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
 import 'child_profile_edit_screen.dart';
 import 'widgets/settings_scaffold.dart';
@@ -25,7 +26,11 @@ import 'widgets/settings_scaffold.dart';
 /// Deleting additionally asks for parent verification and an explicit
 /// confirmation, because it takes the child's progress with it.
 class ManageChildrenScreen extends StatefulWidget {
-  const ManageChildrenScreen({super.key});
+  const ManageChildrenScreen({super.key, this.profileSlotCheckout});
+
+  /// How an extra child profile is bought; defaults to the PayMongo checkout
+  /// ([buyProfileSlotWithPaymongo]). Injectable for tests.
+  final ProfileSlotCheckout? profileSlotCheckout;
 
   @override
   State<ManageChildrenScreen> createState() => _ManageChildrenScreenState();
@@ -215,9 +220,9 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
 
   /// One extra profile, bought before the new child is created.
   ///
-  /// Only the simulated checkout can sell one today: the real payment webhook
-  /// does not yet write profile slots, so a build without the simulation says
-  /// so plainly instead of taking a payment it cannot honour.
+  /// Sold through PayMongo (AUM-349): the signed webhook adds the slot, and
+  /// the child is only created once the backend confirms it. A debug build
+  /// with the simulated checkout compiled in uses that instead.
   Future<bool> _buyProfileSlot() async {
     final proceed = await showDialog<bool>(
       context: context,
@@ -244,11 +249,31 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
     if (proceed != true || !mounted) return false;
 
     if (!PaymentSimulationConfig.isAvailable) {
-      _showMessage(
-        'Extra child profiles can be bought once in-app payments for them '
-        'are live.',
+      final checkout = widget.profileSlotCheckout ?? buyProfileSlotWithPaymongo;
+      final result = await checkout(
+        context,
+        slotsBefore: EntitlementService.instance.realExtraProfileSlots,
       );
-      return false;
+      if (!mounted) return false;
+      switch (result) {
+        case ProfileSlotPurchase.added:
+          return true;
+        case ProfileSlotPurchase.pending:
+          _showMessage(
+            'Payment received. The extra profile appears once PayMongo '
+            'confirms — try Add child again in a moment.',
+          );
+          return false;
+        case ProfileSlotPurchase.premiumRequired:
+          _showMessage('Extra child profiles need an active Premium plan.');
+          return false;
+        case ProfileSlotPurchase.failed:
+          _showMessage('Could not start the payment. Please try again.');
+          return false;
+        case ProfileSlotPurchase.cancelled:
+        case ProfileSlotPurchase.redirected:
+          return false;
+      }
     }
     final outcome = await Navigator.of(context).push<MockCheckoutOutcome>(
       MaterialPageRoute(

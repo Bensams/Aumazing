@@ -1,4 +1,6 @@
-// create-checkout — starts a PayMongo Checkout Session for Aumazing Premium.
+// create-checkout — starts a PayMongo Checkout Session for Aumazing Premium,
+// or for one extra child profile (`product: "profile_slot"`, AUM-349), which
+// only accounts with active Premium may buy.
 //
 // Called by the app (authenticated; JWT verified by the platform). Creates
 // a hosted checkout session on PayMongo, records a pending payment row, and
@@ -26,8 +28,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Premium Monthly — ₱149/month (manuscript Table 3.8), in centavos.
-const PREMIUM_AMOUNT_CENTAVOS = 14900;
+// What each product costs and how it reads on the PayMongo page. Amounts in
+// centavos. Premium Monthly — ₱149/month (manuscript Table 3.8); an extra
+// child profile — ₱30, once (AUM-343).
+const PRODUCTS = {
+  premium: {
+    amount: 14900,
+    name: "Aumazing Premium — 30 days",
+    description:
+      "Aumazing Premium — 30 days of access, no auto-renewal (sandbox)",
+  },
+  profile_slot: {
+    amount: 3000,
+    name: "Aumazing extra child profile",
+    description: "One extra child profile on your account, one-time (sandbox)",
+  },
+} as const;
+type Product = keyof typeof PRODUCTS;
 
 // Sentinel URLs watched by the app's checkout WebView; they never need to
 // resolve to a real page.
@@ -75,6 +92,34 @@ Deno.serve(async (req) => {
   if (body?.return_url !== undefined && returnUrl === null) {
     return json({ error: "return_url not allowed" }, 400);
   }
+  const product: Product = body?.product === "profile_slot"
+    ? "profile_slot"
+    : "premium";
+  if (body?.product !== undefined && body.product !== product) {
+    return json({ error: "unknown product" }, 400);
+  }
+  const item = PRODUCTS[product];
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  // Extra child profiles are a Premium feature (AUM-343): refuse before the
+  // parent is sent to pay for something they could not use.
+  if (product === "profile_slot") {
+    const { data: premium, error: premiumError } = await admin.rpc(
+      "has_active_premium",
+      { p_user_id: user.id },
+    );
+    if (premiumError) {
+      console.error("has_active_premium failed:", premiumError);
+      return json({ error: "could not create checkout session" }, 500);
+    }
+    if (premium !== true) {
+      return json({ error: "premium required" }, 403);
+    }
+  }
+
   const successUrl = returnUrl ? withOutcome(returnUrl, "success") : SUCCESS_URL;
   const cancelUrl = returnUrl ? withOutcome(returnUrl, "cancelled") : CANCEL_URL;
 
@@ -98,19 +143,18 @@ Deno.serve(async (req) => {
           attributes: {
             line_items: [
               {
-                name: "Aumazing Premium — 30 days",
-                amount: PREMIUM_AMOUNT_CENTAVOS,
+                name: item.name,
+                amount: item.amount,
                 currency: "PHP",
                 quantity: 1,
               },
             ],
             payment_method_types: ["card", "gcash", "grab_pay", "paymaya"],
-            description:
-              "Aumazing Premium — 30 days of access, no auto-renewal (sandbox)",
+            description: item.description,
             success_url: successUrl,
             cancel_url: cancelUrl,
             send_email_receipt: false,
-            metadata: { user_id: user.id },
+            metadata: { user_id: user.id, product },
           },
         },
       }),
@@ -132,16 +176,14 @@ Deno.serve(async (req) => {
   }
 
   // Record the pending payment (service role — clients cannot write here).
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  // `product` is what the webhook trusts when deciding the effect.
   const { error: insertError } = await admin.from("payment_records").insert({
     user_id: user.id,
     checkout_session_id: sessionId,
-    amount: PREMIUM_AMOUNT_CENTAVOS,
+    amount: item.amount,
     currency: "PHP",
     status: "pending",
+    product,
   });
   if (insertError) {
     // This row is the ONLY trusted binding between a PayMongo session and

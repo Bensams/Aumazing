@@ -27,9 +27,10 @@
 // as one transaction. There is no shape in this module that can express
 // "move the payment now, grant later".
 //
-// Subscription lifecycle is outside this payment-outcome decision layer.
-// A grant writes `is_premium`, `source` and `activated_at`; the period
-// column is left to that ticket.
+// The Premium period is applied by `apply_payment_outcome` itself: a grant
+// runs 30 days from the later of now and the end of a period still running,
+// and a revoke ends it (AUM-349). Extra child-profile slots are a separate
+// product with their own effects (`grant_slot` / `revoke_slot`).
 
 /// How a PayMongo event type maps onto our payment lifecycle.
 export type OutcomeKind = "grant" | "negative" | "reversal" | "unknown";
@@ -44,8 +45,18 @@ export type PaymentStatus =
   | "expired"
   | "refunded";
 
-/// What a decision does to the entitlement row, if anything.
-export type EntitlementEffect = "none" | "grant" | "revoke";
+/// What a checkout sold (AUM-349). Recorded by create-checkout, so it is
+/// trusted; nothing in an event can change it.
+export type Product = "premium" | "profile_slot";
+
+/// What a decision does to the entitlement row, if anything: Premium
+/// on/off, or one extra child-profile slot added/removed.
+export type EntitlementEffect =
+  | "none"
+  | "grant"
+  | "revoke"
+  | "grant_slot"
+  | "revoke_slot";
 
 /// Terminal states — a payment that reached one of these is never moved
 /// back to `pending`, and negative events against it are ignored.
@@ -123,6 +134,8 @@ export interface StoredPayment {
   status: PaymentStatus;
   /// Last time we wrote this row; used as the staleness floor.
   updatedAt: Date | null;
+  /// What was bought; rows from before AUM-349 are all Premium.
+  product?: Product;
 }
 
 export interface StoredEntitlement {
@@ -369,6 +382,31 @@ function decideGrant(
 
   const source = entitlementSource(event.livemode);
 
+  // An extra child profile: one slot per paid purchase. The slot is added
+  // in the same transaction as the pending→paid transition, so it cannot
+  // be half-applied — there is no repair path, and a second event for an
+  // already-paid slot must add nothing.
+  if (payment.product === "profile_slot") {
+    if (payment.status === "paid") return noop("noop_slot_already_paid");
+    if (payment.status === "refunded") {
+      return noop("rejected_grant_after_refund", false);
+    }
+    const recoveringSlot = NEGATIVE_TERMINAL.includes(payment.status);
+    return {
+      reason: recoveringSlot ? "slot_granted_after_recovery" : "slot_granted",
+      processed: true,
+      apply: {
+        paymentId: payment.id,
+        userId: payment.userId,
+        expectedStatus: payment.status,
+        newStatus: "paid",
+        effect: "grant_slot",
+        source,
+        at: now,
+      },
+    };
+  }
+
   // Already paid: this is a redelivery, or the second of the two event
   // types one purchase produces. Applying again would re-stamp the
   // entitlement — unless the entitlement is genuinely missing, which is
@@ -484,6 +522,27 @@ function decideReversal(
   }
 
   const source = entitlementSource(event.livemode);
+
+  // A refunded extra profile takes its one slot back — once. Children
+  // already on the account stay (AUM-343); the account just cannot add
+  // another until it has a free slot.
+  if (payment.product === "profile_slot") {
+    if (payment.status === "refunded") return noop("noop_slot_already_refunded");
+    return {
+      reason: "slot_revoked",
+      processed: true,
+      apply: {
+        paymentId: payment.id,
+        userId: payment.userId,
+        expectedStatus: payment.status,
+        newStatus: "refunded",
+        effect: "revoke_slot",
+        source,
+        at: now,
+      },
+    };
+  }
+
   // Already settled as refunded — keep the original refund timestamp.
   const newStatus: PaymentStatus | null = payment.status === "refunded"
     ? null

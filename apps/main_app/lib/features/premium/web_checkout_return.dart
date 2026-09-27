@@ -14,11 +14,14 @@ import '../../services/entitlement_service.dart';
 /// network wait is blocked as a pop-up by mobile Safari), and PayMongo sends
 /// them back to the app's own address with `?payment=success` or
 /// `?payment=cancelled`. The app reads that once at start-up, removes it from
-/// the address bar, and [WebCheckoutReturnBanner] finishes the upgrade.
+/// the address bar, and [WebCheckoutReturnBanner] finishes the purchase —
+/// Premium, or an extra child profile (AUM-349).
 class WebCheckoutReturn {
   WebCheckoutReturn._();
 
   static const _startedKey = 'web_checkout_started_at';
+  static const _productKey = 'web_checkout_product';
+  static const _slotsBeforeKey = 'web_checkout_slots_before';
 
   /// How long after leaving for checkout a return still counts as ours.
   static const _window = Duration(hours: 2);
@@ -43,34 +46,76 @@ class WebCheckoutReturn {
     );
   }
 
-  /// Remembers that this browser just left for checkout.
-  static Future<void> markStarted() async {
+  /// Remembers that this browser just left for checkout, what for, and — for
+  /// an extra profile — how many purchased slots the account had before.
+  static Future<void> markStarted({
+    String product = 'premium',
+    int slotsBefore = 0,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_startedKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setString(_productKey, product);
+    await prefs.setInt(_slotsBeforeKey, slotsBefore);
   }
 
-  /// The checkout outcome to report, once: `success`, `cancelled`, or null.
-  /// Only a return to a checkout this browser started counts, so an old link
-  /// with `?payment=success` shows nothing.
-  static Future<String?> takeOutcome({DateTime? now}) async {
+  /// The checkout return to report, once, or null. Only a return to a
+  /// checkout this browser started counts, so an old link with
+  /// `?payment=success` shows nothing.
+  static Future<CheckoutReturn?> takeOutcome({DateTime? now}) async {
     final outcome = _outcome;
     _outcome = null;
     if (outcome != 'success' && outcome != 'cancelled') return null;
     final prefs = await SharedPreferences.getInstance();
     final started = prefs.getInt(_startedKey);
+    final product = prefs.getString(_productKey) ?? 'premium';
+    final slotsBefore = prefs.getInt(_slotsBeforeKey) ?? 0;
     await prefs.remove(_startedKey);
+    await prefs.remove(_productKey);
+    await prefs.remove(_slotsBeforeKey);
     if (started == null) return null;
     final age = (now ?? DateTime.now()).difference(
       DateTime.fromMillisecondsSinceEpoch(started),
     );
-    return age.isNegative || age > _window ? null : outcome;
+    if (age.isNegative || age > _window) return null;
+    return CheckoutReturn(
+      paid: outcome == 'success',
+      profileSlot: product == 'profile_slot',
+      slotsBefore: slotsBefore,
+    );
   }
 
   @visibleForTesting
   static set debugOutcome(String? value) => _outcome = value;
 }
 
-enum _ReturnState { none, activating, active, pending, cancelled }
+/// How a web checkout this browser started came back.
+class CheckoutReturn {
+  const CheckoutReturn({
+    required this.paid,
+    required this.profileSlot,
+    this.slotsBefore = 0,
+  });
+
+  /// True for `?payment=success`, false for `?payment=cancelled`.
+  final bool paid;
+
+  /// True for an extra child profile, false for Premium.
+  final bool profileSlot;
+
+  /// Purchased slots before this checkout, for an extra profile.
+  final int slotsBefore;
+}
+
+enum _ReturnState {
+  none,
+  activating,
+  active,
+  pending,
+  slotAdding,
+  slotAdded,
+  slotPending,
+  cancelled,
+}
 
 /// Shows, over whatever screen the app opens on, how a web checkout ended.
 /// A pass-through everywhere else.
@@ -79,12 +124,16 @@ class WebCheckoutReturnBanner extends StatefulWidget {
     super.key,
     required this.child,
     this.waitForActivation,
+    this.waitForProfileSlot,
   });
 
   final Widget child;
 
   /// Test seam; defaults to [EntitlementService.waitForActivation].
   final Future<bool> Function()? waitForActivation;
+
+  /// Test seam; defaults to [EntitlementService.waitForProfileSlot].
+  final Future<bool> Function(int above)? waitForProfileSlot;
 
   @override
   State<WebCheckoutReturnBanner> createState() =>
@@ -102,11 +151,23 @@ class _WebCheckoutReturnBannerState extends State<WebCheckoutReturnBanner> {
   }
 
   Future<void> _check() async {
-    final outcome = await WebCheckoutReturn.takeOutcome();
-    if (!mounted || outcome == null) return;
-    if (outcome == 'cancelled') {
+    final result = await WebCheckoutReturn.takeOutcome();
+    if (!mounted || result == null) return;
+    if (!result.paid) {
       setState(() => _state = _ReturnState.cancelled);
       _autoHide = Timer(const Duration(seconds: 8), _dismiss);
+      return;
+    }
+    if (result.profileSlot) {
+      setState(() => _state = _ReturnState.slotAdding);
+      final added = await (widget.waitForProfileSlot ??
+          (above) => EntitlementService.instance.waitForProfileSlot(
+            above: above,
+          ))(result.slotsBefore);
+      if (!mounted) return;
+      setState(
+        () => _state = added ? _ReturnState.slotAdded : _ReturnState.slotPending,
+      );
       return;
     }
     setState(() => _state = _ReturnState.activating);
@@ -151,10 +212,26 @@ class _WebCheckoutReturnBannerState extends State<WebCheckoutReturnBanner> {
         'Activation is taking a moment. Premium turns on by itself once '
             'PayMongo confirms — you can keep using the app.',
       ),
+      _ReturnState.slotAdding => (
+        null,
+        'Adding your extra profile…',
+        'Confirming your payment with PayMongo.',
+      ),
+      _ReturnState.slotAdded => (
+        Icons.person_add_alt_1_rounded,
+        'Extra child profile added 🎉',
+        'Open Manage Children and tap Add child to set it up.',
+      ),
+      _ReturnState.slotPending => (
+        Icons.hourglass_top_rounded,
+        'Payment received',
+        'The extra profile appears by itself once PayMongo confirms — you '
+            'can keep using the app.',
+      ),
       _ReturnState.cancelled => (
         Icons.info_outline_rounded,
         'Payment cancelled',
-        'Nothing was charged. You can upgrade any time from Premium.',
+        'Nothing was charged. You can try again any time.',
       ),
       _ReturnState.none => (null, '', ''),
     };
@@ -211,7 +288,8 @@ class _WebCheckoutReturnBannerState extends State<WebCheckoutReturnBanner> {
                               ],
                             ),
                           ),
-                          if (_state != _ReturnState.activating)
+                          if (_state != _ReturnState.activating &&
+                              _state != _ReturnState.slotAdding)
                             IconButton(
                               tooltip: 'Close',
                               icon: const Icon(Icons.close_rounded),

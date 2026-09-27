@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:shared_ui/shared_ui.dart';
 
@@ -13,6 +12,7 @@ import '../../core/utils/network_errors.dart';
 import '../../providers/child_provider.dart';
 import '../../services/entitlement_service.dart';
 import '../settings/bind_account_modal.dart';
+import 'checkout_webview_screen.dart';
 import 'mock_paymongo_checkout_screen.dart';
 import 'web_checkout_return.dart';
 
@@ -190,7 +190,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       }
       final paid = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
-              builder: (_) => _CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
+              builder: (_) => CheckoutWebViewScreen(checkoutUrl: checkoutUrl),
             ),
           ) ??
           false;
@@ -402,69 +402,6 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// PayMongo's hosted checkout rendered inside the app. Watches navigation
-/// for the success/cancel sentinel URLs and pops with the outcome.
-class _CheckoutWebViewScreen extends StatefulWidget {
-  const _CheckoutWebViewScreen({required this.checkoutUrl});
-
-  final String checkoutUrl;
-
-  @override
-  State<_CheckoutWebViewScreen> createState() =>
-      _CheckoutWebViewScreenState();
-}
-
-class _CheckoutWebViewScreenState extends State<_CheckoutWebViewScreen> {
-  late final WebViewController _controller;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (_) {
-            if (mounted) setState(() => _loading = false);
-          },
-          onNavigationRequest: (request) {
-            if (request.url.startsWith('https://aumazing.app/payment/success')) {
-              Navigator.of(context).pop(true);
-              return NavigationDecision.prevent;
-            }
-            if (request.url.startsWith('https://aumazing.app/payment/cancel')) {
-              Navigator.of(context).pop(false);
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.checkoutUrl));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Secure Checkout'),
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          tooltip: 'Close checkout',
-          onPressed: () => Navigator.of(context).pop(false),
-        ),
-      ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-        ],
       ),
     );
   }
