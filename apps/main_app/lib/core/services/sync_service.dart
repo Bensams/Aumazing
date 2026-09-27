@@ -485,15 +485,57 @@ class SyncService {
     };
   }
 
-  Map<String, dynamic> _mapQuestionnaireToSupabase(Map<String, dynamic> local) {
+  /// Local questionnaire row -> cloud `caregiver_questionnaires`.
+  ///
+  /// The cloud table stores the answers as `responses_json` (jsonb) and has
+  /// no `completed_at`; this mapper used to send `responses` and
+  /// `completed_at`, columns the table does not have. It never failed only
+  /// because nothing had written a questionnaire yet.
+  ///
+  /// The four domain scores travel inside `responses_json`. The table's one
+  /// fitting score column, `social_communication_score`, gets the mean of the
+  /// communication and social domains; the others belong to a different
+  /// instrument and stay empty rather than being filled with a guess.
+  @visibleForTesting
+  static Map<String, dynamic> mapQuestionnaireToSupabase(
+    Map<String, dynamic> local,
+  ) {
+    final raw = local['responses'];
+    Map<String, dynamic> responses = const {};
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) responses = decoded;
+      } catch (_) {
+        // A malformed row still syncs its identity; the answers stay local.
+      }
+    }
+    final scores = responses['domain_scores'];
+    double? score(String key) =>
+        scores is Map ? (scores[key] as num?)?.toDouble() : null;
+    final socialCommunication = [
+      score('communication'),
+      score('social'),
+    ].whereType<double>().toList();
+
     return {
       'id': local['id'],
       'child_id': local['child_id'],
+      'assessment_run_id': local['assessment_run_id'],
+      'completed_by_role': 'parent',
       'questionnaire_type': local['questionnaire_type'],
-      'responses': local['responses'],
-      'completed_at': local['completed_at'],
+      'responses_json': responses,
+      'social_communication_score':
+          socialCommunication.isEmpty
+              ? null
+              : socialCommunication.reduce((a, b) => a + b) /
+                  socialCommunication.length,
+      'created_at': local['completed_at'],
     };
   }
+
+  Map<String, dynamic> _mapQuestionnaireToSupabase(Map<String, dynamic> local) =>
+      mapQuestionnaireToSupabase(local);
 
   /// Rubric label → ordinal level, per `20260512_per_area_levels.sql`:
   /// 0 = Needs Support, 1 = Emerging, 2 = Strength.
@@ -1008,9 +1050,10 @@ class SyncService {
   Map<String, dynamic> _mapQuestionnaireToLocal(Map<String, dynamic> r) => {
         'id': r['id'],
         'child_id': r['child_id'],
+        'assessment_run_id': r['assessment_run_id'],
         'questionnaire_type': r['questionnaire_type'] ?? 'unknown',
-        'responses': _asJsonText(r['responses']) ?? '{}',
-        'completed_at': r['completed_at'],
+        'responses': _asJsonText(r['responses_json'] ?? r['responses']) ?? '{}',
+        'completed_at': r['completed_at'] ?? r['created_at'],
         ..._localMeta(r),
       };
 

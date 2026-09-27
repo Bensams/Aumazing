@@ -48,6 +48,7 @@ class AssessmentResultView extends StatefulWidget {
     required this.childDisplayName,
     this.reportPdfSharer,
     this.summaryService,
+    this.comparisonExtra,
   });
 
   final List<AssessmentResult> results;
@@ -73,6 +74,9 @@ class AssessmentResultView extends StatefulWidget {
 
   /// Injectable for tests; defaults to the shared singleton.
   final AssessmentSummaryService? summaryService;
+
+  /// Passed through to the layout's extra comparison slot.
+  final Widget? comparisonExtra;
 
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
@@ -273,6 +277,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       showCelebration: widget.showCelebration,
       onApplyRecommendations: _applyRecommendations,
       onOpenLearningPath: widget.onOpenLearningPath,
+      comparisonExtra: widget.comparisonExtra,
       headerAction: SizedBox(
         width: 44,
         height: 44,

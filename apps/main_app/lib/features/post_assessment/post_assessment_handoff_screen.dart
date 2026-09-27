@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
+import '../questionnaire/parent_questionnaire_screen.dart';
 import 'post_assessment_result_screen.dart';
 
 /// Screen shown to the child after all post-assessment games are complete.
@@ -21,7 +22,19 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
     required this.improvement,
     this.nextModulePremiumRequired = false,
     this.voiceOverFactory,
+    this.childId,
+    this.assessmentRunId,
+    this.showQuestionnaire = true,
   });
+
+  /// The child and the finished run, so the parent questionnaire is stored
+  /// against them. The run id is captured before the run is closed.
+  final String? childId;
+  final String? assessmentRunId;
+
+  /// Whether the parent questionnaire comes between verification and the
+  /// results. On in the app; tests about the hand-off itself turn it off.
+  final bool showQuestionnaire;
 
   /// Output of AssessmentService.compareAssessments for the completed run.
   final Map<String, dynamic> improvement;
@@ -39,7 +52,28 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
       subtitle: MilestoneKind.postAssessment.subtitle,
       milestoneVoiceCue: MilestoneKind.postAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
-      onParentVerified: _showResults,
+      onParentVerified: _afterVerification,
+    );
+  }
+
+  /// The same questionnaire as after the pre-assessment, answered before the
+  /// comparison is shown, so the parent's view of change is their own.
+  void _afterVerification(BuildContext context) {
+    final childId = this.childId;
+    if (!showQuestionnaire || childId == null) {
+      _showResults(context);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => ParentQuestionnaireScreen(
+              assessmentType: 'post',
+              childId: childId,
+              assessmentRunId: assessmentRunId,
+              onDone: _showResults,
+            ),
+      ),
     );
   }
 

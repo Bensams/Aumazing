@@ -113,6 +113,10 @@ void main() {
 
     expect(handoff.improvement, same(improvement));
     expect(handoff.nextModulePremiumRequired, isFalse);
+    // The parent questionnaire behind the gate is stored against this child
+    // and this run; the run id is captured before finishing forgets it.
+    expect(handoff.childId, 'child-1');
+    expect(handoff.assessmentRunId, 'run-1');
     // The finish chain runs the prediction, re-derives a fresh support
     // profile from it, then freeze-frames that exact profile and prediction
     // into the post snapshot — in that order.

@@ -5,6 +5,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
+import '../questionnaire/parent_questionnaire_screen.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -21,7 +22,19 @@ class WaitingForParentScreen extends StatelessWidget {
     required this.profile,
     this.aiResponse,
     this.voiceOverFactory,
+    this.childId,
+    this.assessmentRunId,
+    this.showQuestionnaire = true,
   });
+
+  /// The child and the finished run, so the parent questionnaire is stored
+  /// against them. The run id is captured before the run is closed.
+  final String? childId;
+  final String? assessmentRunId;
+
+  /// Whether the parent questionnaire comes between verification and the
+  /// results. On in the app; tests about the hand-off itself turn it off.
+  final bool showQuestionnaire;
 
   final List<AssessmentResult> results;
   final SupportProfile profile;
@@ -39,7 +52,28 @@ class WaitingForParentScreen extends StatelessWidget {
       subtitle: MilestoneKind.preAssessment.subtitle,
       milestoneVoiceCue: MilestoneKind.preAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
-      onParentVerified: _showSummary,
+      onParentVerified: _afterVerification,
+    );
+  }
+
+  /// The parent has the device: their questionnaire first, before any result
+  /// is on screen, then the summary.
+  void _afterVerification(BuildContext context) {
+    final childId = this.childId;
+    if (!showQuestionnaire || childId == null) {
+      _showSummary(context);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => ParentQuestionnaireScreen(
+              assessmentType: 'pre',
+              childId: childId,
+              assessmentRunId: assessmentRunId,
+              onDone: _showSummary,
+            ),
+      ),
     );
   }
 
