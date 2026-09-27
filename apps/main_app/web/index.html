@@ -34,12 +34,31 @@
   <title>Aumazing</title>
   <link rel="manifest" href="manifest.json?v=20260908b">
   <link rel="stylesheet" href="ios-install.css">
+  <link rel="stylesheet" href="loader.css">
 
   <!-- In-browser AI: onnxruntime-web bridge (see web/ort_bridge.mjs). Runs the
        on-device assessment models in the browser, no server required. -->
   <script type="module" src="ort_bridge.mjs"></script>
 </head>
 <body>
+  <!-- Loading page: saves every file a child needs before the app starts
+       (offline.js), so games never pause for a missing picture or voice. -->
+  <div id="aumazing-loader" class="aumazing-loader" role="status" aria-live="polite">
+    <div class="aumazing-loader-card">
+      <img class="aumazing-loader-logo" src="icons/Icon-192.png?v=20260908b" width="88" height="88" alt="">
+      <h1 id="aumazing-loader-title">Opening Aumazing…</h1>
+      <p id="aumazing-loader-detail">&nbsp;</p>
+      <div id="aumazing-loader-meter" class="aumazing-loader-meter" role="progressbar"
+           aria-labelledby="aumazing-loader-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="aumazing-loader-bar" class="aumazing-loader-bar"></div>
+      </div>
+      <p class="aumazing-loader-note">This happens once. Next time Aumazing opens straight away, even without internet.</p>
+      <div id="aumazing-loader-actions" class="aumazing-loader-actions" hidden>
+        <button id="aumazing-loader-retry" type="button">Try again</button>
+        <button id="aumazing-loader-skip" type="button">Start now</button>
+      </div>
+    </div>
+  </div>
   <aside id="ios-install-banner" class="ios-install-banner" aria-labelledby="ios-install-title" hidden>
     <img class="ios-install-logo" src="aumazing-logo.png?v=20260908b-v2" width="88" height="56" alt="">
     <div class="ios-install-copy">
@@ -80,7 +99,7 @@
     </div>
   </dialog>
   <script src="ios-install.js"></script>
+  <!-- Starts the app (flutter_bootstrap.js) once the files are saved. -->
   <script src="offline.js"></script>
-  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
@@ -15,7 +14,6 @@ import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
-import 'offline_play_screen.dart';
 import 'star_settings_screen.dart';
 import 'gameplay_export_screen.dart';
 import 'widgets/background_picker.dart';
@@ -29,7 +27,6 @@ import 'widgets/object_style_picker.dart';
 /// - Audio — music, volumes, vibration, prompt speed
 /// - Child Preferences — avatar, background theme, game difficulty,
 ///   language, reward celebration
-/// - Offline Play — web build only
 /// - Bind Account — shown only while in guest mode
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.authService});
@@ -97,16 +94,6 @@ class SettingsScreen extends StatelessWidget {
           subtitle: 'Share de-identified CSV, JSON, and PDF summary',
           onTap: () => _push(context, GameplayExportScreen(palette: palette)),
         ),
-        // Only the browser build downloads itself; native installs already
-        // carry every file (AUM-334).
-        if (kIsWeb)
-          _CategoryTile(
-            icon: Icons.cloud_off_rounded,
-            color: const Color(0xFF5C8FD6),
-            title: 'Offline Play',
-            subtitle: 'Save the games so they work without internet',
-            onTap: () => _push(context, OfflinePlayScreen(palette: palette)),
-          ),
         _CategoryTile(
           icon: Icons.lock_outline_rounded,
           color: const Color(0xFF8A7BC8),
