@@ -24,6 +24,7 @@ import 'learn_first_screen.dart';
 import 'sensory/sensory.dart';
 import 'sensory/pre_assessment_round_plan.dart';
 import 'waiting_for_parent_screen.dart';
+import '../questionnaire/observer_intake_screen.dart';
 
 /// Orchestrates the sequential pre-assessment game flow.
 ///
@@ -44,10 +45,16 @@ class PreAssessmentProgressScreen extends StatefulWidget {
   /// so they do not have to walk through it first.
   final bool showLearnFirst;
 
+  /// Whether a new run first asks the watching adult who they are and about
+  /// the child (AUM-351). Always on in the app; off in tests that are about
+  /// something else.
+  final bool showObserverIntake;
+
   const PreAssessmentProgressScreen({
     super.key,
     required this.sensoryConsentResult,
     this.showLearnFirst = true,
+    this.showObserverIntake = true,
   });
 
   @override
@@ -79,6 +86,10 @@ class _PreAssessmentProgressScreenState
   /// A resumed run skips them: they are recorded play, and replaying them
   /// would ask the child to redo work the assessment already has.
   Set<String> _alreadyPlayed = const {};
+
+  /// True when this screen started a new run rather than resuming one: only
+  /// a new run asks the observer's questions.
+  bool _freshRun = false;
 
   /// Controls per-round sensory settings (music/haptic toggling).
   late final SensoryRoundController _sensoryController;
@@ -156,6 +167,7 @@ class _PreAssessmentProgressScreenState
       } else {
         _alreadyPlayed = const {};
         _currentGameIndex = 0;
+        _freshRun = true;
         await assessProv.startAssessmentRun(childId: childId, type: 'pre');
         await _saveSensoryConsent(assessProv.currentAssessmentRunId, childId);
       }
@@ -177,6 +189,17 @@ class _PreAssessmentProgressScreenState
     if (_currentGameIndex >= _gameOrder.length) {
       _finishAssessment();
       return;
+    }
+    // The adult answers before the child starts, never during play.
+    if (widget.showObserverIntake && _freshRun) {
+      await ObserverIntakeScreen.show(
+        context,
+        assessmentType: 'pre',
+        childId: childId,
+        assessmentRunId:
+            context.read<AssessmentProvider>().currentAssessmentRunId,
+      );
+      if (!mounted) return;
     }
     if (widget.showLearnFirst && _alreadyPlayed.isEmpty) {
       await _runLearnFirst();
