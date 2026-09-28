@@ -17,6 +17,7 @@ import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
 import 'package:aumazing/widgets/resume_assessment_dialog.dart';
+import 'package:aumazing/features/questionnaire/observer_intake_screen.dart';
 
 /// The pre-assessment entry point must ask about an interrupted run *before*
 /// starting a new one — starting one closes the run worth offering (AUM-154).
@@ -52,7 +53,11 @@ void main() {
     }
   }
 
-  Widget app(AssessmentProvider provider, {bool learnFirst = false}) =>
+  Widget app(
+    AssessmentProvider provider, {
+    bool learnFirst = false,
+    bool observerIntake = false,
+  }) =>
       MultiProvider(
         providers: [
           ChangeNotifierProvider<ChildProvider>(
@@ -68,6 +73,7 @@ void main() {
             // The familiarisation step has its own tests; most here are about
             // resume.
             showLearnFirst: learnFirst,
+            showObserverIntake: observerIntake,
           ),
         ),
       );
@@ -137,6 +143,52 @@ void main() {
     expect(provider.startAttempts, 1);
     expect(find.text('Play!'), findsOneWidget);
     expect(find.text('Game 1 of 4'), findsOneWidget);
+  });
+
+  group('Before your child starts (AUM-351)', () {
+    Future<void> pumpUntilIntake(WidgetTester tester) async {
+      for (var i = 0; i < 40; i++) {
+        if (find.byType(ObserverIntakeScreen).evaluate().isNotEmpty) return;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+      }
+    }
+
+    testWidgets('a new run asks the watching adult before any game', (
+      tester,
+    ) async {
+      final provider = _ScriptedAssessmentProvider();
+      await tester.pumpWidget(app(provider, observerIntake: true));
+      await pumpFrames(tester);
+      await pumpUntilIntake(tester);
+
+      expect(find.byType(ObserverIntakeScreen), findsOneWidget);
+      // The games wait behind the adult's questions.
+      await pumpFrames(tester);
+      expect(find.text('Play!').hitTestable(), findsNothing);
+      expect(provider.startAttempts, 1);
+
+      await pumpFrames(tester);
+      await tester.tap(find.byKey(const Key('intake.skip')));
+      await pumpFrames(tester);
+      await pumpUntilPlayable(tester);
+      expect(find.byType(ObserverIntakeScreen), findsNothing);
+      expect(find.text('Game 1 of 4'), findsOneWidget);
+    });
+
+    testWidgets('a resumed run does not ask again', (tester) async {
+      final provider = _ScriptedAssessmentProvider(resumable: _openRun());
+      await tester.pumpWidget(app(provider, observerIntake: true));
+      await pumpFrames(tester);
+      await tester.tap(find.text(ResumeAssessmentDialog.continueLabel));
+      await pumpFrames(tester);
+      await pumpUntilPlayable(tester);
+
+      expect(find.byType(ObserverIntakeScreen), findsNothing);
+      expect(find.text('Play!'), findsOneWidget);
+    });
   });
 
   group("Let's learn first", () {

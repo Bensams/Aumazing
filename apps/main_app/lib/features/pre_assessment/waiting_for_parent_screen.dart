@@ -7,6 +7,7 @@ import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
 import '../questionnaire/parent_questionnaire_screen.dart';
 import '../questionnaire/questionnaire_template_repository.dart';
+import '../questionnaire/session_observation_screen.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -38,8 +39,9 @@ class WaitingForParentScreen extends StatelessWidget {
   final String? childId;
   final String? assessmentRunId;
 
-  /// Whether the parent questionnaire comes between verification and the
-  /// results. On in the app; tests about the hand-off itself turn it off.
+  /// Whether the adult's questions — what they saw (AUM-351), then the
+  /// parent questionnaire — come between verification and the results. On
+  /// in the app; tests about the hand-off itself turn it off.
   final bool showQuestionnaire;
 
   final List<AssessmentResult> results;
@@ -62,14 +64,32 @@ class WaitingForParentScreen extends StatelessWidget {
     );
   }
 
-  /// The parent has the device: their questionnaire first, before any result
-  /// is on screen, then the summary.
+  /// The parent has the device: what they saw while the child played, then
+  /// their questionnaire — both before any result is on screen — then the
+  /// summary.
   Future<void> _afterVerification(BuildContext context) async {
     final childId = this.childId;
     if (!showQuestionnaire || childId == null) {
       _showSummary(context);
       return;
     }
+    // The games this run played, in order, each once.
+    final played = {for (final r in results) r.gameId}.toList();
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => SessionObservationScreen(
+              assessmentType: 'pre',
+              childId: childId,
+              assessmentRunId: assessmentRunId,
+              gameIds: played.isEmpty ? kAssessmentGameIds : played,
+              onDone: (next) => _showQuestionnaire(next, childId),
+            ),
+      ),
+    );
+  }
+
+  Future<void> _showQuestionnaire(BuildContext context, String childId) async {
     // The practitioner-authored template when one is active, else the
     // bundled draft. Bounded by a short timeout, so the hand-off never
     // stalls on a slow connection.

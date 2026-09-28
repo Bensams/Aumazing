@@ -17,6 +17,7 @@ import '../../services/recommended_settings_applier.dart';
 import '../../services/report_pdf_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../therapy/therapy_center_recommendation_dialog.dart';
+import '../questionnaire/session_observation_card.dart';
 
 /// Renders a finalized assessment run with the shared result layout.
 ///
@@ -83,6 +84,19 @@ class AssessmentResultView extends StatefulWidget {
 }
 
 class _AssessmentResultViewState extends State<AssessmentResultView> {
+  /// What the adult who watched this run saw (AUM-351), when they answered.
+  Widget? _observationCard() {
+    final first = widget.results.firstOrNull;
+    final runId = first?.assessmentRunId;
+    if (first == null || runId == null) return null;
+    return SessionObservationCard(
+      key: ValueKey('session-observation-$runId'),
+      childId: first.childId,
+      assessmentRunId: runId,
+      results: widget.results,
+    );
+  }
+
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
   bool _sharingReport = false;
 
@@ -278,6 +292,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       onApplyRecommendations: _applyRecommendations,
       onOpenLearningPath: widget.onOpenLearningPath,
       comparisonExtra: widget.comparisonExtra,
+      observationExtra: _observationCard(),
       headerAction: SizedBox(
         width: 44,
         height: 44,

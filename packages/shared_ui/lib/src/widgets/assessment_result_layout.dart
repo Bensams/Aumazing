@@ -46,6 +46,7 @@ class AssessmentResultLayout extends StatefulWidget {
     this.background,
     this.headerAction,
     this.comparisonExtra,
+    this.observationExtra,
   });
 
   /// The canonical result data. The same instance drives both modes.
@@ -91,6 +92,10 @@ class AssessmentResultLayout extends StatefulWidget {
   /// cards — used for the parent's own before/after questionnaire, which
   /// belongs next to the change the games measured.
   final Widget? comparisonExtra;
+
+  /// An extra card placed right after the per-game results — used for what
+  /// the adult who watched the session saw in each game.
+  final Widget? observationExtra;
 
   @override
   State<AssessmentResultLayout> createState() => _AssessmentResultLayoutState();
@@ -203,7 +208,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
 
   /// Section order, identical in every orientation and column count:
   /// overview → overall progress → area progress → profile → game results →
-  /// recommended settings → recommended activities.
+  /// observation → recommended settings → recommended activities.
   ///
   /// Comparison cards sit directly under the overview: when a parent has run
   /// a second assessment, "did this help?" is the question they opened the
@@ -225,6 +230,7 @@ class _AssessmentResultLayoutState extends State<AssessmentResultLayout> {
         AssessmentProfileCard(model: model, dense: _dense),
       if (model.games.isNotEmpty)
         AssessmentGameResultsCard(games: model.games, dense: _dense),
+      if (widget.observationExtra case final extra?) extra,
       if (model.recommendations.isNotEmpty)
         AssessmentRecommendationsCard(
           recommendations: model.recommendations,

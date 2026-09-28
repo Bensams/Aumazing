@@ -496,6 +496,11 @@ class SyncService {
   /// fitting score column, `social_communication_score`, gets the mean of the
   /// communication and social domains; the others belong to a different
   /// instrument and stay empty rather than being filled with a guess.
+  ///
+  /// `completed_by_role` is the observer the adult said they were (AUM-351)
+  /// when the record carries one, and `parent` otherwise.
+  static const _observerRoles = {'parent', 'guardian', 'teacher', 'therapist'};
+
   @visibleForTesting
   static Map<String, dynamic> mapQuestionnaireToSupabase(
     Map<String, dynamic> local,
@@ -522,7 +527,9 @@ class SyncService {
       'id': local['id'],
       'child_id': local['child_id'],
       'assessment_run_id': local['assessment_run_id'],
-      'completed_by_role': 'parent',
+      'completed_by_role': _observerRoles.contains(responses['observer_role'])
+          ? responses['observer_role']
+          : 'parent',
       'questionnaire_type': local['questionnaire_type'],
       'responses_json': responses,
       'social_communication_score':
