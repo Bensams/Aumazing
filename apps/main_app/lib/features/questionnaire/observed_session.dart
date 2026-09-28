@@ -2,15 +2,22 @@
 /// while an adult sits beside them and watches.
 ///
 /// Nothing is asked while the child plays. The adult answers twice:
-/// - **before** the first game — who is watching, and optional background
-///   about the child ([ObserverIntake]);
-/// - **after** the last game, before any result is shown — what they saw in
-///   each game ([SessionObservation]).
+/// - **before** the first game — who is watching, then the "Before your
+///   child starts" template's questions ([IntakeRecord]);
+/// - **after** the last game, before any result is shown — the "What did
+///   you see?" template's questions, per game and for the session
+///   ([ObservationRecord]).
 ///
-/// Both are stored per assessment run in the caregiver questionnaire table,
-/// as `<pre|post>_intake` and `<pre|post>_observation`. They describe the
-/// session and sit beside the game scores; they never change a score.
+/// The questions come from templates a practitioner writes in the portal
+/// (AUM-352), with bundled defaults. Who is watching stays fixed in the app,
+/// because it is stored as the record's `completed_by_role`.
+///
+/// Each record keeps the readable summary and flags worked out when it was
+/// saved, so it still reads correctly after the template is reworded.
+/// Records never change a score.
 library;
+
+import 'package:questionnaire_core/questionnaire_core.dart';
 
 /// Who watched the child play. The keys match the cloud table's
 /// `completed_by_role`.
@@ -27,279 +34,172 @@ enum ObserverRole {
 
   /// The label mid-sentence: "the parent", "the SPED teacher".
   String get inSentence => this == teacher ? label : label.toLowerCase();
-}
 
-enum DiagnosisStatus {
-  diagnosed('diagnosed', 'Diagnosed with autism'),
-  evaluating('evaluating', 'Being evaluated or suspected'),
-  notDiagnosed('not_diagnosed', 'Not diagnosed'),
-  preferNotToSay('prefer_not_to_say', 'Prefer not to say');
-
-  const DiagnosisStatus(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-enum SchoolLevel {
-  notInSchool('not_in_school', 'Not in school yet'),
-  daycare('daycare', 'Daycare'),
-  kinder('kinder', 'Kinder'),
-  grade1('grade_1', 'Grade 1'),
-  grade2Up('grade_2_up', 'Grade 2 or higher'),
-  sped('sped', 'SPED class or school'),
-  inclusive('inclusive', 'Regular class with SPED support'),
-  homeschool('homeschool', 'Home-schooled');
-
-  const SchoolLevel(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-enum Therapy {
-  speech('speech', 'Speech'),
-  occupational('occupational', 'Occupational'),
-  behavioural('behavioural', 'Behavioural'),
-  other('other', 'Other'),
-  none('none', 'None');
-
-  const Therapy(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-T? _byKey<T extends Enum>(List<T> values, Object? key, String Function(T) k) {
-  for (final v in values) {
-    if (k(v) == key) return v;
+  static ObserverRole? fromKey(Object? key) {
+    for (final role in values) {
+      if (role.key == key) return role;
+    }
+    return null;
   }
-  return null;
 }
 
-/// Answered before the child starts.
-class ObserverIntake {
-  const ObserverIntake({
+Map<String, Object?> _answers(Object? raw) =>
+    raw is Map ? {for (final e in raw.entries) '${e.key}': e.value} : {};
+
+List<String> _strings(Object? raw) => [
+  if (raw is List)
+    for (final v in raw)
+      if (v is String) v,
+];
+
+/// What was answered before the session.
+class IntakeRecord {
+  const IntakeRecord({
     required this.role,
-    this.diagnosis,
-    this.school,
-    this.therapies = const {},
+    this.answers = const {},
+    this.summary = const [],
   });
 
-  static const templateId = 'observer_intake';
-  static const templateVersion = 1;
+  /// The record to store for [template]'s [answers].
+  factory IntakeRecord.answer(
+    ChoiceTemplate template,
+    ObserverRole role,
+    Map<String, Object?> answers,
+  ) => IntakeRecord(
+    role: role,
+    answers: answers,
+    summary: template.summary(answers, QuestionScope.session),
+  );
 
   final ObserverRole role;
+  final Map<String, Object?> answers;
 
-  /// Background about the child — each one optional.
-  final DiagnosisStatus? diagnosis;
-  final SchoolLevel? school;
-  final Set<Therapy> therapies;
+  /// Readable answers as they were worded when saved.
+  final List<String> summary;
 
-  Map<String, dynamic> toResponses() => {
-    'template_id': templateId,
-    'template_version': templateVersion,
+  Map<String, dynamic> toResponses(ChoiceTemplate template) => {
+    ...template.stamp,
     'observer_role': role.key,
-    'diagnosis': diagnosis?.key,
-    'school': school?.key,
-    'therapies': [for (final t in therapies) t.key],
+    'answers': answers,
+    'summary': summary,
   };
 
-  static ObserverIntake? fromResponses(Map<String, dynamic> r) {
-    final role = _byKey(ObserverRole.values, r['observer_role'], (v) => v.key);
+  static IntakeRecord? fromResponses(Map<String, dynamic> r) {
+    final role = ObserverRole.fromKey(r['observer_role']);
     if (role == null) return null;
-    final therapies = r['therapies'];
-    return ObserverIntake(
+    return IntakeRecord(
       role: role,
-      diagnosis: _byKey(DiagnosisStatus.values, r['diagnosis'], (v) => v.key),
-      school: _byKey(SchoolLevel.values, r['school'], (v) => v.key),
-      therapies: {
-        if (therapies is List)
-          ...therapies
-              .map((t) => _byKey(Therapy.values, t, (v) => v.key))
-              .whereType<Therapy>(),
-      },
+      answers: _answers(r['answers']),
+      summary: _strings(r['summary']),
     );
   }
 
-  /// "SPED teacher · Diagnosed with autism · Kinder · Speech, Occupational".
-  String get summary => [
-    'Watched by: ${role.label}',
-    if (diagnosis != null && diagnosis != DiagnosisStatus.preferNotToSay)
-      diagnosis!.label,
-    if (school != null) school!.label,
-    if (therapies.isNotEmpty && !therapies.contains(Therapy.none))
-      'Therapy: ${therapies.map((t) => t.label).join(', ')}',
-  ].join(' · ');
+  /// "Watched by: SPED teacher · Diagnosed with autism · Kinder".
+  String get headline =>
+      ['Watched by: ${role.label}', ...summary].join(' · ');
 }
 
-enum Understood {
-  yes('yes', 'Yes'),
-  partly('partly', 'Partly'),
-  no('no', 'No');
-
-  const Understood(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-/// How much the adult helped, least to most — the prompt levels SPED
-/// teachers use.
-enum HelpGiven {
-  none('none', 'No help'),
-  told('told', 'Told them'),
-  showed('showed', 'Pointed or showed'),
-  hand('hand', 'Helped their hand');
-
-  const HelpGiven(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-enum ChildMood {
-  calm('calm', 'Calm'),
-  excited('excited', 'Excited'),
-  upset('upset', 'Frustrated or upset');
-
-  const ChildMood(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-enum AsUsual {
-  usual('usual', 'As usual'),
-  better('better', 'Better than usual'),
-  worse('worse', 'Worse than usual');
-
-  const AsUsual(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-enum SessionDay {
-  normal('normal', 'A normal day'),
-  tiredOrSick('tired_or_sick', 'Tired or sick'),
-  distracted('distracted', 'New place or distracted');
-
-  const SessionDay(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-/// What the adult saw in one game.
-class GameObservation {
-  const GameObservation({
-    this.understood,
-    this.help,
-    this.mood,
-    this.asUsual,
+/// What was seen in one game.
+class GameRecord {
+  const GameRecord({
+    this.answers = const {},
+    this.summary = const [],
+    this.flags = const [],
   });
 
-  final Understood? understood;
-  final HelpGiven? help;
-  final ChildMood? mood;
-  final AsUsual? asUsual;
-
-  bool get complete =>
-      understood != null && help != null && mood != null && asUsual != null;
-
-  GameObservation copyWith({
-    Understood? understood,
-    HelpGiven? help,
-    ChildMood? mood,
-    AsUsual? asUsual,
-  }) => GameObservation(
-    understood: understood ?? this.understood,
-    help: help ?? this.help,
-    mood: mood ?? this.mood,
-    asUsual: asUsual ?? this.asUsual,
-  );
+  final Map<String, Object?> answers;
+  final List<String> summary;
+  final List<String> flags;
 
   Map<String, dynamic> toMap() => {
-    'understood': understood?.key,
-    'help': help?.key,
-    'mood': mood?.key,
-    'as_usual': asUsual?.key,
+    'answers': answers,
+    'summary': summary,
+    'flags': flags,
   };
 
-  static GameObservation fromMap(Map<String, dynamic> m) => GameObservation(
-    understood: _byKey(Understood.values, m['understood'], (v) => v.key),
-    help: _byKey(HelpGiven.values, m['help'], (v) => v.key),
-    mood: _byKey(ChildMood.values, m['mood'], (v) => v.key),
-    asUsual: _byKey(AsUsual.values, m['as_usual'], (v) => v.key),
-  );
-
-  /// What a reader of this game's score should know. Only the facts the
-  /// adult reported; the score itself is never adjusted.
-  List<String> get flags => [
-    if (help == HelpGiven.showed || help == HelpGiven.hand)
-      'Played with help (${help!.label.toLowerCase()})',
-    if (understood == Understood.no) 'Did not understand the task',
-    if (mood == ChildMood.upset) 'Was frustrated or upset',
-    if (asUsual == AsUsual.worse) 'Worse than usual',
-  ];
+  static GameRecord fromMap(Object? raw) {
+    final m = raw is Map ? raw : const {};
+    return GameRecord(
+      answers: _answers(m['answers']),
+      summary: _strings(m['summary']),
+      flags: _strings(m['flags']),
+    );
+  }
 }
 
-/// Answered after the child finishes, before results are shown.
-class SessionObservation {
-  const SessionObservation({
+/// What was answered after the session.
+class ObservationRecord {
+  const ObservationRecord({
     required this.games,
     this.role,
-    this.day,
-    this.note = '',
+    this.sessionAnswers = const {},
+    this.sessionSummary = const [],
+    this.sessionFlags = const [],
+    this.notes = const [],
   });
 
-  static const templateId = 'session_observation';
-  static const templateVersion = 1;
+  /// The record to store for [template]'s answers.
+  factory ObservationRecord.answer(
+    ChoiceTemplate template, {
+    required ObserverRole? role,
+    required Map<String, Map<String, Object?>> games,
+    required Map<String, Object?> session,
+  }) => ObservationRecord(
+    role: role,
+    games: {
+      for (final entry in games.entries)
+        entry.key: GameRecord(
+          answers: entry.value,
+          summary: template.summary(entry.value, QuestionScope.game),
+          flags: template.flags(entry.value, QuestionScope.game),
+        ),
+    },
+    sessionAnswers: session,
+    sessionSummary: template.summary(session, QuestionScope.session),
+    sessionFlags: template.flags(session, QuestionScope.session),
+    notes: template.notes(session, QuestionScope.session),
+  );
 
   /// Game id → what was seen, in play order.
-  final Map<String, GameObservation> games;
+  final Map<String, GameRecord> games;
 
   /// Carried from the intake, so the record says who observed.
   final ObserverRole? role;
-  final SessionDay? day;
-  final String note;
+  final Map<String, Object?> sessionAnswers;
+  final List<String> sessionSummary;
+  final List<String> sessionFlags;
+  final List<String> notes;
 
-  bool get complete => day != null && games.values.every((g) => g.complete);
-
-  Map<String, dynamic> toResponses() => {
-    'template_id': templateId,
-    'template_version': templateVersion,
+  Map<String, dynamic> toResponses(ChoiceTemplate template) => {
+    ...template.stamp,
     'observer_role': role?.key,
     'games': {
       for (final entry in games.entries) entry.key: entry.value.toMap(),
     },
-    'day': day?.key,
-    if (note.trim().isNotEmpty) 'note': note.trim(),
+    'session': {
+      'answers': sessionAnswers,
+      'summary': sessionSummary,
+      'flags': sessionFlags,
+      'notes': notes,
+    },
   };
 
-  static SessionObservation fromResponses(Map<String, dynamic> r) {
+  static ObservationRecord fromResponses(Map<String, dynamic> r) {
     final games = r['games'];
-    return SessionObservation(
-      role: _byKey(ObserverRole.values, r['observer_role'], (v) => v.key),
+    final session = r['session'] is Map ? r['session'] as Map : const {};
+    return ObservationRecord(
+      role: ObserverRole.fromKey(r['observer_role']),
       games: {
         if (games is Map)
           for (final entry in games.entries)
-            if (entry.value is Map)
-              '${entry.key}': GameObservation.fromMap(
-                Map<String, dynamic>.from(entry.value as Map),
-              ),
+            '${entry.key}': GameRecord.fromMap(entry.value),
       },
-      day: _byKey(SessionDay.values, r['day'], (v) => v.key),
-      note: r['note'] as String? ?? '',
+      sessionAnswers: _answers(session['answers']),
+      sessionSummary: _strings(session['summary']),
+      sessionFlags: _strings(session['flags']),
+      notes: _strings(session['notes']),
     );
   }
-
-  /// Flag for the whole session, or null on a normal day.
-  String? get dayFlag =>
-      day == null || day == SessionDay.normal
-          ? null
-          : 'Not a typical day (${day!.label.toLowerCase()})';
 }
 
 /// Questionnaire type strings for one assessment type.

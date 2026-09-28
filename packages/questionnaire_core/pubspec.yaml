@@ -1,0 +1,11 @@
+name: questionnaire_core
+description: Questionnaire templates shared by the Aumazing app and the practitioner portal.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.7.2
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.25.0

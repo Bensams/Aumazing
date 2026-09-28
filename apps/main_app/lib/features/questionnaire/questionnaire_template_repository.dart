@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,7 +13,15 @@ import 'parent_questionnaire.dart';
 typedef TemplateFetcher =
     Future<List<Map<String, dynamic>>> Function(String questionnaireType);
 
-/// Which parent questionnaire to show (AUM-344).
+/// Fetches the active rows of one template kind for an assessment type.
+typedef ChoiceTemplateFetcher =
+    Future<List<Map<String, dynamic>>> Function(
+      TemplateKind kind,
+      String questionnaireType,
+    );
+
+/// Which questions to show (AUM-344, AUM-352): the home questionnaire, and
+/// the before- and after-session questions of the observed assessment.
 ///
 /// An approved practitioner authors templates and an admin activates one
 /// (`questionnaire_templates`). This picks the active template for the
@@ -21,13 +30,18 @@ typedef TemplateFetcher =
 /// questionnaire must never fail to open because a network or a template
 /// was bad.
 class QuestionnaireTemplateRepository {
-  QuestionnaireTemplateRepository({TemplateFetcher? fetcher, this.timeout})
-    : _fetcher = fetcher;
+  QuestionnaireTemplateRepository({
+    TemplateFetcher? fetcher,
+    ChoiceTemplateFetcher? choiceFetcher,
+    this.timeout,
+  }) : _fetcher = fetcher,
+       _choiceFetcher = choiceFetcher;
 
   static final QuestionnaireTemplateRepository instance =
       QuestionnaireTemplateRepository();
 
   final TemplateFetcher? _fetcher;
+  final ChoiceTemplateFetcher? _choiceFetcher;
 
   /// How long the parent waits for the backend before the cached or bundled
   /// template is used. The hand-off must not stall on a slow connection.
@@ -36,6 +50,8 @@ class QuestionnaireTemplateRepository {
   static const _defaultTimeout = Duration(seconds: 3);
 
   static String _cacheKey(String type) => 'questionnaire_template_$type';
+  static String _choiceCacheKey(TemplateKind kind, String type) =>
+      'questionnaire_template_${kind.key}_$type';
 
   /// The template to show before (`pre`) or after (`post`) an assessment.
   Future<QuestionnaireTemplate> templateFor(String questionnaireType) async {
@@ -71,23 +87,100 @@ class QuestionnaireTemplateRepository {
           'status',
         )
         .eq('is_active', true)
+        .eq('kind', TemplateKind.home.key)
+        .inFilter('questionnaire_type', [type, 'both']);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchChoiceRemote(
+    TemplateKind kind,
+    String type,
+  ) async {
+    final rows = await Supabase.instance.client
+        .from('questionnaire_templates')
+        .select(
+          'template_key, version, kind, questionnaire_type, title, intro, '
+          'items, status',
+        )
+        .eq('is_active', true)
+        .eq('kind', kind.key)
         .inFilter('questionnaire_type', [type, 'both']);
     return List<Map<String, dynamic>>.from(rows);
   }
 
   /// The active row for [type]: one made for that type wins over a `both`.
+  /// Only rows of [kind] count; a row with no kind is a home questionnaire.
   @visibleForTesting
   static Map<String, dynamic>? pickActive(
     List<Map<String, dynamic>> rows,
-    String type,
-  ) {
-    for (final row in rows) {
+    String type, {
+    TemplateKind kind = TemplateKind.home,
+  }) {
+    final ofKind = [
+      for (final row in rows)
+        if ((TemplateKind.fromKey(row['kind']) ?? TemplateKind.home) == kind)
+          row,
+    ];
+    for (final row in ofKind) {
       if (row['questionnaire_type'] == type) return row;
     }
-    for (final row in rows) {
+    for (final row in ofKind) {
       if (row['questionnaire_type'] == 'both') return row;
     }
     return null;
+  }
+
+  /// The before- ([TemplateKind.intake]) or after-session
+  /// ([TemplateKind.observation]) questions for an assessment type: the
+  /// active practitioner template, else the last one seen offline, else the
+  /// bundled default.
+  Future<ChoiceTemplate> choiceTemplateFor(
+    TemplateKind kind,
+    String questionnaireType,
+  ) async {
+    final cacheKey = _choiceCacheKey(kind, questionnaireType);
+    try {
+      final rows = await (_choiceFetcher ?? _fetchChoiceRemote)(
+        kind,
+        questionnaireType,
+      ).timeout(timeout ?? _defaultTimeout);
+      final row = pickActive(rows, questionnaireType, kind: kind);
+      final parsed = row == null ? null : ChoiceTemplate.fromRow(row, kind);
+      if (parsed != null) {
+        await _store(cacheKey, row!);
+        return parsed;
+      }
+      if (row == null) {
+        await _remove(cacheKey);
+        return defaultChoiceTemplate(kind);
+      }
+    } catch (e) {
+      debugPrint('[QuestionnaireTemplates] remote unavailable: $e');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(cacheKey);
+        final decoded = raw == null ? null : jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          final cached = ChoiceTemplate.fromRow(decoded, kind);
+          if (cached != null) return cached;
+        }
+      } catch (_) {}
+    }
+    return defaultChoiceTemplate(kind);
+  }
+
+  Future<void> _store(String key, Map<String, dynamic> row) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonEncode(row));
+    } catch (_) {}
+  }
+
+  Future<void> _remove(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    } catch (_) {}
   }
 
   /// A template from a stored row, or null when it would not work: unknown
@@ -133,19 +226,10 @@ class QuestionnaireTemplateRepository {
     }
   }
 
-  Future<void> _cache(String type, Map<String, dynamic> row) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey(type), jsonEncode(row));
-    } catch (_) {}
-  }
+  Future<void> _cache(String type, Map<String, dynamic> row) =>
+      _store(_cacheKey(type), row);
 
-  Future<void> _clearCache(String type) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cacheKey(type));
-    } catch (_) {}
-  }
+  Future<void> _clearCache(String type) => _remove(_cacheKey(type));
 
   Future<QuestionnaireTemplate?> _cached(String type) async {
     try {

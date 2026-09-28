@@ -9,13 +9,17 @@ parents in pre-assessment."*
 | Piece | Where | Status |
 |---|---|---|
 | `practitioners` table: apply → admin approves | `supabase/migrations/20260927_practitioner_questionnaires.sql` | applied 2026-09-28 |
-| `questionnaire_templates` table + access rules | same migration, plus the two `20260928_*` follow-ups | applied 2026-09-28 |
-| App reads the active template, caches it for offline use, falls back to the bundled draft | `apps/main_app/lib/features/questionnaire/questionnaire_template_repository.dart` | done |
-| Parent questionnaire screen and pre/post comparison | AUM-341 | done |
-| Practitioner self-service authoring screen | — | phase 2 |
+| `questionnaire_templates` table + access rules | same migration, plus the `20260928_*` follow-ups | applied 2026-09-28 |
+| Three question sets per template `kind`: `home` (the home questionnaire), `intake` ("Before your child starts") and `observation` ("What did you see?") | `20260928_questionnaire_template_kinds.sql` | applied 2026-09-28 (AUM-352) |
+| Shared template model and validation, used by the app and the portal | `packages/questionnaire_core` | done |
+| App reads the active template of each kind, caches it for offline use, falls back to the bundled questions | `apps/main_app/lib/features/questionnaire/questionnaire_template_repository.dart` | done |
+| Portal: practitioners apply and write templates; admins approve practitioners and choose what is in use | `apps/admin_portal` (Questionnaires, Practitioners) | done (AUM-352) |
 
-Until an admin activates a template the app behaves exactly as before:
-nothing is active, nothing is cached, and the bundled draft is shown.
+Until an admin puts a template in use, the app behaves exactly as before:
+nothing is active, nothing is cached, and the bundled questions are shown.
+Who is watching (parent, guardian, SPED teacher, therapist) is always asked
+by the app itself, because it is stored as each record's
+`completed_by_role`.
 
 ## Access rules
 
@@ -33,63 +37,35 @@ nothing is active, nothing is cached, and the bundled draft is shown.
   `both`).
 - **Parents and guests** can only read the active template.
 
-## Operating it (phase 1, admin SQL)
+## Operating it (portal)
 
-1. The migrations are already applied to the live project (2026-09-28).
+1. The practitioner signs in to the portal (email and password, or Google)
+   and fills in the application: full name, profession, PRC licence number.
+2. An admin opens **Practitioners**, checks the licence, and approves.
+3. The practitioner opens **Questionnaires** → **New questionnaire**, picks
+   the question set (Home questionnaire / Before the session / After the
+   session) and which assessment it serves, and writes the questions —
+   or presses **Start from the built-in questions** and edits those. The
+   page shows what still needs fixing and a preview, and only saves what
+   the app will accept.
+   - Home: statements rated Never → Always, each in one of the four areas;
+     every area needs at least one.
+   - Before / after the session: choose-one, choose-any or written
+     questions. After-session questions can repeat **for each game**
+     (at least one must). An answer can carry a **flag** shown beside that
+     game's score (for example "Played with help"); **Hide** leaves an answer
+     out of the results summary ("Prefer not to say"); **Only** clears the
+     other answers ("None").
+4. An admin reviews it in **Questionnaires**, optionally **Mark validated**,
+   and presses **Use this**. That takes the previous template of the same
+   set and assessment out of use.
 
-2. The practitioner signs in to the app once, so they have a user id. They
-   apply as a practitioner:
+The next assessment uses it. Every stored answer records `template_id`,
+`template_version` and `template_status`, and before/after records keep the
+summary and flags worked out when they were saved, so rewording a template
+never changes old results.
 
-   ```sql
-   insert into public.practitioners (user_id, full_name, profession, license_number)
-   values (auth.uid(), 'Ma''am Lea Famor', 'SPED teacher', '<licence no.>');
-   ```
+## Future recommendations
 
-   Or an admin enters it for them, using their user id.
-
-3. An admin verifies the credentials, then approves:
-
-   ```sql
-   update public.practitioners
-      set status = 'approved', approved_by = auth.uid(), approved_at = now()
-    where user_id = '<practitioner user id>';
-   ```
-
-4. The practitioner (or an admin for them) adds a template. It needs every
-   domain (`communication`, `play`, `social`, `attention`) covered by at least
-   one item, and unique item ids. Otherwise the app ignores it and keeps the
-   bundled draft.
-
-   ```sql
-   insert into public.questionnaire_templates
-     (template_key, version, questionnaire_type, title, intro, items, authored_by)
-   values (
-     'sped_parent_checklist', 1, 'both',
-     'A few questions about your child',
-     'Think about the last two weeks at home...',
-     '[{"id":"comm_name","domain":"communication","text":"My child responds when I call their name."},
-       {"id":"play_pretend","domain":"play","text":"My child plays pretend."},
-       {"id":"social_turn","domain":"social","text":"My child waits for their turn in a simple game."},
-       {"id":"attn_finish","domain":"attention","text":"My child finishes a short activity with me."}]',
-     '<practitioner user id>'
-   );
-   ```
-
-5. An admin reviews it and activates it, marking it validated if it has been
-   validated:
-
-   ```sql
-   update public.questionnaire_templates
-      set is_active = true, status = 'validated'
-    where template_key = 'sped_parent_checklist' and version = 1;
-   ```
-
-The next parent who finishes an assessment gets it. Every stored answer
-records `template_id`, `template_version` and `template_status`, so answers
-from different templates are never mixed.
-
-## Phase 2 (Future Recommendations if not built)
-
-- A practitioner portal (web) for applying, authoring and previewing templates.
 - With explicit parent consent (RA 10173), sharing a family's questionnaire
   results with the practitioner whose template they answered.

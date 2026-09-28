@@ -999,6 +999,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.2"
+  questionnaire_core:
+    dependency: "direct main"
+    description:
+      path: "../../packages/questionnaire_core"
+      relative: true
+    source: path
+    version: "1.0.0"
   realtime_client:
     dependency: transitive
     description:

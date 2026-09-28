@@ -3,17 +3,22 @@ import 'dart:convert';
 import 'package:aumazing/core/services/sync_service.dart';
 import 'package:aumazing/features/questionnaire/observed_session.dart';
 import 'package:aumazing/features/questionnaire/observer_intake_screen.dart';
+import 'package:aumazing/features/questionnaire/parent_questionnaire.dart';
+import 'package:aumazing/features/questionnaire/questionnaire_template_repository.dart';
 import 'package:aumazing/features/questionnaire/session_observation_card.dart';
 import 'package:aumazing/features/questionnaire/session_observation_screen.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 
-/// AUM-351 — the observed assessment: the child plays while an adult watches;
-/// the adult answers only before the child starts and after they finish.
 typedef Saved = Map<String, dynamic>;
 
+/// AUM-351 / AUM-352 — the observed assessment: the child plays while an
+/// adult watches; the adult answers only before the child starts and after
+/// they finish, with questions a practitioner can author in the portal.
 void main() {
   Future<void> saverInto(
     List<Saved> into, {
@@ -41,89 +46,76 @@ void main() {
     'completed_at': completedAt,
   };
 
-  group('the model', () {
-    test('an intake round-trips and summarises the background', () {
-      const intake = ObserverIntake(
-        role: ObserverRole.teacher,
-        diagnosis: DiagnosisStatus.diagnosed,
-        school: SchoolLevel.sped,
-        therapies: {Therapy.speech, Therapy.occupational},
+  Future<void> tapKey(WidgetTester tester, String key) async {
+    await tester.ensureVisible(find.byKey(Key(key)));
+    await tester.tap(find.byKey(Key(key)));
+    await tester.pump();
+  }
+
+  test('the app and the portal share one bundled home questionnaire', () {
+    const app = kParentQuestionnaireDraft;
+    expect(app.id, kDefaultHomeTemplate['template_key']);
+    expect(app.title, kDefaultHomeTemplate['title']);
+    expect(app.intro, kDefaultHomeTemplate['intro']);
+    expect(
+      [
+        for (final i in app.items)
+          {'id': i.id, 'domain': i.domain.key, 'text': i.text},
+      ],
+      kDefaultHomeTemplate['items'],
+    );
+  });
+
+  group('records', () {
+    test('an intake keeps who watched and a readable summary', () {
+      final record = IntakeRecord.answer(
+        kDefaultIntakeTemplate,
+        ObserverRole.teacher,
+        {
+          'diagnosis': 'diagnosed',
+          'school': 'sped',
+          'therapies': ['speech'],
+        },
       );
-      final back = ObserverIntake.fromResponses(intake.toResponses())!;
+      final back =
+          IntakeRecord.fromResponses(
+            record.toResponses(kDefaultIntakeTemplate),
+          )!;
       expect(back.role, ObserverRole.teacher);
-      expect(back.diagnosis, DiagnosisStatus.diagnosed);
-      expect(back.school, SchoolLevel.sped);
-      expect(back.therapies, {Therapy.speech, Therapy.occupational});
+      expect(back.answers['school'], 'sped');
       expect(
-        back.summary,
+        back.headline,
         'Watched by: SPED teacher · Diagnosed with autism · '
-        'SPED class or school · Therapy: Speech, Occupational',
+        'SPED class or school · Therapy: Speech',
       );
     });
 
-    test('"prefer not to say" and "no therapy" stay out of the summary', () {
-      const intake = ObserverIntake(
-        role: ObserverRole.parent,
-        diagnosis: DiagnosisStatus.preferNotToSay,
-        therapies: {Therapy.none},
-      );
-      expect(intake.summary, 'Watched by: Parent');
-    });
-
-    test('a game flags help, confusion, upset and a worse-than-usual try', () {
-      const calm = GameObservation(
-        understood: Understood.yes,
-        help: HelpGiven.told,
-        mood: ChildMood.calm,
-        asUsual: AsUsual.usual,
-      );
-      expect(calm.flags, isEmpty, reason: 'a spoken reminder is not a flag');
-
-      const hard = GameObservation(
-        understood: Understood.no,
-        help: HelpGiven.hand,
-        mood: ChildMood.upset,
-        asUsual: AsUsual.worse,
-      );
-      expect(hard.flags, [
-        'Played with help (helped their hand)',
-        'Did not understand the task',
-        'Was frustrated or upset',
-        'Worse than usual',
-      ]);
-    });
-
-    test('an observation is complete only with every game and the day', () {
-      const done = GameObservation(
-        understood: Understood.yes,
-        help: HelpGiven.none,
-        mood: ChildMood.calm,
-        asUsual: AsUsual.usual,
-      );
-      expect(
-        const SessionObservation(games: {'copy_me': done}).complete,
-        isFalse,
-      );
-      expect(
-        const SessionObservation(
-          games: {'copy_me': done, 'match_it': GameObservation()},
-          day: SessionDay.normal,
-        ).complete,
-        isFalse,
-      );
-      const full = SessionObservation(
-        games: {'copy_me': done},
-        day: SessionDay.tiredOrSick,
+    test('an observation keeps what it said when it was saved', () {
+      final record = ObservationRecord.answer(
+        kDefaultObservationTemplate,
         role: ObserverRole.guardian,
-        note: '  Sleepy after lunch  ',
+        games: {
+          'copy_me': {
+            'understood': 'no',
+            'help': 'hand',
+            'mood': 'calm',
+            'as_usual': 'usual',
+          },
+        },
+        session: {'day': 'tired_or_sick', 'note': 'Sleepy after lunch'},
       );
-      expect(full.complete, isTrue);
-      expect(full.dayFlag, 'Not a typical day (tired or sick)');
-
-      final back = SessionObservation.fromResponses(full.toResponses());
+      final responses = record.toResponses(kDefaultObservationTemplate);
+      expect(responses['template_id'], 'aumazing_session_observation');
+      final back = ObservationRecord.fromResponses(
+        jsonDecode(jsonEncode(responses)) as Map<String, dynamic>,
+      );
       expect(back.role, ObserverRole.guardian);
-      expect(back.games['copy_me']!.complete, isTrue);
-      expect(back.note, 'Sleepy after lunch');
+      expect(back.games['copy_me']!.flags, [
+        'Did not understand the task',
+        'Played with help (helped their hand)',
+      ]);
+      expect(back.sessionFlags, ['Not a typical day (tired or sick)']);
+      expect(back.notes, ['Sleepy after lunch']);
     });
   });
 
@@ -131,6 +123,7 @@ void main() {
     Future<(List<Saved>, List<Object?>)> open(
       WidgetTester tester, {
       List<Map<String, dynamic>> previous = const [],
+      ChoiceTemplate? template,
     }) async {
       await tester.binding.setSurfaceSize(const Size(900, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -151,6 +144,7 @@ void main() {
                                 assessmentType: 'pre',
                                 childId: 'child-1',
                                 assessmentRunId: 'run-1',
+                                template: template,
                                 loader: (_) async => previous,
                                 saver:
                                     ({
@@ -182,12 +176,6 @@ void main() {
       return (saved, popped);
     }
 
-    Future<void> tapKey(WidgetTester tester, String key) async {
-      await tester.ensureVisible(find.byKey(Key(key)));
-      await tester.tap(find.byKey(Key(key)));
-      await tester.pump();
-    }
-
     bool startEnabled(WidgetTester tester) =>
         tester
             .widget<FilledButton>(find.byKey(const Key('intake.start')))
@@ -212,7 +200,7 @@ void main() {
       expect(startEnabled(tester), isTrue);
       await tapKey(tester, 'intake.diagnosis.evaluating');
       await tapKey(tester, 'intake.school.kinder');
-      await tapKey(tester, 'intake.therapy.speech');
+      await tapKey(tester, 'intake.therapies.speech');
       await tapKey(tester, 'intake.start');
       await tester.pumpAndSettle();
 
@@ -221,35 +209,40 @@ void main() {
       expect(saved.single['assessment_run_id'], 'run-1');
       final responses = saved.single['responses'] as Map<String, dynamic>;
       expect(responses['observer_role'], 'teacher');
-      expect(responses['diagnosis'], 'evaluating');
-      expect(responses['school'], 'kinder');
-      expect(responses['therapies'], ['speech']);
-      expect((popped.single as ObserverIntake).role, ObserverRole.teacher);
+      expect(responses['template_id'], 'aumazing_observer_intake');
+      expect(responses['answers'], {
+        'diagnosis': 'evaluating',
+        'school': 'kinder',
+        'therapies': ['speech'],
+      });
+      expect((popped.single as IntakeRecord).role, ObserverRole.teacher);
     });
 
-    testWidgets('"None" clears the other therapies and the other way round', (
-      tester,
-    ) async {
+    testWidgets('"None" clears the other therapies', (tester) async {
       final (saved, _) = await open(tester);
       await tapKey(tester, 'intake.role.parent');
-      await tapKey(tester, 'intake.therapy.speech');
-      await tapKey(tester, 'intake.therapy.none');
+      await tapKey(tester, 'intake.therapies.speech');
+      await tapKey(tester, 'intake.therapies.none');
       await tapKey(tester, 'intake.start');
       await tester.pumpAndSettle();
-      expect(
-        (saved.single['responses'] as Map<String, dynamic>)['therapies'],
-        ['none'],
-      );
+      expect((saved.single['responses'] as Map<String, dynamic>)['answers'], {
+        'therapies': ['none'],
+      });
     });
 
     testWidgets('answers from last time are filled in', (tester) async {
       final (saved, _) = await open(
         tester,
         previous: [
-          row('pre_intake', 'run-0', const ObserverIntake(
-            role: ObserverRole.guardian,
-            school: SchoolLevel.grade1,
-          ).toResponses()),
+          row(
+            'pre_intake',
+            'run-0',
+            IntakeRecord.answer(
+              kDefaultIntakeTemplate,
+              ObserverRole.guardian,
+              {'school': 'grade_1', 'retired_question': 'x'},
+            ).toResponses(kDefaultIntakeTemplate),
+          ),
         ],
       );
       expect(startEnabled(tester), isTrue);
@@ -257,7 +250,47 @@ void main() {
       await tester.pumpAndSettle();
       final responses = saved.single['responses'] as Map<String, dynamic>;
       expect(responses['observer_role'], 'guardian');
-      expect(responses['school'], 'grade_1');
+      // A question the current template no longer asks is not carried over.
+      expect(responses['answers'], {'school': 'grade_1'});
+    });
+
+    testWidgets('asks a practitioner\'s own questions', (tester) async {
+      const custom = ChoiceTemplate(
+        key: 'sped_intake',
+        version: 2,
+        status: 'validated',
+        kind: TemplateKind.intake,
+        title: 'Bago magsimula',
+        intro: 'Panoorin ang bata.',
+        questions: [
+          TemplateQuestion(
+            id: 'language',
+            text: 'Language at home',
+            type: QuestionType.single,
+            required: true,
+            options: [
+              ChoiceOption(id: 'fil', label: 'Filipino'),
+              ChoiceOption(id: 'en', label: 'English'),
+            ],
+          ),
+        ],
+      );
+      final (saved, _) = await open(tester, template: custom);
+      expect(find.text('Bago magsimula'), findsOneWidget);
+      expect(find.text('Panoorin ang bata.'), findsOneWidget);
+      expect(find.byKey(const Key('intake.diagnosis.diagnosed')), findsNothing);
+
+      await tapKey(tester, 'intake.role.parent');
+      // A required practitioner question holds the start.
+      expect(startEnabled(tester), isFalse);
+      await tapKey(tester, 'intake.language.fil');
+      await tapKey(tester, 'intake.start');
+      await tester.pumpAndSettle();
+      final responses = saved.single['responses'] as Map<String, dynamic>;
+      expect(responses['template_id'], 'sped_intake');
+      expect(responses['template_version'], 2);
+      expect(responses['template_status'], 'validated');
+      expect(responses['summary'], ['Filipino']);
     });
 
     testWidgets('Skip starts the games without saving', (tester) async {
@@ -274,7 +307,7 @@ void main() {
       WidgetTester tester, {
       List<Map<String, dynamic>> rows = const [],
     }) async {
-      await tester.binding.setSurfaceSize(const Size(900, 2400));
+      await tester.binding.setSurfaceSize(const Size(900, 2600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final saved = <Saved>[];
       final events = <String>[];
@@ -310,17 +343,11 @@ void main() {
       return (saved, events);
     }
 
-    Future<void> tapKey(WidgetTester tester, String key) async {
-      await tester.ensureVisible(find.byKey(Key(key)));
-      await tester.tap(find.byKey(Key(key)));
-      await tester.pump();
-    }
-
     Future<void> answerGame(WidgetTester tester, String game) async {
       await tapKey(tester, 'observation.$game.understood.yes');
       await tapKey(tester, 'observation.$game.help.showed');
       await tapKey(tester, 'observation.$game.mood.calm');
-      await tapKey(tester, 'observation.$game.usual.usual');
+      await tapKey(tester, 'observation.$game.as_usual.usual');
     }
 
     bool saveEnabled(WidgetTester tester) =>
@@ -332,7 +359,10 @@ void main() {
     testWidgets('asks about each game the child played', (tester) async {
       await open(tester);
       expect(find.byKey(const Key('observation.game.copy_me')), findsOneWidget);
-      expect(find.byKey(const Key('observation.game.match_it')), findsOneWidget);
+      expect(
+        find.byKey(const Key('observation.game.match_it')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const Key('observation.game.do_what_i_say')),
         findsNothing,
@@ -343,13 +373,21 @@ void main() {
       final (saved, events) = await open(
         tester,
         rows: [
-          row('post_intake', 'run-2', const ObserverIntake(
-            role: ObserverRole.therapist,
-          ).toResponses()),
+          row(
+            'post_intake',
+            'run-2',
+            const IntakeRecord(
+              role: ObserverRole.therapist,
+            ).toResponses(kDefaultIntakeTemplate),
+          ),
           // Another run's intake must not be taken for this one.
-          row('post_intake', 'run-1', const ObserverIntake(
-            role: ObserverRole.parent,
-          ).toResponses()),
+          row(
+            'post_intake',
+            'run-1',
+            const IntakeRecord(
+              role: ObserverRole.parent,
+            ).toResponses(kDefaultIntakeTemplate),
+          ),
         ],
       );
       expect(find.text('Answering as: Therapist'), findsOneWidget);
@@ -358,11 +396,11 @@ void main() {
       expect(saveEnabled(tester), isFalse);
       await answerGame(tester, 'match_it');
       expect(saveEnabled(tester), isFalse);
-      await tapKey(tester, 'observation.day.normal');
+      await tapKey(tester, 'observation.session.day.normal');
       expect(saveEnabled(tester), isTrue);
 
       await tester.enterText(
-        find.byKey(const Key('observation.note')),
+        find.byKey(const Key('observation.session.note')),
         'Liked the matching game',
       );
       await tapKey(tester, 'observation.save');
@@ -373,14 +411,22 @@ void main() {
       expect(saved.single['assessment_run_id'], 'run-2');
       final responses = saved.single['responses'] as Map<String, dynamic>;
       expect(responses['observer_role'], 'therapist');
-      expect(responses['day'], 'normal');
-      expect(responses['note'], 'Liked the matching game');
-      expect((responses['games'] as Map)['match_it'], {
+      final games = responses['games'] as Map;
+      expect((games['match_it'] as Map)['answers'], {
         'understood': 'yes',
         'help': 'showed',
         'mood': 'calm',
         'as_usual': 'usual',
       });
+      expect((games['match_it'] as Map)['flags'], [
+        'Played with help (pointed or showed)',
+      ]);
+      final session = responses['session'] as Map;
+      expect(session['answers'], {
+        'day': 'normal',
+        'note': 'Liked the matching game',
+      });
+      expect(session['notes'], ['Liked the matching game']);
     });
 
     testWidgets('Skip for now carries on without saving', (tester) async {
@@ -432,28 +478,36 @@ void main() {
       tester,
     ) async {
       await pumpCard(tester, [
-        row('pre_intake', 'run-1', const ObserverIntake(
-          role: ObserverRole.teacher,
-          school: SchoolLevel.sped,
-        ).toResponses()),
-        row('pre_observation', 'run-1', const SessionObservation(
-          role: ObserverRole.teacher,
-          day: SessionDay.distracted,
-          games: {
-            'copy_me': GameObservation(
-              understood: Understood.partly,
-              help: HelpGiven.hand,
-              mood: ChildMood.calm,
-              asUsual: AsUsual.usual,
-            ),
-            'match_it': GameObservation(
-              understood: Understood.yes,
-              help: HelpGiven.none,
-              mood: ChildMood.excited,
-              asUsual: AsUsual.better,
-            ),
-          },
-        ).toResponses()),
+        row(
+          'pre_intake',
+          'run-1',
+          IntakeRecord.answer(kDefaultIntakeTemplate, ObserverRole.teacher, {
+            'school': 'sped',
+          }).toResponses(kDefaultIntakeTemplate),
+        ),
+        row(
+          'pre_observation',
+          'run-1',
+          ObservationRecord.answer(
+            kDefaultObservationTemplate,
+            role: ObserverRole.teacher,
+            games: {
+              'copy_me': {
+                'understood': 'partly',
+                'help': 'hand',
+                'mood': 'calm',
+                'as_usual': 'usual',
+              },
+              'match_it': {
+                'understood': 'yes',
+                'help': 'none',
+                'mood': 'excited',
+                'as_usual': 'better',
+              },
+            },
+            session: {'day': 'distracted'},
+          ).toResponses(kDefaultObservationTemplate),
+        ),
       ]);
 
       expect(find.text('What the SPED teacher saw'), findsOneWidget);
@@ -464,9 +518,10 @@ void main() {
       expect(find.text('Score 7/10'), findsOneWidget);
       expect(find.text('Score 9/10'), findsOneWidget);
       expect(
-        find.text('Played with help (helped their hand)'),
+        find.text('Understood: Partly · Helped their hand · Calm · As usual'),
         findsOneWidget,
       );
+      expect(find.text('Played with help (helped their hand)'), findsOneWidget);
       expect(
         find.text('Not a typical day (new place or distracted)'),
         findsOneWidget,
@@ -477,12 +532,104 @@ void main() {
       tester,
     ) async {
       await pumpCard(tester, [
-        row('pre_observation', 'run-9', const SessionObservation(
-          games: {},
-          day: SessionDay.normal,
-        ).toResponses()),
+        row(
+          'pre_observation',
+          'run-9',
+          const ObservationRecord(
+            games: {},
+          ).toResponses(kDefaultObservationTemplate),
+        ),
       ]);
       expect(find.byKey(const Key('session-observation-card')), findsNothing);
+    });
+  });
+
+  group('templates from the portal', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    Map<String, dynamic> templateRow(
+      TemplateKind kind,
+      String type,
+      List<Map<String, Object?>> items,
+    ) => {
+      'template_key': 'portal_template',
+      'version': 3,
+      'kind': kind.key,
+      'questionnaire_type': type,
+      'title': 'From the portal',
+      'intro': '',
+      'items': items,
+      'status': 'draft',
+    };
+
+    const noteOnly = [
+      {'id': 'note', 'text': 'Anything?', 'type': 'text'},
+    ];
+
+    test('the active template of the right kind is used', () async {
+      final repo = QuestionnaireTemplateRepository(
+        choiceFetcher:
+            (kind, type) async => [
+              templateRow(TemplateKind.home, 'both', const []),
+              templateRow(TemplateKind.intake, 'both', noteOnly),
+            ],
+      );
+      final intake = await repo.choiceTemplateFor(TemplateKind.intake, 'pre');
+      expect(intake.key, 'portal_template');
+      expect(intake.version, 3);
+    });
+
+    test('a broken or missing template falls back to the bundled one', () async {
+      final broken = QuestionnaireTemplateRepository(
+        choiceFetcher:
+            (kind, type) async => [
+              templateRow(TemplateKind.observation, 'pre', noteOnly),
+            ],
+      );
+      // Observation needs a per-game question; this one has none.
+      expect(
+        (await broken.choiceTemplateFor(TemplateKind.observation, 'pre')).key,
+        kDefaultObservationTemplate.key,
+      );
+      final none = QuestionnaireTemplateRepository(
+        choiceFetcher: (kind, type) async => const [],
+      );
+      expect(
+        (await none.choiceTemplateFor(TemplateKind.intake, 'post')).key,
+        kDefaultIntakeTemplate.key,
+      );
+    });
+
+    test('the last template seen is used offline', () async {
+      final online = QuestionnaireTemplateRepository(
+        choiceFetcher:
+            (kind, type) async => [
+              templateRow(TemplateKind.intake, 'pre', noteOnly),
+            ],
+      );
+      await online.choiceTemplateFor(TemplateKind.intake, 'pre');
+      final offline = QuestionnaireTemplateRepository(
+        choiceFetcher: (kind, type) async => throw Exception('offline'),
+      );
+      expect(
+        (await offline.choiceTemplateFor(TemplateKind.intake, 'pre')).key,
+        'portal_template',
+      );
+    });
+
+    test('the home questionnaire ignores the other kinds', () {
+      expect(
+        QuestionnaireTemplateRepository.pickActive([
+          templateRow(TemplateKind.observation, 'pre', noteOnly),
+        ], 'pre'),
+        isNull,
+      );
+      expect(
+        QuestionnaireTemplateRepository.pickActive([
+          {'questionnaire_type': 'pre', 'template_key': 'old_row'},
+        ], 'pre')?['template_key'],
+        'old_row',
+      );
     });
   });
 
