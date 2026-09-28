@@ -164,15 +164,76 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
       for (final t in _templates)
         if ((TemplateKind.fromKey(t['kind']) ?? TemplateKind.home) == kind) t,
     ];
-    if (rows.isEmpty) {
-      return [
-        const ListTile(
-          dense: true,
-          title: Text('None yet — the app uses its built-in questions.'),
-        ),
-      ];
+    return [_builtInRow(kind, rows), for (final t in rows) _row(t)];
+  }
+
+  /// The questions the app ships with, as a template row. They live in the
+  /// app, not the database, so they are shown here to read and copy.
+  static Map<String, dynamic> builtInRow(TemplateKind kind) {
+    if (kind == TemplateKind.home) {
+      return {
+        ...kDefaultHomeTemplate,
+        'kind': kind.key,
+        'questionnaire_type': AssessmentScope.both.key,
+        'version': 1,
+      };
     }
-    return [for (final t in rows) _row(t)];
+    final t = defaultChoiceTemplate(kind);
+    return {
+      'kind': kind.key,
+      'questionnaire_type': AssessmentScope.both.key,
+      'template_key': t.key,
+      'version': t.version,
+      'title': t.title,
+      'intro': t.intro,
+      'items': t.itemsJson(),
+    };
+  }
+
+  Widget _builtInRow(TemplateKind kind, List<Map<String, dynamic>> rows) {
+    final builtIn = builtInRow(kind);
+    final replaced = {
+      for (final t in rows)
+        if (t['is_active'] == true)
+          AssessmentScope.fromKey(t['questionnaire_type']),
+    };
+    final String use;
+    if (replaced.contains(AssessmentScope.both) ||
+        (replaced.contains(AssessmentScope.pre) &&
+            replaced.contains(AssessmentScope.post))) {
+      use = 'Not in use — replaced below';
+    } else if (replaced.contains(AssessmentScope.pre)) {
+      use = 'In use for post-assessment';
+    } else if (replaced.contains(AssessmentScope.post)) {
+      use = 'In use for pre-assessment';
+    } else {
+      use = 'In use';
+    }
+    final inUse = !use.startsWith('Not');
+    return Card(
+      key: Key('questionnaires.builtIn.${kind.key}'),
+      child: ListTile(
+        leading: Icon(
+          inUse ? Icons.check_circle_rounded : Icons.inventory_2_outlined,
+          color: inUse ? Colors.green : null,
+        ),
+        title: Text('${builtIn['title']}  ·  built into the app'),
+        subtitle: Text(
+          [
+            AssessmentScope.both.label,
+            '${(builtIn['items'] as List).length} questions',
+            use,
+            'Not yet expert-validated',
+          ].join(' · '),
+        ),
+        trailing: TextButton.icon(
+          key: Key('questionnaires.builtIn.edit.${kind.key}'),
+          onPressed: () => _openEditor(copyOf: builtIn),
+          icon: const Icon(Icons.copy_rounded),
+          label: const Text('View and edit a copy'),
+        ),
+      ),
+    );
   }
 
   Widget _row(Map<String, dynamic> t) {
