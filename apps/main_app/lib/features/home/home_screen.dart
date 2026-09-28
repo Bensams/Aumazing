@@ -23,6 +23,7 @@ import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
 import 'widgets/overall_gameplay_summary_card.dart';
+import '../premium/premium_plan.dart';
 import '../premium/premium_upgrade_screen.dart';
 import '../history/parent_history_screen.dart';
 import 'gameplay_report_screen.dart';
@@ -1480,38 +1481,72 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Freemium gateway (FR-10): upgrade banner for Free parents; hidden
   /// once Premium is active. Rebuilds live when the entitlement changes.
+  ///
+  /// Premium never renews by itself (AUM-169), so the banner also reminds
+  /// the parent in the last days of a paid period and says when it ended.
   Widget _buildPremiumBanner() {
     return ListenableBuilder(
       listenable: EntitlementService.instance,
       builder: (context, _) {
-        if (EntitlementService.instance.isPremium) {
+        final plan = PremiumPlan.of(EntitlementService.instance);
+        final endingSoon = plan.kind == PremiumPlanKind.endingSoon;
+        final ended = plan.kind == PremiumPlanKind.ended;
+        if (EntitlementService.instance.isPremium && !endingSoon) {
           return const SizedBox.shrink();
         }
+        final (String emoji, String title, String body) =
+            endingSoon
+                ? (
+                  '⏳',
+                  'Premium: ${plan.timeLeft!.toLowerCase()}',
+                  'Ends ${PremiumPlan.formatDate(plan.until!)}. It does not '
+                      'renew by itself — renew now to add 30 days without a '
+                      'gap.',
+                )
+                : ended
+                ? (
+                  '⭐',
+                  'Premium ended ${PremiumPlan.formatDate(plan.until!)}',
+                  'Renew to bring back the therapy locator, skill trends and '
+                      'fresh AI recommendations — ₱149 for 30 days.',
+                )
+                : (
+                  '⭐',
+                  'Aumazing Premium',
+                  'Interactive therapy locator, skill trends, and '
+                      'fresh AI recommendations — ₱149 for 30 days.',
+                );
         return Padding(
+          key: Key(
+            endingSoon
+                ? 'premium-renewal-reminder'
+                : ended
+                ? 'premium-ended-banner'
+                : 'premium-upgrade-banner',
+          ),
           padding: const EdgeInsets.only(top: AppSpacing.md),
           child: RainbowBorderCard(
             child: AppCard(
               child: _CtaBand(
-                leading: const Text('⭐', style: TextStyle(fontSize: 28)),
+                leading: Text(emoji, style: const TextStyle(fontSize: 28)),
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Aumazing Premium',
+                      title,
                       style: AppTextStyles.titleMedium.copyWith(
                         color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
-                      'Interactive therapy locator, skill trends, and '
-                      'fresh AI recommendations — ₱149/month.',
+                      body,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.mutedForeground,
                       ),
                     ),
                   ],
                 ),
-                label: 'Upgrade',
+                label: endingSoon || ended ? 'Renew' : 'Upgrade',
                 icon: Icons.star_rounded,
                 onPressed:
                     () => Navigator.of(context).push(

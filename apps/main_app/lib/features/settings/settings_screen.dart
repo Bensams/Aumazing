@@ -7,14 +7,17 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../providers/child_provider.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/parent_pin_service.dart';
 import '../../services/screen_time_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
+import '../premium/premium_plan.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
 import 'star_settings_screen.dart';
+import 'your_plan_screen.dart';
 import 'gameplay_export_screen.dart';
 import 'widgets/background_picker.dart';
 import 'widgets/settings_scaffold.dart';
@@ -27,6 +30,7 @@ import 'widgets/object_style_picker.dart';
 /// - Audio — music, volumes, vibration, prompt speed
 /// - Child Preferences — avatar, background theme, game difficulty,
 ///   language, reward celebration
+/// - Your Plan — Premium status, its end date, renewal (AUM-169)
 /// - Bind Account — shown only while in guest mode
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.authService});
@@ -63,6 +67,25 @@ class SettingsScreen extends StatelessWidget {
           title: 'Manage Children',
           subtitle: 'Add, switch, edit or remove a child profile',
           onTap: () => _push(context, const ManageChildrenScreen()),
+        ),
+        ListenableBuilder(
+          listenable: EntitlementService.instance,
+          builder:
+              (context, _) => _CategoryTile(
+                key: const Key('your-plan-tile'),
+                icon: Icons.workspace_premium_rounded,
+                color: const Color(0xFFD4A52C),
+                title: 'Your Plan',
+                subtitle: PremiumPlan.of(EntitlementService.instance).summary,
+                onTap:
+                    () => _push(
+                      context,
+                      YourPlanScreen(
+                        palette: palette,
+                        authService: authService,
+                      ),
+                    ),
+              ),
         ),
         _CategoryTile(
           icon: Icons.star_rounded,
@@ -899,6 +922,7 @@ class _AppearanceTab extends StatelessWidget {
 /// One category row on the main settings hub.
 class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
+    super.key,
     required this.icon,
     required this.color,
     required this.title,
