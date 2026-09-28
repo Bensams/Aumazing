@@ -285,22 +285,31 @@ class EntitlementService extends ChangeNotifier {
   /// successful backend read within the window: a stale cached `true`, or
   /// an offline device that cannot check, reports false rather than
   /// unlocking on the redirect alone.
+  ///
+  /// A renewal (AUM-169) passes the end date Premium had before paying as
+  /// [extendedPast]: Premium was already on, so only a later end date shows
+  /// that the new payment has landed.
   Future<bool> waitForActivation({
+    DateTime? extendedPast,
     Duration timeout = const Duration(seconds: 20),
     Duration pollInterval = const Duration(seconds: 2),
   }) async {
+    bool landed() =>
+        isRealPremium &&
+        (extendedPast == null ||
+            (_premiumUntil != null && _premiumUntil!.isAfter(extendedPast)));
     final deadline = DateTime.now().add(timeout);
     var confirmed = false;
     while (true) {
       final reachedBackend = await refresh();
       if (reachedBackend) {
         confirmed = true;
-        if (isRealPremium) return true;
+        if (landed()) return true;
       }
       if (!DateTime.now().isBefore(deadline)) break;
       await Future.delayed(pollInterval);
     }
-    return confirmed && isRealPremium;
+    return confirmed && landed();
   }
 
   /// Waits for a purchased child-profile slot (AUM-349) to reach the backend:

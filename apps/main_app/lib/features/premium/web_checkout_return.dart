@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/web/browser_url.dart';
 import '../../services/entitlement_service.dart';
+import 'premium_plan.dart';
 
 /// The web app's side of a Premium checkout.
 ///
@@ -22,6 +23,7 @@ class WebCheckoutReturn {
   static const _startedKey = 'web_checkout_started_at';
   static const _productKey = 'web_checkout_product';
   static const _slotsBeforeKey = 'web_checkout_slots_before';
+  static const _untilBeforeKey = 'web_checkout_premium_until_before';
 
   /// How long after leaving for checkout a return still counts as ours.
   static const _window = Duration(hours: 2);
@@ -47,15 +49,25 @@ class WebCheckoutReturn {
   }
 
   /// Remembers that this browser just left for checkout, what for, and — for
-  /// an extra profile — how many purchased slots the account had before.
+  /// an extra profile — how many purchased slots the account had before, or
+  /// — for a Premium renewal (AUM-169) — when the running period ended.
   static Future<void> markStarted({
     String product = 'premium',
     int slotsBefore = 0,
+    DateTime? premiumUntilBefore,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_startedKey, DateTime.now().millisecondsSinceEpoch);
     await prefs.setString(_productKey, product);
     await prefs.setInt(_slotsBeforeKey, slotsBefore);
+    if (premiumUntilBefore == null) {
+      await prefs.remove(_untilBeforeKey);
+    } else {
+      await prefs.setString(
+        _untilBeforeKey,
+        premiumUntilBefore.toUtc().toIso8601String(),
+      );
+    }
   }
 
   /// The checkout return to report, once, or null. Only a return to a
@@ -69,9 +81,13 @@ class WebCheckoutReturn {
     final started = prefs.getInt(_startedKey);
     final product = prefs.getString(_productKey) ?? 'premium';
     final slotsBefore = prefs.getInt(_slotsBeforeKey) ?? 0;
+    final untilBefore = DateTime.tryParse(
+      prefs.getString(_untilBeforeKey) ?? '',
+    );
     await prefs.remove(_startedKey);
     await prefs.remove(_productKey);
     await prefs.remove(_slotsBeforeKey);
+    await prefs.remove(_untilBeforeKey);
     if (started == null) return null;
     final age = (now ?? DateTime.now()).difference(
       DateTime.fromMillisecondsSinceEpoch(started),
@@ -81,6 +97,7 @@ class WebCheckoutReturn {
       paid: outcome == 'success',
       profileSlot: product == 'profile_slot',
       slotsBefore: slotsBefore,
+      premiumUntilBefore: untilBefore,
     );
   }
 
@@ -94,6 +111,7 @@ class CheckoutReturn {
     required this.paid,
     required this.profileSlot,
     this.slotsBefore = 0,
+    this.premiumUntilBefore,
   });
 
   /// True for `?payment=success`, false for `?payment=cancelled`.
@@ -104,12 +122,17 @@ class CheckoutReturn {
 
   /// Purchased slots before this checkout, for an extra profile.
   final int slotsBefore;
+
+  /// When running Premium was due to end, for a renewal; null for a first
+  /// purchase.
+  final DateTime? premiumUntilBefore;
 }
 
 enum _ReturnState {
   none,
   activating,
   active,
+  renewed,
   pending,
   slotAdding,
   slotAdded,
@@ -130,7 +153,7 @@ class WebCheckoutReturnBanner extends StatefulWidget {
   final Widget child;
 
   /// Test seam; defaults to [EntitlementService.waitForActivation].
-  final Future<bool> Function()? waitForActivation;
+  final Future<bool> Function(DateTime? extendedPast)? waitForActivation;
 
   /// Test seam; defaults to [EntitlementService.waitForProfileSlot].
   final Future<bool> Function(int above)? waitForProfileSlot;
@@ -173,12 +196,28 @@ class _WebCheckoutReturnBannerState extends State<WebCheckoutReturnBanner> {
     setState(() => _state = _ReturnState.activating);
     // The payment webhook usually lands before PayMongo redirects back, but
     // give it a minute before saying it is still on its way.
+    final renewal = result.premiumUntilBefore;
     final active = await (widget.waitForActivation ??
-        () => EntitlementService.instance.waitForActivation(
+        (extendedPast) => EntitlementService.instance.waitForActivation(
+          extendedPast: extendedPast,
           timeout: const Duration(seconds: 60),
-        ))();
+        ))(renewal);
     if (!mounted) return;
-    setState(() => _state = active ? _ReturnState.active : _ReturnState.pending);
+    setState(
+      () => _state = !active
+          ? _ReturnState.pending
+          : renewal != null
+          ? _ReturnState.renewed
+          : _ReturnState.active,
+    );
+  }
+
+  String _renewedBody() {
+    final until = EntitlementService.instance.premiumUntil;
+    return until == null
+        ? '30 more days were added to your Premium.'
+        : '30 more days were added. Premium now runs until '
+            '${PremiumPlan.formatDate(until)}.';
   }
 
   void _dismiss() {
@@ -205,6 +244,11 @@ class _WebCheckoutReturnBannerState extends State<WebCheckoutReturnBanner> {
         'Welcome to Premium! 🎉',
         'Advanced analytics and the interactive therapy locator are now '
             'unlocked.',
+      ),
+      _ReturnState.renewed => (
+        Icons.workspace_premium_rounded,
+        'Premium renewed 🎉',
+        _renewedBody(),
       ),
       _ReturnState.pending => (
         Icons.hourglass_top_rounded,

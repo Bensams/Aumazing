@@ -50,6 +50,26 @@ void main() {
       expect(result.slotsBefore, 2);
     });
 
+    test('remembers when a renewed Premium period was due to end', () async {
+      final before = DateTime.utc(2026, 10, 3, 8);
+      await WebCheckoutReturn.markStarted(premiumUntilBefore: before);
+      WebCheckoutReturn.debugOutcome = 'success';
+      final result = (await WebCheckoutReturn.takeOutcome())!;
+      expect(result.premiumUntilBefore, before);
+    });
+
+    test('a first purchase carries no earlier end date', () async {
+      await WebCheckoutReturn.markStarted(
+        premiumUntilBefore: DateTime.utc(2026, 10, 3),
+      );
+      WebCheckoutReturn.debugOutcome = 'cancelled';
+      await WebCheckoutReturn.takeOutcome();
+      // A later checkout does not inherit the earlier renewal date.
+      await WebCheckoutReturn.markStarted();
+      WebCheckoutReturn.debugOutcome = 'success';
+      expect((await WebCheckoutReturn.takeOutcome())!.premiumUntilBefore, isNull);
+    });
+
     test('ignores unknown outcomes', () async {
       await WebCheckoutReturn.markStarted();
       WebCheckoutReturn.debugOutcome = 'maybe';
@@ -59,7 +79,7 @@ void main() {
 
   group('WebCheckoutReturnBanner', () {
     Widget app(
-      Future<bool> Function() wait, {
+      Future<bool> Function(DateTime? extendedPast) wait, {
       Future<bool> Function(int above)? waitForSlot,
     }) => MaterialApp(
       home: WebCheckoutReturnBanner(
@@ -70,7 +90,7 @@ void main() {
     );
 
     testWidgets('shows nothing without a checkout return', (tester) async {
-      await tester.pumpWidget(app(() async => true));
+      await tester.pumpWidget(app((_) async => true));
       await tester.pump();
       expect(find.byKey(const Key('web-checkout-return-banner')), findsNothing);
       expect(find.text('home'), findsOneWidget);
@@ -82,7 +102,7 @@ void main() {
       await tester.runAsync(WebCheckoutReturn.markStarted);
       WebCheckoutReturn.debugOutcome = 'success';
       final activation = Completer<bool>();
-      await tester.pumpWidget(app(() => activation.future));
+      await tester.pumpWidget(app((_) => activation.future));
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump();
       expect(find.text('Finishing your upgrade…'), findsOneWidget);
@@ -97,12 +117,34 @@ void main() {
       expect(find.byKey(const Key('web-checkout-return-banner')), findsNothing);
     });
 
+    testWidgets('a renewal waits for the later end date, then says renewed', (
+      tester,
+    ) async {
+      final before = DateTime.utc(2026, 10, 3, 8);
+      await tester.runAsync(
+        () => WebCheckoutReturn.markStarted(premiumUntilBefore: before),
+      );
+      WebCheckoutReturn.debugOutcome = 'success';
+      DateTime? waitedPast;
+      await tester.pumpWidget(
+        app((extendedPast) async {
+          waitedPast = extendedPast;
+          return true;
+        }),
+      );
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      await tester.pump();
+      expect(waitedPast, before);
+      expect(find.text('Premium renewed 🎉'), findsOneWidget);
+    });
+
     testWidgets('says activation is on its way when it is slow', (
       tester,
     ) async {
       await tester.runAsync(WebCheckoutReturn.markStarted);
       WebCheckoutReturn.debugOutcome = 'success';
-      await tester.pumpWidget(app(() async => false));
+      await tester.pumpWidget(app((_) async => false));
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump();
       await tester.pump();
@@ -119,7 +161,7 @@ void main() {
       int? above;
       await tester.pumpWidget(
         app(
-          () async => fail('must not wait for Premium'),
+          (_) async => fail('must not wait for Premium'),
           waitForSlot: (value) async {
             above = value;
             return true;
@@ -138,7 +180,7 @@ void main() {
     ) async {
       await tester.runAsync(WebCheckoutReturn.markStarted);
       WebCheckoutReturn.debugOutcome = 'cancelled';
-      await tester.pumpWidget(app(() async => true));
+      await tester.pumpWidget(app((_) async => true));
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump();
       expect(find.text('Payment cancelled'), findsOneWidget);

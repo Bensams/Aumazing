@@ -18,6 +18,7 @@ import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/stars_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
+import 'package:aumazing/services/entitlement_service.dart';
 import 'package:aumazing/services/tour_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -206,6 +207,67 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.pump(const Duration(milliseconds: 700));
+  });
+
+  group('Premium renewal reminder (AUM-169)', () {
+    final entitlement = EntitlementService.instance;
+    setUp(() {
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v2': true,
+      });
+      TourService.instance.resetCache();
+    });
+    tearDown(() => entitlement.debugSetRealPremium(false));
+
+    Future<void> pumpHome(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(960, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+    }
+
+    testWidgets('no banner while Premium has plenty of time left', (
+      tester,
+    ) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().add(const Duration(days: 20)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-renewal-reminder')), findsNothing);
+      expect(find.byKey(const Key('premium-upgrade-banner')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('reminds the parent in the last days', (tester) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().add(const Duration(days: 2, hours: 3)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-renewal-reminder')), findsOneWidget);
+      expect(find.text('Premium: 2 days left'), findsOneWidget);
+      expect(find.text('Renew'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('says when Premium ended instead of a generic upsell', (
+      tester,
+    ) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-ended-banner')), findsOneWidget);
+      expect(find.textContaining('Premium ended '), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
   });
 
   group('first assessment guidance', () {

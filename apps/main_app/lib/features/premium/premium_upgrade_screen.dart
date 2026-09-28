@@ -14,9 +14,14 @@ import '../../services/entitlement_service.dart';
 import '../settings/bind_account_modal.dart';
 import 'checkout_webview_screen.dart';
 import 'mock_paymongo_checkout_screen.dart';
+import 'premium_plan.dart';
 import 'web_checkout_return.dart';
 
 /// Premium upgrade screen (freemium model, PayMongo sandbox).
+///
+/// Also where Premium is renewed (AUM-169). Each payment buys 30 days and
+/// nothing renews by itself; paying while Premium is running adds 30 days on
+/// top of what is left.
 ///
 /// The checkout itself is PayMongo's hosted page rendered in an in-app
 /// WebView — the parent never leaves the app, and card data never touches
@@ -44,6 +49,17 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
   void initState() {
     super.initState();
     _authService = widget.authService ?? AuthService();
+    EntitlementService.instance.addListener(_onEntitlementChanged);
+  }
+
+  @override
+  void dispose() {
+    EntitlementService.instance.removeListener(_onEntitlementChanged);
+    super.dispose();
+  }
+
+  void _onEntitlementChanged() {
+    if (mounted) setState(() {});
   }
 
   static const _benefits = [
@@ -165,6 +181,13 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       _busy = true;
       _error = null;
     });
+    // Renewing: Premium is already on, so the payment has landed only once
+    // the end date moves past this one.
+    final entitlement = EntitlementService.instance;
+    final renewFrom =
+        entitlement.isRealPremium
+            ? (entitlement.premiumUntil ?? DateTime.now())
+            : null;
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'create-checkout',
@@ -184,7 +207,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       // finishes the upgrade. On Android/iOS checkout stays in the in-app
       // WebView, which detects the success/cancel redirects itself.
       if (kIsWeb) {
-        await WebCheckoutReturn.markStarted();
+        await WebCheckoutReturn.markStarted(premiumUntilBefore: renewFrom);
         await launchUrl(Uri.parse(checkoutUrl), webOnlyWindowName: '_self');
         return;
       }
@@ -198,16 +221,29 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
 
       if (paid == true) {
         setState(() => _busy = true);
-        final active = await EntitlementService.instance.waitForActivation();
+        final active = await entitlement.waitForActivation(
+          extendedPast: renewFrom,
+        );
         if (!mounted) return;
         if (active) {
+          final until = entitlement.premiumUntil;
+          final untilLine = until == null
+              ? ''
+              : ' Premium now runs until ${PremiumPlan.formatDate(until)}.';
           await showDialog<void>(
             context: context,
             builder: (dialogContext) => AlertDialog(
-              title: const Text('Welcome to Premium! 🎉'),
-              content: const Text(
-                  'Advanced analytics and the interactive therapy locator '
-                  'are now unlocked.'),
+              title: Text(
+                renewFrom != null
+                    ? 'Premium renewed 🎉'
+                    : 'Welcome to Premium! 🎉',
+              ),
+              content: Text(
+                renewFrom != null
+                    ? '30 more days were added.$untilLine'
+                    : 'Advanced analytics and the interactive therapy '
+                        'locator are now unlocked.$untilLine',
+              ),
               actions: [
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
@@ -260,6 +296,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
     final palette = context.watch<ChildProvider>().activePalette;
     final isBound = _authService.isBoundAccount;
     final simulated = PaymentSimulationConfig.isAvailable;
+    final plan = PremiumPlan.of(EntitlementService.instance);
 
     return Scaffold(
       body: Container(
@@ -298,12 +335,44 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '₱149 / month',
+                      '₱149 for 30 days',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleLarge
                           .copyWith(color: AppColors.textPrimary),
                     ),
+                    Text(
+                      'One-time payment · never renews by itself',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
                     const SizedBox(height: AppSpacing.lg),
+                    if (plan.isPaidActive) ...[
+                      AppCard(
+                        key: const Key('premium-active-card'),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.workspace_premium_rounded,
+                                color: AppColors.statusSuccessDark, size: 28),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                plan.until == null
+                                    ? 'Premium is active. Paying again adds '
+                                        '30 days.'
+                                    : 'Premium is active until '
+                                        '${PremiumPlan.formatDate(plan.until!)}'
+                                        ' (${plan.timeLeft!.toLowerCase()}). '
+                                        'Paying again adds 30 days on top.',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.textPrimary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
                     for (final (icon, title, subtitle) in _benefits)
                       Padding(
                         padding:
@@ -368,6 +437,8 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
                       label: isBound
                           ? (simulated
                               ? 'Upgrade (simulated payment)'
+                              : plan.isPaidActive
+                              ? 'Renew with PayMongo (+30 days)'
                               : 'Upgrade with PayMongo')
                           : 'Link account & upgrade',
                       icon: isBound
