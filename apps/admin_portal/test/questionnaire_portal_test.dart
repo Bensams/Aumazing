@@ -166,10 +166,15 @@ void main() {
         ),
       );
       expect(find.text('After the session'), findsOneWidget);
-      expect(
-        find.text('None yet — the app uses its built-in questions.'),
-        findsNWidgets(2),
-      );
+      // Every set shows the questions built into the app, in use until a
+      // stored questionnaire replaces them.
+      for (final kind in TemplateKind.values) {
+        expect(
+          find.byKey(Key('questionnaires.builtIn.${kind.key}')),
+          findsOneWidget,
+        );
+      }
+      expect(find.textContaining('· In use ·'), findsNWidgets(3));
       // Practitioners cannot activate.
       expect(find.byKey(const Key('questionnaires.activate.t1')), findsNothing);
     });
@@ -187,6 +192,45 @@ void main() {
 
       expect(api.activated, [('t1', true)]);
       expect(api.statuses, [('t1', 'validated')]);
+    });
+
+    testWidgets('an active questionnaire replaces the built-in one', (
+      tester,
+    ) async {
+      await pumpSized(
+        tester,
+        QuestionnairesPage(
+          api: _FakeApi(templates: [_template(active: true)]),
+          isAdmin: true,
+        ),
+      );
+      expect(
+        find.textContaining('Not in use — replaced below'),
+        findsOneWidget,
+      );
+      // The other two built-in sets, and the active questionnaire itself.
+      expect(find.textContaining('· In use ·'), findsNWidgets(3));
+    });
+
+    testWidgets('the built-in questions open as a copy to edit and save', (
+      tester,
+    ) async {
+      final api = _FakeApi();
+      await pumpSized(tester, QuestionnairesPage(api: api, isAdmin: false));
+      await tester.tap(
+        find.byKey(const Key('questionnaires.builtIn.edit.home')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('New version'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('editor.save')));
+      await tester.pumpAndSettle();
+
+      final row = api.inserted.single;
+      expect(row['kind'], 'home');
+      expect(row['template_key'], 'aumazing_parent_checklist');
+      expect(row['version'], 2);
+      expect(row['items'], kDefaultHomeTemplate['items']);
     });
 
     testWidgets('a practitioner cannot edit someone else\'s template', (
