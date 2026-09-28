@@ -1,0 +1,330 @@
+{
+  "home": {
+    "template_key": "aumazing_parent_checklist",
+    "title": "A few questions about your child",
+    "intro": "Think about the last two weeks at home. For each sentence, choose how often it is true for your child. There are no right or wrong answers — this is your view, and it sits beside what the games measured.",
+    "items": [
+      {
+        "id": "comm_name",
+        "domain": "communication",
+        "text": "My child responds when I call their name."
+      },
+      {
+        "id": "comm_request",
+        "domain": "communication",
+        "text": "My child uses words, signs or gestures to ask for what they want."
+      },
+      {
+        "id": "comm_instruction",
+        "domain": "communication",
+        "text": "My child follows a simple one-step instruction, like \"Give me the ball.\""
+      },
+      {
+        "id": "comm_point",
+        "domain": "communication",
+        "text": "My child points to show me something interesting."
+      },
+      {
+        "id": "play_functional",
+        "domain": "play",
+        "text": "My child plays with toys the way they are meant to be used, like pushing a car or stacking blocks."
+      },
+      {
+        "id": "play_pretend",
+        "domain": "play",
+        "text": "My child plays pretend, like feeding a doll or talking on a toy phone."
+      },
+      {
+        "id": "play_imitate",
+        "domain": "play",
+        "text": "My child copies a simple action I show them during play."
+      },
+      {
+        "id": "play_stay",
+        "domain": "play",
+        "text": "My child stays with one toy or game for a few minutes."
+      },
+      {
+        "id": "social_face",
+        "domain": "social",
+        "text": "My child looks at my face when I talk or play with them."
+      },
+      {
+        "id": "social_turn",
+        "domain": "social",
+        "text": "My child waits for their turn in a simple game."
+      },
+      {
+        "id": "social_greet",
+        "domain": "social",
+        "text": "My child waves or greets back when someone says hello."
+      },
+      {
+        "id": "social_share",
+        "domain": "social",
+        "text": "My child brings or shows me things to share their interest."
+      },
+      {
+        "id": "attn_finish",
+        "domain": "attention",
+        "text": "My child sits with me and finishes a short activity."
+      },
+      {
+        "id": "attn_follow_point",
+        "domain": "attention",
+        "text": "When I point at something, my child looks where I am pointing."
+      },
+      {
+        "id": "attn_return",
+        "domain": "attention",
+        "text": "My child goes back to a task after a small distraction."
+      },
+      {
+        "id": "attn_listen",
+        "domain": "attention",
+        "text": "My child listens to a short instruction without walking away."
+      }
+    ],
+    "domains": {
+      "communication": "Communication",
+      "play": "Play Skills",
+      "social": "Social Interaction",
+      "attention": "Attention & Focus"
+    }
+  },
+  "intake": {
+    "template_key": "aumazing_observer_intake",
+    "version": 1,
+    "title": "Before your child starts",
+    "intro": "Sit beside your child and watch them play. Please help only if they are stuck or upset, and remember how much you helped. Nothing will interrupt the games — we will ask what you saw when your child finishes.",
+    "items": [
+      {
+        "id": "diagnosis",
+        "text": "Has your child been diagnosed with autism?",
+        "type": "single",
+        "scope": "session",
+        "options": [
+          {
+            "id": "diagnosed",
+            "label": "Diagnosed with autism"
+          },
+          {
+            "id": "evaluating",
+            "label": "Being evaluated or suspected"
+          },
+          {
+            "id": "not_diagnosed",
+            "label": "Not diagnosed"
+          },
+          {
+            "id": "prefer_not_to_say",
+            "label": "Prefer not to say",
+            "quiet": true
+          }
+        ]
+      },
+      {
+        "id": "school",
+        "text": "Where does your child go to school?",
+        "type": "single",
+        "scope": "session",
+        "options": [
+          {
+            "id": "not_in_school",
+            "label": "Not in school yet"
+          },
+          {
+            "id": "daycare",
+            "label": "Daycare"
+          },
+          {
+            "id": "kinder",
+            "label": "Kinder"
+          },
+          {
+            "id": "grade_1",
+            "label": "Grade 1"
+          },
+          {
+            "id": "grade_2_up",
+            "label": "Grade 2 or higher"
+          },
+          {
+            "id": "sped",
+            "label": "SPED class or school"
+          },
+          {
+            "id": "inclusive",
+            "label": "Regular class with SPED support"
+          },
+          {
+            "id": "homeschool",
+            "label": "Home-schooled"
+          }
+        ]
+      },
+      {
+        "id": "therapies",
+        "text": "Current therapy (choose any)",
+        "type": "multi",
+        "scope": "session",
+        "short_label": "Therapy",
+        "options": [
+          {
+            "id": "speech",
+            "label": "Speech"
+          },
+          {
+            "id": "occupational",
+            "label": "Occupational"
+          },
+          {
+            "id": "behavioural",
+            "label": "Behavioural"
+          },
+          {
+            "id": "other",
+            "label": "Other"
+          },
+          {
+            "id": "none",
+            "label": "None",
+            "quiet": true,
+            "exclusive": true
+          }
+        ]
+      }
+    ]
+  },
+  "observation": {
+    "template_key": "aumazing_session_observation",
+    "version": 1,
+    "title": "What did you see?",
+    "intro": "Think back to the games your child just played. There are no right answers — tell us what you saw. Your answers appear beside each game's result and never change a score.",
+    "items": [
+      {
+        "id": "understood",
+        "text": "Did your child understand what to do?",
+        "type": "single",
+        "scope": "game",
+        "required": true,
+        "short_label": "Understood",
+        "options": [
+          {
+            "id": "yes",
+            "label": "Yes"
+          },
+          {
+            "id": "partly",
+            "label": "Partly"
+          },
+          {
+            "id": "no",
+            "label": "No",
+            "flag": "Did not understand the task"
+          }
+        ]
+      },
+      {
+        "id": "help",
+        "text": "How much did you help?",
+        "type": "single",
+        "scope": "game",
+        "required": true,
+        "options": [
+          {
+            "id": "none",
+            "label": "No help"
+          },
+          {
+            "id": "told",
+            "label": "Told them"
+          },
+          {
+            "id": "showed",
+            "label": "Pointed or showed",
+            "flag": "Played with help (pointed or showed)"
+          },
+          {
+            "id": "hand",
+            "label": "Helped their hand",
+            "flag": "Played with help (helped their hand)"
+          }
+        ]
+      },
+      {
+        "id": "mood",
+        "text": "How did your child seem?",
+        "type": "single",
+        "scope": "game",
+        "required": true,
+        "options": [
+          {
+            "id": "calm",
+            "label": "Calm"
+          },
+          {
+            "id": "excited",
+            "label": "Excited"
+          },
+          {
+            "id": "upset",
+            "label": "Frustrated or upset",
+            "flag": "Was frustrated or upset"
+          }
+        ]
+      },
+      {
+        "id": "as_usual",
+        "text": "Compared with how your child usually does tasks like this:",
+        "type": "single",
+        "scope": "game",
+        "required": true,
+        "options": [
+          {
+            "id": "usual",
+            "label": "As usual"
+          },
+          {
+            "id": "better",
+            "label": "Better than usual"
+          },
+          {
+            "id": "worse",
+            "label": "Worse than usual",
+            "flag": "Worse than usual"
+          }
+        ]
+      },
+      {
+        "id": "day",
+        "text": "Was today a typical day for your child?",
+        "type": "single",
+        "scope": "session",
+        "required": true,
+        "options": [
+          {
+            "id": "normal",
+            "label": "A normal day"
+          },
+          {
+            "id": "tired_or_sick",
+            "label": "Tired or sick",
+            "flag": "Not a typical day (tired or sick)"
+          },
+          {
+            "id": "distracted",
+            "label": "New place or distracted",
+            "flag": "Not a typical day (new place or distracted)"
+          }
+        ]
+      },
+      {
+        "id": "note",
+        "text": "Anything else you noticed? (optional)",
+        "type": "text",
+        "scope": "session"
+      }
+    ]
+  }
+}
