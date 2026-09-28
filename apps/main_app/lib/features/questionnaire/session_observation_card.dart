@@ -12,10 +12,12 @@ import 'parent_questionnaire_comparison_card.dart' show QuestionnaireLoader;
 /// "What the observer saw" (AUM-351): the adult's answers for one assessment
 /// run, beside each game's score.
 ///
-/// Flags — played with help, did not understand, upset, worse than usual, not
-/// a typical day — tell the reader how to take a score. The scores
-/// themselves are never changed. Shows nothing when the adult skipped both
-/// the before and after questions.
+/// Flags — the answers a practitioner marked as worth knowing, such as
+/// "Played with help" — tell the reader how to take a score. The scores
+/// themselves are never changed. Everything shown is what was worked out
+/// when the answers were saved, so rewording a template later does not
+/// change old results. Shows nothing when the adult skipped both the before
+/// and after questions.
 class SessionObservationCard extends StatefulWidget {
   const SessionObservationCard({
     super.key,
@@ -38,8 +40,8 @@ class SessionObservationCard extends StatefulWidget {
 }
 
 class _SessionObservationCardState extends State<SessionObservationCard> {
-  ObserverIntake? _intake;
-  SessionObservation? _observation;
+  IntakeRecord? _intake;
+  ObservationRecord? _observation;
 
   @override
   void initState() {
@@ -51,17 +53,17 @@ class _SessionObservationCardState extends State<SessionObservationCard> {
     try {
       final rows = await (widget.loader ??
           localDbService.getCaregiverQuestionnaires)(widget.childId);
-      ObserverIntake? intake;
-      SessionObservation? observation;
+      IntakeRecord? intake;
+      ObservationRecord? observation;
       for (final row in rows) {
         if (row['assessment_run_id'] != widget.assessmentRunId) continue;
         final type = '${row['questionnaire_type']}';
         final decoded = jsonDecode(row['responses'] as String? ?? '{}');
         if (decoded is! Map<String, dynamic>) continue;
         if (type.endsWith('_intake')) {
-          intake ??= ObserverIntake.fromResponses(decoded);
+          intake ??= IntakeRecord.fromResponses(decoded);
         } else if (type.endsWith('_observation')) {
-          observation ??= SessionObservation.fromResponses(decoded);
+          observation ??= ObservationRecord.fromResponses(decoded);
         }
       }
       if (!mounted) return;
@@ -87,7 +89,7 @@ class _SessionObservationCardState extends State<SessionObservationCard> {
     final observation = _observation;
     if (intake == null && observation == null) return const SizedBox.shrink();
     final role = observation?.role ?? intake?.role;
-    final dayFlag = observation?.dayFlag;
+    final sessionFlags = observation?.sessionFlags ?? const <String>[];
     return AppCard(
       key: const Key('session-observation-card'),
       padding: AppSpacing.paddingMd,
@@ -114,16 +116,16 @@ class _SessionObservationCardState extends State<SessionObservationCard> {
           if (intake != null) ...[
             const SizedBox(height: 4),
             Text(
-              intake.summary,
+              intake.headline,
               key: const Key('session-observation-background'),
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
             ),
           ],
-          if (dayFlag != null) ...[
+          if (sessionFlags.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            _Flag(dayFlag),
+            for (final flag in sessionFlags) _Flag(flag),
           ],
           if (observation == null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -140,16 +142,17 @@ class _SessionObservationCardState extends State<SessionObservationCard> {
                 seen: entry.value,
                 result: _resultFor(entry.key),
               ),
-          if (observation != null && observation.note.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '“${observation.note}”',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textPrimary,
-                fontStyle: FontStyle.italic,
+          if (observation != null)
+            for (final note in observation.notes) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                '“$note”',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textPrimary,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
-            ),
-          ],
+            ],
         ],
       ),
     );
@@ -164,18 +167,13 @@ class _GameRow extends StatelessWidget {
   });
 
   final String gameId;
-  final GameObservation seen;
+  final GameRecord seen;
   final AssessmentResult? result;
 
   @override
   Widget build(BuildContext context) {
     final result = this.result;
-    final details = [
-      if (seen.understood != null) 'Understood: ${seen.understood!.label}',
-      if (seen.help != null) seen.help!.label,
-      if (seen.mood != null) seen.mood!.label,
-      if (seen.asUsual != null) seen.asUsual!.label,
-    ].join(' · ');
+    final details = seen.summary.join(' · ');
     return Padding(
       key: Key('session-observation-game-$gameId'),
       padding: const EdgeInsets.only(top: AppSpacing.sm),

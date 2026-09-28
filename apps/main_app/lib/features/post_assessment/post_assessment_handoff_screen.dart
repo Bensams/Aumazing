@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
 
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
@@ -73,10 +74,17 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
       _showResults(context);
       return;
     }
+    // The practitioner-authored observation questions when active, else the
+    // bundled ones; bounded by the repository's short timeout.
+    final observation = await (templateRepository ??
+            QuestionnaireTemplateRepository.instance)
+        .choiceTemplateFor(TemplateKind.observation, 'post');
+    if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder:
             (_) => SessionObservationScreen(
+              template: observation,
               assessmentType: 'post',
               childId: childId,
               assessmentRunId: assessmentRunId,

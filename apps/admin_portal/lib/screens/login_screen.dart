@@ -122,9 +122,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Aumazing Admin',
+                    'Aumazing Portal',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'For administrators and approved practitioners',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 24),
                   TextField(

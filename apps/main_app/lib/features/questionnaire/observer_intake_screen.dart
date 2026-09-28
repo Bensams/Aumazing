@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:uuid/uuid.dart';
 
@@ -8,15 +9,17 @@ import '../../core/services/local_db_service.dart';
 import 'observed_session.dart';
 import 'parent_questionnaire_comparison_card.dart' show QuestionnaireLoader;
 import 'parent_questionnaire_screen.dart' show QuestionnaireSaver;
+import 'questionnaire_template_repository.dart';
 import 'widgets/observation_choice_row.dart';
+import 'widgets/template_question_field.dart';
 
 /// "Before your child starts" (AUM-351): shown to the adult once a new
 /// assessment run exists and before the first game, so nothing is asked
 /// while the child plays.
 ///
-/// Records who is watching and, optionally, background about the child —
-/// pre-filled from the last time it was answered. **Skip** starts the games
-/// without saving anything.
+/// Records who is watching, then the practitioner-authored intake questions
+/// (AUM-352) — background about the child, pre-filled from the last time.
+/// **Skip** starts the games without saving anything.
 class ObserverIntakeScreen extends StatefulWidget {
   const ObserverIntakeScreen({
     super.key,
@@ -25,6 +28,7 @@ class ObserverIntakeScreen extends StatefulWidget {
     required this.assessmentRunId,
     this.saver,
     this.loader,
+    this.template,
   });
 
   /// `pre` or `post`.
@@ -35,23 +39,33 @@ class ObserverIntakeScreen extends StatefulWidget {
   final QuestionnaireSaver? saver;
   final QuestionnaireLoader? loader;
 
+  /// The questions to ask; the active template, or the bundled default,
+  /// when null.
+  final ChoiceTemplate? template;
+
   /// Shows the screen and completes with what was saved, or null when the
   /// adult skipped it.
-  static Future<ObserverIntake?> show(
+  static Future<IntakeRecord?> show(
     BuildContext context, {
     required String assessmentType,
     required String childId,
     required String? assessmentRunId,
-  }) => Navigator.of(context).push<ObserverIntake>(
-    MaterialPageRoute(
-      builder:
-          (_) => ObserverIntakeScreen(
-            assessmentType: assessmentType,
-            childId: childId,
-            assessmentRunId: assessmentRunId,
-          ),
-    ),
-  );
+  }) async {
+    final template = await QuestionnaireTemplateRepository.instance
+        .choiceTemplateFor(TemplateKind.intake, assessmentType);
+    if (!context.mounted) return null;
+    return Navigator.of(context).push<IntakeRecord>(
+      MaterialPageRoute(
+        builder:
+            (_) => ObserverIntakeScreen(
+              assessmentType: assessmentType,
+              childId: childId,
+              assessmentRunId: assessmentRunId,
+              template: template,
+            ),
+      ),
+    );
+  }
 
   @override
   State<ObserverIntakeScreen> createState() => _ObserverIntakeScreenState();
@@ -59,10 +73,13 @@ class ObserverIntakeScreen extends StatefulWidget {
 
 class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
   ObserverRole? _role;
-  DiagnosisStatus? _diagnosis;
-  SchoolLevel? _school;
-  Set<Therapy> _therapies = {};
+  final Map<String, Object?> _answers = {};
   bool _saving = false;
+
+  /// Bumped when last time's answers arrive, so the fields rebuild with them.
+  int _prefillGeneration = 0;
+
+  ChoiceTemplate get _template => widget.template ?? kDefaultIntakeTemplate;
 
   @override
   void initState() {
@@ -71,7 +88,8 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
   }
 
   /// The latest intake for this child, so background is answered once and
-  /// only corrected afterwards.
+  /// only corrected afterwards. Answers the current questions no longer
+  /// offer are dropped.
   Future<void> _prefill() async {
     try {
       final rows = await (widget.loader ??
@@ -89,14 +107,18 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
       for (final row in intakes) {
         final decoded = jsonDecode(row['responses'] as String? ?? '{}');
         if (decoded is! Map<String, dynamic>) continue;
-        final last = ObserverIntake.fromResponses(decoded);
+        final last = IntakeRecord.fromResponses(decoded);
         if (last == null) continue;
         if (!mounted) return;
         setState(() {
           _role ??= last.role;
-          _diagnosis ??= last.diagnosis;
-          _school ??= last.school;
-          if (_therapies.isEmpty) _therapies = {...last.therapies};
+          for (final q in _template.questions) {
+            final value = last.answers[q.id];
+            if (!_answers.containsKey(q.id) && q.isAnswered(value)) {
+              _answers[q.id] = value;
+            }
+          }
+          _prefillGeneration++;
         });
         return;
       }
@@ -105,41 +127,32 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
     }
   }
 
-  void _toggleTherapy(Therapy t) {
-    setState(() {
-      if (t == Therapy.none) {
-        _therapies = _therapies.contains(Therapy.none) ? {} : {Therapy.none};
-        return;
-      }
-      final next = {..._therapies}..remove(Therapy.none);
-      if (!next.remove(t)) next.add(t);
-      _therapies = next;
-    });
-  }
+  bool get _canStart =>
+      _role != null &&
+      !_saving &&
+      _template.isComplete(_answers, QuestionScope.session);
 
   Future<void> _start() async {
     final role = _role;
-    if (role == null || _saving) return;
+    if (role == null || !_canStart) return;
     setState(() => _saving = true);
-    final intake = ObserverIntake(
-      role: role,
-      diagnosis: _diagnosis,
-      school: _school,
-      therapies: _therapies,
-    );
+    final record = IntakeRecord.answer(_template, role, {
+      for (final entry in _answers.entries)
+        if (entry.value != null) entry.key: entry.value,
+    });
     try {
       await (widget.saver ?? _defaultSaver)(
         id: const Uuid().v4(),
         childId: widget.childId,
         assessmentRunId: widget.assessmentRunId,
         questionnaireType: intakeTypeFor(widget.assessmentType),
-        responses: intake.toResponses(),
+        responses: record.toResponses(_template),
       );
     } catch (e) {
       // The games matter more than this record: start them anyway.
       debugPrint('[ObserverIntake] save failed: $e');
     }
-    if (mounted) Navigator.of(context).pop(intake);
+    if (mounted) Navigator.of(context).pop(record);
   }
 
   static Future<void> _defaultSaver({
@@ -158,6 +171,7 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final template = _template;
     return PopScope(
       // Leaving goes through Skip or Start, so the games always follow.
       canPop: false,
@@ -165,7 +179,7 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
         backgroundColor: AppColors.lavenderLight,
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: const Text('Before your child starts'),
+          title: Text(template.title),
           actions: [
             TextButton(
               key: const Key('intake.skip'),
@@ -181,29 +195,26 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
-                    AppCard(
-                      key: const Key('intake.instructions'),
-                      padding: AppSpacing.paddingMd,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('👀', style: TextStyle(fontSize: 28)),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Text(
-                              'Sit beside your child and watch them play. '
-                              'Please help only if they are stuck or upset, '
-                              'and remember how much you helped. Nothing '
-                              'will interrupt the games — we will ask what '
-                              'you saw when your child finishes.',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.textPrimary,
+                    if (template.intro.isNotEmpty)
+                      AppCard(
+                        key: const Key('intake.instructions'),
+                        padding: AppSpacing.paddingMd,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('👀', style: TextStyle(fontSize: 28)),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                template.intro,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: AppSpacing.lg),
                     ObservationChoiceRow<ObserverRole>(
                       keyPrefix: 'intake.role',
@@ -214,53 +225,31 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                       selected: _role,
                       onSelected: (v) => setState(() => _role = v),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'About your child (optional)',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.primaryPurple,
+                    if (template.questions.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'About your child',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.primaryPurple,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Saved with this assessment to help read the results. '
-                      'It does not change any score.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.mutedForeground,
+                      Text(
+                        'Saved with this assessment to help read the '
+                        'results. It does not change any score.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ObservationChoiceRow<DiagnosisStatus>(
-                      keyPrefix: 'intake.diagnosis',
-                      question: 'Has your child been diagnosed with autism?',
-                      values: DiagnosisStatus.values,
-                      label: (v) => v.label,
-                      id: (v) => v.key,
-                      selected: _diagnosis,
-                      onSelected:
-                          (v) => setState(
-                            () => _diagnosis = _diagnosis == v ? null : v,
-                          ),
-                    ),
-                    ObservationChoiceRow<SchoolLevel>(
-                      keyPrefix: 'intake.school',
-                      question: 'Where does your child go to school?',
-                      values: SchoolLevel.values,
-                      label: (v) => v.label,
-                      id: (v) => v.key,
-                      selected: _school,
-                      onSelected:
-                          (v) =>
-                              setState(() => _school = _school == v ? null : v),
-                    ),
-                    ObservationChoiceRow<Therapy>(
-                      keyPrefix: 'intake.therapy',
-                      question: 'Current therapy (choose any)',
-                      values: Therapy.values,
-                      label: (v) => v.label,
-                      id: (v) => v.key,
-                      isSelected: _therapies.contains,
-                      onSelected: _toggleTherapy,
-                    ),
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final q in template.questions)
+                        TemplateQuestionField(
+                          key: ValueKey('intake.${q.id}.$_prefillGeneration'),
+                          keyPrefix: 'intake',
+                          question: q,
+                          value: _answers[q.id],
+                          onChanged: (v) => setState(() => _answers[q.id] = v),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -285,7 +274,7 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                     ),
                     FilledButton(
                       key: const Key('intake.start'),
-                      onPressed: _role != null && !_saving ? _start : null,
+                      onPressed: _canStart ? _start : null,
                       child: const Text('Start the games'),
                     ),
                   ],

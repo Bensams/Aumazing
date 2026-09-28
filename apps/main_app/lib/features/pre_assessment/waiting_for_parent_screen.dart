@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
 
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
@@ -75,10 +76,17 @@ class WaitingForParentScreen extends StatelessWidget {
     }
     // The games this run played, in order, each once.
     final played = {for (final r in results) r.gameId}.toList();
+    // The practitioner-authored observation questions when active, else the
+    // bundled ones; bounded by the repository's short timeout.
+    final observation = await (templateRepository ??
+            QuestionnaireTemplateRepository.instance)
+        .choiceTemplateFor(TemplateKind.observation, 'pre');
+    if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder:
             (_) => SessionObservationScreen(
+              template: observation,
               assessmentType: 'pre',
               childId: childId,
               assessmentRunId: assessmentRunId,

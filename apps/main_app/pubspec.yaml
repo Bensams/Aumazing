@@ -19,6 +19,8 @@ dependencies:
     path: ../../packages/shared_audio
   shared_haptic:
     path: ../../packages/shared_haptic
+  questionnaire_core:
+    path: ../../packages/questionnaire_core
   # ── App dependencies ─────────────────────────────────────────────────
   cupertino_icons: ^1.0.8
   flame: ^1.30.1
