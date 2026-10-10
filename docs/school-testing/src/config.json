@@ -1,0 +1,35 @@
+{
+  "_note": "Fill in the bracketed values, then run: node docs/school-testing/src/build_kit.js. Anything left in [brackets] prints as a blank to fill by hand.",
+
+  "letter_date": "[Date]",
+
+  "school_name": "[Name of School]",
+  "school_address": "[School Address]",
+  "school_type": "[public/private]",
+
+  "principal_name": "[Name of Principal]",
+  "principal_position": "School Principal",
+  "principal_salutation": "Ma'am/Sir",
+
+  "sds_name": "[Name of Schools Division Superintendent]",
+  "sds_position": "Schools Division Superintendent",
+  "division_name": "[Schools Division Office of Davao City]",
+  "division_address": "[Division Office Address]",
+
+  "kinder_adviser": "[Name of Kindergarten Class Adviser]",
+  "grade1_adviser": "[Name of Grade 1 Class Adviser]",
+  "sped_teacher": "[Name of SPED Teacher]",
+
+  "dean_name": "[Name of Dean]",
+  "dean_position": "Dean, Faculty of Information Technology",
+
+  "testing_dates": "[testing dates]",
+  "testing_hours": "[time window, e.g. 8:00 to 11:30 in the morning]",
+  "venue": "[a quiet classroom or the SPED resource room]",
+  "participant_count": "[number]",
+  "reply_by_date": "[date consent forms are due]",
+  "data_deletion_date": "[month and year, after the final defense]",
+
+  "contact_number": "[contact number]",
+  "contact_email": "[contact email]"
+}

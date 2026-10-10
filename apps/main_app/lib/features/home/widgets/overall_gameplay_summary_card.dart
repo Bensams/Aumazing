@@ -3,6 +3,7 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../../services/overall_gameplay_summary_service.dart';
 import '../../../services/rubric/rubric.dart';
+import '../../../core/services/local_db_service.dart';
 
 /// The parent dashboard's overall gameplay summary: one narrative across the
 /// pre-assessment, the recommended activities (with the tries each My Path
@@ -54,12 +55,27 @@ class _OverallGameplaySummaryCardState
   @override
   void initState() {
     super.initState();
+    localDbService.caregiverQuestionnaireRevision.addListener(_onHomeChanged);
     _load();
+  }
+
+  void _onHomeChanged() => _load();
+
+  @override
+  void dispose() {
+    localDbService.caregiverQuestionnaireRevision.removeListener(
+      _onHomeChanged,
+    );
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(OverallGameplaySummaryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.childId != widget.childId) {
+      _summary = null;
+      _input = null;
+    }
     if (oldWidget.childId != widget.childId ||
         oldWidget.refreshToken != widget.refreshToken ||
         oldWidget.languageCode != widget.languageCode) {
@@ -69,19 +85,22 @@ class _OverallGameplaySummaryCardState
 
   Future<void> _load({bool forceRefresh = false}) async {
     final generation = ++_generation;
+    final childId = widget.childId;
+    final languageCode = widget.languageCode;
     if (!_loading) setState(() => _loading = true);
     GameplaySummaryInput? input;
     OverallGameplaySummary? summary;
     try {
       input = await _service.buildInput(
-        childId: widget.childId,
+        childId: childId,
         pathGameIds: widget.pathGameIds,
         pathAttempts: widget.pathAttempts,
       );
+      if (!mounted || generation != _generation) return;
       summary = await _service.summarize(
-        childId: widget.childId,
+        childId: childId,
         input: input,
-        languageCode: widget.languageCode,
+        languageCode: languageCode,
         forceRefresh: forceRefresh,
       );
     } catch (e) {
@@ -124,6 +143,7 @@ class _OverallGameplaySummaryCardState
           const SizedBox(height: 4),
           Text(
             'Pre-assessment, recommended activities and post-assessment. '
+            'Includes parent-reported home observations when available. '
             'Free practice is not included.',
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.mutedForeground,
@@ -155,7 +175,7 @@ class _OverallGameplaySummaryCardState
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Text(
-                  'Saved summary · no new games since '
+                  'Saved summary · no new summary information since '
                   '${_date(summary.generatedAt)}',
                   key: const ValueKey('overallSummaryCached'),
                   style: AppTextStyles.labelSmall.copyWith(

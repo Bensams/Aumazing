@@ -2,13 +2,15 @@
 // using Google Gemini (free tier), with Groq as the fallback when Gemini is
 // rate-limited or failing (see ../_shared/llm.ts). JWT-verified; both API
 // keys are read from Supabase Vault and never reach the app. Data
-// minimization: only skill levels, scores, and recommendation names are
+// minimization: only skill levels, scores, recommendation names and bounded
+// parent-reported home frequencies with dates are
 // sent — never the child's name or any identifier.
 //
 // The app treats this as best-effort: when both providers fail (missing
 // keys, errors, quota, timeout) it falls back to the built-in rubric
 // summary, so the parent always sees something.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { parentContextPrompt } from '../_shared/parent_context.ts';
 import { generateWithFallback } from '../_shared/llm.ts';
 
 const corsHeaders = {
@@ -87,7 +89,7 @@ Deno.serve(async (req: Request) => {
         'You are writing a short, warm PROGRESS note for the parent of a ',
         'young child (ages 2-6) who just finished a follow-up set of ',
         'playful learning games, after practicing since their first round. ',
-        'Using ONLY the before-and-after data below, write 2-3 encouraging ',
+        'Using ONLY the before-and-after data below, write 3-4 encouraging ',
         'sentences about how their child has grown.',
         '',
         'Rules:',
@@ -104,6 +106,7 @@ Deno.serve(async (req: Request) => {
         recommendations.length
           ? `Suggested next activities: ${recommendations.join(', ')}`
           : '',
+        parentContextPrompt(body.parent_context),
         langInstruction,
       ].join('\n');
     } else {
@@ -111,7 +114,7 @@ Deno.serve(async (req: Request) => {
         'You are writing a short, warm note for the parent of a young child ',
         '(ages 2-6) who just finished a set of playful learning games in an ',
         'app that supports early childhood development. Using ONLY the data ',
-        'below, write 2-3 encouraging sentences in plain language.',
+        'below, write 3-4 encouraging sentences in plain language.',
         '',
         'Rules:',
         '- Address the parent, refer to "your child" (no names are provided).',
@@ -129,13 +132,14 @@ Deno.serve(async (req: Request) => {
         recommendations.length
           ? `Suggested next activities: ${recommendations.join(', ')}`
           : '',
+        parentContextPrompt(body.parent_context),
         langInstruction,
       ].join('\n');
     }
 
     const result = await generateWithFallback(admin, prompt, {
       temperature: 0.7,
-      maxTokens: 300,
+      maxTokens: 450,
     });
     const summary = result?.text.trim();
     if (!result || !summary) {

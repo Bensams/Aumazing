@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// subscription state to cancel.
 void main() {
   final entitlement = EntitlementService.instance;
-  final now = DateTime(2026, 9, 28, 12);
+  final now = DateTime.now();
 
   tearDown(() {
     entitlement.debugSetRealPremium(false);

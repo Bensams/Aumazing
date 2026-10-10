@@ -119,7 +119,11 @@ class PostAssessmentResultScreen extends StatelessWidget {
                 childProv.profile?.id == null
                     ? null
                     : ParentQuestionnaireComparisonCard(
-                      childId: childProv.profile!.id,
+                      key: ValueKey(
+                        'home-${results.first.childId}-${results.first.assessmentRunId}',
+                      ),
+                      childId: results.first.childId,
+                      assessmentRunId: results.first.assessmentRunId,
                     ),
             onContinue:
                 () => Navigator.of(context).popUntil((route) => route.isFirst),

@@ -390,7 +390,14 @@ class _CopyMeScreenState extends State<CopyMeScreen>
                     .activePalette
                     .gameBackgroundFor('copy_me'),
               ),
-              child: GameWidget(game: _game),
+              child: Semantics(
+                container: true,
+                label: 'Copy Me play area',
+                child: GameWidget(
+                  key: const Key('game.canvas.copy_me'),
+                  game: _game,
+                ),
+              ),
             ),
           ),
 

@@ -57,13 +57,10 @@ void main() {
     expect(app.id, kDefaultHomeTemplate['template_key']);
     expect(app.title, kDefaultHomeTemplate['title']);
     expect(app.intro, kDefaultHomeTemplate['intro']);
-    expect(
-      [
-        for (final i in app.items)
-          {'id': i.id, 'domain': i.domain.key, 'text': i.text},
-      ],
-      kDefaultHomeTemplate['items'],
-    );
+    expect([
+      for (final i in app.items)
+        {'id': i.id, 'domain': i.domain.key, 'text': i.text},
+    ], kDefaultHomeTemplate['items']);
   });
 
   group('records', () {
@@ -230,29 +227,130 @@ void main() {
       });
     });
 
-    testWidgets('answers from last time are filled in', (tester) async {
-      final (saved, _) = await open(
-        tester,
-        previous: [
-          row(
-            'pre_intake',
-            'run-0',
-            IntakeRecord.answer(
-              kDefaultIntakeTemplate,
-              ObserverRole.guardian,
-              {'school': 'grade_1', 'retired_question': 'x'},
-            ).toResponses(kDefaultIntakeTemplate),
-          ),
-        ],
-      );
-      expect(startEnabled(tester), isTrue);
-      await tapKey(tester, 'intake.start');
-      await tester.pumpAndSettle();
-      final responses = saved.single['responses'] as Map<String, dynamic>;
-      expect(responses['observer_role'], 'guardian');
-      // A question the current template no longer asks is not carried over.
-      expect(responses['answers'], {'school': 'grade_1'});
-    });
+    testWidgets(
+      'explicit reuse retains provenance and asks who watches today',
+      (tester) async {
+        final (saved, _) = await open(
+          tester,
+          previous: [
+            row(
+              'pre_intake',
+              'run-0',
+              IntakeRecord.answer(
+                kDefaultIntakeTemplate,
+                ObserverRole.guardian,
+                {'school': 'grade_1', 'retired_question': 'x'},
+              ).toResponses(kDefaultIntakeTemplate),
+            ),
+          ],
+        );
+        expect(startEnabled(tester), isFalse);
+        expect(find.byKey(const Key('intake.school.grade_1')), findsNothing);
+        await tapKey(tester, 'intake.reuse');
+        await tapKey(tester, 'intake.role.parent');
+        await tapKey(tester, 'intake.start');
+        await tester.pumpAndSettle();
+        final responses = saved.single['responses'] as Map<String, dynamic>;
+        expect(responses['observer_role'], 'parent');
+        expect(responses['background_mode'], 'reuse');
+        expect(responses['reused_question_ids'], ['school']);
+        expect(
+          (responses['answer_sources'] as Map)['school'],
+          containsPair('completed_at', '2026-09-28T10:00:00'),
+        );
+        // A question the current template no longer asks is not carried over.
+        expect(responses['answers'], {'school': 'grade_1'});
+      },
+    );
+
+    testWidgets(
+      'update edits background and keeps untouched answers labeled earlier',
+      (tester) async {
+        final (saved, _) = await open(
+          tester,
+          previous: [
+            row(
+              'pre_intake',
+              'run-0',
+              IntakeRecord.answer(kDefaultIntakeTemplate, ObserverRole.parent, {
+                'school': 'grade_1',
+                'diagnosis': 'diagnosed',
+              }).toResponses(kDefaultIntakeTemplate),
+            ),
+          ],
+        );
+        await tapKey(tester, 'intake.update');
+        await tapKey(tester, 'intake.role.guardian');
+        await tapKey(tester, 'intake.school.sped');
+        await tapKey(tester, 'intake.start');
+        await tester.pumpAndSettle();
+        final responses = saved.single['responses'] as Map<String, dynamic>;
+        expect(responses['background_mode'], 'update');
+        expect(responses['answers'], {
+          'school': 'sped',
+          'diagnosis': 'diagnosed',
+        });
+        expect(responses['reused_question_ids'], ['diagnosis']);
+        expect(
+          (responses['answer_sources'] as Map).containsKey('school'),
+          isFalse,
+        );
+      },
+    );
+
+    testWidgets(
+      'session questions are asked anew even when background is reused',
+      (tester) async {
+        const template = ChoiceTemplate(
+          key: 'intake',
+          version: 1,
+          status: 'validated',
+          kind: TemplateKind.intake,
+          title: 'Before play',
+          intro: '',
+          questions: [
+            TemplateQuestion(
+              id: 'school',
+              text: 'School',
+              type: QuestionType.text,
+            ),
+            TemplateQuestion(
+              id: 'sleep',
+              text: 'Sleep today',
+              type: QuestionType.text,
+              timing: AnswerTiming.currentSession,
+              required: true,
+            ),
+          ],
+        );
+        final (saved, _) = await open(
+          tester,
+          template: template,
+          previous: [
+            row(
+              'pre_intake',
+              'older',
+              IntakeRecord.answer(template, ObserverRole.parent, {
+                'school': 'Kinder',
+                'sleep': 'Good',
+              }).toResponses(template),
+            ),
+          ],
+        );
+        await tapKey(tester, 'intake.reuse');
+        await tapKey(tester, 'intake.role.parent');
+        expect(startEnabled(tester), isFalse);
+        expect(find.text('Good'), findsNothing);
+        await tester.enterText(find.byKey(const Key('intake.sleep')), 'Tired');
+        await tester.pump();
+        await tapKey(tester, 'intake.start');
+        await tester.pumpAndSettle();
+        final data = saved.single['responses'] as Map;
+        expect(data['background_answers'], {'school': 'Kinder'});
+        expect(data['session_answers'], {'sleep': 'Tired'});
+        expect(data['reused_question_ids'], ['school']);
+      },
+    );
 
     testWidgets('asks a practitioner\'s own questions', (tester) async {
       const custom = ChoiceTemplate(
@@ -344,6 +442,7 @@ void main() {
     }
 
     Future<void> answerGame(WidgetTester tester, String game) async {
+      await tapKey(tester, 'observation.details.$game');
       await tapKey(tester, 'observation.$game.understood.yes');
       await tapKey(tester, 'observation.$game.help.showed');
       await tapKey(tester, 'observation.$game.mood.calm');
@@ -356,18 +455,26 @@ void main() {
             .onPressed !=
         null;
 
-    testWidgets('asks about each game the child played', (tester) async {
-      await open(tester);
-      expect(find.byKey(const Key('observation.game.copy_me')), findsOneWidget);
-      expect(
-        find.byKey(const Key('observation.game.match_it')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('observation.game.do_what_i_say')),
-        findsNothing,
-      );
-    });
+    testWidgets(
+      'starts short and adds details only for a selected played game',
+      (tester) async {
+        await open(tester);
+        expect(find.byKey(const Key('observation.game.copy_me')), findsNothing);
+        await tapKey(tester, 'observation.details.copy_me');
+        expect(
+          find.byKey(const Key('observation.game.copy_me')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('observation.game.match_it')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('observation.game.do_what_i_say')),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('Save waits for every game and the day', (tester) async {
       final (saved, events) = await open(
@@ -397,6 +504,8 @@ void main() {
       await answerGame(tester, 'match_it');
       expect(saveEnabled(tester), isFalse);
       await tapKey(tester, 'observation.session.day.normal');
+      await tapKey(tester, 'observation.session.session_help.some');
+      await tapKey(tester, 'observation.session.session_mood.calm');
       expect(saveEnabled(tester), isTrue);
 
       await tester.enterText(
@@ -424,10 +533,35 @@ void main() {
       final session = responses['session'] as Map;
       expect(session['answers'], {
         'day': 'normal',
+        'session_help': 'some',
+        'session_mood': 'calm',
         'note': 'Liked the matching game',
       });
       expect(session['notes'], ['Liked the matching game']);
     });
+
+    testWidgets(
+      'check-in can save without game details; deselection removes hidden answers',
+      (tester) async {
+        final (saved, events) = await open(tester);
+        await answerGame(tester, 'copy_me');
+        await tapKey(tester, 'observation.details.copy_me');
+        await tapKey(tester, 'observation.session.session_help.none');
+        await tapKey(tester, 'observation.session.session_mood.excited');
+        await tapKey(tester, 'observation.session.day.normal');
+        await tapKey(tester, 'observation.save');
+        await tester.pumpAndSettle();
+        expect(events, ['done']);
+        final data = saved.single['responses'] as Map;
+        expect(data['games'], isEmpty);
+        expect((data['session'] as Map)['answers'], {
+          'session_help': 'none',
+          'session_mood': 'excited',
+          'day': 'normal',
+        });
+        expect(data.containsKey('background_answers'), isFalse);
+      },
+    );
 
     testWidgets('Skip for now carries on without saving', (tester) async {
       final (saved, events) = await open(tester);
@@ -579,26 +713,29 @@ void main() {
       expect(intake.version, 3);
     });
 
-    test('a broken or missing template falls back to the bundled one', () async {
-      final broken = QuestionnaireTemplateRepository(
-        choiceFetcher:
-            (kind, type) async => [
-              templateRow(TemplateKind.observation, 'pre', noteOnly),
-            ],
-      );
-      // Observation needs a per-game question; this one has none.
-      expect(
-        (await broken.choiceTemplateFor(TemplateKind.observation, 'pre')).key,
-        kDefaultObservationTemplate.key,
-      );
-      final none = QuestionnaireTemplateRepository(
-        choiceFetcher: (kind, type) async => const [],
-      );
-      expect(
-        (await none.choiceTemplateFor(TemplateKind.intake, 'post')).key,
-        kDefaultIntakeTemplate.key,
-      );
-    });
+    test(
+      'a broken or missing template falls back to the bundled one',
+      () async {
+        final broken = QuestionnaireTemplateRepository(
+          choiceFetcher:
+              (kind, type) async => [
+                templateRow(TemplateKind.observation, 'pre', const []),
+              ],
+        );
+        // An empty template cannot provide a check-in.
+        expect(
+          (await broken.choiceTemplateFor(TemplateKind.observation, 'pre')).key,
+          kDefaultObservationTemplate.key,
+        );
+        final none = QuestionnaireTemplateRepository(
+          choiceFetcher: (kind, type) async => const [],
+        );
+        expect(
+          (await none.choiceTemplateFor(TemplateKind.intake, 'post')).key,
+          kDefaultIntakeTemplate.key,
+        );
+      },
+    );
 
     test('the last template seen is used offline', () async {
       final online = QuestionnaireTemplateRepository(

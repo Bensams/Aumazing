@@ -6,7 +6,7 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
-import '../questionnaire/parent_questionnaire_screen.dart';
+import '../questionnaire/home_questionnaire_flow.dart';
 import '../questionnaire/questionnaire_template_repository.dart';
 import '../questionnaire/session_observation_screen.dart';
 import 'game_summary_dialog.dart';
@@ -90,53 +90,43 @@ class WaitingForParentScreen extends StatelessWidget {
               assessmentType: 'pre',
               childId: childId,
               assessmentRunId: assessmentRunId,
-              gameIds: played.isEmpty ? kAssessmentGameIds : played,
+              gameIds: played,
               onDone: (next) => _showQuestionnaire(next, childId),
             ),
       ),
     );
   }
 
-  Future<void> _showQuestionnaire(BuildContext context, String childId) async {
-    // The practitioner-authored template when one is active, else the
-    // bundled draft. Bounded by a short timeout, so the hand-off never
-    // stalls on a slow connection.
-    final template = await (templateRepository ??
-            QuestionnaireTemplateRepository.instance)
-        .templateFor('pre');
-    if (!context.mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder:
-            (_) => ParentQuestionnaireScreen(
-              template: template,
-              assessmentType: 'pre',
-              childId: childId,
-              assessmentRunId: assessmentRunId,
-              onDone: _showSummary,
-            ),
-      ),
-    );
-  }
+  Future<void> _showQuestionnaire(BuildContext context, String childId) =>
+      HomeQuestionnaireFlow.show(
+        context,
+        assessmentType: 'pre',
+        childId: childId,
+        assessmentRunId: assessmentRunId,
+        onDone: _showSummary,
+        repository: templateRepository,
+      );
 
   void _showSummary(BuildContext context) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (summaryContext) => GameSummaryDialog(
-          results: results,
-          aiResponse: aiResponse,
-          onContinue: () {
-            Navigator.of(summaryContext).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => PreAssessmentResultScreen(
-                  profile: profile,
-                  results: results,
-                  aiResponse: aiResponse,
-                ),
-              ),
-            );
-          },
-        ),
+        builder:
+            (summaryContext) => GameSummaryDialog(
+              results: results,
+              aiResponse: aiResponse,
+              onContinue: () {
+                Navigator.of(summaryContext).pushReplacement(
+                  MaterialPageRoute(
+                    builder:
+                        (_) => PreAssessmentResultScreen(
+                          profile: profile,
+                          results: results,
+                          aiResponse: aiResponse,
+                        ),
+                  ),
+                );
+              },
+            ),
       ),
     );
   }

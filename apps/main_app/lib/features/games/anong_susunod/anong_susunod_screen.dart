@@ -328,7 +328,14 @@ class _AnongSusunodScreenState extends State<AnongSusunodScreen>
                   .activePalette
                   .gameBackgroundFor('anong_susunod'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Anong Susunod play area',
+              child: GameWidget(
+                key: const Key('game.canvas.anong_susunod'),
+                game: _game,
+              ),
+            ),
           ),
 
           // Three-star sparkle overlay when a routine is completed

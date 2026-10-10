@@ -437,6 +437,9 @@ class _PostAssessmentProgressScreenState
             voiceOverFactory: widget.voiceOverFactory,
             childId: childId,
             assessmentRunId: runId,
+            gameIds: {
+              for (final result in assessProv.postResults) result.gameId,
+            }.toList(),
           ),
         ),
       );

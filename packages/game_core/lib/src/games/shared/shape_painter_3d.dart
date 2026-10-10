@@ -17,49 +17,102 @@ class ShapePainter3D {
 
   // ── Public API ──────────────────────────────────────────────────────
 
-  static void drawCircle(ui.Canvas canvas, double cx, double cy, double r,
-      ui.Color color) {
+  static void drawCircle(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     _drawShadow(canvas, cx, cy, r, color);
+    _drawCircleHalo(canvas, cx, cy, r);
     final gradient = _radialGradient(cx, cy, r, color);
     canvas.drawCircle(ui.Offset(cx, cy), r, ui.Paint()..shader = gradient);
+    _drawCircleContour(canvas, cx, cy, r);
     _drawHighlight(canvas, cx, cy, r);
   }
 
-  static void drawStar(ui.Canvas canvas, double cx, double cy, double r,
-      ui.Color color) {
+  static void drawStar(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     final path = _starPath(cx, cy, r);
     _drawPathShadow(canvas, path, cx, cy, r, color);
-    canvas.drawPath(path, ui.Paint()..shader = _radialGradient(cx, cy, r, color));
+    _drawPathHalo(canvas, path, r);
+    canvas.drawPath(
+      path,
+      ui.Paint()..shader = _radialGradient(cx, cy, r, color),
+    );
+    _drawPathContour(canvas, path, r);
     _drawHighlight(canvas, cx, cy, r * 0.55);
   }
 
-  static void drawHeart(ui.Canvas canvas, double cx, double cy, double r,
-      ui.Color color) {
+  static void drawHeart(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     final path = _heartPath(cx, cy, r);
     _drawPathShadow(canvas, path, cx, cy, r, color);
-    canvas.drawPath(path, ui.Paint()..shader = _radialGradient(cx, cy, r, color));
+    _drawPathHalo(canvas, path, r);
+    canvas.drawPath(
+      path,
+      ui.Paint()..shader = _radialGradient(cx, cy, r, color),
+    );
+    _drawPathContour(canvas, path, r);
     _drawHighlight(canvas, cx - r * 0.22, cy - r * 0.25, r * 0.35);
   }
 
-  static void drawTriangle(ui.Canvas canvas, double cx, double cy, double r,
-      ui.Color color) {
+  static void drawTriangle(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     final path = _trianglePath(cx, cy, r);
     _drawPathShadow(canvas, path, cx, cy, r, color);
-    canvas.drawPath(path, ui.Paint()..shader = _radialGradient(cx, cy, r, color));
+    _drawPathHalo(canvas, path, r);
+    canvas.drawPath(
+      path,
+      ui.Paint()..shader = _radialGradient(cx, cy, r, color),
+    );
+    _drawPathContour(canvas, path, r);
     _drawHighlight(canvas, cx - r * 0.15, cy - r * 0.2, r * 0.35);
   }
 
-  static void drawDiamond(ui.Canvas canvas, double cx, double cy, double r,
-      ui.Color color) {
+  static void drawDiamond(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     final path = _diamondPath(cx, cy, r);
     _drawPathShadow(canvas, path, cx, cy, r, color);
-    canvas.drawPath(path, ui.Paint()..shader = _radialGradient(cx, cy, r, color));
+    _drawPathHalo(canvas, path, r);
+    canvas.drawPath(
+      path,
+      ui.Paint()..shader = _radialGradient(cx, cy, r, color),
+    );
+    _drawPathContour(canvas, path, r);
     _drawHighlight(canvas, cx - r * 0.12, cy - r * 0.25, r * 0.32);
   }
 
   /// Dispatches by shape-type string (used by Do What I Say / Copy Me).
-  static void drawByName(ui.Canvas canvas, String shapeType, double cx, double cy,
-      double r, ui.Color color) {
+  static void drawByName(
+    ui.Canvas canvas,
+    String shapeType,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     switch (shapeType) {
       case 'circle':
         drawCircle(canvas, cx, cy, r, color);
@@ -98,13 +151,17 @@ class ShapePainter3D {
     // global the running games read. Games leave this null.
     GameObjectStyle? styleOverride,
   }) {
-    final rrect =
-        ui.RRect.fromRectAndRadius(rect, ui.Radius.circular(cornerRadius));
+    final rrect = ui.RRect.fromRectAndRadius(
+      rect,
+      ui.Radius.circular(cornerRadius),
+    );
 
     // Drop shadow
     final shadowRect = rect.translate(2, 3);
-    final shadowRRect =
-        ui.RRect.fromRectAndRadius(shadowRect, ui.Radius.circular(cornerRadius));
+    final shadowRRect = ui.RRect.fromRectAndRadius(
+      shadowRect,
+      ui.Radius.circular(cornerRadius),
+    );
     canvas.drawRRect(
       shadowRRect,
       ui.Paint()
@@ -125,9 +182,10 @@ class ShapePainter3D {
     // paints solid.
     final style = styleOverride ?? GameObjectStyle.current;
     final override = style.cardColour;
-    final baseColor = override != null
-        ? override.withValues(alpha: alpha < 40 ? 0.45 : 1.0)
-        : color.withAlpha(alpha);
+    final baseColor =
+        override != null
+            ? override.withValues(alpha: alpha < 40 ? 0.45 : 1.0)
+            : color.withAlpha(alpha);
     final lighter = _lighten(baseColor, 0.25);
     final darker = _darken(baseColor, 0.15);
     final gradient = LinearGradient(
@@ -136,10 +194,7 @@ class ShapePainter3D {
       colors: [lighter, baseColor, darker],
       stops: const [0.0, 0.5, 1.0],
     );
-    canvas.drawRRect(
-      rrect,
-      ui.Paint()..shader = gradient.createShader(rect),
-    );
+    canvas.drawRRect(rrect, ui.Paint()..shader = gradient.createShader(rect));
 
     // Rim highlight (top edge)
     final rimRect = ui.Rect.fromLTWH(
@@ -181,10 +236,11 @@ class ShapePainter3D {
           ..strokeWidth = borderWidth,
       );
     } else if (style.hasOutline) {
-      final paint = ui.Paint()
-        ..color = GameObjectStyle.standingOutline
-        ..style = ui.PaintingStyle.stroke
-        ..strokeWidth = style.effectiveWidth;
+      final paint =
+          ui.Paint()
+            ..color = GameObjectStyle.standingOutline
+            ..style = ui.PaintingStyle.stroke
+            ..strokeWidth = style.effectiveWidth;
       if (style.outline == ObjectOutline.dashed) {
         _strokeDashed(canvas, ui.Path()..addRRect(rrect), paint);
       } else {
@@ -214,7 +270,11 @@ class ShapePainter3D {
   // ── Private helpers ─────────────────────────────────────────────────
 
   static ui.Shader _radialGradient(
-      double cx, double cy, double r, ui.Color color) {
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     final lighter = _lighten(color, 0.35);
     final darker = _darken(color, 0.25);
     return ui.Gradient.radial(
@@ -226,7 +286,12 @@ class ShapePainter3D {
   }
 
   static void _drawShadow(
-      ui.Canvas canvas, double cx, double cy, double r, ui.Color color) {
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     canvas.drawCircle(
       ui.Offset(cx + 2, cy + 3),
       r + 1,
@@ -237,7 +302,13 @@ class ShapePainter3D {
   }
 
   static void _drawPathShadow(
-      ui.Canvas canvas, ui.Path path, double cx, double cy, double r, ui.Color color) {
+    ui.Canvas canvas,
+    ui.Path path,
+    double cx,
+    double cy,
+    double r,
+    ui.Color color,
+  ) {
     canvas.save();
     canvas.translate(2, 3);
     canvas.drawPath(
@@ -249,23 +320,75 @@ class ShapePainter3D {
     canvas.restore();
   }
 
-  static void _drawHighlight(
-      ui.Canvas canvas, double cx, double cy, double r) {
+  static void _drawCircleHalo(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+  ) {
+    canvas.drawCircle(
+      ui.Offset(cx, cy),
+      r,
+      ui.Paint()
+        ..color = const ui.Color(0xE6FFFFFF)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = math.max(3, r * 0.18),
+    );
+  }
+
+  static void _drawCircleContour(
+    ui.Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+  ) {
+    canvas.drawCircle(
+      ui.Offset(cx, cy),
+      r,
+      ui.Paint()
+        ..color = const ui.Color(0xFF1E293B)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = math.max(2, r * 0.08),
+    );
+  }
+
+  static void _drawPathHalo(ui.Canvas canvas, ui.Path path, double r) {
+    canvas.drawPath(
+      path,
+      ui.Paint()
+        ..color = const ui.Color(0xE6FFFFFF)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeJoin = ui.StrokeJoin.round
+        ..strokeWidth = math.max(3, r * 0.18),
+    );
+  }
+
+  static void _drawPathContour(ui.Canvas canvas, ui.Path path, double r) {
+    canvas.drawPath(
+      path,
+      ui.Paint()
+        ..color = const ui.Color(0xFF1E293B)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeJoin = ui.StrokeJoin.round
+        ..strokeWidth = math.max(2, r * 0.08),
+    );
+  }
+
+  static void _drawHighlight(ui.Canvas canvas, double cx, double cy, double r) {
     final highlightR = r * 0.38;
     final hx = cx - r * 0.28;
     final hy = cy - r * 0.28;
     canvas.drawOval(
       ui.Rect.fromCenter(
-          center: ui.Offset(hx, hy), width: highlightR * 1.4, height: highlightR),
+        center: ui.Offset(hx, hy),
+        width: highlightR * 1.4,
+        height: highlightR,
+      ),
       ui.Paint()
-        ..shader = ui.Gradient.radial(
-          ui.Offset(hx, hy),
-          highlightR,
-          [
-            const ui.Color(0xFFFFFFFF).withAlpha(90),
-            const ui.Color(0xFFFFFFFF).withAlpha(0),
-          ],
-        ),
+        ..shader = ui.Gradient.radial(ui.Offset(hx, hy), highlightR, [
+          const ui.Color(0xFFFFFFFF).withAlpha(90),
+          const ui.Color(0xFFFFFFFF).withAlpha(0),
+        ]),
     );
   }
 
@@ -294,9 +417,21 @@ class ShapePainter3D {
     return ui.Path()
       ..moveTo(cx, cy + h * 0.6)
       ..cubicTo(
-          cx - w * 1.2, cy - h * 0.2, cx - w * 0.4, cy - h * 0.9, cx, cy - h * 0.3)
+        cx - w * 1.2,
+        cy - h * 0.2,
+        cx - w * 0.4,
+        cy - h * 0.9,
+        cx,
+        cy - h * 0.3,
+      )
       ..cubicTo(
-          cx + w * 0.4, cy - h * 0.9, cx + w * 1.2, cy - h * 0.2, cx, cy + h * 0.6)
+        cx + w * 0.4,
+        cy - h * 0.9,
+        cx + w * 1.2,
+        cy - h * 0.2,
+        cx,
+        cy + h * 0.6,
+      )
       ..close();
   }
 

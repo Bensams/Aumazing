@@ -67,6 +67,7 @@ class _ParentQuestionnaireScreenState extends State<ParentQuestionnaireScreen> {
       // Carried with every answer so draft-template answers can always be
       // told apart from a validated instrument's.
       'template_status': _template.status,
+      'schema_signature': questionnaireSchemaSignature(_template),
       'answers': {
         for (final entry in _answers.entries) entry.key: entry.value.value,
       },
@@ -145,6 +146,15 @@ class _ParentQuestionnaireScreenState extends State<ParentQuestionnaireScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
+                    const Text(
+                      'Optional — your answers help add home observations to '
+                      'the summary. You can skip and still see game results and summaries. '
+                      'We ask at the initial assessment and planned follow-ups after a '
+                      'learning path, rather than after each game. Answer about home '
+                      'life over the last two weeks, not just today’s session.',
+                      key: Key('questionnaire.optionalNote'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     Text(
                       _template.intro,
                       style: AppTextStyles.bodyMedium.copyWith(

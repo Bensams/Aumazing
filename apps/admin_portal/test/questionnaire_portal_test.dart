@@ -10,8 +10,11 @@ import 'package:questionnaire_core/questionnaire_core.dart';
 /// AUM-352 — practitioners write the questionnaires in the portal;
 /// administrators approve practitioners and choose what is in use.
 class _FakeApi implements QuestionnaireApi {
-  _FakeApi({this.admin = false, this.application, List<Map<String, dynamic>>? templates})
-    : _templates = templates ?? [];
+  _FakeApi({
+    this.admin = false,
+    this.application,
+    List<Map<String, dynamic>>? templates,
+  }) : _templates = templates ?? [];
 
   bool admin;
   Map<String, dynamic>? application;
@@ -110,7 +113,9 @@ void main() {
       await pumpSized(
         tester,
         AdminShell(
-          api: _FakeApi(application: {'status': 'approved', 'full_name': 'Lea'}),
+          api: _FakeApi(
+            application: {'status': 'approved', 'full_name': 'Lea'},
+          ),
           onSignOut: () async {},
         ),
       );
@@ -233,6 +238,25 @@ void main() {
       expect(row['items'], kDefaultHomeTemplate['items']);
     });
 
+    testWidgets(
+      'an in-use questionnaire offers revision instead of direct editing',
+      (tester) async {
+        await pumpSized(
+          tester,
+          QuestionnairesPage(
+            api: _FakeApi(templates: [_template(active: true)]),
+            isAdmin: false,
+          ),
+        );
+        expect(find.byKey(const Key('questionnaires.edit.t1')), findsNothing);
+        expect(find.text('Create a revised version'), findsOneWidget);
+        expect(find.textContaining('sped_after'), findsNothing);
+        await tester.tap(find.byKey(const Key('questionnaires.copy.t1')));
+        await tester.pumpAndSettle();
+        expect(find.text('New version'), findsOneWidget);
+      },
+    );
+
     testWidgets('a practitioner cannot edit someone else\'s template', (
       tester,
     ) async {
@@ -262,16 +286,18 @@ void main() {
       final api = _FakeApi();
       await pumpSized(tester, TemplateEditorPage(api: api, isAdmin: false));
 
-      // Nothing to save yet: no name, title or questions.
+      // Nothing to save yet: no title or questions.
       expect(find.byKey(const Key('editor.errors')), findsOneWidget);
       expect(saveEnabled(tester), isFalse);
 
-      await tester.tap(find.text('After the session'));
+      await tester.tap(find.byKey(const Key('editor.kind')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('After the session').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editor.builtIn')));
       await tester.tap(find.byKey(const Key('editor.builtIn')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('editor.key')), 'sped_after');
-      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor.key')), findsNothing);
 
       expect(find.byKey(const Key('editor.errors')), findsNothing);
       await tester.tap(find.byKey(const Key('editor.save')));
@@ -279,7 +305,7 @@ void main() {
 
       final row = api.inserted.single;
       expect(row['kind'], 'observation');
-      expect(row['template_key'], 'sped_after');
+      expect(row['template_key'], 'what_did_you_see');
       expect(row['version'], 1);
       expect(row['title'], 'What did you see?');
       // What the portal saves is exactly what the app accepts.
@@ -290,12 +316,79 @@ void main() {
       expect(row['items'], kDefaultObservationTemplate.itemsJson());
     });
 
+    testWidgets(
+      'a practitioner marks current-session intake questions and revisions preserve that setting',
+      (tester) async {
+        final api = _FakeApi();
+        await pumpSized(
+          tester,
+          TemplateEditorPage(
+            api: api,
+            isAdmin: false,
+            asNewVersionOf: {
+              'template_key': kDefaultIntakeTemplate.key,
+              'version': 1,
+              'kind': 'intake',
+              'questionnaire_type': 'both',
+              'title': kDefaultIntakeTemplate.title,
+              'intro': kDefaultIntakeTemplate.intro,
+              'items': kDefaultIntakeTemplate.itemsJson(),
+              'status': 'draft',
+            },
+          ),
+        );
+        await tester.ensureVisible(find.byKey(const Key('editor.timing.1')));
+        await tester.tap(find.byKey(const Key('editor.timing.1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Ask each session').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('editor.save')));
+        await tester.pumpAndSettle();
+        final items = api.inserted.single['items'] as List;
+        expect(items.first['timing'], 'current_session');
+        expect(items[1]['timing'], 'background');
+        expect(
+          ChoiceTemplate.validateItems(TemplateKind.intake, items),
+          isEmpty,
+        );
+      },
+    );
+
+    testWidgets('normal titles get unique keys without technical input', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        templates: [
+          {'template_key': 'everyday_skills'},
+        ],
+      );
+      await pumpSized(tester, TemplateEditorPage(api: api, isAdmin: false));
+      await tester.enterText(
+        find.byKey(const ValueKey('editor.title.0')),
+        'Everyday Skills',
+      );
+      await tester.ensureVisible(find.byKey(const Key('editor.builtIn')));
+      await tester.tap(find.byKey(const Key('editor.builtIn')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor.key')), findsNothing);
+      await tester.tap(find.byKey(const Key('editor.save')));
+      await tester.pumpAndSettle();
+      expect(api.inserted.single['template_key'], 'everyday_skills_2');
+      expect(api.inserted.single['title'], 'Everyday Skills');
+      expect(validateHomeItems(api.inserted.single['items']), isEmpty);
+    });
+
     testWidgets('home questions need every area before saving', (tester) async {
       final api = _FakeApi();
       await pumpSized(tester, TemplateEditorPage(api: api, isAdmin: true));
-      await tester.enterText(find.byKey(const Key('editor.key')), 'home_v');
+      await tester.enterText(
+        find.byKey(const ValueKey('editor.title.0')),
+        'Everyday skills',
+      );
+      await tester.ensureVisible(find.byKey(const Key('editor.addQuestion')));
       await tester.tap(find.byKey(const Key('editor.addQuestion')));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editor.errors')));
       expect(
         find.textContaining('Add at least one question for Play Skills'),
         findsOneWidget,
@@ -324,13 +417,126 @@ void main() {
       expect(api.inserted, isEmpty);
     });
 
+    testWidgets('duplicate and undo preserve saved question identities', (
+      tester,
+    ) async {
+      final api = _FakeApi();
+      final source = {
+        ...kDefaultHomeTemplate,
+        'id': 'home',
+        'kind': 'home',
+        'version': 1,
+        'questionnaire_type': 'both',
+      };
+      await pumpSized(
+        tester,
+        TemplateEditorPage(api: api, isAdmin: false, existing: source),
+      );
+      final duplicate = find.byTooltip('Duplicate question').first;
+      await tester.ensureVisible(duplicate);
+      await tester.tap(duplicate);
+      await tester.pumpAndSettle();
+      final remove = find.byTooltip('Remove question').first;
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor.save')));
+      await tester.pumpAndSettle();
+      final items = api.updated.single.$2['items'] as List;
+      expect(items.length, (kDefaultHomeTemplate['items'] as List).length + 1);
+      expect(items[0]['id'], 'comm_name');
+      expect(items[1]['id'], isNot('comm_name'));
+      expect(items.map((item) => item['id']).toSet().length, items.length);
+      expect(validateHomeItems(items), isEmpty);
+      expect(items[2]['id'], 'comm_request');
+    });
+
+    testWidgets('small-screen preview accepts answers without saving them', (
+      tester,
+    ) async {
+      final api = _FakeApi();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TemplateEditorPage(
+            api: api,
+            isAdmin: false,
+            asNewVersionOf: {
+              ...kDefaultHomeTemplate,
+              'kind': 'home',
+              'version': 1,
+              'questionnaire_type': 'both',
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('editor.openPreview')));
+      await tester.pumpAndSettle();
+      expect(find.text('Preview as a parent'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilterChip, 'Often').first);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Often').first)
+            .selected,
+        isTrue,
+      );
+      expect(api.inserted, isEmpty);
+      expect(api.updated, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('rewording an existing question keeps its stored id', (
+      tester,
+    ) async {
+      final api = _FakeApi();
+      await pumpSized(
+        tester,
+        TemplateEditorPage(api: api, isAdmin: false, existing: _template()),
+      );
+      final question =
+          find
+              .byWidgetPredicate(
+                (w) =>
+                    w is TextField &&
+                    w.decoration?.labelText == 'Question parents will answer',
+              )
+              .first;
+      await tester.ensureVisible(question);
+      await tester.enterText(
+        question,
+        'Did your child need support during this game?',
+      );
+      await tester.tap(find.byKey(const Key('editor.save')));
+      await tester.pumpAndSettle();
+      final items = api.updated.single.$2['items'] as List;
+      expect(items.first['id'], kDefaultObservationTemplate.questions.first.id);
+      expect(
+        items.first['text'],
+        'Did your child need support during this game?',
+      );
+      expect(
+        items.first['options'],
+        kDefaultObservationTemplate.itemsJson().first['options'],
+      );
+    });
+
     testWidgets('a new version copies the questions and bumps the version', (
       tester,
     ) async {
       final api = _FakeApi();
       await pumpSized(
         tester,
-        TemplateEditorPage(api: api, isAdmin: false, asNewVersionOf: _template()),
+        TemplateEditorPage(
+          api: api,
+          isAdmin: false,
+          asNewVersionOf: _template(),
+        ),
       );
       await tester.tap(find.byKey(const Key('editor.save')));
       await tester.pumpAndSettle();

@@ -589,6 +589,8 @@ class _FallbackSummaryService extends AssessmentSummaryService {
     required String fallback,
     List<Map<String, String>>? previousAreas,
     String languageCode = 'en',
+    Map<String, dynamic>? parentContext,
+    String cacheScope = '',
   }) async => AssessmentSummary(text: fallback, isAi: false);
 }
 

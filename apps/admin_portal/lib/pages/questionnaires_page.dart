@@ -13,7 +13,11 @@ import 'template_editor_page.dart';
 /// per question set and assessment type. With none in use the app asks its
 /// built-in questions.
 class QuestionnairesPage extends StatefulWidget {
-  const QuestionnairesPage({super.key, required this.api, required this.isAdmin});
+  const QuestionnairesPage({
+    super.key,
+    required this.api,
+    required this.isAdmin,
+  });
 
   final QuestionnaireApi api;
   final bool isAdmin;
@@ -70,16 +74,21 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
   }) async {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => TemplateEditorPage(
-          api: widget.api,
-          isAdmin: widget.isAdmin,
-          existing: existing,
-          asNewVersionOf: copyOf,
-        ),
+        builder:
+            (_) => TemplateEditorPage(
+              api: widget.api,
+              isAdmin: widget.isAdmin,
+              existing: existing,
+              asNewVersionOf: copyOf,
+            ),
       ),
     );
     if (saved == true) {
-      _snack('Saved.');
+      _snack(
+        widget.isAdmin
+            ? 'Saved. Activate this questionnaire when it is ready for parents.'
+            : 'Saved. An administrator must review and activate this questionnaire before parents see it.',
+      );
       _load();
     }
   }
@@ -96,7 +105,9 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   bool _mine(Map<String, dynamic> t) => t['authored_by'] == widget.api.userId;
@@ -133,11 +144,11 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
           Text(
             widget.isAdmin
                 ? 'Review what practitioners write, then choose which '
-                      'questionnaire is in use. With none in use, the app '
-                      'asks its built-in questions.'
+                    'questionnaire is in use. With none in use, the app '
+                    'asks its built-in questions.'
                 : 'Write the questions parents, guardians and teachers '
-                      'answer around an assessment. An administrator reviews '
-                      'each one before parents see it.',
+                    'answer around an assessment. An administrator reviews '
+                    'each one before parents see it.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -252,7 +263,7 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
           active ? Icons.check_circle_rounded : Icons.description_outlined,
           color: active ? Colors.green : null,
         ),
-        title: Text('${t['title']}  ·  ${t['template_key']} v${t['version']}'),
+        title: Text('${t['title']}  ·  Version ${t['version']}'),
         subtitle: Text(
           [
             scope,
@@ -268,40 +279,42 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
         trailing: Wrap(
           spacing: 4,
           children: [
-            if (canEdit)
+            if (canEdit && !active)
               IconButton(
                 key: Key('questionnaires.edit.${t['id']}'),
                 tooltip: 'Edit',
                 onPressed: () => _openEditor(existing: t),
                 icon: const Icon(Icons.edit_rounded),
               ),
-            IconButton(
+            TextButton.icon(
               key: Key('questionnaires.copy.${t['id']}'),
-              tooltip: 'New version from this',
               onPressed: () => _openEditor(copyOf: t),
               icon: const Icon(Icons.copy_rounded),
+              label: Text(active ? 'Create a revised version' : 'New version'),
             ),
             if (widget.isAdmin) ...[
               TextButton(
                 key: Key('questionnaires.validate.${t['id']}'),
-                onPressed: () => _run(
-                  () => widget.api.setStatus(
-                    '${t['id']}',
-                    validated ? 'draft' : 'validated',
-                  ),
-                  validated ? 'Marked as draft.' : 'Marked as validated.',
-                ),
+                onPressed:
+                    () => _run(
+                      () => widget.api.setStatus(
+                        '${t['id']}',
+                        validated ? 'draft' : 'validated',
+                      ),
+                      validated ? 'Marked as draft.' : 'Marked as validated.',
+                    ),
                 child: Text(validated ? 'Mark draft' : 'Mark validated'),
               ),
               FilledButton.tonal(
                 key: Key('questionnaires.activate.${t['id']}'),
-                onPressed: () => _run(
-                  () => widget.api.setActive(t, !active),
-                  active
-                      ? 'Taken out of use. The app asks its built-in '
-                            'questions.'
-                      : 'Now in use for new assessments.',
-                ),
+                onPressed:
+                    () => _run(
+                      () => widget.api.setActive(t, !active),
+                      active
+                          ? 'Taken out of use. The app asks its built-in '
+                              'questions.'
+                          : 'Now in use for new assessments.',
+                    ),
                 child: Text(active ? 'Stop using' : 'Use this'),
               ),
             ],

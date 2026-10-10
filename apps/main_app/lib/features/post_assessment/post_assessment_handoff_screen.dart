@@ -3,7 +3,7 @@ import 'package:questionnaire_core/questionnaire_core.dart';
 
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
-import '../questionnaire/parent_questionnaire_screen.dart';
+import '../questionnaire/home_questionnaire_flow.dart';
 import '../questionnaire/questionnaire_template_repository.dart';
 import '../questionnaire/session_observation_screen.dart';
 import 'post_assessment_result_screen.dart';
@@ -29,11 +29,13 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
     this.assessmentRunId,
     this.showQuestionnaire = true,
     this.templateRepository,
+    this.gameIds = kAssessmentGameIds,
   });
 
   /// Where the questionnaire's active template comes from. Injectable for
   /// tests; the app uses the shared repository.
   final QuestionnaireTemplateRepository? templateRepository;
+  final List<String> gameIds;
 
   /// The child and the finished run, so the parent questionnaire is stored
   /// against them. The run id is captured before the run is closed.
@@ -88,41 +90,31 @@ class PostAssessmentHandoffScreen extends StatelessWidget {
               assessmentType: 'post',
               childId: childId,
               assessmentRunId: assessmentRunId,
+              gameIds: gameIds,
               onDone: (next) => _showQuestionnaire(next, childId),
             ),
       ),
     );
   }
 
-  Future<void> _showQuestionnaire(BuildContext context, String childId) async {
-    // The practitioner-authored template when one is active, else the
-    // bundled draft. Bounded by a short timeout, so the hand-off never
-    // stalls on a slow connection.
-    final template = await (templateRepository ??
-            QuestionnaireTemplateRepository.instance)
-        .templateFor('post');
-    if (!context.mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder:
-            (_) => ParentQuestionnaireScreen(
-              template: template,
-              assessmentType: 'post',
-              childId: childId,
-              assessmentRunId: assessmentRunId,
-              onDone: _showResults,
-            ),
-      ),
-    );
-  }
+  Future<void> _showQuestionnaire(BuildContext context, String childId) =>
+      HomeQuestionnaireFlow.show(
+        context,
+        assessmentType: 'post',
+        childId: childId,
+        assessmentRunId: assessmentRunId,
+        onDone: _showResults,
+        repository: templateRepository,
+      );
 
   void _showResults(BuildContext context) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => PostAssessmentResultScreen(
-          improvement: improvement,
-          nextModulePremiumRequired: nextModulePremiumRequired,
-        ),
+        builder:
+            (_) => PostAssessmentResultScreen(
+              improvement: improvement,
+              nextModulePremiumRequired: nextModulePremiumRequired,
+            ),
       ),
     );
   }

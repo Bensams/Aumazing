@@ -6,22 +6,26 @@ void main() {
     test('pass their own validation', () {
       expect(validateHomeItems(kDefaultHomeTemplate['items']), isEmpty);
       for (final t in [kDefaultIntakeTemplate, kDefaultObservationTemplate]) {
-        expect(ChoiceTemplate.validateItems(t.kind, t.itemsJson()), isEmpty,
-            reason: t.key);
+        expect(
+          ChoiceTemplate.validateItems(t.kind, t.itemsJson()),
+          isEmpty,
+          reason: t.key,
+        );
       }
     });
 
     test('round-trip through a stored row unchanged', () {
       for (final t in [kDefaultIntakeTemplate, kDefaultObservationTemplate]) {
-        final back = ChoiceTemplate.fromRow({
-          'template_key': t.key,
-          'version': t.version,
-          'kind': t.kind.key,
-          'title': t.title,
-          'intro': t.intro,
-          'items': t.itemsJson(),
-          'status': 'validated',
-        }, t.kind)!;
+        final back =
+            ChoiceTemplate.fromRow({
+              'template_key': t.key,
+              'version': t.version,
+              'kind': t.kind.key,
+              'title': t.title,
+              'intro': t.intro,
+              'items': t.itemsJson(),
+              'status': 'validated',
+            }, t.kind)!;
         expect(back.itemsJson(), t.itemsJson());
         expect(back.status, 'validated');
       }
@@ -81,12 +85,12 @@ void main() {
       );
     });
 
-    test('after the session at least one question is per game', () {
+    test('a short check-in can contain only session questions', () {
       expect(
         ChoiceTemplate.validateItems(TemplateKind.observation, [
           {'id': 'n', 'text': 'Note', 'type': 'text'},
         ]),
-        ['Ask at least one question for each game.'],
+        isEmpty,
       );
     });
 
@@ -127,7 +131,14 @@ void main() {
       expect(t.isComplete(game, QuestionScope.game), isTrue);
       // The note is optional; the day is not.
       expect(t.isComplete({}, QuestionScope.session), isFalse);
-      expect(t.isComplete({'day': 'normal'}, QuestionScope.session), isTrue);
+      expect(
+        t.isComplete({
+          'day': 'normal',
+          'session_help': 'none',
+          'session_mood': 'calm',
+        }, QuestionScope.session),
+        isTrue,
+      );
       // An answer the question does not offer does not count.
       expect(t.isComplete({'day': 'rainy'}, QuestionScope.session), isFalse);
     });
@@ -169,7 +180,9 @@ void main() {
         ['SPED class or school', 'Therapy: Speech, Occupational'],
       );
       expect(
-        intake.summary({'therapies': ['none']}, QuestionScope.session),
+        intake.summary({
+          'therapies': ['none'],
+        }, QuestionScope.session),
         isEmpty,
       );
     });

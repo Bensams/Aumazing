@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -47,10 +49,20 @@ class AssessmentSummaryService {
     required String fallback,
     List<Map<String, String>>? previousAreas,
     String languageCode = 'en',
+    Map<String, dynamic>? parentContext,
+    String cacheScope = '',
   }) async {
     final isProgress = previousAreas != null && previousAreas.isNotEmpty;
     final cacheKey = _cacheKey(
-        areas, overallPct, supportLevel, previousAreas, languageCode);
+      areas,
+      overallPct,
+      supportLevel,
+      previousAreas,
+      languageCode,
+      parentContext,
+      cacheScope,
+      recommendations,
+    );
 
     // 1) Cached AI summary → instant, works offline.
     final cached = await _readCache(cacheKey);
@@ -61,15 +73,19 @@ class AssessmentSummaryService {
     // 2) Try the Edge Function, but never let it break the screen.
     try {
       final response = await Supabase.instance.client.functions
-          .invoke('summarize-assessment', body: {
-            'areas': areas,
-            'overall_pct': overallPct,
-            'support_level': supportLevel,
-            'recommendations': recommendations,
-            'language': languageCode,
-            if (isProgress) 'previous_areas': previousAreas,
-            'mode': isProgress ? 'progress' : 'snapshot',
-          })
+          .invoke(
+            'summarize-assessment',
+            body: {
+              'areas': areas,
+              'overall_pct': overallPct,
+              'support_level': supportLevel,
+              'recommendations': recommendations,
+              'language': languageCode,
+              if (isProgress) 'previous_areas': previousAreas,
+              'mode': isProgress ? 'progress' : 'snapshot',
+              if (parentContext != null) 'parent_context': parentContext,
+            },
+          )
           .timeout(_timeout);
 
       final data = response.data;
@@ -95,9 +111,11 @@ class AssessmentSummaryService {
     String supportLevel, [
     List<Map<String, String>>? previousAreas,
     String languageCode = 'en',
+    Map<String, dynamic>? parentContext,
+    String cacheScope = '',
+    List<String> recommendations = const [],
   ]) {
-    final areaPart =
-        areas.map((a) => '${a['name']}:${a['level']}').join('|');
+    final areaPart = areas.map((a) => '${a['name']}:${a['level']}').join('|');
     // The pre levels are part of the key so a post (progress) summary
     // caches separately from a snapshot with the same current levels; the
     // language is included so each language caches (and re-generates)
@@ -105,9 +123,22 @@ class AssessmentSummaryService {
     final prevPart = (previousAreas ?? const [])
         .map((a) => '${a['name']}:${a['level']}')
         .join('|');
-    return 'ai_summary_${areaPart}_${overallPct}_${supportLevel}_'
-            '${prevPart}_$languageCode'
-        .hashCode
+    return sha256
+        .convert(
+          utf8.encode(
+            jsonEncode([
+              'summary_with_home_context_v1',
+              cacheScope,
+              areaPart,
+              overallPct,
+              supportLevel,
+              prevPart,
+              languageCode,
+              recommendations,
+              parentContext,
+            ]),
+          ),
+        )
         .toString();
   }
 
@@ -137,6 +168,15 @@ class AssessmentSummaryService {
     String supportLevel, [
     List<Map<String, String>>? previousAreas,
     String languageCode = 'en',
-  ]) =>
-      _cacheKey(areas, overallPct, supportLevel, previousAreas, languageCode);
+    Map<String, dynamic>? parentContext,
+    String cacheScope = '',
+  ]) => _cacheKey(
+    areas,
+    overallPct,
+    supportLevel,
+    previousAreas,
+    languageCode,
+    parentContext,
+    cacheScope,
+  );
 }

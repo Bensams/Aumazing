@@ -37,14 +37,15 @@ void main() {
   ) async {
     final game = AnongSusunodGame(
       onStepChanged: (_) {},
-      onGameComplete: ({
-        required score,
-        required totalItems,
-        required errorCount,
-        required totalResponseTimeMs,
-        required extras,
-        analytics,
-      }) {},
+      onGameComplete:
+          ({
+            required score,
+            required totalItems,
+            required errorCount,
+            required totalResponseTimeMs,
+            required extras,
+            analytics,
+          }) {},
       childId: 'test-child',
       profile: profile,
     );
@@ -97,34 +98,51 @@ void main() {
       DifficultyProfile.medium,
       DifficultyProfile.hard,
     ]) {
-      testWidgets('${profile.label}: the tray offers more cards than gaps',
-          (tester) async {
+      testWidgets('${profile.label}: the tray offers more cards than gaps', (
+        tester,
+      ) async {
         final game = await boot(tester, profile);
         final gaps = slotsOf(game).where((s) => s.filled == null).length;
 
         expect(gaps, greaterThan(0));
-        expect(trayOf(game).length, greaterThan(gaps),
-            reason: 'with one card per gap the last placement is forced, and '
-                'on Easy — one gap, one card — the child cannot be wrong at '
-                'all, so the session reports a perfect score no matter what '
-                'they understood');
+        expect(
+          trayOf(game).length,
+          greaterThan(gaps),
+          reason:
+              'with one card per gap the last placement is forced, and '
+              'on Easy — one gap, one card — the child cannot be wrong at '
+              'all, so the session reports a perfect score no matter what '
+              'they understood',
+        );
       });
 
-      testWidgets('${profile.label}: a distractor belongs to no slot this round',
-          (tester) async {
-        final game = await boot(tester, profile);
-        // Round one always draws the first routine.
-        final belongs = kRoutines.first.steps.map((s) => s.id).toSet();
-        final offered = trayOf(game).map((c) => c.step.id).toSet();
+      testWidgets(
+        '${profile.label}: a distractor belongs to no slot this round',
+        (tester) async {
+          final game = await boot(tester, profile);
+          // Round one always draws the first routine; Easy exposes only three
+          // of its four steps, so the hidden fourth step can be a valid foil.
+          final belongs =
+              kRoutines.first.steps
+                  .take(slotsOf(game).length)
+                  .map((step) => step.id)
+                  .toSet();
+          final offered = trayOf(game).map((c) => c.step.id).toSet();
 
-        expect(offered.difference(belongs), isNotEmpty,
-            reason: 'no distractor was dealt at all');
-        // `brush` is in both Umaga and Gabi, `wash` in both Kainan and Laro.
-        // A foil chosen by identity rather than by step id would hand back a
-        // card that IS part of this routine, leaving a step unplaceable.
-        expect(offered.intersection(belongs).length,
-            lessThanOrEqualTo(belongs.length));
-      });
+          expect(
+            offered.difference(belongs),
+            isNotEmpty,
+            reason: 'no distractor was dealt at all',
+          );
+          // `brush` is in both Umaga and Gabi, `wash` in both Kainan and Laro.
+          // A foil chosen by identity rather than by step id would hand back a
+          // card that IS part of this routine, leaving a step unplaceable.
+          expect(
+            offered.intersection(belongs).length,
+            lessThanOrEqualTo(belongs.length),
+          );
+        },
+      );
     }
 
     testWidgets('a distractor is rejected rather than seated', (tester) async {
@@ -141,8 +159,9 @@ void main() {
   });
 
   group('drag places a card, exactly as a tap does', () {
-    testWidgets('dragging the right card onto its slot seats it',
-        (tester) async {
+    testWidgets('dragging the right card onto its slot seats it', (
+      tester,
+    ) async {
       final game = await boot(tester, DifficultyProfile.medium);
       final gap = slotsOf(game).firstWhere((s) => s.filled == null);
       final wanted = kRoutines.first.steps[gap.index].id;
@@ -152,13 +171,18 @@ void main() {
 
       expect(gap.filled?.id, wanted);
       expect(card.placed, isTrue);
-      expect(trayOf(game).any((c) => c.step.id == wanted), isFalse,
-          reason: 'the same step showing in the tray and in its slot at once '
-              'is the ambiguity a visual schedule exists to remove');
+      expect(
+        trayOf(game).any((c) => c.step.id == wanted),
+        isFalse,
+        reason:
+            'the same step showing in the tray and in its slot at once '
+            'is the ambiguity a visual schedule exists to remove',
+      );
     });
 
-    testWidgets('tapping the right card then its slot seats it too',
-        (tester) async {
+    testWidgets('tapping the right card then its slot seats it too', (
+      tester,
+    ) async {
       final game = await boot(tester, DifficultyProfile.medium);
       final gap = slotsOf(game).firstWhere((s) => s.filled == null);
       final wanted = kRoutines.first.steps[gap.index].id;
@@ -171,13 +195,18 @@ void main() {
       await tester.tapAt(centreOf(gap));
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(gap.filled?.id, wanted,
-          reason: 'the tap path must still place a card — it is what a child '
-              'with motor-planning differences can complete');
+      expect(
+        gap.filled?.id,
+        wanted,
+        reason:
+            'the tap path must still place a card — it is what a child '
+            'with motor-planning differences can complete',
+      );
     });
 
-    testWidgets('a wrong card dragged onto a slot comes back to the tray',
-        (tester) async {
+    testWidgets('a wrong card dragged onto a slot comes back to the tray', (
+      tester,
+    ) async {
       final game = await boot(tester, DifficultyProfile.medium);
       final gap = slotsOf(game).firstWhere((s) => s.filled == null);
       final wanted = kRoutines.first.steps[gap.index].id;
@@ -189,13 +218,18 @@ void main() {
 
       expect(gap.filled, isNull);
       expect(card.placed, isFalse);
-      expect((card.position - home).length, lessThan(1.0),
-          reason: 'a rejected card must return to the tray, not sit on top of '
-              'the slot it bounced off');
+      expect(
+        (card.position - home).length,
+        lessThan(1.0),
+        reason:
+            'a rejected card must return to the tray, not sit on top of '
+            'the slot it bounced off',
+      );
     });
 
-    testWidgets('a card released over open canvas returns home unscored',
-        (tester) async {
+    testWidgets('a card released over open canvas returns home unscored', (
+      tester,
+    ) async {
       final game = await boot(tester, DifficultyProfile.medium);
       final card = trayOf(game).first;
       final home = card.homePosition.clone();
@@ -207,8 +241,9 @@ void main() {
       expect((card.position - home).length, lessThan(1.0));
     });
 
-    testWidgets('a tap that wobbles leaves the card exactly where it was',
-        (tester) async {
+    testWidgets('a tap that wobbles leaves the card exactly where it was', (
+      tester,
+    ) async {
       final game = await boot(tester, DifficultyProfile.medium);
       final card = trayOf(game).first;
       final home = card.homePosition.clone();

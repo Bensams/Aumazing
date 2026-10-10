@@ -18,8 +18,11 @@ void main() {
       for (final domain in QuestionnaireDomain.values) {
         expect(template.itemsFor(domain), hasLength(4), reason: domain.key);
       }
-      expect(template.items.map((i) => i.id).toSet(), hasLength(16),
-          reason: 'item ids are stored with answers and must be unique');
+      expect(
+        template.items.map((i) => i.id).toSet(),
+        hasLength(16),
+        reason: 'item ids are stored with answers and must be unique',
+      );
     });
 
     test('is marked as a draft', () {
@@ -45,9 +48,7 @@ void main() {
     });
 
     test('all Always is 100 and all Never is 0', () {
-      final always = {
-        for (final i in template.items) i.id: Frequency.always,
-      };
+      final always = {for (final i in template.items) i.id: Frequency.always};
       final never = {for (final i in template.items) i.id: Frequency.never};
       expect(scoreQuestionnaire(template, always).values.toSet(), {100});
       expect(scoreQuestionnaire(template, never).values.toSet(), {0});
@@ -94,7 +95,9 @@ void main() {
 
     Future<void> answerAll(WidgetTester tester, Frequency f) async {
       for (final item in template.items) {
-        final chip = find.byKey(Key('questionnaire.answer.${item.id}.${f.name}'));
+        final chip = find.byKey(
+          Key('questionnaire.answer.${item.id}.${f.name}'),
+        );
         await tester.ensureVisible(chip);
         await tester.tap(chip);
         await tester.pump();
@@ -143,6 +146,10 @@ void main() {
       final responses = record['responses'] as Map<String, dynamic>;
       expect(responses['template_id'], template.id);
       expect(responses['template_status'], 'draft');
+      expect(
+        responses['schema_signature'],
+        questionnaireSchemaSignature(template),
+      );
       expect((responses['answers'] as Map), hasLength(16));
       expect(responses['domain_scores'], {
         'communication': 50.0,
@@ -165,7 +172,11 @@ void main() {
     Map<String, dynamic> row(String type, String at, Map<String, double> s) => {
       'questionnaire_type': type,
       'completed_at': at,
-      'responses': jsonEncode({'domain_scores': s}),
+      'responses': jsonEncode({
+        'template_id': template.id,
+        'template_version': 1,
+        'domain_scores': s,
+      }),
     };
 
     Future<void> pumpCard(
@@ -217,6 +228,32 @@ void main() {
       ]);
       expect(find.byKey(const Key('questionnaireComparison')), findsNothing);
     });
+
+    testWidgets('changed questions cannot show a before-after comparison', (
+      tester,
+    ) async {
+      final changed = row('post', '2026-03-01', {'communication': 75});
+      changed['responses'] = jsonEncode({
+        'template_id': template.id,
+        'template_version': 2,
+        'domain_scores': {'communication': 75},
+      });
+      await pumpCard(tester, [
+        row('pre', '2026-01-01', {'communication': 25}),
+        changed,
+      ]);
+      expect(find.byKey(const Key('questionnaireComparison')), findsNothing);
+    });
+
+    testWidgets('a later pre cannot be compared to an earlier post', (
+      tester,
+    ) async {
+      await pumpCard(tester, [
+        row('pre', '2026-04-01', {'communication': 25}),
+        row('post', '2026-03-01', {'communication': 75}),
+      ]);
+      expect(find.byKey(const Key('questionnaireComparison')), findsNothing);
+    });
   });
 
   group('sync to the cloud table', () {
@@ -242,11 +279,17 @@ void main() {
       expect(row['assessment_run_id'], 'run-1');
       expect(row['completed_by_role'], 'parent');
       expect(row['created_at'], '2026-09-27T10:00:00.000');
-      expect(row['social_communication_score'], 75.0,
-          reason: 'the mean of communication (50) and social (100)');
+      expect(
+        row['social_communication_score'],
+        75.0,
+        reason: 'the mean of communication (50) and social (100)',
+      );
       expect(row.containsKey('responses'), isFalse);
-      expect(row.containsKey('completed_at'), isFalse,
-          reason: 'the cloud table has no completed_at column');
+      expect(
+        row.containsKey('completed_at'),
+        isFalse,
+        reason: 'the cloud table has no completed_at column',
+      );
     });
 
     test('a malformed answer blob still syncs the row identity', () {

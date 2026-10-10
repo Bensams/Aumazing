@@ -11,6 +11,7 @@ import '../core/services/local_db_service.dart';
 import '../model/assessment_result.dart';
 import '../model/gameplay_session.dart';
 import 'parent_history_service.dart';
+import '../features/questionnaire/home_observation_context.dart';
 import 'rubric/rubric.dart';
 
 /// Who wrote an overall gameplay summary.
@@ -107,6 +108,7 @@ class GameplaySummaryInput {
     required this.pathGames,
     required this.recommendedPlays,
     required this.fingerprint,
+    this.homeContext = const HomeObservationContext(),
   });
 
   /// Completed assessments, oldest first.
@@ -115,8 +117,9 @@ class GameplaySummaryInput {
   final int recommendedPlays;
 
   /// Changes whenever a record the summary depends on changes; an unchanged
-  /// fingerprint means there is no new game record to summarize.
+  /// fingerprint means there is no new game or home report to summarize.
   final String fingerprint;
+  final HomeObservationContext homeContext;
 
   bool get isEmpty => assessments.isEmpty && recommendedPlays == 0;
 
@@ -124,6 +127,7 @@ class GameplaySummaryInput {
     'assessments': [for (final a in assessments) a.toPayload()],
     'recommended_activities': [for (final g in pathGames) g.toPayload()],
     'recommended_plays': recommendedPlays,
+    if (!homeContext.isEmpty) 'parent_context': homeContext.toPayload(),
   };
 }
 
@@ -143,7 +147,7 @@ class OverallGameplaySummary {
   final GameplaySummarySource source;
   final DateTime generatedAt;
 
-  /// True when this is the saved summary, reused because no new game record
+  /// True when this is the saved summary, reused because no new input
   /// arrived since it was written.
   final bool fromCache;
 
@@ -160,7 +164,8 @@ typedef GameplaySummaryRemote =
 /// post-assessment and any later assessment cycle — free practice is left
 /// out. The `summarize-gameplay` Edge Function writes it with Gemini, or with
 /// Groq when Gemini is at its limit (keys in Vault; only levels, counts and
-/// game names are sent — never the child's name). When neither answers the
+/// game names and dated aggregate home frequencies are sent — never the
+/// child's name). When neither answers the
 /// summary is written on the device instead, and the card says which of the
 /// three the parent is reading.
 ///
@@ -208,6 +213,12 @@ class OverallGameplaySummaryService {
     final runs = await _localDb.getAssessmentRuns(childId: childId);
     final results = await _localDb.getAssessmentResults(childId: childId);
     final sessions = await _localDb.getGameSessions(childId: childId);
+    List<Map<String, dynamic>> questionnaires = const [];
+    try {
+      questionnaires = await _localDb.getCaregiverQuestionnaires(childId);
+    } catch (_) {
+      // Home observations are optional; gameplay remains sufficient.
+    }
     return assemble(
       runs: [
         for (final r in runs)
@@ -218,6 +229,8 @@ class OverallGameplaySummaryService {
       sessions: sessions,
       pathGameIds: pathGameIds,
       pathAttempts: pathAttempts,
+      questionnaireRows: questionnaires,
+      childId: childId,
     );
   }
 
@@ -229,6 +242,8 @@ class OverallGameplaySummaryService {
     required List<GameplaySession> sessions,
     List<String> pathGameIds = const [],
     Map<String, PathAttemptRecord> pathAttempts = const {},
+    List<Map<String, dynamic>> questionnaireRows = const [],
+    String? childId,
   }) {
     final included = [
       for (final s in sessions)
@@ -310,11 +325,17 @@ class OverallGameplaySummaryService {
       );
     }
 
+    final homeContext = HomeObservationContext.fromRows(
+      rows: questionnaireRows,
+      runs: runs,
+      childId: childId,
+    );
     return GameplaySummaryInput(
+      homeContext: homeContext,
       assessments: assessments,
       pathGames: pathGames,
       recommendedPlays: recommended.length,
-      fingerprint: _fingerprint(included, assessments, pathGames),
+      fingerprint: _fingerprint(included, assessments, pathGames, homeContext),
     );
   }
 
@@ -331,8 +352,10 @@ class OverallGameplaySummaryService {
     List<GameplaySession> included,
     List<SummaryAssessment> assessments,
     List<SummaryPathGame> pathGames,
+    HomeObservationContext homeContext,
   ) {
-    final buffer = StringBuffer();
+    final buffer = StringBuffer('summary_with_home_context_v1|');
+    buffer.write(jsonEncode(homeContext.toPayload()));
     for (final s in included) {
       buffer.write('${s.id}|');
     }
@@ -568,7 +591,10 @@ class OverallGameplaySummaryService {
     }
 
     return OverallGameplaySummary(
-      summary: sentences.join(' '),
+      summary: [
+        ...sentences,
+        if (!input.homeContext.isEmpty) input.homeContext.fallbackText,
+      ].join(' '),
       questions: questions.take(5).toList(),
       source: GameplaySummarySource.onDevice,
       generatedAt: DateTime.now(),

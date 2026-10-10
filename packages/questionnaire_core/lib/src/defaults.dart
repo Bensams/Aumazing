@@ -65,7 +65,7 @@ const kDefaultIntakeTemplate = ChoiceTemplate(
 /// The bundled "What did you see?" questions (AUM-351).
 const kDefaultObservationTemplate = ChoiceTemplate(
   key: 'aumazing_session_observation',
-  version: 1,
+  version: 2,
   status: 'draft',
   kind: TemplateKind.observation,
   title: 'What did you see?',
@@ -74,6 +74,38 @@ const kDefaultObservationTemplate = ChoiceTemplate(
       'answers — tell us what you saw. Your answers appear beside each '
       'game\'s result and never change a score.',
   questions: [
+    TemplateQuestion(
+      id: 'session_help',
+      text: 'Did your child need help during this session?',
+      type: QuestionType.single,
+      required: true,
+      shortLabel: 'Help during this session',
+      options: [
+        ChoiceOption(id: 'none', label: 'No help'),
+        ChoiceOption(id: 'some', label: 'Some help', flag: 'Needed some help'),
+        ChoiceOption(
+          id: 'a_lot',
+          label: 'A lot of help',
+          flag: 'Needed a lot of help',
+        ),
+      ],
+    ),
+    TemplateQuestion(
+      id: 'session_mood',
+      text: 'How did your child seem during this session?',
+      type: QuestionType.single,
+      required: true,
+      shortLabel: 'Mood during this session',
+      options: [
+        ChoiceOption(id: 'calm', label: 'Calm'),
+        ChoiceOption(id: 'excited', label: 'Excited'),
+        ChoiceOption(
+          id: 'upset',
+          label: 'Frustrated or upset',
+          flag: 'Was frustrated or upset',
+        ),
+      ],
+    ),
     TemplateQuestion(
       id: 'understood',
       text: 'Did your child understand what to do?',

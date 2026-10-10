@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:questionnaire_core/questionnaire_core.dart';
 import 'package:shared_ui/shared_ui.dart';
@@ -7,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/services/local_db_service.dart';
 import 'observed_session.dart';
+import 'intake_background.dart';
 import 'parent_questionnaire_comparison_card.dart' show QuestionnaireLoader;
 import 'parent_questionnaire_screen.dart' show QuestionnaireSaver;
 import 'questionnaire_template_repository.dart';
@@ -18,7 +17,7 @@ import 'widgets/template_question_field.dart';
 /// while the child plays.
 ///
 /// Records who is watching, then the practitioner-authored intake questions
-/// (AUM-352) — background about the child, pre-filled from the last time.
+/// (AUM-352) — background about the child, with an explicit reuse or update choice.
 /// **Skip** starts the games without saving anything.
 class ObserverIntakeScreen extends StatefulWidget {
   const ObserverIntakeScreen({
@@ -75,6 +74,10 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
   ObserverRole? _role;
   final Map<String, Object?> _answers = {};
   bool _saving = false;
+  bool _loading = true;
+  IntakeBackground? _previous;
+  String? _backgroundMode;
+  final Set<String> _edited = {};
 
   /// Bumped when last time's answers arrive, so the fields rebuild with them.
   int _prefillGeneration = 0;
@@ -87,59 +90,79 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
     _prefill();
   }
 
-  /// The latest intake for this child, so background is answered once and
-  /// only corrected afterwards. Answers the current questions no longer
-  /// offer are dropped.
   Future<void> _prefill() async {
     try {
       final rows = await (widget.loader ??
           localDbService.getCaregiverQuestionnaires)(widget.childId);
-      final intakes =
-          rows
-              .where(
-                (r) => '${r['questionnaire_type']}'.endsWith('_intake'),
-              )
-              .toList()
-            ..sort(
-              (a, b) =>
-                  '${b['completed_at']}'.compareTo('${a['completed_at']}'),
-            );
-      for (final row in intakes) {
-        final decoded = jsonDecode(row['responses'] as String? ?? '{}');
-        if (decoded is! Map<String, dynamic>) continue;
-        final last = IntakeRecord.fromResponses(decoded);
-        if (last == null) continue;
-        if (!mounted) return;
-        setState(() {
-          _role ??= last.role;
-          for (final q in _template.questions) {
-            final value = last.answers[q.id];
-            if (!_answers.containsKey(q.id) && q.isAnswered(value)) {
-              _answers[q.id] = value;
-            }
-          }
-          _prefillGeneration++;
-        });
-        return;
-      }
+      if (!mounted) return;
+      final previous = IntakeBackground.latest(rows, _template);
+      setState(() {
+        _previous = previous;
+        _loading = false;
+        if (previous == null || previous.answers.isEmpty) {
+          _backgroundMode = 'initial';
+        }
+      });
     } catch (e) {
-      debugPrint('[ObserverIntake] prefill failed: $e');
+      debugPrint('[ObserverIntake] background read failed: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _backgroundMode = 'initial';
+        });
+      }
     }
   }
+
+  void _chooseBackground(String mode) {
+    setState(() {
+      _backgroundMode = mode;
+      for (final q in _template.questions) {
+        if (q.timing == AnswerTiming.background) _answers.remove(q.id);
+      }
+      _answers.addAll(_previous?.answers ?? {});
+      _edited.clear();
+      _prefillGeneration++;
+    });
+  }
+
+  bool _showQuestion(TemplateQuestion q) =>
+      q.timing == AnswerTiming.currentSession ||
+      (_backgroundMode != null &&
+          (_backgroundMode != 'reuse' ||
+              !(_previous?.answers.containsKey(q.id) ?? false)));
 
   bool get _canStart =>
       _role != null &&
       !_saving &&
+      !_loading &&
+      _backgroundMode != null &&
       _template.isComplete(_answers, QuestionScope.session);
 
   Future<void> _start() async {
     final role = _role;
     if (role == null || !_canStart) return;
     setState(() => _saving = true);
-    final record = IntakeRecord.answer(_template, role, {
-      for (final entry in _answers.entries)
-        if (entry.value != null) entry.key: entry.value,
-    });
+    final answers = <String, Object?>{
+      for (final q in _template.questions)
+        if (q.isAnswered(_answers[q.id])) q.id: _answers[q.id],
+    };
+    final reused = <String>[
+      for (final q in _template.questions)
+        if (q.timing == AnswerTiming.background &&
+            !_edited.contains(q.id) &&
+            (_previous?.answers.containsKey(q.id) ?? false) &&
+            answers.containsKey(q.id))
+          q.id,
+    ];
+    final record = IntakeRecord(
+      role: role,
+      answers: answers,
+      summary: _template.summary(answers, QuestionScope.session),
+      backgroundMode: _backgroundMode,
+      reusedQuestionIds: reused,
+      answerSources: {for (final id in reused) id: _previous!.sources[id]},
+    );
     try {
       await (widget.saver ?? _defaultSaver)(
         id: const Uuid().v4(),
@@ -183,6 +206,9 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
           actions: [
             TextButton(
               key: const Key('intake.skip'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+              ),
               onPressed: _saving ? null : () => Navigator.of(context).pop(),
               child: const Text('Skip'),
             ),
@@ -195,6 +221,50 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
+                    Text(
+                      'Optional — background helps explain your child’s needs. '
+                      'You can skip and still play the games and see results and summaries. '
+                      'It does not change scores.',
+                      key: const Key('intake.optionalNote'),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (_loading) const LinearProgressIndicator(),
+                    if (_previous != null && _previous!.answers.isNotEmpty) ...[
+                      Text(
+                        'Background is available from an earlier questionnaire. '
+                        'Reusing it keeps the original dates and labels it as earlier information.',
+                        key: const Key('intake.previousNote'),
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton(
+                            key: const Key('intake.reuse'),
+                            onPressed:
+                                _saving
+                                    ? null
+                                    : () => _chooseBackground('reuse'),
+                            child: const Text('Use previous answers'),
+                          ),
+                          OutlinedButton(
+                            key: const Key('intake.update'),
+                            onPressed:
+                                _saving
+                                    ? null
+                                    : () => _chooseBackground('update'),
+                            child: const Text('Update answers'),
+                          ),
+                        ],
+                      ),
+                      if (_backgroundMode == 'reuse')
+                        const Text(
+                          'Previous background selected. Answer only what is new or needed today.',
+                        ),
+                    ],
                     if (template.intro.isNotEmpty)
                       AppCard(
                         key: const Key('intake.instructions'),
@@ -230,24 +300,29 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                       Text(
                         'About your child',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       Text(
                         'Saved with this assessment to help read the '
                         'results. It does not change any score.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.mutedForeground,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      for (final q in template.questions)
+                      for (final q in template.questions.where(_showQuestion))
                         TemplateQuestionField(
                           key: ValueKey('intake.${q.id}.$_prefillGeneration'),
                           keyPrefix: 'intake',
                           question: q,
                           value: _answers[q.id],
-                          onChanged: (v) => setState(() => _answers[q.id] = v),
+                          onChanged:
+                              (v) => setState(() {
+                                _answers[q.id] = v;
+                                _edited.add(q.id);
+                              }),
                         ),
                     ],
                   ],
@@ -268,7 +343,8 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                             : 'Hand the device to your child when the '
                                 'games begin.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),

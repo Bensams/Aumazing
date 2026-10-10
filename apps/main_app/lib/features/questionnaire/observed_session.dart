@@ -58,6 +58,9 @@ class IntakeRecord {
     required this.role,
     this.answers = const {},
     this.summary = const [],
+    this.backgroundMode,
+    this.reusedQuestionIds = const [],
+    this.answerSources = const {},
   });
 
   /// The record to store for [template]'s [answers].
@@ -76,12 +79,32 @@ class IntakeRecord {
 
   /// Readable answers as they were worded when saved.
   final List<String> summary;
+  final String? backgroundMode;
+  final List<String> reusedQuestionIds;
+  final Map<String, Object?> answerSources;
 
   Map<String, dynamic> toResponses(ChoiceTemplate template) => {
     ...template.stamp,
     'observer_role': role.key,
     'answers': answers,
     'summary': summary,
+    'question_signatures': {
+      for (final q in template.questions) q.id: q.answerSignature,
+    },
+    'background_answers': {
+      for (final q in template.questions)
+        if (q.timing == AnswerTiming.background && answers.containsKey(q.id))
+          q.id: answers[q.id],
+    },
+    'session_answers': {
+      for (final q in template.questions)
+        if (q.timing == AnswerTiming.currentSession &&
+            answers.containsKey(q.id))
+          q.id: answers[q.id],
+    },
+    if (backgroundMode != null) 'background_mode': backgroundMode,
+    'reused_question_ids': reusedQuestionIds,
+    'answer_sources': answerSources,
   };
 
   static IntakeRecord? fromResponses(Map<String, dynamic> r) {
@@ -91,12 +114,19 @@ class IntakeRecord {
       role: role,
       answers: _answers(r['answers']),
       summary: _strings(r['summary']),
+      backgroundMode: r['background_mode'] as String?,
+      reusedQuestionIds: _strings(r['reused_question_ids']),
+      answerSources: _answers(r['answer_sources']),
     );
   }
 
   /// "Watched by: SPED teacher · Diagnosed with autism · Kinder".
-  String get headline =>
-      ['Watched by: ${role.label}', ...summary].join(' · ');
+  String get headline => [
+    'Watched by: ${role.label}',
+    ...summary,
+    if (reusedQuestionIds.isNotEmpty)
+      'Includes earlier background answers — not new observations',
+  ].join(' · ');
 }
 
 /// What was seen in one game.
