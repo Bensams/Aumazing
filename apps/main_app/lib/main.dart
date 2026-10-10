@@ -12,6 +12,7 @@ import 'core/config/supabase_config.dart';
 import 'core/services/db_web_factory.dart';
 import 'core/offline_first_integration.dart';
 import 'dev/developer_tools_overlay.dart';
+import 'features/app_update/app_update_service.dart';
 import 'features/parent_lock/parent_pin_delegate.dart';
 import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
@@ -98,6 +99,10 @@ Future<void> main() async {
   // Admin-configured rubric thresholds: cache-first with hardcoded
   // defaults, so scoring works offline; refreshed in the background.
   RubricThresholdService.instance.load();
+
+  // Sideloaded Android build: look for a newer published APK in the
+  // background. Offline or failing, it stays quiet (never blocks launch).
+  AppUpdateService.instance.check(quiet: true);
 
   // Parent lock: load the account's PIN state (and follow account changes),
   // then install the delegate so every ParentVerificationDialog call site

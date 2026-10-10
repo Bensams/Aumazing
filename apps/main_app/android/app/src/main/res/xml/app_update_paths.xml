@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only files the update FileProvider may share: downloaded APKs, which
+     the Dart side writes to <cache>/app_updates/. -->
+<paths>
+    <cache-path name="app_updates" path="app_updates/" />
+</paths>

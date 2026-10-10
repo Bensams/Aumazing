@@ -23,6 +23,7 @@ import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
 import 'widgets/overall_gameplay_summary_card.dart';
+import '../app_update/app_update_banner.dart';
 import '../premium/premium_plan.dart';
 import '../premium/premium_upgrade_screen.dart';
 import '../history/parent_history_screen.dart';
@@ -790,6 +791,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // Hides itself when online with nothing pending, so it only costs
       // space when there is genuinely something to say.
       KeyedSubtree(key: _syncBannerKey, child: const SyncStatusBanner()),
+      // Hidden unless a newer APK is published; parent dashboard only.
+      const AppUpdateBanner(),
       _buildActionButtons(),
       KeyedSubtree(key: _premiumKey, child: _buildPremiumBanner()),
       KeyedSubtree(key: _historyKey, child: _buildHistoryEntry()),

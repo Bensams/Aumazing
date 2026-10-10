@@ -52,6 +52,7 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        AppUpdateChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     private fun isTabletFormFactor() =

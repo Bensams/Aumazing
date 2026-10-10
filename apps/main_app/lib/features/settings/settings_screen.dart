@@ -10,6 +10,8 @@ import '../../providers/child_provider.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/parent_pin_service.dart';
 import '../../services/screen_time_service.dart';
+import '../app_update/app_update_dialog.dart';
+import '../app_update/app_update_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
 import '../premium/premium_plan.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
@@ -31,6 +33,7 @@ import 'widgets/object_style_picker.dart';
 /// - Child Preferences — avatar, background theme, game difficulty,
 ///   language, reward celebration
 /// - Your Plan — Premium status, its end date, renewal (AUM-169)
+/// - App Updates — installed version, newer APK download (Android only)
 /// - Bind Account — shown only while in guest mode
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.authService});
@@ -131,6 +134,21 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
         ),
+        // Only the sideloaded Android build updates itself; the web app is
+        // always current and other platforms have no APK to install.
+        if (AppUpdateService.instance.status != AppUpdateStatus.unsupported)
+          ListenableBuilder(
+            listenable: AppUpdateService.instance,
+            builder:
+                (context, _) => _CategoryTile(
+                  key: const Key('app-updates-tile'),
+                  icon: Icons.system_update_rounded,
+                  color: const Color(0xFF5E94B5),
+                  title: 'App Updates',
+                  subtitle: _appUpdateSummary(AppUpdateService.instance),
+                  onTap: () => showAppUpdateDialog(context),
+                ),
+          ),
         if (isGuest)
           _CategoryTile(
             icon: Icons.link_rounded,
@@ -167,6 +185,20 @@ class SettingsScreen extends StatelessWidget {
 
   void _push(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  static String _appUpdateSummary(AppUpdateService service) {
+    final installed = service.installed?.name;
+    final current = installed == null ? '' : 'Version $installed · ';
+    final release = service.latest;
+    return switch (service.status) {
+      AppUpdateStatus.checking => '${current}Checking…',
+      AppUpdateStatus.downloading => '${current}Downloading the update…',
+      _ when release != null =>
+        '${current}Version ${release.versionName} is available',
+      AppUpdateStatus.upToDate => '${current}Up to date',
+      _ => '${current}Tap to check for a newer version',
+    };
   }
 }
 
