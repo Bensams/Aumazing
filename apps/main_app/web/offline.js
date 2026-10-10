@@ -1,18 +1,26 @@
 (function () {
   'use strict';
 
-  // The loading page. Before the app starts, it saves every file a child
-  // needs into the offline cache — the app itself, pictures, sound effects,
-  // music, and the voice lines for the child's language — so a game never
-  // stops to wait for a picture or a voice line, and the app keeps working
-  // with no connection. Voices for other languages follow in the background
-  // once the app is running.
+  // The loading page. Before the app starts it saves only what the app needs
+  // to open — its code, engine and fonts, about 20 MB — so the app opens in
+  // seconds instead of waiting for every game file. Everything else a child
+  // needs is then saved quietly in the background while the child plays,
+  // most-needed first: pictures, the voice lines and sound effects for the
+  // child's language, the assessment models, music, then videos. Voices for
+  // other languages follow last. A file a game asks for before it has been
+  // saved simply loads from the network, and the worker saves it then; the
+  // background download picks up where it left off on the next visit.
   //
   // The files go into the same cache the offline service worker
   // (offline_sw.js) serves from, tagged the same way, so the worker's install
   // finds them already saved instead of downloading them a second time.
   // offline_manifest.json (tool/build_offline_web.dart) lists every file with
   // its content hash and size.
+  //
+  // How far the background download has got is published as
+  // window.aumazingOffline, with an `aumazing-offline` event on each change,
+  // for the app's Offline Play tile in Settings
+  // (lib/core/web/offline_save_status_web.dart).
 
   const CACHE_PREFIX = 'aumazing-offline-';
   const REV_HEADER = 'x-aumazing-rev';
@@ -23,16 +31,32 @@
   const BASE = new URL('.', document.baseURI);
 
   const FOREGROUND_CONCURRENCY = 8;
-  const BACKGROUND_CONCURRENCY = 2;
-  // After this long a parent may start before everything is saved.
+  // Low, so the background download never slows a game's own requests.
+  const BACKGROUND_CONCURRENCY = 3;
+  // After this long a parent may start before the app's files are saved.
   const OFFER_START_AFTER_MS = 20000;
-  const BACKGROUND_DELAY_MS = 15000;
+  // Lets the first screens load before the background download begins.
+  const BACKGROUND_START_DELAY_MS = 3000;
+  // Waits before retrying files that failed while still online.
+  const RETRY_DELAYS_MS = [15000, 60000, 300000];
+  const PUBLISH_INTERVAL_MS = 500;
 
   // Only opened on request (install guide, licences), never mid-game.
   const ON_DEMAND = new Set(['ios-install-guide.png', 'assets/NOTICES']);
   const AUDIO_DIR = 'assets/packages/shared_audio/assets/audio/';
   const FALLBACK_DIR = 'audio_fallback/';
   const VOICE_PACK = /^assets\/packages\/shared_audio\/assets\/audio\/voice_over\/([a-z]+)_[^/]+\//;
+  const SEED_CARD_AUDIO = /^assets\/packages\/shared_ui\/assets\/seed_cards\/audio\/([a-z]+)\//;
+  const MUSIC = /(^|\/)(bgm\/|bg_music[^/]*$)/;
+
+  // Background order, most-needed first.
+  const PICTURES = 0;
+  const CHILD_AUDIO = 1;
+  const MODELS = 2;
+  const SONGS = 3;
+  const VIDEOS = 4;
+  const OTHER_LANGUAGES = 5;
+  const LEAVE_OUT = -1;
 
   // ── Page ────────────────────────────────────────────────────────────────
 
@@ -82,6 +106,32 @@
       },
     };
   })();
+
+  // ── Progress, for the app ───────────────────────────────────────────────
+
+  // status: 'checking' | 'saving' | 'paused' | 'ready' | 'unavailable'.
+  // reason, while paused: 'offline' or 'retrying'. done/total are bytes of
+  // the files this device's children need (other languages are not counted).
+  const progress = { status: 'checking', reason: null, done: 0, total: 0 };
+  let publishTimer = null;
+
+  function publish(change) {
+    Object.assign(progress, change);
+    if (publishTimer !== null) {
+      clearTimeout(publishTimer);
+      publishTimer = null;
+    }
+    window.aumazingOffline = Object.assign({}, progress);
+    window.dispatchEvent(new Event('aumazing-offline'));
+  }
+
+  // For the stream of per-file updates: at most one event per interval.
+  function publishSoon(change) {
+    Object.assign(progress, change);
+    if (publishTimer === null) {
+      publishTimer = setTimeout(() => publish({}), PUBLISH_INTERVAL_MS);
+    }
+  }
 
   // ── Starting the app ────────────────────────────────────────────────────
 
@@ -133,25 +183,34 @@
     }));
   }
 
-  // Runs [task] over [items], [limit] at a time; returns the items that failed.
+  // Runs [task] over [items], [limit] at a time; returns the items that
+  // failed. [onDone] is told after each item, and whether it was saved.
   async function pool(items, limit, task, onDone) {
     let next = 0;
     const failed = [];
     async function worker() {
       while (next < items.length) {
         const item = items[next++];
+        let ok = true;
         try {
           await task(item);
         } catch (e) {
+          ok = false;
           failed.push(item);
           console.warn('[loader]', e && e.message ? e.message : e);
         }
-        if (onDone) onDone(item);
+        if (onDone) onDone(item, ok);
       }
     }
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
     return failed;
   }
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const backOnline = () => new Promise((resolve) => {
+    window.addEventListener('online', resolve, { once: true });
+  });
 
   // ── What to save ────────────────────────────────────────────────────────
 
@@ -174,7 +233,7 @@
     return langs;
   }
 
-  // Engine fonts to save before play: without them a child offline sees
+  // Engine fonts not saved yet: without them a child offline sees
   // crossed-out boxes wherever a game draws an object as an emoji.
   async function missingFonts(manifest) {
     const base = manifest.fontBaseUrl;
@@ -194,30 +253,47 @@
     await (await caches.open(FONT_CACHE)).put(url, res);
   }
 
-  // Splits the build into files to save before play ([now]) and after the
-  // app has started ([later]). Music the browser cannot play, and pages only
-  // opened on request, are left out entirely.
+  // Where [path] goes in the background queue.
+  function rank(path, langs, oggOk, lazy) {
+    if (ON_DEMAND.has(path)) return LEAVE_OUT;
+    // Same choice as the app's music player: .ogg where the browser plays
+    // it, otherwise the .mp3 copy under audio_fallback/.
+    if (path.startsWith(FALLBACK_DIR)) return oggOk ? LEAVE_OUT : SONGS;
+    if (!oggOk && path.startsWith(AUDIO_DIR) && path.endsWith('.ogg')) {
+      const mp3 = FALLBACK_DIR + path.slice(AUDIO_DIR.length).replace(/\.ogg$/, '.mp3');
+      if (mp3 in lazy) return LEAVE_OUT;
+    }
+    const language = VOICE_PACK.exec(path) || SEED_CARD_AUDIO.exec(path);
+    if (language) return langs.has(language[1]) ? CHILD_AUDIO : OTHER_LANGUAGES;
+    if (path.startsWith(AUDIO_DIR)) {
+      return MUSIC.test(path.slice(AUDIO_DIR.length)) ? SONGS : CHILD_AUDIO;
+    }
+    if (path.startsWith('assets/assets/videos/')) return VIDEOS;
+    if (path.startsWith('ort/') || path.startsWith('assets/assets/models/')) return MODELS;
+    return PICTURES;
+  }
+
+  // Splits the build into the files saved before the app starts ([boot]),
+  // the ones saved in the background in order of need ([background]), and
+  // other languages' voices ([later]).
   function plan(manifest) {
     const langs = chosenLanguages();
     const oggOk = !!document.createElement('audio')
       .canPlayType('audio/ogg; codecs="vorbis"');
-    const now = [];
-    const later = [];
-    for (const [path, rev] of Object.entries(manifest.core)) now.push([path, rev]);
-    for (const [path, rev] of Object.entries(manifest.lazy)) {
-      if (ON_DEMAND.has(path)) continue;
-      // Same choice as the app's music player: .ogg where the browser plays
-      // it, otherwise the .mp3 copy under audio_fallback/.
-      if (path.startsWith(FALLBACK_DIR)) {
-        if (oggOk) continue;
-      } else if (!oggOk && path.startsWith(AUDIO_DIR) && path.endsWith('.ogg')) {
-        const mp3 = FALLBACK_DIR + path.slice(AUDIO_DIR.length).replace(/\.ogg$/, '.mp3');
-        if (mp3 in manifest.lazy) continue;
-      }
-      const pack = VOICE_PACK.exec(path);
-      (pack && !langs.has(pack[1]) ? later : now).push([path, rev]);
+    // Manifests from before the boot tier opened the app on the core.
+    const bootFiles = manifest.boot || manifest.core;
+    const queued = Object.assign({}, manifest.lazy, manifest.boot ? manifest.core : {});
+    const ranked = [];
+    for (const [path, rev] of Object.entries(queued)) {
+      const r = rank(path, langs, oggOk, manifest.lazy);
+      if (r !== LEAVE_OUT) ranked.push([r, [path, rev]]);
     }
-    return { now, later };
+    ranked.sort((a, b) => a[0] - b[0]);
+    return {
+      boot: Object.entries(bootFiles),
+      background: ranked.filter(([r]) => r < OTHER_LANGUAGES).map(([, file]) => file),
+      later: ranked.filter(([r]) => r === OTHER_LANGUAGES).map(([, file]) => file),
+    };
   }
 
   // ── Service worker ──────────────────────────────────────────────────────
@@ -297,6 +373,48 @@
     return older;
   }
 
+  // Saves [files] (in order) while the child plays, reporting progress, and
+  // keeps going until every one is saved: paused while the device is
+  // offline, and retried after a while when a download fails. Then saves
+  // [later] without reporting it.
+  async function saveInBackground(manifest, cacheName, files, later) {
+    publish({ status: 'checking' });
+    const sizes = manifest.sizes || {};
+    const sizeOf = ([path]) => sizes[path] || 0;
+    const cache = await caches.open(cacheName);
+    // Fonts ride along first, as [url, null] entries.
+    const fonts = (await missingFonts(manifest)).map((url) => [url, null]);
+    let pending = fonts.concat(await missingFrom(cache, files));
+    const total = files.reduce((sum, f) => sum + sizeOf(f), 0);
+    let done = total - pending.reduce((sum, f) => sum + sizeOf(f), 0);
+
+    for (let round = 0; pending.length > 0; round++) {
+      if (!navigator.onLine) {
+        publish({ status: 'paused', reason: 'offline', done, total });
+        await backOnline();
+      }
+      publish({ status: 'saving', reason: null, done, total });
+      const older = await olderCachesThan(cacheName);
+      pending = await pool(pending, BACKGROUND_CONCURRENCY,
+        ([path, rev]) => (rev === null ? saveFont(path) : save(cache, older, path, rev)),
+        (file, ok) => {
+          if (!ok) return;
+          done += sizeOf(file);
+          publishSoon({ done });
+        });
+      if (pending.length === 0) break;
+      publish({ status: 'paused', reason: navigator.onLine ? 'retrying' : 'offline', done, total });
+      const wait = RETRY_DELAYS_MS[Math.min(round, RETRY_DELAYS_MS.length - 1)];
+      await Promise.race([sleep(wait), backOnline()]);
+    }
+    publish({ status: 'ready', reason: null, done: total, total });
+
+    const rest = await missingFrom(cache, later);
+    if (rest.length === 0 || !navigator.onLine) return;
+    const older = await olderCachesThan(cacheName);
+    await pool(rest, BACKGROUND_CONCURRENCY, ([path, rev]) => save(cache, older, path, rev));
+  }
+
   async function run() {
     let loaded;
     try {
@@ -318,32 +436,37 @@
     const sizes = manifest.sizes || {};
     const sizeOf = ([path]) => sizes[path] || 0;
     const cache = await caches.open(cacheName);
-    const { now, later } = plan(manifest);
+    const { boot, background, later } = plan(manifest);
+    publish({ status: 'checking' });
 
-    // Fonts ride along with the build's files, as [url, null] entries.
-    const fonts = (await missingFonts(manifest)).map((url) => [url, null]);
-    let missing = (await missingFrom(cache, now)).concat(fonts);
+    // However the app ends up starting, the rest follows once it is up.
+    whenStarted.push(() => setTimeout(() => {
+      saveInBackground(manifest, cacheName, background, later).catch((e) => {
+        console.warn('[loader] background saving stopped:', e && e.message ? e.message : e);
+      });
+    }, BACKGROUND_START_DELAY_MS));
+
+    let missing = await missingFrom(cache, boot);
     if (missing.length > 0 && navigator.onLine) {
       const older = await olderCachesThan(cacheName);
-      const total = now.reduce((sum, f) => sum + sizeOf(f), 0);
+      const total = boot.reduce((sum, f) => sum + sizeOf(f), 0);
       let done = total - missing.reduce((sum, f) => sum + sizeOf(f), 0);
-      ui.message('Getting the games ready',
-        'Saving pictures, voices and music so play is never interrupted.');
+      ui.message('Opening Aumazing',
+        'Saving the app so it opens without internet next time.');
       ui.progress(done, total);
       // Starting early keeps the download going; anything not saved yet is
-      // fetched when a game first needs it.
+      // fetched when the app first needs it.
       const startNow = () => { takeOver(); startApp(); };
       const offer = setTimeout(() => ui.offerStart(startNow), OFFER_START_AFTER_MS);
 
-      const saveFile = ([path, rev]) =>
-        rev === null ? saveFont(path) : save(cache, older, path, rev);
-      const counted = (file) => { done += sizeOf(file); ui.progress(done, total); };
       for (let attempt = 0; attempt < 3 && missing.length > 0 && !started; attempt++) {
-        missing = await pool(missing, FOREGROUND_CONCURRENCY, saveFile, (file) => {
-          if (!started) counted(file);
-        });
-        // A failed file was counted as done; take it back off before retrying.
-        done -= missing.reduce((sum, f) => sum + sizeOf(f), 0);
+        missing = await pool(missing, FOREGROUND_CONCURRENCY,
+          ([path, rev]) => save(cache, older, path, rev),
+          (file, ok) => {
+            if (started || !ok) return;
+            done += sizeOf(file);
+            ui.progress(done, total);
+          });
       }
       clearTimeout(offer);
       if (started) return;
@@ -358,21 +481,12 @@
 
     await takeOver();
     startApp();
-
-    // Other languages' voices, quietly, once the child is playing.
-    if (later.length > 0) {
-      whenStarted.push(() => setTimeout(async () => {
-        const rest = await missingFrom(cache, later);
-        if (rest.length === 0 || !navigator.onLine) return;
-        const older = await olderCachesThan(cacheName);
-        await pool(rest, BACKGROUND_CONCURRENCY, ([path, rev]) => save(cache, older, path, rev));
-      }, BACKGROUND_DELAY_MS));
-    }
   }
 
   if (!('serviceWorker' in navigator) || !('caches' in window)) {
     // No offline support (e.g. a private window in some browsers): start
     // normally and load files as they are needed.
+    publish({ status: 'unavailable' });
     startApp();
     return;
   }

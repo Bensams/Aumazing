@@ -41,8 +41,8 @@
   <script type="module" src="ort_bridge.mjs"></script>
 </head>
 <body>
-  <!-- Loading page: saves every file a child needs before the app starts
-       (offline.js), so games never pause for a missing picture or voice. -->
+  <!-- Loading page: saves the files the app needs to open, then starts it
+       (offline.js). The games' pictures and voices follow in the background. -->
   <div id="aumazing-loader" class="aumazing-loader" role="status" aria-live="polite">
     <div class="aumazing-loader-card">
       <img class="aumazing-loader-logo" src="icons/Icon-192.png?v=20260908b" width="88" height="88" alt="">
@@ -52,7 +52,7 @@
            aria-labelledby="aumazing-loader-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <div id="aumazing-loader-bar" class="aumazing-loader-bar"></div>
       </div>
-      <p class="aumazing-loader-note">This happens once. Next time Aumazing opens straight away, even without internet.</p>
+      <p class="aumazing-loader-note">The games' pictures and voices keep saving while your child plays. Settings › Offline Play shows when every game works without internet.</p>
       <div id="aumazing-loader-actions" class="aumazing-loader-actions" hidden>
         <button id="aumazing-loader-retry" type="button">Try again</button>
         <button id="aumazing-loader-skip" type="button">Start now</button>
