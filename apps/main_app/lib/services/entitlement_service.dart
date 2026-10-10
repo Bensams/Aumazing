@@ -61,6 +61,11 @@ class EntitlementService extends ChangeNotifier {
   /// lapses on this date even offline, from the cached value.
   DateTime? _premiumUntil;
 
+  /// Where the current Premium came from (`entitlements.source`): a
+  /// payment, the free month every new account gets, or an administrator
+  /// grant (AUM-357). Only changes how the plan is described, never access.
+  String? _premiumSource;
+
   bool get _periodActive =>
       _premiumUntil == null || DateTime.now().isBefore(_premiumUntil!);
 
@@ -77,6 +82,9 @@ class EntitlementService extends ChangeNotifier {
 
   /// When the current Premium period ends, if it has an end.
   DateTime? get premiumUntil => _premiumUntil;
+
+  /// Where the current Premium came from; see [_premiumSource].
+  String? get premiumSource => _premiumSource;
 
   /// Whether the in-memory developer override is currently forcing Premium.
   bool get isDeveloperPremiumOverrideActive => _developerPremiumOverride;
@@ -165,10 +173,11 @@ class EntitlementService extends ChangeNotifier {
   /// inside an `assert` so it does nothing in profile or release builds, and
   /// it writes no cache or backend state.
   @visibleForTesting
-  void debugSetRealPremium(bool value, {DateTime? until}) {
+  void debugSetRealPremium(bool value, {DateTime? until, String? source}) {
     assert(() {
       _isPremium = value;
       _premiumUntil = until;
+      _premiumSource = source;
       notifyListeners();
       return true;
     }());
@@ -177,6 +186,8 @@ class EntitlementService extends ChangeNotifier {
   static String _cacheKey(String userId) => 'entitlement_premium_$userId';
   static String _slotsKey(String userId) => 'entitlement_profile_slots_$userId';
   static String _untilKey(String userId) => 'entitlement_premium_until_$userId';
+  static String _sourceKey(String userId) =>
+      'entitlement_premium_source_$userId';
 
   /// Call once after Supabase.initialize: loads the current state and
   /// reloads whenever the signed-in user changes (login, logout, guest
@@ -194,6 +205,7 @@ class EntitlementService extends ChangeNotifier {
     if (user == null) {
       _isPremium = false;
       _premiumUntil = null;
+      _premiumSource = null;
       _extraProfileSlots = 0;
       _loadedUserId = null;
       notifyListeners();
@@ -204,6 +216,7 @@ class EntitlementService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isPremium = prefs.getBool(_cacheKey(user.id)) ?? false;
       _premiumUntil = DateTime.tryParse(prefs.getString(_untilKey(user.id)) ?? '');
+      _premiumSource = prefs.getString(_sourceKey(user.id));
       _extraProfileSlots = prefs.getInt(_slotsKey(user.id)) ?? 0;
       notifyListeners();
     } catch (_) {}
@@ -247,16 +260,19 @@ class EntitlementService extends ChangeNotifier {
       final row =
           await Supabase.instance.client
               .from('entitlements')
-              .select('is_premium, expires_at')
+              .select('is_premium, expires_at, source')
               .eq('user_id', user.id)
               .maybeSingle();
       final premium = row?['is_premium'] == true;
       final until = DateTime.tryParse(row?['expires_at'] as String? ?? '');
+      final source = row?['source'] as String?;
       if (premium != _isPremium ||
           until != _premiumUntil ||
+          source != _premiumSource ||
           _loadedUserId != user.id) {
         _isPremium = premium;
         _premiumUntil = until;
+        _premiumSource = source;
         _loadedUserId = user.id;
         notifyListeners();
       }
@@ -266,6 +282,11 @@ class EntitlementService extends ChangeNotifier {
         await prefs.remove(_untilKey(user.id));
       } else {
         await prefs.setString(_untilKey(user.id), until.toIso8601String());
+      }
+      if (source == null) {
+        await prefs.remove(_sourceKey(user.id));
+      } else {
+        await prefs.setString(_sourceKey(user.id), source);
       }
       return true;
     } catch (e) {

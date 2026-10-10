@@ -1498,16 +1498,22 @@ class _HomeScreenState extends State<HomeScreen> {
             endingSoon
                 ? (
                   '⏳',
-                  'Premium: ${plan.timeLeft!.toLowerCase()}',
-                  'Ends ${PremiumPlan.formatDate(plan.until!)}. It does not '
-                      'renew by itself — renew now to add 30 days without a '
-                      'gap.',
+                  '${plan.isFreeMonth ? 'Free month' : 'Premium'}: '
+                      '${plan.timeLeft!.toLowerCase()}',
+                  plan.originLabel == null
+                      ? 'Ends ${PremiumPlan.formatDate(plan.until!)}. It does '
+                          'not renew by itself — renew now to add 30 days '
+                          'without a gap.'
+                      : 'Ends ${PremiumPlan.formatDate(plan.until!)}. Keep '
+                          'Premium without a gap — ₱149 adds 30 days.',
                 )
                 : ended
                 ? (
                   '⭐',
-                  'Premium ended ${PremiumPlan.formatDate(plan.until!)}',
-                  'Renew to bring back the therapy locator, skill trends and '
+                  '${plan.isFreeMonth ? 'Your free month' : 'Premium'} ended '
+                      '${PremiumPlan.formatDate(plan.until!)}',
+                  '${plan.originLabel == null ? 'Renew' : 'Get Premium'} to '
+                      'bring back the therapy locator, skill trends and '
                       'fresh AI recommendations — ₱149 for 30 days.',
                 )
                 : (
@@ -1546,7 +1552,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                label: endingSoon || ended ? 'Renew' : 'Upgrade',
+                label: (endingSoon || ended) && plan.originLabel == null
+                    ? 'Renew'
+                    : endingSoon
+                    ? 'Keep Premium'
+                    : 'Upgrade',
                 icon: Icons.star_rounded,
                 onPressed:
                     () => Navigator.of(context).push(

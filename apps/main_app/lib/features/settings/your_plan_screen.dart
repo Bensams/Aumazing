@@ -63,9 +63,12 @@ class _YourPlanScreenState extends State<YourPlanScreen> {
         final plan = PremiumPlan.of(EntitlementService.instance);
         final action = switch (plan.kind) {
           PremiumPlanKind.free => 'Get Premium',
-          PremiumPlanKind.ended => 'Renew Premium',
-          PremiumPlanKind.active ||
-          PremiumPlanKind.endingSoon => 'Renew now (+30 days)',
+          PremiumPlanKind.ended =>
+            plan.originLabel == null ? 'Renew Premium' : 'Get Premium',
+          PremiumPlanKind.active || PremiumPlanKind.endingSoon =>
+            plan.originLabel == null
+                ? 'Renew now (+30 days)'
+                : 'Keep Premium (+30 days)',
           _ => null,
         };
         return SettingsScaffold(
@@ -126,7 +129,7 @@ class _StatusCard extends StatelessWidget {
     final until = plan.until;
     final (String title, String body, Color color) = switch (plan.kind) {
       PremiumPlanKind.active => (
-        'Premium',
+        plan.originLabel == null ? 'Premium' : 'Premium · ${plan.originLabel}',
         until == null
             ? 'Active.'
             : 'Active until ${PremiumPlan.formatDate(until)} · '
@@ -134,16 +137,18 @@ class _StatusCard extends StatelessWidget {
         AppColors.statusSuccessDark,
       ),
       PremiumPlanKind.endingSoon => (
-        'Premium · ending soon',
-        'Ends ${PremiumPlan.formatDate(until!)} · ${plan.timeLeft}. Renew '
-            'now to keep Premium without a gap.',
+        plan.isFreeMonth ? 'Free month · ending soon' : 'Premium · ending soon',
+        'Ends ${PremiumPlan.formatDate(until!)} · ${plan.timeLeft}. '
+            '${plan.originLabel == null ? 'Renew' : 'Pay'} now to keep '
+            'Premium without a gap.',
         AppColors.statusWarningDark,
       ),
       PremiumPlanKind.ended => (
         'Free plan',
-        'Premium ended on ${PremiumPlan.formatDate(until!)}. Every child '
-            'profile and all progress are kept; Premium features are locked '
-            'until you renew.',
+        '${plan.isFreeMonth ? 'Your free month' : 'Premium'} ended on '
+            '${PremiumPlan.formatDate(until!)}. Every child profile and all '
+            'progress are kept; Premium features are locked until you '
+            '${plan.originLabel == null ? 'renew' : 'get Premium'}.',
         AppColors.statusWarningDark,
       ),
       PremiumPlanKind.free => (

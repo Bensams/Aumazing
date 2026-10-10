@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/premium_admin.dart';
+import 'premium_grant_dialog.dart';
+
 /// Parent account management (Section B FR): search, filter, and
 /// suspend/reactivate accounts.
 ///
@@ -9,6 +12,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// RPCs; suspension sets `banned_until` so the account can no longer sign
 /// in or refresh its session, and every action lands in the audit log.
 /// Administrator accounts cannot be suspended (enforced server-side).
+///
+/// Administrators can also grant Premium to a bound account, or end Premium
+/// that was given rather than paid for (AUM-357); guests must link first.
 class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
 
@@ -109,6 +115,132 @@ class _UsersPageState extends State<UsersPage> {
     }
   }
 
+  Future<void> _grantPremium(Map<String, dynamic> user) async {
+    final choice = await PremiumGrantDialog.show(
+      context,
+      accountLabel: user['email'] as String? ?? 'this account',
+    );
+    if (choice == null) return;
+    await _runPremiumAction(
+      () => Supabase.instance.client.rpc(
+        'admin_grant_premium',
+        params: {
+          'p_user_id': user['id'],
+          'p_days': choice.days,
+          'p_reason': choice.reason,
+        },
+      ),
+      done: 'Granted ${choice.days} days of Premium.',
+    );
+  }
+
+  Future<void> _endPremium(Map<String, dynamic> user) async {
+    final reason = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => StatefulBuilder(
+            builder:
+                (dialogContext, setDialogState) => AlertDialog(
+                  title: const Text('End Premium?'),
+                  content: SizedBox(
+                    width: 420,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${user['email'] ?? 'This account'} goes back to the '
+                          'Free plan now. Their data is kept.',
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: reason,
+                          maxLength: 500,
+                          decoration: const InputDecoration(
+                            labelText: 'Reason (kept in the audit log)',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      onPressed:
+                          reason.text.trim().isEmpty
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(true),
+                      child: const Text('End Premium'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+    final text = reason.text.trim();
+    reason.dispose();
+    if (confirmed != true) return;
+    await _runPremiumAction(
+      () => Supabase.instance.client.rpc(
+        'admin_revoke_premium',
+        params: {'p_user_id': user['id'], 'p_reason': text},
+      ),
+      done: 'Premium ended.',
+    );
+  }
+
+  Future<void> _runPremiumAction(
+    Future<dynamic> Function() action, {
+    required String done,
+  }) async {
+    try {
+      await action();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(done)));
+      }
+      _load();
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Action failed: ${e.message}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Action failed: $e')));
+      }
+    }
+  }
+
+  Widget _premiumButton(Map<String, dynamic> user) {
+    final premium = PremiumAdminStatus.fromRow(user);
+    if (premium.canEnd) {
+      return TextButton(
+        onPressed: () => _endPremium(user),
+        child: const Text('End Premium'),
+      );
+    }
+    return Tooltip(
+      message: premium.grantBlockedReason ?? '',
+      child: TextButton.icon(
+        onPressed: premium.canGrant ? () => _grantPremium(user) : null,
+        icon: const Icon(Icons.star_rounded, size: 18),
+        label: const Text('Grant Premium'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d, y');
@@ -187,6 +319,8 @@ class _UsersPageState extends State<UsersPage> {
                           final isGuest = user['is_anonymous'] == true;
                           final createdAt = DateTime.tryParse(
                               user['created_at'] as String? ?? '');
+                          final premiumLine =
+                              PremiumAdminStatus.fromRow(user).describe();
                           return Card(
                             child: ListTile(
                               leading: Icon(
@@ -219,11 +353,17 @@ class _UsersPageState extends State<UsersPage> {
                                 '${user['children_count'] ?? 0} child '
                                 'profile(s)'
                                 '${createdAt == null ? '' : ' · joined '
-                                    '${dateFormat.format(createdAt.toLocal())}'}',
+                                    '${dateFormat.format(createdAt.toLocal())}'}'
+                                '${premiumLine == null ? '' : '\n$premiumLine'}',
                               ),
-                              trailing: isAdmin
-                                  ? null
-                                  : suspended
+                              isThreeLine: premiumLine != null,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _premiumButton(user),
+                                  if (!isAdmin) ...[
+                                    const SizedBox(width: 8),
+                                    suspended
                                       ? FilledButton.tonal(
                                           onPressed: () =>
                                               _setSuspension(user, false),
@@ -239,6 +379,9 @@ class _UsersPageState extends State<UsersPage> {
                                               _setSuspension(user, true),
                                           child: const Text('Suspend'),
                                         ),
+                                  ],
+                                ],
+                              ),
                             ),
                           );
                         },

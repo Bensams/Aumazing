@@ -39,6 +39,7 @@ class PremiumPlan {
     this.until,
     this.extraProfiles = 0,
     this.unlimitedProfiles = false,
+    this.source,
     this.now,
   });
 
@@ -50,9 +51,10 @@ class PremiumPlan {
     if (PremiumAccessConfig.unlockedForEveryone) {
       kind = PremiumPlanKind.unlocked;
     } else if (entitlement.isRealPremium) {
-      kind = until != null && until.difference(at) <= reminderWindow
-          ? PremiumPlanKind.endingSoon
-          : PremiumPlanKind.active;
+      kind =
+          until != null && until.difference(at) <= reminderWindow
+              ? PremiumPlanKind.endingSoon
+              : PremiumPlanKind.active;
     } else if (entitlement.isDeveloperPremiumOverrideActive) {
       kind = PremiumPlanKind.developer;
     } else if (entitlement.isSimulatedPurchaseActive) {
@@ -67,6 +69,7 @@ class PremiumPlan {
       until: until,
       extraProfiles: entitlement.extraProfileSlots,
       unlimitedProfiles: entitlement.unlimitedProfiles,
+      source: entitlement.premiumSource,
       now: at,
     );
   }
@@ -86,7 +89,24 @@ class PremiumPlan {
   /// Whether this build or session sets no profile limit.
   final bool unlimitedProfiles;
 
+  /// Where the Premium came from (`entitlements.source`, AUM-357).
+  final String? source;
+
   final DateTime? now;
+
+  /// The free month every new account gets.
+  bool get isFreeMonth => source == 'free_month';
+
+  /// Premium an administrator gave the account.
+  bool get isGift => source == 'admin_grant';
+
+  /// "free month" or "gift" when the Premium was not paid for, else null.
+  String? get originLabel =>
+      isFreeMonth
+          ? 'free month'
+          : isGift
+          ? 'gift'
+          : null;
 
   /// Paid Premium that is still running: paying now extends it rather than
   /// starting a new period.
@@ -110,14 +130,24 @@ class PremiumPlan {
 
   /// One line for the Settings tile.
   String get summary => switch (kind) {
-    PremiumPlanKind.active ||
-    PremiumPlanKind.endingSoon => until == null
-        ? 'Premium'
-        : 'Premium until ${formatDate(until!)}',
-    PremiumPlanKind.ended => 'Free plan · Premium ended ${formatDate(until!)}',
+    PremiumPlanKind.active || PremiumPlanKind.endingSoon => switch ((
+      until,
+      isFreeMonth,
+      isGift,
+    )) {
+      (null, _, _) => 'Premium',
+      (_, true, _) => 'Free month of Premium until ${formatDate(until!)}',
+      (_, _, true) => 'Premium (gift) until ${formatDate(until!)}',
+      _ => 'Premium until ${formatDate(until!)}',
+    },
+    PremiumPlanKind.ended =>
+      isFreeMonth
+          ? 'Free plan · free month ended ${formatDate(until!)}'
+          : 'Free plan · Premium ended ${formatDate(until!)}',
     PremiumPlanKind.free => 'Free plan',
     PremiumPlanKind.unlocked => 'Every feature unlocked in this edition',
-    PremiumPlanKind.simulated => 'Premium (simulated, ends when the app closes)',
+    PremiumPlanKind.simulated =>
+      'Premium (simulated, ends when the app closes)',
     PremiumPlanKind.developer => 'Premium (developer override)',
   };
 }
