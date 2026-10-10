@@ -8,13 +8,16 @@
 // Without that step the placeholder below never matches a manifest, install
 // fails, and the app simply behaves as an ordinary online page.
 //
-// - install:  precache every core file (app shell, engine, code, models,
-//             fonts, pictures) into a cache named after the build version.
-//             On a first visit the loading page (offline.js) has usually
-//             saved them already, so this only confirms they are there.
-//             Files whose hash is unchanged are copied from the previous
-//             version's cache instead of downloaded again, and lazy files
-//             (voice lines, music) already cached carry over too.
+// - install:  precache the boot files (app shell, engine, code, fonts) into
+//             a cache named after the build version. On a first visit the
+//             loading page (offline.js) has saved them already, so this only
+//             confirms they are there; the pictures and audio follow in the
+//             background from the loading page while the child plays.
+//             On an update, the core files (pictures, models) are precached
+//             too, so a device that was ready offline stays ready. Files
+//             whose hash is unchanged are copied from the previous version's
+//             cache instead of downloaded again, and anything else already
+//             cached (voice lines, music) carries over too.
 // - fetch:    same-origin requests for build files are served cache-first;
 //             a lazy file is cached the first time it is fetched. Audio range
 //             requests get a proper 206 so Safari can play cached sound.
@@ -64,7 +67,12 @@ function loadManifest() {
         throw new Error(
           `offline manifest is for build ${manifest.version}, worker is ${VERSION}`);
       }
-      manifest.files = Object.assign({}, manifest.lazy, manifest.core);
+      // Manifests from before the boot tier opened the app on the core.
+      if (!manifest.boot) {
+        manifest.boot = manifest.core;
+        manifest.core = {};
+      }
+      manifest.files = Object.assign({}, manifest.lazy, manifest.core, manifest.boot);
       return manifest;
     })();
     manifestPromise.catch(() => { manifestPromise = null; });
@@ -152,12 +160,19 @@ self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const manifest = await loadManifest();
     const cache = await caches.open(CACHE_NAME);
-    const failed = await pool(Object.entries(manifest.core), 6,
+    const isUpdate = (await caches.keys())
+      .some((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME);
+    const required = Object.entries(isUpdate
+      ? Object.assign({}, manifest.core, manifest.boot)
+      : manifest.boot);
+    const failed = await pool(required, 6,
       ([path, rev]) => ensureCached(cache, path, rev));
     // A half-filled shell must not take over: fail and retry next visit.
-    if (failed > 0) throw new Error(`${failed} core files could not be cached`);
-    // Carry over lazy files a previous version already downloaded.
-    await pool(Object.entries(manifest.lazy), 6,
+    if (failed > 0) throw new Error(`${failed} startup files could not be cached`);
+    // Carry over whatever a previous version already downloaded.
+    const rest = Object.entries(Object.assign({}, manifest.lazy, manifest.core))
+      .filter(([path]) => !(path in manifest.boot));
+    await pool(rest, 6,
       ([path, rev]) => ensureCached(cache, path, rev, { network: false }));
   })());
 });

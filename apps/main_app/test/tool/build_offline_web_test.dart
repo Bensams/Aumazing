@@ -4,21 +4,38 @@ import '../../tool/build_offline_web.dart';
 
 void main() {
   group('classify', () {
-    test('app shell, code, engine, models, pictures and startup videos are core', () {
+    test('app shell, code, engine, fonts and asset manifests are boot', () {
       for (final path in [
         'index.html',
         'main.dart.js',
         'flutter_bootstrap.js',
         'manifest.json',
+        'offline.js',
         'sqlite3.wasm',
-        'ort/ort-wasm-simd-threaded.wasm',
+        'ort_bridge.mjs',
+        'ort/ort.wasm.min.mjs',
         'canvaskit/canvaskit.wasm',
         'canvaskit/chromium/canvaskit.wasm',
         'assets/AssetManifest.bin',
+        'assets/AssetManifest.bin.json',
         'assets/FontManifest.json',
-        'assets/assets/models/play.onnx',
+        'assets/fonts/MaterialIcons-Regular.otf',
         'assets/packages/shared_ui/assets/google_fonts/Nunito-Regular.ttf',
+        'assets/shaders/ink_sparkle.frag',
+      ]) {
+        expect(classify(path), OfflineTier.boot, reason: path);
+      }
+    });
+
+    test('pictures, assessment models and videos are core', () {
+      for (final path in [
+        'ort/ort-wasm-simd-threaded.wasm',
+        'aumazing-logo.png',
+        'assets/assets/models/play.onnx',
+        'assets/assets/images/Aumazing_Logo.png',
         'assets/packages/shared_ui/assets/characters/teddy/idle.png',
+        'assets/packages/shared_ui/assets/costumes/panda/sheet.png',
+        'assets/packages/shared_ui/assets/seed_cards/cat.png',
         'assets/assets/videos/Aumazing_Splash_Screen.mp4',
       ]) {
         expect(classify(path), OfflineTier.core, reason: path);
@@ -57,7 +74,8 @@ void main() {
 
   test('offlineFontUrls picks Roboto, emoji and symbol fonts only', () {
     final urls = offlineFontUrls(
-      canvasKitFonts: "String _robotoUrl =\n"
+      canvasKitFonts:
+          "String _robotoUrl =\n"
           "    '\${configuration.fontFallbackBaseUrl}roboto/v32/KFOm-Abc.woff2';",
       fallbackData: '''
     'Noto Color Emoji 0',
@@ -81,11 +99,13 @@ void main() {
       'main.dart.js': 'bbb',
       'audio_fallback/bg_music.mp3': 'ccc',
       'version.json': 'ddd',
+      'assets/assets/images/logo.png': 'eee',
     };
 
-    test('splits files into core and lazy and drops skipped ones', () {
+    test('splits files into boot, core and lazy and drops skipped ones', () {
       final manifest = buildManifest(hashes);
-      expect(manifest['core'], {'index.html': 'aaa', 'main.dart.js': 'bbb'});
+      expect(manifest['boot'], {'index.html': 'aaa', 'main.dart.js': 'bbb'});
+      expect(manifest['core'], {'assets/assets/images/logo.png': 'eee'});
       expect(manifest['lazy'], {'audio_fallback/bg_music.mp3': 'ccc'});
     });
 
@@ -97,11 +117,13 @@ void main() {
           'main.dart.js': 20,
           'audio_fallback/bg_music.mp3': 30,
           'version.json': 40,
+          'assets/assets/images/logo.png': 50,
         },
       );
       expect(manifest['sizes'], {
         'index.html': 10,
         'main.dart.js': 20,
+        'assets/assets/images/logo.png': 50,
         'audio_fallback/bg_music.mp3': 30,
       });
     });
@@ -109,8 +131,14 @@ void main() {
     test('version changes only when cached content changes', () {
       final version = buildManifest(hashes)['version'];
       expect(buildManifest(Map.of(hashes))['version'], version);
-      expect(buildManifest({...hashes, 'version.json': 'zzz'})['version'], version);
-      expect(buildManifest({...hashes, 'main.dart.js': 'new'})['version'], isNot(version));
+      expect(
+        buildManifest({...hashes, 'version.json': 'zzz'})['version'],
+        version,
+      );
+      expect(
+        buildManifest({...hashes, 'main.dart.js': 'new'})['version'],
+        isNot(version),
+      );
     });
   });
 }

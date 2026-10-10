@@ -20,6 +20,7 @@ import 'star_settings_screen.dart';
 import 'your_plan_screen.dart';
 import 'gameplay_export_screen.dart';
 import 'widgets/background_picker.dart';
+import 'widgets/offline_play_tile.dart';
 import 'widgets/settings_scaffold.dart';
 import 'widgets/object_style_picker.dart';
 
@@ -87,6 +88,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
               ),
         ),
+        const OfflinePlayTile(),
         _CategoryTile(
           icon: Icons.star_rounded,
           color: AppColors.primaryPurple,
