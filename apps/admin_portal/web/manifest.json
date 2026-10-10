@@ -1,11 +1,11 @@
 {
-    "name": "admin_portal",
-    "short_name": "admin_portal",
+    "name": "Aumazing Portal",
+    "short_name": "Aumazing Portal",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Aumazing portal for administrators and approved practitioners.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

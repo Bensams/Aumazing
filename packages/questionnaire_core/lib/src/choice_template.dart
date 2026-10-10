@@ -47,6 +47,22 @@ enum QuestionScope {
   }
 }
 
+/// Background may be reused; current-session information is always asked anew.
+enum AnswerTiming {
+  background('background', 'Background — reuse later'),
+  currentSession('current_session', 'Ask each session');
+
+  const AnswerTiming(this.key, this.label);
+  final String key;
+  final String label;
+  static AnswerTiming? fromKey(Object? key) {
+    for (final value in values) {
+      if (value.key == key) return value;
+    }
+    return null;
+  }
+}
+
 /// One answer a question offers.
 class ChoiceOption {
   const ChoiceOption({
@@ -83,9 +99,10 @@ class ChoiceOption {
   static ChoiceOption fromJson(Map raw) => ChoiceOption(
     id: '${raw['id'] ?? ''}',
     label: '${raw['label'] ?? ''}',
-    flag: raw['flag'] is String && (raw['flag'] as String).trim().isNotEmpty
-        ? raw['flag'] as String
-        : null,
+    flag:
+        raw['flag'] is String && (raw['flag'] as String).trim().isNotEmpty
+            ? raw['flag'] as String
+            : null,
     quiet: raw['quiet'] == true,
     exclusive: raw['exclusive'] == true,
   );
@@ -100,6 +117,7 @@ class TemplateQuestion {
     this.scope = QuestionScope.session,
     this.required = false,
     this.shortLabel,
+    this.timing = AnswerTiming.background,
     this.options = const [],
   });
 
@@ -114,6 +132,21 @@ class TemplateQuestion {
   /// Prefix for the answer in the results summary, e.g. "Therapy" or
   /// "Understood".
   final String? shortLabel;
+  final AnswerTiming timing;
+
+  /// Exact wording and choices used when the answer was supplied. A stable id
+  /// alone is not enough to reuse an answer after a practitioner edits it.
+  String get answerSignature {
+    final choices = [
+      for (final o in options) [o.id, o.label.trim()],
+    ]..sort((a, b) => a.first.compareTo(b.first));
+    return jsonEncode({
+      'text': text.trim(),
+      'type': type.key,
+      'timing': timing.key,
+      'options': choices,
+    });
+  }
 
   final List<ChoiceOption> options;
 
@@ -129,6 +162,7 @@ class TemplateQuestion {
     'text': text,
     'type': type.key,
     'scope': scope.key,
+    'timing': timing.key,
     if (required) 'required': true,
     if (shortLabel != null && shortLabel!.trim().isNotEmpty)
       'short_label': shortLabel,
@@ -142,7 +176,9 @@ class TemplateQuestion {
     type: QuestionType.fromKey(raw['type']) ?? QuestionType.single,
     scope: QuestionScope.fromKey(raw['scope']) ?? QuestionScope.session,
     required: raw['required'] == true,
-    shortLabel: raw['short_label'] is String ? raw['short_label'] as String : null,
+    shortLabel:
+        raw['short_label'] is String ? raw['short_label'] as String : null,
+    timing: AnswerTiming.fromKey(raw['timing']) ?? AnswerTiming.background,
     options: [
       if (raw['options'] is List)
         for (final o in raw['options'] as List)
@@ -154,7 +190,9 @@ class TemplateQuestion {
   bool isAnswered(Object? value) => switch (type) {
     QuestionType.single => value is String && option(value) != null,
     QuestionType.multi =>
-      value is List && value.isNotEmpty && value.every((v) => option(v) != null),
+      value is List &&
+          value.isNotEmpty &&
+          value.every((v) => option(v) != null),
     QuestionType.text => value is String && value.trim().isNotEmpty,
   };
 }
@@ -227,6 +265,10 @@ class ChoiceTemplate {
         errors.add('Question $n needs its wording.');
       }
       final type = QuestionType.fromKey(raw['type']);
+      if (raw.containsKey('timing') &&
+          AnswerTiming.fromKey(raw['timing']) == null) {
+        errors.add('Question $n has an unknown reuse setting.');
+      }
       if (type == null) {
         errors.add('Question $n needs an answer type.');
         continue;
@@ -250,7 +292,9 @@ class ChoiceTemplate {
       for (var j = 0; j < options.length; j++) {
         final o = options[j];
         if (o is! Map) {
-          errors.add('Question $n, answer ${j + 1} is not in the right format.');
+          errors.add(
+            'Question $n, answer ${j + 1} is not in the right format.',
+          );
           continue;
         }
         final oid = o['id'];
@@ -268,10 +312,6 @@ class ChoiceTemplate {
         }
       }
     }
-    if (kind == TemplateKind.observation &&
-        !items.any((raw) => raw is Map && raw['scope'] == 'game')) {
-      errors.add('Ask at least one question for each game.');
-    }
     return errors;
   }
 
@@ -284,9 +324,10 @@ class ChoiceTemplate {
       if ((TemplateKind.fromKey(row['kind']) ?? TemplateKind.home) != kind) {
         return null;
       }
-      final items = row['items'] is String
-          ? jsonDecode(row['items'] as String)
-          : row['items'];
+      final items =
+          row['items'] is String
+              ? jsonDecode(row['items'] as String)
+              : row['items'];
       if (validateItems(kind, items).isNotEmpty) return null;
       final key = row['template_key'];
       final title = row['title'];
@@ -299,7 +340,8 @@ class ChoiceTemplate {
         title: title,
         intro: (row['intro'] as String?) ?? '',
         questions: [
-          for (final raw in items as List) TemplateQuestion.fromJson(raw as Map),
+          for (final raw in items as List)
+            TemplateQuestion.fromJson(raw as Map),
         ],
       );
     } catch (_) {
@@ -309,9 +351,9 @@ class ChoiceTemplate {
 
   /// Whether every required question in [scope] is answered.
   bool isComplete(Map<String, Object?> answers, QuestionScope scope) =>
-      questionsFor(scope).every(
-        (q) => !q.required || q.isAnswered(answers[q.id]),
-      );
+      questionsFor(
+        scope,
+      ).every((q) => !q.required || q.isAnswered(answers[q.id]));
 
   /// Readable answers for the results, e.g. "Kinder", "Therapy: Speech".
   List<String> summary(Map<String, Object?> answers, QuestionScope scope) {
@@ -345,12 +387,12 @@ class ChoiceTemplate {
           text.trim(),
   ];
 
-  static List<Object?> _chosen(TemplateQuestion q, Object? value) =>
-      switch (q.type) {
-        QuestionType.single => [value],
-        QuestionType.multi => value is List ? value : const [],
-        QuestionType.text => const [],
-      };
+  static List<Object?> _chosen(TemplateQuestion q, Object? value) => switch (q
+      .type) {
+    QuestionType.single => [value],
+    QuestionType.multi => value is List ? value : const [],
+    QuestionType.text => const [],
+  };
 
   /// The template fields stored with every answer, so answers from
   /// different templates are never mixed.
