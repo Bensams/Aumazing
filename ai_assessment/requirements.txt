@@ -1,10 +1,8 @@
-fastapi
-uvicorn[standard]
 xgboost
 scikit-learn
 pandas
 numpy
 joblib
-pydantic
-supabase>=2.0.0
-python-dotenv>=1.0.0
+onnx
+onnxmltools
+skl2onnx

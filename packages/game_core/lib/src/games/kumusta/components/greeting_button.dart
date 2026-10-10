@@ -3,28 +3,95 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
+import 'package:flame/events.dart';
 import 'package:flutter/animation.dart' show Curves;
 
 import '../../../config/game_motion.dart';
+import '../../shared/fingertip_drag.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../greetings.dart';
 
-/// One large icon button the child taps to greet back.
+/// Called when the child answers with a card, by tap or by drag.
+///
+/// [pressedAt] is when the finger first came down on the card — the moment
+/// the child *responded*, whichever way they then finished the gesture — so
+/// greeting latency means the same thing for a tap and for a drag.
+typedef GreetingTapped = void Function(
+    GreetingButton button, DateTime pressedAt);
+
+/// Called when the child lets go of a dragged card. [dropCenter] is the
+/// card's centre, in game space, at the moment it was released.
+typedef GreetingDropped = void Function(
+    GreetingButton button, Vector2 dropCenter, DateTime pressedAt);
+
+/// One large greeting card the child taps — or drags to the buddy — to greet
+/// back.
 ///
 /// Styled as a card the same way `sari_sari_sort`'s items are, so the two games
-/// feel like the same app, but tapped rather than dragged: returning a greeting
-/// is a single act, and asking for a drag would put a motor-planning demand in
-/// front of a social one.
-class GreetingButton extends PositionComponent {
+/// feel like the same app. A tap is always enough: returning a greeting is a
+/// single act, and *requiring* a drag would put a motor-planning demand in
+/// front of a social one. Dragging the card onto the buddy is offered as well,
+/// because handing the greeting *to* the buddy is how many children naturally
+/// try it — and a child who reaches toward the character is making exactly the
+/// social move the game is about.
+///
+/// Tap and drag share one component, so they are told apart by distance, the
+/// way Match It does it: a release within [_tapSlop] of where the finger came
+/// down is a tap, however long it was held. The drag recognizer claims the
+/// pointer as soon as it moves at all, so waiting for a perfectly still finger
+/// would lose nearly every child's tap.
+class GreetingButton extends PositionComponent
+    with TapCallbacks, DragCallbacks, FingertipDrag {
   GreetingButton({
     required this.greeting,
     required this.color,
     required Vector2 position,
     required Vector2 size,
-  }) : super(position: position, size: size);
+    this.onTapped,
+    this.onDropped,
+    this.claimsPoint,
+  }) : super(position: position, size: size) {
+    homePosition = position.clone();
+  }
 
   final Greeting greeting;
   final Color color;
+
+  /// Fired for a tap (including a wobbly one that never left the card).
+  final GreetingTapped? onTapped;
+
+  /// Fired when a real drag ends. The game decides whether the card landed on
+  /// the buddy; the card only moves.
+  final GreetingDropped? onDropped;
+
+  /// Decides which card owns a point where the generous hit boxes of two
+  /// neighbours overlap. Given a point in game space, returns whether this
+  /// card should take it. Without one, the inflated bounds alone decide.
+  final bool Function(GreetingButton button, Vector2 point)? claimsPoint;
+
+  /// Where the card rests in the row. The game updates it on every layout;
+  /// the card glides back here after a drag.
+  late Vector2 homePosition;
+
+  /// Pointer travel (game px) below which a release still counts as a tap.
+  static const double _tapSlop = 14.0;
+
+  /// When the finger came down on the card, for greeting latency.
+  DateTime? _pressedAt;
+
+  /// Where the finger came down, in game space. The tap/drag decision is
+  /// displacement from here, not accumulated movement, so a trembling finger
+  /// that never leaves the card keeps its tap.
+  Vector2? _pointerOrigin;
+
+  /// The drag recognizer has this pointer.
+  bool _pointerDown = false;
+
+  /// The pointer has travelled past [_tapSlop]: a real drag.
+  bool _dragging = false;
+
+  /// Whether the child is holding the card away from its slot right now.
+  bool get isDragging => _dragging;
 
   /// Set while the correct-icon pulse (prompt rung 2) is running.
   bool _pulsing = false;
@@ -50,6 +117,122 @@ class GreetingButton extends PositionComponent {
     return rect.contains(Offset(point.x, point.y));
   }
 
+  /// Routes pointer events to this card using the same generous bounds, and
+  /// lets the game break ties between overlapping neighbours by distance.
+  @override
+  bool containsLocalPoint(Vector2 point) {
+    final inGame = position + point;
+    if (!containsPointGenerous(inGame)) return false;
+    return claimsPoint?.call(this, inGame) ?? true;
+  }
+
+  // ── Tap and drag input ───────────────────────────────────────────────
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    _pressedAt ??= DateTime.now();
+  }
+
+  /// The rare tap the gesture arena awards to the tap recognizer: the finger
+  /// did not move at all, so the drag path never saw it.
+  @override
+  void onTapUp(TapUpEvent event) {
+    if (_pointerDown) return;
+    final pressedAt = _pressedAt ?? DateTime.now();
+    _pressedAt = null;
+    onTapped?.call(this, pressedAt);
+  }
+
+  @override
+  void onTapCancel(TapCancelEvent event) {
+    // The drag recognizer took the pointer; it now owns the press time.
+    if (!_pointerDown) _pressedAt = null;
+  }
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    _pointerDown = true;
+    _dragging = false;
+    _pressedAt ??= DateTime.now();
+    _pointerOrigin = event.canvasPosition.clone();
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    if (!_pointerDown) return;
+    if (!_dragging) {
+      // Still tap-like: leave the card in its slot so a shaky tap does not
+      // visibly nudge it.
+      final origin = _pointerOrigin;
+      if (origin != null &&
+          (event.canvasEndPosition - origin).length < _tapSlop) {
+        return;
+      }
+      _dragging = true;
+      priority = 100; // above the buddy and the other cards while held
+      // Centring starts only once the gesture is confirmed as a drag; the
+      // glide covers the catch-up.
+      startFingertipFollow(event.canvasEndPosition);
+      return;
+    }
+    moveFingertip(event.canvasEndPosition);
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    if (!_pointerDown) return;
+    _pointerDown = false;
+    final pressedAt = _pressedAt ?? DateTime.now();
+    _pressedAt = null;
+
+    if (!_dragging) {
+      // Released without ever leaving the card — that was a tap.
+      onTapped?.call(this, pressedAt);
+      return;
+    }
+
+    _dragging = false;
+    final dropCenter = visualCenter;
+    stopFingertipFollow();
+    priority = 0;
+    onDropped?.call(this, dropCenter, pressedAt);
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    // Flame implements onDragCancel as onDragEnd(event.toDragEnd()). Clear
+    // the pointer first so that dispatch cannot run the drop path for a
+    // gesture that was cancelled, not released.
+    final wasDragging = _dragging;
+    _pointerDown = false;
+    _dragging = false;
+    _pressedAt = null;
+    super.onDragCancel(event);
+    if (!wasDragging) return;
+    stopFingertipFollow();
+    priority = 0;
+    returnHome();
+  }
+
+  /// Glide back to the card's slot — after a drop anywhere but the buddy, and
+  /// after the buddy has taken the greeting. [onArrived] runs once it is home,
+  /// so a bounce or press animation plays in the slot rather than mid-flight.
+  void returnHome({void Function()? onArrived}) {
+    removeWhere((c) => c is MoveToEffect);
+    if ((position - homePosition).length < 0.5) {
+      position = homePosition.clone();
+      onArrived?.call();
+      return;
+    }
+    add(MoveToEffect(
+      homePosition.clone(),
+      EffectController(duration: 0.22, curve: Curves.easeOut),
+      onComplete: onArrived,
+    ));
+  }
+
   /// The centre of the card, for the ghost hand and the pulse.
   Vector2 get centre => position + size / 2;
 
@@ -64,6 +247,7 @@ class GreetingButton extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    followFingertip(dt);
     if (GameMotion.reduced) return;
     if (greeting == Greeting.wave || greeting == Greeting.highFive) {
       _idle += dt;

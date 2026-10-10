@@ -121,8 +121,7 @@ class AssessmentResultHeader extends StatelessWidget {
 
 /// Quiet inline tag naming the analysis source.
 ///
-/// Shows the same three labels everywhere: AI Analysis, On-Device AI,
-/// Rule-Based.
+/// Shows the same two labels everywhere: On-Device AI, Rule-Based.
 class AssessmentSourceTag extends StatelessWidget {
   const AssessmentSourceTag({super.key, required this.source});
 

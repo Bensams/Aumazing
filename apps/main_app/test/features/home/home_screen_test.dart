@@ -18,6 +18,7 @@ import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/providers/stars_provider.dart';
 import 'package:aumazing/providers/progress_provider.dart';
+import 'package:aumazing/services/entitlement_service.dart';
 import 'package:aumazing/services/tour_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,10 +209,71 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   });
 
+  group('Premium renewal reminder (AUM-169)', () {
+    final entitlement = EntitlementService.instance;
+    setUp(() {
+      SharedPreferences.setMockInitialValues({
+        'parent_dashboard_tour_seen_v2': true,
+      });
+      TourService.instance.resetCache();
+    });
+    tearDown(() => entitlement.debugSetRealPremium(false));
+
+    Future<void> pumpHome(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(960, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+        ),
+      );
+      await _settleUi(tester);
+    }
+
+    testWidgets('no banner while Premium has plenty of time left', (
+      tester,
+    ) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().add(const Duration(days: 20)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-renewal-reminder')), findsNothing);
+      expect(find.byKey(const Key('premium-upgrade-banner')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('reminds the parent in the last days', (tester) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().add(const Duration(days: 2, hours: 3)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-renewal-reminder')), findsOneWidget);
+      expect(find.text('Premium: 2 days left'), findsOneWidget);
+      expect(find.text('Renew'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('says when Premium ended instead of a generic upsell', (
+      tester,
+    ) async {
+      entitlement.debugSetRealPremium(
+        true,
+        until: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      await pumpHome(tester);
+      expect(find.byKey(const Key('premium-ended-banner')), findsOneWidget);
+      expect(find.textContaining('Premium ended '), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
+
   group('first assessment guidance', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
     });
@@ -345,7 +407,7 @@ void main() {
     'skills snapshot is domain-first and uses the latest post-assessment',
     (tester) async {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
@@ -512,11 +574,92 @@ void main() {
     },
   );
 
+  testWidgets('the tour covers every feature on the dashboard', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    TourService.instance.resetCache();
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+        childProvider: _TestChildProvider(initialProfile: _profile),
+        assessmentProvider: _DashboardAssessmentProvider(
+          pre: [
+            _dashboardResult(
+              type: 'pre',
+              runId: 'run-pre',
+              gameId: 'copy_me',
+              score: 6,
+              errors: 4,
+              communication: 'Emerging',
+            ),
+          ],
+          post: const [],
+        ),
+      ),
+    );
+    await _settleUi(tester);
+    expect(find.textContaining('A quick tour'), findsOneWidget);
+
+    // Walk to the end, noting every step title the parent is shown.
+    // Sign out sits inside the collapsed summary card on a phone, so there
+    // the tour explains it through the "Your child" step instead.
+    final seen = <String>[];
+    String currentTitle() {
+      final card = find.ancestor(
+        of: find.text('Skip'),
+        matching: find.byType(Column),
+      );
+      final texts =
+          find
+              .descendant(of: card.first, matching: find.byType(Text))
+              .evaluate()
+              .map((e) => (e.widget as Text).data)
+              .whereType<String>();
+      return texts.first;
+    }
+
+    var guard = 0;
+    while (find.text('Done').evaluate().isEmpty && guard++ < 40) {
+      seen.add(currentTitle());
+      await tester.tap(find.text('Next'));
+      await _settleUi(tester);
+    }
+    seen.add(currentTitle());
+
+    expect(
+      seen,
+      containsAll(<String>[
+        'Your child',
+        'Assessment',
+        'Child mode',
+        'Therapy directory',
+        'Premium',
+        'History & Progress',
+        'Recommended module',
+        'Skills snapshot',
+        'Overall summary',
+        'Advanced trends',
+        'Recent activity',
+        'Settings',
+        "That's it",
+      ]),
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Done'));
+    await _settleUi(tester);
+    await tester.pump(const Duration(milliseconds: 700));
+  });
+
   testWidgets('the help button replays the tour for a parent who has seen it', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'parent_dashboard_tour_seen_v1': true,
+      'parent_dashboard_tour_seen_v2': true,
     });
     TourService.instance.resetCache();
 
@@ -581,6 +724,139 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   });
 
+  group('pre-assessment prompt after the tour', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      TourService.instance.resetCache();
+    });
+
+    Future<_RecordingVoiceOver> skipTour(
+      WidgetTester tester, {
+      AssessmentProvider? assessmentProvider,
+    }) async {
+      final narrator = _RecordingVoiceOver();
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          assessmentProvider: assessmentProvider,
+          parentVoiceOverFactory: (_) => narrator,
+        ),
+      );
+      await _settleUi(tester);
+      expect(find.textContaining('A quick tour'), findsOneWidget);
+
+      await tester.tap(find.text('Skip'));
+      await _settleUi(tester);
+      return narrator;
+    }
+
+    testWidgets('skipping the tour points at the assessment and says so', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      expect(
+        find.textContaining('discover your child’s strengths'),
+        findsOneWidget,
+      );
+      for (final domain in [
+        'Communication',
+        'Play Skills',
+        'Social Interaction',
+        'Attention & Focus',
+      ]) {
+        expect(find.text(domain), findsOneWidget);
+      }
+      expect(narrator.played, [VoiceOverCue.parentStartPreAssessment]);
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('finishing the tour prompts too', (tester) async {
+      final narrator = _RecordingVoiceOver();
+      await tester.binding.setSurfaceSize(const Size(960, 540));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _buildTestApp(
+          authService: AuthService(supabaseAuth: _FakeSupabaseAuthClient()),
+          childProvider: _TestChildProvider(initialProfile: _profile),
+          parentVoiceOverFactory: (_) => narrator,
+        ),
+      );
+      await _settleUi(tester);
+
+      var guard = 0;
+      while (find.text('Done').evaluate().isEmpty && guard++ < 20) {
+        await tester.tap(find.text('Next'));
+        await _settleUi(tester);
+      }
+      await tester.tap(find.text('Done'));
+      await _settleUi(tester);
+
+      expect(find.text('Start now'), findsOneWidget);
+      expect(narrator.played, [VoiceOverCue.parentStartPreAssessment]);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('Start now opens the pre-assessment introduction', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      await tester.tap(find.text('Start now'));
+      await _settleUi(tester);
+      expect(find.byType(PreAssessmentIntroScreen), findsOneWidget);
+      expect(narrator.stops, greaterThan(0));
+      expect(tester.takeException(), isNull);
+
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('Later leaves the dashboard usable and stops the voice', (
+      tester,
+    ) async {
+      final narrator = await skipTour(tester);
+
+      await tester.tap(find.text('Later'));
+      await _settleUi(tester);
+      expect(find.text('Start now'), findsNothing);
+      expect(narrator.stops, greaterThan(0));
+      expect(find.text('Start Pre-Assessment').hitTestable(), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+
+    testWidgets('no prompt once a pre-assessment exists', (tester) async {
+      final narrator = await skipTour(
+        tester,
+        assessmentProvider: _DashboardAssessmentProvider(
+          pre: [
+            _dashboardResult(
+              type: 'pre',
+              runId: 'pre-1',
+              gameId: 'match_it',
+              score: 8,
+              errors: 2,
+              communication: 'Emerging',
+            ),
+          ],
+          post: const [],
+        ),
+      );
+
+      expect(find.text('Start now'), findsNothing);
+      expect(narrator.played, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 700));
+    });
+  });
+
   group('returning users open in child mode (AUM-306)', () {
     testWidgets('openChildMode pushes the child lobby over the dashboard', (
       tester,
@@ -588,7 +864,7 @@ void main() {
       // Tour already seen: a returning parent, so the dashboard must not
       // try to run onboarding on top of the auto-launched lobby.
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
@@ -625,7 +901,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        'parent_dashboard_tour_seen_v1': true,
+        'parent_dashboard_tour_seen_v2': true,
       });
       TourService.instance.resetCache();
 
@@ -710,6 +986,7 @@ Widget _buildTestApp({
   Stream<SyncState>? syncStates,
   bool openChildMode = false,
   TextScaler textScaler = TextScaler.noScaling,
+  VoiceOverService Function(BuildContext context)? parentVoiceOverFactory,
 }) {
   return MultiProvider(
     providers: [
@@ -734,6 +1011,9 @@ Widget _buildTestApp({
         authService: authService,
         syncStates: syncStates,
         openChildMode: openChildMode,
+        // Never a platform player in a widget test.
+        parentVoiceOverFactory:
+            parentVoiceOverFactory ?? (_) => _RecordingVoiceOver(),
       ),
     ),
   );
@@ -884,6 +1164,28 @@ class _TestProgressProvider extends ProgressProvider {
   @override
   Future<void> loadProgress(String childId) async {
     progressLoads.add(childId);
+  }
+}
+
+/// Records the cues asked for instead of reaching a platform player.
+class _RecordingVoiceOver extends VoiceOverService {
+  _RecordingVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  final List<VoiceOverCue> played = [];
+  int stops = 0;
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {
+    played.add(cue);
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
   }
 }
 

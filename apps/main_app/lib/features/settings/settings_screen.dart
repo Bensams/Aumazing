@@ -7,16 +7,22 @@ import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../providers/child_provider.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/parent_pin_service.dart';
 import '../../services/screen_time_service.dart';
+import '../app_update/app_update_dialog.dart';
+import '../app_update/app_update_service.dart';
 import '../parent_lock/parent_pin_setup_dialog.dart';
+import '../premium/premium_plan.dart';
 import '../rewards/widgets/reward_preference_selector.dart';
 import 'bind_account_modal.dart';
 import 'delete_account_screen.dart';
 import 'manage_children_screen.dart';
 import 'star_settings_screen.dart';
+import 'your_plan_screen.dart';
 import 'gameplay_export_screen.dart';
 import 'widgets/background_picker.dart';
+import 'widgets/offline_play_tile.dart';
 import 'widgets/settings_scaffold.dart';
 import 'widgets/object_style_picker.dart';
 
@@ -27,6 +33,8 @@ import 'widgets/object_style_picker.dart';
 /// - Audio — music, volumes, vibration, prompt speed
 /// - Child Preferences — avatar, background theme, game difficulty,
 ///   language, reward celebration
+/// - Your Plan — Premium status, its end date, renewal (AUM-169)
+/// - App Updates — installed version, newer APK download (Android only)
 /// - Bind Account — shown only while in guest mode
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.authService});
@@ -64,6 +72,26 @@ class SettingsScreen extends StatelessWidget {
           subtitle: 'Add, switch, edit or remove a child profile',
           onTap: () => _push(context, const ManageChildrenScreen()),
         ),
+        ListenableBuilder(
+          listenable: EntitlementService.instance,
+          builder:
+              (context, _) => _CategoryTile(
+                key: const Key('your-plan-tile'),
+                icon: Icons.workspace_premium_rounded,
+                color: const Color(0xFFD4A52C),
+                title: 'Your Plan',
+                subtitle: PremiumPlan.of(EntitlementService.instance).summary,
+                onTap:
+                    () => _push(
+                      context,
+                      YourPlanScreen(
+                        palette: palette,
+                        authService: authService,
+                      ),
+                    ),
+              ),
+        ),
+        const OfflinePlayTile(),
         _CategoryTile(
           icon: Icons.star_rounded,
           color: AppColors.primaryPurple,
@@ -108,6 +136,21 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
         ),
+        // Only the sideloaded Android build updates itself; the web app is
+        // always current and other platforms have no APK to install.
+        if (AppUpdateService.instance.status != AppUpdateStatus.unsupported)
+          ListenableBuilder(
+            listenable: AppUpdateService.instance,
+            builder:
+                (context, _) => _CategoryTile(
+                  key: const Key('app-updates-tile'),
+                  icon: Icons.system_update_rounded,
+                  color: const Color(0xFF5E94B5),
+                  title: 'App Updates',
+                  subtitle: _appUpdateSummary(AppUpdateService.instance),
+                  onTap: () => showAppUpdateDialog(context),
+                ),
+          ),
         if (isGuest)
           _CategoryTile(
             icon: Icons.link_rounded,
@@ -144,6 +187,20 @@ class SettingsScreen extends StatelessWidget {
 
   void _push(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  static String _appUpdateSummary(AppUpdateService service) {
+    final installed = service.installed?.name;
+    final current = installed == null ? '' : 'Version $installed · ';
+    final release = service.latest;
+    return switch (service.status) {
+      AppUpdateStatus.checking => '${current}Checking…',
+      AppUpdateStatus.downloading => '${current}Downloading the update…',
+      _ when release != null =>
+        '${current}Version ${release.versionName} is available',
+      AppUpdateStatus.upToDate => '${current}Up to date',
+      _ => '${current}Tap to check for a newer version',
+    };
   }
 }
 
@@ -899,6 +956,7 @@ class _AppearanceTab extends StatelessWidget {
 /// One category row on the main settings hub.
 class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
+    super.key,
     required this.icon,
     required this.color,
     required this.title,
@@ -2063,6 +2121,63 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
   // app's own games run 3–7 minutes, so these map to roughly 1–4 games.
   static const _sessionOptions = [5, 10, 15, 20, 30];
 
+  /// Bounds for a limit the parent types in themselves. The presets cover the
+  /// common cases; these let a family match a therapist's plan exactly (a
+  /// 40-minute day, a 12-minute sitting). The daily ceiling is four hours —
+  /// well past any guidance, but a parent may have a reason, and the
+  /// recommendation line still says what the guidance is.
+  static const _customDailyRange = (min: 5, max: 240);
+  static const _customSessionRange = (min: 1, max: 120);
+
+  /// Asks for a custom number of minutes and applies it with [apply].
+  Future<void> _pickCustom({
+    required String title,
+    required int? current,
+    required int fallback,
+    required ({int min, int max}) range,
+    required Future<void> Function(int minutes) apply,
+  }) async {
+    final minutes = await showDialog<int>(
+      context: context,
+      builder:
+          (_) => _CustomMinutesDialog(
+            title: title,
+            initial: (current ?? fallback).clamp(range.min, range.max),
+            min: range.min,
+            max: range.max,
+          ),
+    );
+    if (minutes != null) await apply(minutes);
+  }
+
+  /// The "Custom" chip that sits after a row of presets. Selected, and
+  /// showing its value, whenever the limit in force is not one of [presets].
+  Widget _customChip({
+    required Key key,
+    required int? current,
+    required List<int> presets,
+    required VoidCallback onTap,
+  }) {
+    final isCustom = current != null && !presets.contains(current);
+    return ChoiceChip(
+      key: key,
+      avatar: Icon(
+        Icons.edit_rounded,
+        size: 16,
+        color: isCustom ? AppColors.white : AppColors.textPrimary,
+      ),
+      label: Text(isCustom ? 'Custom: $current min' : 'Custom…'),
+      selected: isCustom,
+      selectedColor: AppColors.primaryPurple,
+      labelStyle: AppTextStyles.bodySmall.copyWith(
+        color: isCustom ? AppColors.white : AppColors.textPrimary,
+      ),
+      // Tapping a selected custom chip edits the value rather than doing
+      // nothing, so the parent can nudge 40 to 45 without leaving it.
+      onSelected: (_) => onTap(),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2207,6 +2322,19 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                         ),
                         onSelected: (_) => screenTime.setLimitMinutes(minutes),
                       ),
+                    _customChip(
+                      key: const Key('screenTime.customDaily'),
+                      current: limit,
+                      presets: _options,
+                      onTap:
+                          () => _pickCustom(
+                            title: 'Custom daily limit',
+                            current: limit,
+                            fallback: recommended ?? 30,
+                            range: _customDailyRange,
+                            apply: screenTime.setLimitMinutes,
+                          ),
+                    ),
                   ],
                 ),
                 if (recommended != null) ...[
@@ -2279,6 +2407,19 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                         onSelected:
                             (_) => screenTime.setSessionLimitMinutes(minutes),
                       ),
+                    _customChip(
+                      key: const Key('screenTime.customSession'),
+                      current: sessionLimit,
+                      presets: _sessionOptions,
+                      onTap:
+                          () => _pickCustom(
+                            title: 'Custom session limit',
+                            current: sessionLimit,
+                            fallback: 15,
+                            range: _customSessionRange,
+                            apply: screenTime.setSessionLimitMinutes,
+                          ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -2294,6 +2435,105 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
               ],
             );
           },
+        ),
+      ],
+    );
+  }
+}
+
+/// Picks a whole number of minutes between [min] and [max].
+///
+/// Big − / + buttons for small adjustments, a slider for large ones, and the
+/// value itself shown large — the parent is often holding a child with the
+/// other arm, so nothing here needs typing.
+class _CustomMinutesDialog extends StatefulWidget {
+  const _CustomMinutesDialog({
+    required this.title,
+    required this.initial,
+    required this.min,
+    required this.max,
+  });
+
+  final String title;
+  final int initial;
+  final int min;
+  final int max;
+
+  @override
+  State<_CustomMinutesDialog> createState() => _CustomMinutesDialogState();
+}
+
+class _CustomMinutesDialogState extends State<_CustomMinutesDialog> {
+  late int _minutes = widget.initial;
+
+  /// One minute at a time for short limits, five once the value is large
+  /// enough that single minutes would mean a lot of tapping.
+  int get _step => _minutes >= 30 ? 5 : 1;
+
+  void _nudge(int direction) {
+    setState(() {
+      _minutes = (_minutes + direction * _step).clamp(widget.min, widget.max);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton.filledTonal(
+                key: const Key('customMinutes.decrease'),
+                tooltip: 'Less',
+                onPressed: _minutes > widget.min ? () => _nudge(-1) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                ScreenTimeService.formatDuration(_minutes * 60),
+                key: const Key('customMinutes.value'),
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              IconButton.filledTonal(
+                key: const Key('customMinutes.increase'),
+                tooltip: 'More',
+                onPressed: _minutes < widget.max ? () => _nudge(1) : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          Slider(
+            value: _minutes.toDouble(),
+            min: widget.min.toDouble(),
+            max: widget.max.toDouble(),
+            divisions: widget.max - widget.min,
+            label: '$_minutes min',
+            onChanged: (v) => setState(() => _minutes = v.round()),
+          ),
+          Text(
+            'Between ${widget.min} and ${widget.max} minutes.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('customMinutes.save'),
+          onPressed: () => Navigator.of(context).pop(_minutes),
+          child: const Text('Save'),
         ),
       ],
     );

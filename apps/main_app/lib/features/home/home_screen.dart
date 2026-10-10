@@ -22,6 +22,9 @@ import '../../services/parent_skill_summary_service.dart';
 import '../../services/screen_time_service.dart';
 import '../../services/tour_service.dart';
 import 'widgets/guided_tour_overlay.dart';
+import 'widgets/overall_gameplay_summary_card.dart';
+import '../app_update/app_update_banner.dart';
+import '../premium/premium_plan.dart';
 import '../premium/premium_upgrade_screen.dart';
 import '../history/parent_history_screen.dart';
 import 'gameplay_report_screen.dart';
@@ -44,9 +47,16 @@ class HomeScreen extends StatefulWidget {
     this.authService,
     this.syncStates,
     this.openChildMode = false,
+    this.parentVoiceOverFactory,
   });
 
   final AuthService? authService;
+
+  /// Builds the narrator that speaks the pre-assessment prompt to the parent.
+  ///
+  /// Injectable so a widget test can observe the cue without a platform audio
+  /// player; production gets an adult narrator in the child's language.
+  final VoiceOverService Function(BuildContext context)? parentVoiceOverFactory;
 
   /// Sync-state feed the dashboard refreshes on. Defaults to the live
   /// [syncService]; injectable so a test can land a synced pass without a
@@ -75,6 +85,15 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Whether the guided tour is currently dimming the dashboard.
   bool _isTourActive = false;
 
+  /// Whether the "start the pre-assessment" prompt is spotlighting the
+  /// assessment button. Shown when the tour ends — finished or skipped — for
+  /// a child with no pre-assessment yet.
+  bool _isStartPromptActive = false;
+
+  /// Speaks the start prompt. Built on first use, so a parent who never sees
+  /// the prompt never holds audio players for it.
+  VoiceOverService? _parentVoiceOver;
+
   // Tour targets. Landscape and portrait draw different widgets for the
   // same thing, so each has its own key; the tour skips whichever pair is
   // not on screen.
@@ -92,6 +111,18 @@ class _HomeScreenState extends State<HomeScreen> {
   final _screenTimeKey = GlobalKey();
   final _recentActivityKey = GlobalKey();
   final _historyKey = GlobalKey();
+  final _helpWideKey = GlobalKey();
+  final _helpPortraitKey = GlobalKey();
+  final _panelToggleKey = GlobalKey();
+  final _syncBannerKey = GlobalKey();
+  final _premiumKey = GlobalKey();
+  final _gameplaySummaryKey = GlobalKey();
+  final _trendsKey = GlobalKey();
+
+  /// Horizontal padding the "Start here" card falls back to when the roomy
+  /// [AppSpacing.lg] would squeeze the assessment label past its line
+  /// budget. Padding is cheaper to lose than the label itself.
+  static const double _tightCardPadding = AppSpacing.sm;
 
   /// Re-queries the dashboard when a sync pass lands rows.
   ///
@@ -206,6 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _syncSubscription?.cancel();
+    _parentVoiceOver?.dispose();
     unlockParentOrientation();
     super.dispose();
   }
@@ -294,14 +326,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _endTour() {
     TourService.instance.markParentTourSeen();
-    if (mounted) setState(() => _isTourActive = false);
+    if (!mounted) return;
+    setState(() => _isTourActive = false);
+    _maybePromptPreAssessment();
+  }
+
+  // ── Pre-assessment prompt ───────────────────────────────────────────
+
+  /// After the tour — whether the parent walked through it or skipped it —
+  /// point at the one thing a new parent should do next, and say it aloud.
+  /// Nothing to prompt once a pre-assessment exists.
+  void _maybePromptPreAssessment() {
+    if (!mounted || _isStartPromptActive || !_assessmentsReady) return;
+    if (context.read<AssessmentProvider>().hasPreAssessment) return;
+    setState(() => _isStartPromptActive = true);
+    _speakStartPrompt();
+  }
+
+  void _speakStartPrompt() {
+    final voiceOver = _parentVoiceOver ??=
+        (widget.parentVoiceOverFactory ?? _defaultParentVoiceOver)(context);
+    unawaited(voiceOver.play(VoiceOverCue.parentStartPreAssessment));
+  }
+
+  /// An adult narrator in the child's language, at its natural pace: the
+  /// prompt-speed setting slows speech for the child, not for the parent.
+  static VoiceOverService _defaultParentVoiceOver(BuildContext context) {
+    final childProvider = context.read<ChildProvider>();
+    return VoiceOverService(
+      languageCode: parentVoiceFolder(childProvider.voiceAssetFolder),
+    );
+  }
+
+  /// The prompt closed — "Later", a tap outside, or starting the assessment.
+  void _endStartPrompt() {
+    unawaited(_parentVoiceOver?.stop());
+    if (mounted) setState(() => _isStartPromptActive = false);
+  }
+
+  /// The prompt's single step: the assessment button, spotlighted, with the
+  /// four skill areas the assessment reports on.
+  List<TourStep> _startPromptSteps() {
+    return [
+      TourStep(
+        targetKey: _assessmentButtonKey,
+        title: 'Start the pre-assessment',
+        body:
+            'Start the pre-assessment to discover your child’s strengths in '
+            'four domains.',
+        icon: Icons.play_circle_filled_rounded,
+        tags: const [
+          'Communication',
+          'Play Skills',
+          'Social Interaction',
+          'Attention & Focus',
+        ],
+        actionLabel: 'Start now',
+        dismissLabel: 'Later',
+        onAction: _startPreAssessment,
+      ),
+    ];
   }
 
   /// The walkthrough itself: one short sentence per control, in the order a
-  /// parent meets them. Steps whose target is missing (wrong layout, card
-  /// hidden) are skipped by the overlay, so both keys of a pair can be
-  /// listed and only the mounted one is shown.
+  /// parent meets them on screen — except the assessment, which comes right
+  /// after the welcome because it is where a new parent should begin. Steps
+  /// whose target is missing (wrong
+  /// layout, a card this child's state hides, the Premium banner for a
+  /// Premium parent) are skipped by the overlay, so both keys of a pair can
+  /// be listed and only the mounted one is shown.
+  ///
+  /// Every control and card on the dashboard has a step here. A feature
+  /// added to the dashboard without one is invisible to a parent who relies
+  /// on the tour, so add its step alongside it.
   List<TourStep> _tourSteps() {
+    final hasPre = context.read<AssessmentProvider>().hasPreAssessment;
+    final isPremium = EntitlementService.instance.isPremium;
     return [
       const TourStep(
         title: 'Welcome',
@@ -312,13 +412,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       TourStep(
         targetKey: _assessmentButtonKey,
-        title:
-            context.read<AssessmentProvider>().hasPreAssessment
-                ? 'Assessment'
-                : 'Start here',
+        title: hasPre ? 'Assessment' : 'Start here',
         body:
-            context.read<AssessmentProvider>().hasPreAssessment
-                ? 'Review your child’s assessment results and recommended module here.'
+            hasPre
+                ? 'Review your child’s assessment results and recommended '
+                    'module here.'
                 : 'Start the pre-assessment here to find your child’s starting '
                     'level and get a recommended module.',
         icon: Icons.assessment_rounded,
@@ -326,8 +424,16 @@ class _HomeScreenState extends State<HomeScreen> {
       TourStep(
         targetKey: _childPanelKey,
         title: 'Your child',
-        body: "Your child's name, age and quick stats live here.",
+        body:
+            "Your child's name, age and quick stats: games played, "
+            'sessions and assessments.',
         icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _panelToggleKey,
+        title: 'More room',
+        body: 'Collapse this panel for a wider view; tap again to bring it back.',
+        icon: Icons.chevron_left_rounded,
       ),
       TourStep(
         targetKey: _summaryCardKey,
@@ -336,6 +442,14 @@ class _HomeScreenState extends State<HomeScreen> {
             "Tap this card to expand your child's quick stats and your "
             'account details.',
         icon: Icons.person_rounded,
+      ),
+      TourStep(
+        targetKey: _syncBannerKey,
+        title: 'Sync status',
+        body:
+            'Progress is saved on this device first. This banner shows when '
+            'something is still waiting to sync to your account.',
+        icon: Icons.cloud_sync_rounded,
       ),
       TourStep(
         targetKey: _childModeKey,
@@ -360,6 +474,22 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.location_on_rounded,
       ),
       TourStep(
+        targetKey: _premiumKey,
+        title: 'Premium',
+        body:
+            'Upgrade for the interactive therapy locator, skill trends and a '
+            'fresh recommendation after every assessment.',
+        icon: Icons.star_rounded,
+      ),
+      TourStep(
+        targetKey: _historyKey,
+        title: 'History & Progress',
+        body:
+            'Every assessment, My Path step and practice session your child '
+            'has played, in one place.',
+        icon: Icons.history_rounded,
+      ),
+      TourStep(
         targetKey: _screenTimeKey,
         title: 'Screen time',
         body: "Today's play time against the daily limit you set in Settings.",
@@ -370,37 +500,59 @@ class _HomeScreenState extends State<HomeScreen> {
         title: 'Recommended module',
         body:
             'The activity your child should work on next — tap it to open '
-            'that learning path straight away.',
+            'that learning path. When the path is done, the post-assessment '
+            'appears here to measure progress.',
         icon: Icons.recommend_rounded,
       ),
       TourStep(
         targetKey: _scoresKey,
-        title: 'Assessment scores',
-        body: 'How your child scored on each assessment activity.',
+        title: 'Skills snapshot',
+        body:
+            'How your child is doing in each of the four domains, from the '
+            'latest assessment.',
         icon: Icons.bar_chart_rounded,
+      ),
+      TourStep(
+        targetKey: _gameplaySummaryKey,
+        title: 'Overall summary',
+        body:
+            'One written summary of the assessments and My Path, with '
+            'questions you can bring to a therapist.',
+        icon: Icons.summarize_rounded,
+      ),
+      TourStep(
+        targetKey: _trendsKey,
+        title: 'Advanced trends',
+        body:
+            isPremium
+                ? 'Skill changes from pre- to post-assessment appear here '
+                    'once a post-assessment is done.'
+                : 'Skill changes across assessment cycles — unlock them with '
+                    'Premium.',
+        icon: Icons.insights_rounded,
       ),
       TourStep(
         targetKey: _recentActivityKey,
         title: 'Recent activity',
         body:
             'The last few sessions your child played, with score and time '
-            'spent.',
+            'spent. Tap one to open its full gameplay report.',
         icon: Icons.history_rounded,
       ),
       TourStep(
         targetKey: _settingsWideKey,
         title: 'Settings',
         body:
-            'Set the parent PIN, screen-time limit, sounds and profile '
-            'details here.',
+            'Set the parent PIN, screen-time limit, sounds, narrator voice '
+            'and profile details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
         targetKey: _settingsPortraitKey,
         title: 'Settings',
         body:
-            'Set the parent PIN, screen-time limit, sounds and profile '
-            'details here.',
+            'Set the parent PIN, screen-time limit, sounds, narrator voice '
+            'and profile details here.',
         icon: Icons.settings_rounded,
       ),
       TourStep(
@@ -419,11 +571,16 @@ class _HomeScreenState extends State<HomeScreen> {
             'saved.',
         icon: Icons.logout_rounded,
       ),
-      const TourStep(
+      TourStep(
+        targetKey: _helpWideKey,
         title: 'That\'s it',
-        body:
-            'You can replay this tour any time from the ? button at the '
-            'top of the dashboard.',
+        body: 'Replay this tour any time from this ? button.',
+        icon: Icons.help_outline_rounded,
+      ),
+      TourStep(
+        targetKey: _helpPortraitKey,
+        title: 'That\'s it',
+        body: 'Replay this tour any time from this ? button.',
         icon: Icons.help_outline_rounded,
       ),
     ];
@@ -479,18 +636,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _pushChildFacing(const ChildModeLobbyScreen());
   }
 
-  /// True when the child has finished every step of the learning path and
-  /// hasn't taken the post-assessment yet — time to measure improvement.
+  /// True when the post-assessment is waiting: the child has finished every
+  /// step of the learning path (or has already started the post-assessment)
+  /// and hasn't completed it yet.
+  ///
+  /// Finishing the path's last game already offers the child the
+  /// post-assessment, so this is the fallback for a child who chose the lobby
+  /// instead, or left a run before it finished.
   bool _postAssessmentReady(AssessmentProvider assessProv) {
-    if (assessProv.aiPrediction == null) return false;
     if (assessProv.hasPostAssessment) return false;
+    // A run the child already started stays reachable here even if the
+    // path underneath it has since changed.
+    if (assessProv.postAssessmentInProgress) return true;
+    if (assessProv.aiPrediction == null) return false;
     final path = LearningPathService.fromContext(
       context,
       activeGameIds: ActiveGamesService.instance.cachedActiveGameIds,
     );
-    if (path.isEmpty) return false;
-    final done = assessProv.pathCompletedGameIds;
-    return path.every((e) => done.contains(e.game.id));
+    return LearningPathService.postAssessmentDue(
+      path,
+      assessProv.pathCompletedGameIds,
+      hasPostAssessment: assessProv.hasPostAssessment,
+    );
   }
 
   /// Opens the child lobby directly on the AI-recommended learning path
@@ -536,8 +703,20 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          // Keyed apart: the prompt follows the tour in the same slot, and
+          // reusing the tour's finished state would close it on arrival.
           if (_isTourActive)
-            GuidedTourOverlay(steps: _tourSteps(), onFinish: _endTour),
+            GuidedTourOverlay(
+              key: const ValueKey('dashboard-tour'),
+              steps: _tourSteps(),
+              onFinish: _endTour,
+            )
+          else if (_isStartPromptActive)
+            GuidedTourOverlay(
+              key: const ValueKey('start-assessment-prompt'),
+              steps: _startPromptSteps(),
+              onFinish: _endStartPrompt,
+            ),
         ],
       ),
     );
@@ -611,9 +790,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       // Hides itself when online with nothing pending, so it only costs
       // space when there is genuinely something to say.
-      const SyncStatusBanner(),
+      KeyedSubtree(key: _syncBannerKey, child: const SyncStatusBanner()),
+      // Hidden unless a newer APK is published; parent dashboard only.
+      const AppUpdateBanner(),
       _buildActionButtons(),
-      _buildPremiumBanner(),
+      KeyedSubtree(key: _premiumKey, child: _buildPremiumBanner()),
       KeyedSubtree(key: _historyKey, child: _buildHistoryEntry()),
       _buildScreenTimeStatus(),
       const SizedBox(height: AppSpacing.md),
@@ -621,7 +802,11 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: AppSpacing.md),
       KeyedSubtree(key: _scoresKey, child: _buildProgressSection()),
       const SizedBox(height: AppSpacing.md),
-      _buildAdvancedTrends(),
+      KeyedSubtree(
+        key: _gameplaySummaryKey,
+        child: _buildOverallGameplaySummary(),
+      ),
+      KeyedSubtree(key: _trendsKey, child: _buildAdvancedTrends()),
       KeyedSubtree(key: _recentActivityKey, child: _buildRecentActivity()),
     ];
   }
@@ -694,6 +879,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       IconButton(
+                        key: _helpPortraitKey,
                         icon: const Icon(Icons.help_outline_rounded),
                         tooltip: 'Dashboard guide',
                         onPressed: _assessmentsReady ? _startTour : null,
@@ -880,6 +1066,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     IconButton(
+                      key: _helpWideKey,
                       icon: const Icon(Icons.help_outline_rounded),
                       tooltip: 'Dashboard guide',
                       onPressed: _assessmentsReady ? _startTour : null,
@@ -934,6 +1121,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
+                    key: _panelToggleKey,
                     icon: Icon(
                       _isLeftPanelExpanded
                           ? Icons.chevron_left_rounded
@@ -1090,46 +1278,55 @@ class _HomeScreenState extends State<HomeScreen> {
             !childProv.hasProfile ||
             assessProv.isLoading;
         final needsAssessment = !isLoading && !assessProv.hasPreAssessment;
-        final Widget assessment;
-        if (isLoading) {
-          assessment = _buildLoadingCard('Loading assessment…');
-        } else {
+        final assessmentLabel =
+            assessProv.hasPreAssessment ? 'Assessment' : 'Start Pre-Assessment';
+
+        // The "Start here" lead-in card wraps the CTA, so the card's own
+        // horizontal padding is width the button cannot use. On a narrow
+        // phone at a large text scale that padding is the difference
+        // between the label reading in full and being clipped, so the
+        // tight arrangement gives up padding rather than text.
+        Widget buildAssessment({required bool tight}) {
+          if (isLoading) return _buildLoadingCard('Loading assessment…');
           final button = AppPrimaryButton(
             key: _assessmentButtonKey,
-            label: needsAssessment ? 'Start Pre-Assessment' : 'Assessment',
+            label: assessmentLabel,
             onPressed: _startPreAssessment,
             icon:
                 needsAssessment
                     ? Icons.play_circle_filled_rounded
                     : Icons.assessment_rounded,
+            compact: tight,
           );
-          assessment =
-              needsAssessment
-                  ? AppCard(
-                    color: AppColors.lavenderLight,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Start here',
-                          style: AppTextStyles.titleLarge.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'The pre-assessment helps find your child’s starting '
-                          'level and recommends a learning module.',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        button,
-                      ],
-                    ),
-                  )
-                  : button;
+          if (!needsAssessment) return button;
+          return AppCard(
+            color: AppColors.lavenderLight,
+            padding: EdgeInsets.symmetric(
+              horizontal: tight ? _tightCardPadding : AppSpacing.lg,
+              vertical: AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Start here',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'The pre-assessment helps find your child’s starting '
+                  'level and recommends a learning module.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                button,
+              ],
+            ),
+          );
         }
         final childMode = _ActionCard(
           key: _childModeKey,
@@ -1156,15 +1353,26 @@ class _HomeScreenState extends State<HomeScreen> {
         // What each action needs to read in full, measured from its own
         // label at the ambient text scale. A fixed 540 breakpoint clipped
         // "Start Pre-Assessment" once the tablet sidebar had taken its
-        // share of the width.
-        final assessmentMin = AppPrimaryButton.minWidthFor(
-          context,
-          label:
-              assessProv.hasPreAssessment
-                  ? 'Assessment'
-                  : 'Start Pre-Assessment',
-          icon: Icons.play_circle_filled_rounded,
-        );
+        // share of the width. The wrapping card's padding counts too:
+        // measuring the bare button and then rendering it inside the
+        // "Start here" card understated the requirement by that padding
+        // and clipped the label on a narrow phone at 1.3x text scale.
+        double assessmentMinFor({required bool tight}) {
+          final cardPadding =
+              needsAssessment
+                  ? (tight ? _tightCardPadding : AppSpacing.lg) * 2
+                  : 0.0;
+          return AppPrimaryButton.minWidthFor(
+                context,
+                label: assessmentLabel,
+                icon: Icons.play_circle_filled_rounded,
+                compact: tight,
+              ) +
+              cardPadding;
+        }
+
+        final assessmentMin = assessmentMinFor(tight: false);
+        final assessmentMinTight = assessmentMinFor(tight: true);
         final cardMin = _ActionCard.minWidthFor(
           context,
           labels: const ['Enter Child Mode', 'Therapy Directory'],
@@ -1175,19 +1383,25 @@ class _HomeScreenState extends State<HomeScreen> {
             const gap = AppSpacing.md;
             final width = constraints.maxWidth;
 
+            // Only tighten when the roomy arrangement will not fit, so the
+            // CTA surrenders padding before it surrenders text.
+            final tight = width < assessmentMin;
+            final assessment = buildAssessment(tight: tight);
+            final ctaMin = tight ? assessmentMinTight : assessmentMin;
+
             // Three across only when every label fits at once. Spare space
             // is shared proportionally, so the assessment CTA — the widest
             // label — keeps the largest column.
             if (!needsAssessment &&
                 !isLoading &&
-                width >= assessmentMin + cardMin * 2 + gap * 2) {
+                width >= ctaMin + cardMin * 2 + gap * 2) {
               // IntrinsicHeight keeps the three tiles the same height even
               // when one of them wraps its label.
               return IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(flex: assessmentMin.round(), child: assessment),
+                    Expanded(flex: ctaMin.round(), child: assessment),
                     const SizedBox(width: gap),
                     Expanded(flex: cardMin.round(), child: childMode),
                     const SizedBox(width: gap),
@@ -1199,7 +1413,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Two columns: the long CTA takes a full-width row of its own
             // and the two shorter cards pair up beneath it.
-            if (width >= cardMin * 2 + gap && width >= assessmentMin) {
+            if (width >= cardMin * 2 + gap && width >= ctaMin) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1270,38 +1484,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Freemium gateway (FR-10): upgrade banner for Free parents; hidden
   /// once Premium is active. Rebuilds live when the entitlement changes.
+  ///
+  /// Premium never renews by itself (AUM-169), so the banner also reminds
+  /// the parent in the last days of a paid period and says when it ended.
   Widget _buildPremiumBanner() {
     return ListenableBuilder(
       listenable: EntitlementService.instance,
       builder: (context, _) {
-        if (EntitlementService.instance.isPremium) {
+        final plan = PremiumPlan.of(EntitlementService.instance);
+        final endingSoon = plan.kind == PremiumPlanKind.endingSoon;
+        final ended = plan.kind == PremiumPlanKind.ended;
+        if (EntitlementService.instance.isPremium && !endingSoon) {
           return const SizedBox.shrink();
         }
+        final (String emoji, String title, String body) =
+            endingSoon
+                ? (
+                  '⏳',
+                  '${plan.isFreeMonth ? 'Free month' : 'Premium'}: '
+                      '${plan.timeLeft!.toLowerCase()}',
+                  plan.originLabel == null
+                      ? 'Ends ${PremiumPlan.formatDate(plan.until!)}. It does '
+                          'not renew by itself — renew now to add 30 days '
+                          'without a gap.'
+                      : 'Ends ${PremiumPlan.formatDate(plan.until!)}. Keep '
+                          'Premium without a gap — ₱149 adds 30 days.',
+                )
+                : ended
+                ? (
+                  '⭐',
+                  '${plan.isFreeMonth ? 'Your free month' : 'Premium'} ended '
+                      '${PremiumPlan.formatDate(plan.until!)}',
+                  '${plan.originLabel == null ? 'Renew' : 'Get Premium'} to '
+                      'bring back the therapy locator, skill trends and '
+                      'fresh AI recommendations — ₱149 for 30 days.',
+                )
+                : (
+                  '⭐',
+                  'Aumazing Premium',
+                  'Interactive therapy locator, skill trends, and '
+                      'fresh AI recommendations — ₱149 for 30 days.',
+                );
         return Padding(
+          key: Key(
+            endingSoon
+                ? 'premium-renewal-reminder'
+                : ended
+                ? 'premium-ended-banner'
+                : 'premium-upgrade-banner',
+          ),
           padding: const EdgeInsets.only(top: AppSpacing.md),
           child: RainbowBorderCard(
             child: AppCard(
               child: _CtaBand(
-                leading: const Text('⭐', style: TextStyle(fontSize: 28)),
+                leading: Text(emoji, style: const TextStyle(fontSize: 28)),
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Aumazing Premium',
+                      title,
                       style: AppTextStyles.titleMedium.copyWith(
                         color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
-                      'Interactive therapy locator, skill trends, and '
-                      'fresh AI recommendations — ₱149/month.',
+                      body,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.mutedForeground,
                       ),
                     ),
                   ],
                 ),
-                label: 'Upgrade',
+                label: (endingSoon || ended) && plan.originLabel == null
+                    ? 'Renew'
+                    : endingSoon
+                    ? 'Keep Premium'
+                    : 'Upgrade',
                 icon: Icons.star_rounded,
                 onPressed:
                     () => Navigator.of(context).push(
@@ -1620,13 +1878,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: AppColors.primaryPurple,
                         ),
                         content: Text(
-                          'Learning path complete! Measure the progress with '
-                          'a post-assessment.',
+                          assessProv.postAssessmentInProgress
+                              ? 'Post-assessment started but not finished. '
+                                  'Continue where the child left off.'
+                              : 'Learning path complete! Measure the progress '
+                                  'with a post-assessment.',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        label: 'Start Post-Assessment',
+                        label:
+                            assessProv.postAssessmentInProgress
+                                ? 'Continue Post-Assessment'
+                                : 'Start Post-Assessment',
                         icon: Icons.play_arrow_rounded,
                         onPressed:
                             () => _pushChildFacing(
@@ -1725,6 +1989,51 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Overall gameplay summary (Gemini or on-device) ──────────────────
+
+  /// One summary across every assessment cycle and the recommended
+  /// activities, with questions for the therapist. Hidden until the child has
+  /// an assessment, like the Skills Snapshot above it.
+  Widget _buildOverallGameplaySummary() {
+    return Consumer3<ChildProvider, AssessmentProvider, ProgressProvider>(
+      builder: (context, childProv, assessProv, progressProv, _) {
+        final profile = childProv.profile;
+        if (profile == null ||
+            assessProv.isLoading ||
+            assessProv.preResults.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final path =
+            assessProv.nextCycleLocked
+                ? const <LearningPathEntry>[]
+                : LearningPathService.fromContext(
+                  context,
+                  activeGameIds: ActiveGamesService.instance.cachedActiveGameIds,
+                );
+        final attempts = assessProv.pathAttempts;
+        final totalTries = attempts.values.fold<int>(
+          0,
+          (sum, r) => sum + r.attempts,
+        );
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: OverallGameplaySummaryCard(
+            childId: profile.id,
+            pathGameIds: [for (final e in path) e.game.id],
+            pathAttempts: attempts,
+            languageCode: childProv.language.slug,
+            // New sessions, a new assessment or a new path try all mean a
+            // record the summary has not seen yet.
+            refreshToken:
+                '${progressProv.recentSessions.length}|'
+                '${assessProv.preResults.length}|'
+                '${assessProv.postResults.length}|$totalTries',
           ),
         );
       },

@@ -19,7 +19,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:aumazing/features/child_mode/child_mode_lobby_screen.dart';
+import 'package:aumazing/features/post_assessment/post_assessment_progress_screen.dart';
+import 'package:aumazing/features/pre_assessment/learn_first_screen.dart';
+import 'package:shared_audio/shared_audio.dart';
 import 'package:aumazing/features/premium/premium_upgrade_screen.dart';
+import 'package:aumazing/services/assessment_service.dart';
 final _profile = ChildProfile(
   id: 'child-1',
   userId: 'user-1',
@@ -104,11 +108,15 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     ParentVerificationDialog.pinDelegate = null;
     PendingPathLaunch.take();
+    // Starting the post-assessment opens the "Let's learn first" step; keep
+    // its narrator off the platform audio player.
+    LearnFirstScreen.debugVoiceOverFactory = (_) => _SilentVoiceOver();
   });
 
   tearDown(() {
     ParentVerificationDialog.pinDelegate = null;
     PendingPathLaunch.take();
+    LearnFirstScreen.debugVoiceOverFactory = null;
   });
 
   testWidgets('path Next parks the launch and pops home instead of swapping', (
@@ -251,6 +259,40 @@ void main() {
   );
 
 
+  testWidgets(
+    'a path game below Strength locks Next and asks for another try',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(const _LobbyWithGame(), pathCompleted: const {}),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('finish'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('gameEndNeedsStrength')), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.byKey(const ValueKey('gameEndLockedNext')), findsOneWidget);
+      // The next step is shown locked, never offered by name.
+      expect(find.text('Copy Me'), findsNothing);
+
+      // Tapping the locked step does nothing.
+      await tester.tap(
+        find.byKey(const ValueKey('gameEndLockedNext')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Try again'), findsOneWidget);
+      expect(PendingPathLaunch.take(), isNull);
+
+      await tester.tap(find.text('Lobby'));
+      await tester.pumpAndSettle();
+      expect(find.text('play'), findsOneWidget);
+    },
+  );
+
   testWidgets('path Lobby pops home without parking a launch', (tester) async {
     await tester.pumpWidget(_wrap(const _LobbyWithGame()));
     await tester.pump();
@@ -275,6 +317,9 @@ void main() {
       // `onShown` used to be called only once it had finished. That let the
       // watchdog's own 15s window expire mid-victory and ferry the child out
       // to the parent dashboard instead of back to the child lobby.
+      //
+      // The post-assessment is already taken here, so there is nothing to
+      // hand over to and the child returns to the lobby.
       var shown = 0;
       final semantics = tester.ensureSemantics();
       await tester.pumpWidget(
@@ -282,6 +327,7 @@ void main() {
           _LobbyWithGame(onShown: () => shown++),
           prediction: _completedPathPrediction,
           progressProvider: _TestProgressProvider(),
+          hasPostAssessment: true,
         ),
       );
       await tester.pump();
@@ -312,6 +358,74 @@ void main() {
           warnIfMissed: false);
       await tester.pumpAndSettle();
 
+      expect(find.text('play'), findsOneWidget, reason: 'back at the lobby');
+      semantics.dispose();
+    },
+  );
+
+  /// Plays the last path game and waits out the victory, leaving the
+  /// post-assessment offer on screen.
+  Future<void> finishPathAndCelebrate(WidgetTester tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const _LobbyWithGame(),
+        prediction: _completedPathPrediction,
+        progressProvider: _TestProgressProvider(),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('play'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('finish'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(
+      find.text('You finished every activity on your path!'),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 16));
+    await tester.tap(find.byIcon(Icons.arrow_forward_rounded),
+        warnIfMissed: false);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'finishing the path offers the post-assessment, and Continue starts it',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await finishPathAndCelebrate(tester);
+
+      // Offered to the child, not started behind their back.
+      expect(find.byKey(const ValueKey('postAssessmentOffer')), findsOneWidget);
+      expect(find.byType(PostAssessmentProgressScreen), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('postAssessmentContinue')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // The finished game was replaced by the post-assessment — not popped
+      // back to the lobby, and not left for a button on the parent dashboard.
+      expect(find.byType(PostAssessmentProgressScreen), findsOneWidget);
+      expect(find.text('finish'), findsNothing);
+
+      // Tear the tree down so the post-assessment countdown is cancelled.
+      await tester.pumpWidget(const SizedBox());
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'the child can leave the post-assessment for later from the offer',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await finishPathAndCelebrate(tester);
+
+      await tester.tap(find.byKey(const ValueKey('postAssessmentLater')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PostAssessmentProgressScreen), findsNothing);
       expect(find.text('play'), findsOneWidget, reason: 'back at the lobby');
       semantics.dispose();
     },
@@ -416,6 +530,8 @@ Widget _wrap(
   bool nextCycleLocked = false,
   AiAssessmentResponse prediction = _prediction,
   ProgressProvider? progressProvider,
+  Set<String> pathCompleted = const {'match_it'},
+  bool hasPostAssessment = false,
 }) {
   return MultiProvider(
     providers: [
@@ -427,6 +543,8 @@ Widget _wrap(
             (_) => _TestAssessmentProvider(
               nextCycleLocked: nextCycleLocked,
               prediction: prediction,
+              pathCompleted: pathCompleted,
+              hasPostAssessment: hasPostAssessment,
             ),
       ),
       ChangeNotifierProvider<StarsProvider>(
@@ -469,7 +587,14 @@ class _TestAssessmentProvider extends AssessmentProvider {
   _TestAssessmentProvider({
     required this.nextCycleLocked,
     required this.prediction,
+    this.pathCompleted = const {'match_it'},
+    this.hasPostAssessment = false,
   });
+
+  final Set<String> pathCompleted;
+
+  @override
+  final bool hasPostAssessment;
 
   @override
   final bool nextCycleLocked;
@@ -480,13 +605,27 @@ class _TestAssessmentProvider extends AssessmentProvider {
   AiAssessmentResponse? get aiPrediction => prediction;
 
   @override
-  Set<String> get pathCompletedGameIds => const {'match_it'};
+  Set<String> get pathCompletedGameIds => pathCompleted;
 
   @override
   bool get hasPreAssessment => true;
 
   @override
   Future<void> loadAssessments(String childId) async {}
+
+  // The post-assessment opens its run on arrival; keep that off the database.
+  @override
+  Future<OpenAssessmentRun?> findResumableRun({
+    required String childId,
+    required String type,
+    DateTime? now,
+  }) async => null;
+
+  @override
+  Future<String> startAssessmentRun({
+    required String childId,
+    required String type,
+  }) async => 'run-1';
 }
 
 class _FakeSupabaseAuthClient implements SupabaseAuthClient {
@@ -533,4 +672,22 @@ class _TestPinDelegate implements ParentPinDelegate {
 
   @override
   Future<bool> onForgotPin(BuildContext context) async => false;
+}
+
+/// A narrator that never reaches a platform player.
+class _SilentVoiceOver extends VoiceOverService {
+  _SilentVoiceOver() : super(languageCode: 'en_adult_woman');
+
+  @override
+  Future<void> play(
+    VoiceOverCue cue, {
+    bool awaitCompletion = false,
+    bool skipDebounce = false,
+  }) async {}
+
+  @override
+  Future<void> playCorrectPraise() async {}
+
+  @override
+  Future<void> stop() async {}
 }

@@ -8,7 +8,13 @@ import '../../model/child_profile.dart';
 import '../../providers/assessment_provider.dart';
 import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../../core/config/payment_simulation_config.dart';
+import '../../services/child_profile_allowance.dart';
 import '../../services/child_switch_service.dart';
+import '../../services/entitlement_service.dart';
+import '../premium/mock_paymongo_checkout_screen.dart';
+import '../premium/premium_upgrade_screen.dart';
+import '../premium/profile_slot_checkout.dart';
 import '../splash/auth/child_profile_setup_screen.dart';
 import 'child_profile_edit_screen.dart';
 import 'widgets/settings_scaffold.dart';
@@ -20,7 +26,11 @@ import 'widgets/settings_scaffold.dart';
 /// Deleting additionally asks for parent verification and an explicit
 /// confirmation, because it takes the child's progress with it.
 class ManageChildrenScreen extends StatefulWidget {
-  const ManageChildrenScreen({super.key});
+  const ManageChildrenScreen({super.key, this.profileSlotCheckout});
+
+  /// How an extra child profile is bought; defaults to the PayMongo checkout
+  /// ([buyProfileSlotWithPaymongo]). Injectable for tests.
+  final ProfileSlotCheckout? profileSlotCheckout;
 
   @override
   State<ManageChildrenScreen> createState() => _ManageChildrenScreenState();
@@ -30,6 +40,32 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
   /// The child currently being switched to, so its row can show a spinner
   /// and the list cannot be double-tapped mid-switch.
   String? _busyChildId;
+
+  /// The account's grandfathered profile baseline, once known.
+  int? _baseline;
+
+  /// Key the baseline is stored under: the parent's user id when the
+  /// children carry one, otherwise a device-local key.
+  String _accountKey(List<ChildProfile> children) =>
+      children.isNotEmpty && children.first.userId.isNotEmpty
+          ? children.first.userId
+          : 'local';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBaseline());
+  }
+
+  Future<void> _loadBaseline() async {
+    if (!mounted) return;
+    final children = context.read<ChildProvider>().children;
+    final baseline = await ChildProfileAllowance.instance.baselineFor(
+      _accountKey(children),
+      existing: children.length,
+    );
+    if (mounted) setState(() => _baseline = baseline);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +104,28 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
           autofocus: false,
         ),
         const SizedBox(height: AppSpacing.sm),
+        ListenableBuilder(
+          listenable: EntitlementService.instance,
+          builder: (context, _) {
+            final entitlement = EntitlementService.instance;
+            final baseline = _baseline;
+            if (entitlement.unlimitedProfiles || baseline == null) {
+              return const SizedBox.shrink();
+            }
+            final allowance = ChildProfileAllowance.allowance(
+              baseline: baseline,
+              isPremium: entitlement.isPremium,
+              extraSlots: entitlement.extraProfileSlots,
+            );
+            return SettingsHintText(
+              'Profiles: ${children.length} of $allowance. One child profile '
+              'is included; with Premium you can add more for '
+              '$kExtraProfilePriceLabel each.',
+              key: const Key('profile-allowance-hint'),
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
         const SettingsHintText(
           'Each child keeps their own assessment results, learning path, '
           'gameplay records, screen time and preferences.',
@@ -103,7 +161,145 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
     );
   }
 
+  /// Checks the profile allowance and, where a purchase is needed, walks the
+  /// parent through it. Returns whether a child may now be added.
+  Future<bool> _mayAddChild() async {
+    final children = context.read<ChildProvider>().children;
+    final entitlement = EntitlementService.instance;
+    final baseline =
+        _baseline ??
+        await ChildProfileAllowance.instance.baselineFor(
+          _accountKey(children),
+          existing: children.length,
+        );
+    if (!mounted) return false;
+
+    final gate = ChildProfileAllowance.gate(
+      existing: children.length,
+      baseline: baseline,
+      isPremium: entitlement.isPremium,
+      extraSlots: entitlement.extraProfileSlots,
+      unlimited: entitlement.unlimitedProfiles,
+    );
+    switch (gate) {
+      case AddChildGate.allowed:
+        return true;
+      case AddChildGate.needsPremium:
+        final upgrade = await showDialog<bool>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                key: const Key('needs-premium-dialog'),
+                title: const Text('Adding another child needs Premium'),
+                content: const Text(
+                  'Your account includes one child profile. With Premium you '
+                  'can add more, for $kExtraProfilePriceLabel each.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Not now'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('See Premium'),
+                  ),
+                ],
+              ),
+        );
+        if (upgrade == true && mounted) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
+          );
+        }
+        return false;
+      case AddChildGate.needsSlot:
+        return _buyProfileSlot();
+    }
+  }
+
+  /// One extra profile, bought before the new child is created.
+  ///
+  /// Sold through PayMongo (AUM-349): the signed webhook adds the slot, and
+  /// the child is only created once the backend confirms it. A debug build
+  /// with the simulated checkout compiled in uses that instead.
+  Future<bool> _buyProfileSlot() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            key: const Key('buy-profile-dialog'),
+            title: const Text('Add another child profile'),
+            content: const Text(
+              'Every profile on your account is in use. An extra child '
+              'profile costs $kExtraProfilePriceLabel, once.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Continue to payment'),
+              ),
+            ],
+          ),
+    );
+    if (proceed != true || !mounted) return false;
+
+    if (!PaymentSimulationConfig.isAvailable) {
+      final checkout = widget.profileSlotCheckout ?? buyProfileSlotWithPaymongo;
+      final result = await checkout(
+        context,
+        slotsBefore: EntitlementService.instance.realExtraProfileSlots,
+      );
+      if (!mounted) return false;
+      switch (result) {
+        case ProfileSlotPurchase.added:
+          return true;
+        case ProfileSlotPurchase.pending:
+          _showMessage(
+            'Payment received. The extra profile appears once PayMongo '
+            'confirms — try Add child again in a moment.',
+          );
+          return false;
+        case ProfileSlotPurchase.premiumRequired:
+          _showMessage('Extra child profiles need an active Premium plan.');
+          return false;
+        case ProfileSlotPurchase.failed:
+          _showMessage('Could not start the payment. Please try again.');
+          return false;
+        case ProfileSlotPurchase.cancelled:
+        case ProfileSlotPurchase.redirected:
+          return false;
+      }
+    }
+    final outcome = await Navigator.of(context).push<MockCheckoutOutcome>(
+      MaterialPageRoute(
+        builder:
+            (_) => const MockPaymongoCheckoutScreen(
+              amountLabel: kExtraProfilePriceLabel,
+              planLabel: 'Extra child profile — one-time',
+            ),
+      ),
+    );
+    if (!mounted) return false;
+    switch (outcome) {
+      case MockCheckoutOutcome.paid:
+        EntitlementService.instance.grantSimulatedProfileSlot();
+        return true;
+      case MockCheckoutOutcome.declined:
+        _showMessage('The payment was declined. No profile was added.');
+        return false;
+      case MockCheckoutOutcome.cancelled:
+      case null:
+        return false;
+    }
+  }
+
   Future<void> _addChild() async {
+    if (!await _mayAddChild() || !mounted) return;
     final created = await Navigator.of(context).push<ChildProfile>(
       MaterialPageRoute(
         builder: (_) => const ChildProfileSetupScreen.addAnother(),

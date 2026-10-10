@@ -85,8 +85,8 @@ flowchart TB
         Supa[(Supabase - assessment_results)]
     end
 
-    subgraph AI [AI Backend]
-        FA[FastAPI + XGBoost]
+    subgraph AI [On-Device AI]
+        FA[XGBoost via ONNX Runtime]
     end
 
     Games --> GS

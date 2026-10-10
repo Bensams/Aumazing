@@ -256,6 +256,17 @@ enum VoiceOverCue {
   milestoneLearningPathComplete,
   milestonePostAssessmentComplete,
 
+  /// "Start the pre-assessment to discover your child's strengths in four
+  /// domains." — spoken to the *parent* on the dashboard once the guided tour
+  /// ends (finished or skipped) and no pre-assessment has been taken yet.
+  ///
+  /// The one cue addressed to a grown-up rather than the child, so it is
+  /// recorded only in the adult packs: [parentVoiceFolder] always resolves to
+  /// one of them, whatever narrator the child plays with. Kept in `milestone/`
+  /// because it opens the first milestone, and because that folder is already
+  /// declared for every pack and is never drawn by a random picker.
+  parentStartPreAssessment,
+
   // ── Transition ────────────────────────────────────────────────────
   //
   // Drawn at random between activities, so every line has to still be true
@@ -554,6 +565,7 @@ const Map<VoiceOverCue, VoiceOverCategory> _cueCategories = {
   VoiceOverCue.milestonePreAssessmentComplete: VoiceOverCategory.milestone,
   VoiceOverCue.milestoneLearningPathComplete: VoiceOverCategory.milestone,
   VoiceOverCue.milestonePostAssessmentComplete: VoiceOverCategory.milestone,
+  VoiceOverCue.parentStartPreAssessment: VoiceOverCategory.milestone,
 
   // Transition
   VoiceOverCue.getReady: VoiceOverCategory.transition,
@@ -849,6 +861,8 @@ const Map<VoiceOverCue, String> _cueAssetPaths = {
       'voice_over/milestone/MilestonePathComplete.wav',
   VoiceOverCue.milestonePostAssessmentComplete:
       'voice_over/milestone/MilestonePostComplete.wav',
+  VoiceOverCue.parentStartPreAssessment:
+      'voice_over/milestone/StartPreAssessment.wav',
 
   // Transition
   VoiceOverCue.getReady: 'voice_over/transition/GetReady.wav',

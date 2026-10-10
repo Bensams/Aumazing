@@ -160,7 +160,7 @@ class _SplashVideoPlatform extends platform.VideoPlayerPlatform {
       platform.VideoEvent(
         eventType: platform.VideoEventType.initialized,
         duration: const Duration(seconds: 8),
-        size: const Size(1920, 1080),
+        size: const Size(1902, 1080),
       ),
     );
   }

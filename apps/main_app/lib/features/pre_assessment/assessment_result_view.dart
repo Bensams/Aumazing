@@ -17,6 +17,9 @@ import '../../services/recommended_settings_applier.dart';
 import '../../services/report_pdf_service.dart';
 import '../../services/scoring_service.dart' as local_scoring;
 import '../therapy/therapy_center_recommendation_dialog.dart';
+import '../questionnaire/session_observation_card.dart';
+import '../questionnaire/home_observation_context.dart';
+import '../../core/services/local_db_service.dart';
 
 /// Renders a finalized assessment run with the shared result layout.
 ///
@@ -48,6 +51,8 @@ class AssessmentResultView extends StatefulWidget {
     required this.childDisplayName,
     this.reportPdfSharer,
     this.summaryService,
+    this.comparisonExtra,
+    this.homeObservationLoader,
   });
 
   final List<AssessmentResult> results;
@@ -74,11 +79,28 @@ class AssessmentResultView extends StatefulWidget {
   /// Injectable for tests; defaults to the shared singleton.
   final AssessmentSummaryService? summaryService;
 
+  /// Passed through to the layout's extra comparison slot.
+  final Widget? comparisonExtra;
+  final HomeObservationLoader? homeObservationLoader;
+
   @override
   State<AssessmentResultView> createState() => _AssessmentResultViewState();
 }
 
 class _AssessmentResultViewState extends State<AssessmentResultView> {
+  /// What the adult who watched this run saw (AUM-351), when they answered.
+  Widget? _observationCard() {
+    final first = widget.results.firstOrNull;
+    final runId = first?.assessmentRunId;
+    if (first == null || runId == null) return null;
+    return SessionObservationCard(
+      key: ValueKey('session-observation-$runId'),
+      childId: first.childId,
+      assessmentRunId: runId,
+      results: widget.results,
+    );
+  }
+
   Set<String>? _activeGameIds = ActiveGamesService.instance.cachedActiveGameIds;
   bool _sharingReport = false;
 
@@ -90,6 +112,7 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
   @override
   void initState() {
     super.initState();
+    localDbService.caregiverQuestionnaireRevision.addListener(_loadAiSummary);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _awardStars();
       _loadAiSummary();
@@ -100,6 +123,26 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       }
     });
     if (_activeGameIds == null) _loadActiveGameIds();
+  }
+
+  @override
+  void dispose() {
+    localDbService.caregiverQuestionnaireRevision.removeListener(
+      _loadAiSummary,
+    );
+    super.dispose();
+  }
+
+  int _summaryGeneration = 0;
+
+  @override
+  void didUpdateWidget(AssessmentResultView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.results != widget.results ||
+        oldWidget.assessmentType != widget.assessmentType ||
+        oldWidget.progress != widget.progress) {
+      _loadAiSummary();
+    }
   }
 
   /// Stars for finishing an assessment (STAR-B6).
@@ -180,8 +223,26 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
   /// (before -> after) instead of a snapshot.
   Future<void> _loadAiSummary() async {
     if (!mounted) return;
+    final generation = ++_summaryGeneration;
+    if (_aiSummary != null) setState(() => _aiSummary = null);
     final model = _buildModel();
     if (!model.hasAreas) return;
+    final first = widget.results.firstOrNull;
+    final runId = first?.assessmentRunId;
+    var homeContext = const HomeObservationContext();
+    if (first != null && runId != null) {
+      try {
+        homeContext = await (widget.homeObservationLoader ??
+            HomeObservationService.instance.forAssessment)(
+          first.childId,
+          runId,
+          widget.assessmentType,
+        );
+      } catch (_) {
+        // A skipped or unavailable questionnaire leaves the game summary usable.
+      }
+    }
+    if (!mounted || generation != _summaryGeneration) return;
 
     // Same preference that drives the localized voice-overs. A host without
     // ChildProvider still gets a summary, in English.
@@ -206,14 +267,14 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
           ],
           overallPct: model.overallPercent,
           supportLevel: model.supportLevel ?? 'moderate',
-          recommendations: [
-            for (final step in model.learningPath) step.name,
-          ],
+          recommendations: [for (final step in model.learningPath) step.name],
           fallback: model.summary,
           languageCode: languageCode,
+          parentContext: homeContext.isEmpty ? null : homeContext.toPayload(),
+          cacheScope: '${first?.childId ?? ''}:${runId ?? ''}',
         );
 
-    if (!mounted || !summary.isAi) return;
+    if (!mounted || generation != _summaryGeneration || !summary.isAi) return;
     setState(() => _aiSummary = summary.text);
   }
 
@@ -273,6 +334,8 @@ class _AssessmentResultViewState extends State<AssessmentResultView> {
       showCelebration: widget.showCelebration,
       onApplyRecommendations: _applyRecommendations,
       onOpenLearningPath: widget.onOpenLearningPath,
+      comparisonExtra: widget.comparisonExtra,
+      observationExtra: _observationCard(),
       headerAction: SizedBox(
         width: 44,
         height: 44,

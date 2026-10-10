@@ -1,5 +1,6 @@
 // paymongo-webhook — PayMongo event receiver; the ONLY writer of Premium
-// entitlements (NFR-06: signature verified before any grant).
+// entitlements and of purchased child-profile slots (NFR-06: signature
+// verified before any grant).
 //
 // Deploy with --no-verify-jwt (PayMongo cannot send a Supabase JWT); the
 // HMAC signature in the Paymongo-Signature header is the authentication.
@@ -164,7 +165,7 @@ Deno.serve(async (req) => {
     const { data: row, error: paymentError } = await admin
       .from("payment_records")
       .select(
-        "id, user_id, checkout_session_id, amount, currency, status, updated_at",
+        "id, user_id, checkout_session_id, amount, currency, status, updated_at, product",
       )
       .eq("checkout_session_id", event.sessionId)
       .maybeSingle();
@@ -180,6 +181,7 @@ Deno.serve(async (req) => {
         currency: row.currency,
         status: row.status as PaymentStatus,
         updatedAt: toDate(row.updated_at),
+        product: row.product === "profile_slot" ? "profile_slot" : "premium",
       };
     }
   }

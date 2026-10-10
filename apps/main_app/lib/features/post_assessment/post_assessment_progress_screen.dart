@@ -17,6 +17,8 @@ import 'post_assessment_handoff_screen.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/mascot_host.dart';
 import '../../widgets/resume_assessment_dialog.dart';
+import '../pre_assessment/learn_first_screen.dart';
+import '../questionnaire/observer_intake_screen.dart';
 
 /// Orchestrates the sequential post-assessment game flow.
 ///
@@ -31,7 +33,19 @@ class PostAssessmentProgressScreen extends StatefulWidget {
     super.key,
     this.skipToFinish = false,
     this.voiceOverFactory,
+    this.showLearnFirst = true,
+    this.showObserverIntake = true,
   });
+
+  /// Whether a new run opens with the "Let's learn first" familiarisation
+  /// step. Always on in the app; off in tests that are about something else,
+  /// so they do not have to walk through it first.
+  final bool showLearnFirst;
+
+  /// Whether a new run first asks the watching adult who they are and about
+  /// the child (AUM-351). Always on in the app; off in tests that are about
+  /// something else.
+  final bool showObserverIntake;
 
   /// Test seam: supplies the child hand-off narrator without platform audio.
   @visibleForTesting
@@ -71,6 +85,10 @@ class _PostAssessmentProgressScreenState
   /// A resumed run skips them: they are recorded play, and replaying them
   /// would ask the child to redo work the assessment already has.
   Set<String> _alreadyPlayed = const {};
+
+  /// True when this screen started a new run rather than resuming one: only
+  /// a new run asks the observer's questions.
+  bool _freshRun = false;
 
   /// Developer auto-play handle for the transition screen. Null in a normal
   /// build; lets automation start the pending game without waiting out the
@@ -143,6 +161,7 @@ class _PostAssessmentProgressScreenState
       } else {
         _alreadyPlayed = const {};
         _currentGameIndex = 0;
+        _freshRun = true;
         await assessProv.startAssessmentRun(childId: childId, type: 'post');
       }
     } catch (e) {
@@ -167,7 +186,43 @@ class _PostAssessmentProgressScreenState
       _finishAssessment();
       return;
     }
+    // The same step as before the pre-assessment, so a pre -> post change
+    // can never be put down to one run having had it and the other not.
+    // The adult answers before the child starts, never during play.
+    if (widget.showObserverIntake && _freshRun) {
+      await ObserverIntakeScreen.show(
+        context,
+        assessmentType: 'post',
+        childId: childId,
+        assessmentRunId:
+            context.read<AssessmentProvider>().currentAssessmentRunId,
+      );
+      if (!mounted) return;
+    }
+    if (widget.showLearnFirst && _alreadyPlayed.isEmpty) {
+      await _runLearnFirst();
+      if (!mounted) return;
+    }
     _startCountdown();
+  }
+
+  /// Runs the familiarisation step for a new run and logs how it went.
+  ///
+  /// Only a fresh run gets it: a resumed run already had it before it was
+  /// interrupted, and repeating it mid-assessment would put unscored exposure
+  /// between scored games.
+  Future<void> _runLearnFirst() async {
+    final outcome = await LearnFirstScreen.show(
+      context,
+      assessmentType: 'post',
+    );
+    if (!mounted) return;
+    await LearnFirstLog.instance.record(
+      childId: _childId,
+      assessmentRunId: context.read<AssessmentProvider>().currentAssessmentRunId,
+      assessmentType: 'post',
+      outcome: outcome,
+    );
   }
 
   /// The first activity of the run that has no session yet.
@@ -322,6 +377,8 @@ class _PostAssessmentProgressScreenState
 
     final assessProv = context.read<AssessmentProvider>();
     final childId = _childId;
+    // Captured now: finishing closes the run and forgets its id.
+    final runId = assessProv.currentAssessmentRunId;
 
     try {
       // Saves post results per game and computes the improvement summary.
@@ -378,6 +435,11 @@ class _PostAssessmentProgressScreenState
             improvement: improvement,
             nextModulePremiumRequired: nextModulePremiumRequired,
             voiceOverFactory: widget.voiceOverFactory,
+            childId: childId,
+            assessmentRunId: runId,
+            gameIds: {
+              for (final result in assessProv.postResults) result.gameId,
+            }.toList(),
           ),
         ),
       );

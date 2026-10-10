@@ -1,5 +1,6 @@
 import '../child_profile_policy.dart';
 import '../../model/child_profile.dart';
+import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 import 'connectivity_service.dart';
 import 'local_db_service.dart';
@@ -37,6 +38,21 @@ class ChildBootstrapService {
   final LocalDbService _localDbService;
 
   Future<BootstrapResult> bootstrap() async {
+    // A guest choice is persisted locally so the app can open offline. When
+    // the browser was offline (or anonymous sign-in briefly failed), retry
+    // the cloud upgrade before deciding which data can be hydrated.
+    final isEstablishedGuest = await _authService.isGuestEstablished();
+    if (_connectivityService.isOnline &&
+        isEstablishedGuest &&
+        !_authService.isLoggedIn) {
+      try {
+        await _authService.ensureCloudGuestSession();
+      } catch (e) {
+        // The local guest remains usable and can retry on a later launch.
+        debugPrint('[ChildBootstrap] guest cloud upgrade skipped: $e');
+      }
+    }
+
     if (_connectivityService.isOnline && _authService.isLoggedIn) {
       await _authService.refreshSession();
     }
@@ -47,7 +63,6 @@ class ChildBootstrapService {
     // (a local id minted for offline storage, before any choice was made) is
     // NOT a valid session: those users go to login on every fresh open / new
     // install, instead of being dropped into child setup.
-    final isEstablishedGuest = await _authService.isGuestEstablished();
     if (!_authService.isLoggedIn && !isEstablishedGuest) {
       return const BootstrapResult(destination: BootstrapDestination.login);
     }

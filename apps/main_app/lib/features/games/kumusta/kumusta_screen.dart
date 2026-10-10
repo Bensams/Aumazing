@@ -347,7 +347,14 @@ class _KumustaScreenState extends State<KumustaScreen>
                   .activePalette
                   .gameBackgroundFor('kumusta'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Kumusta play area',
+              child: GameWidget(
+                key: const Key('game.canvas.kumusta'),
+                game: _game,
+              ),
+            ),
           ),
 
           // Three-star sparkle overlay when a round is completed

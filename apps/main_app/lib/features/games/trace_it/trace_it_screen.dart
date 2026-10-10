@@ -296,7 +296,14 @@ class _TraceItScreenState extends State<TraceItScreen>
                   .activePalette
                   .gameBackgroundFor('trace_it'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Trace It play area',
+              child: GameWidget(
+                key: const Key('game.canvas.trace_it'),
+                game: _game,
+              ),
+            ),
           ),
 
           // Three-star sparkle overlay when a glyph is completed

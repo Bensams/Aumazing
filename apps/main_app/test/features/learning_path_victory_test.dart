@@ -119,6 +119,55 @@ void main() {
     });
   });
 
+  // After the victory, the child is carried straight into the post-assessment
+  // when — and only when — this rule holds. The parent dashboard's fallback
+  // button reads the same rule.
+  group('post-assessment hand-over after the path', () {
+    test('is due once every path game is complete', () {
+      expect(
+        LearningPathService.postAssessmentDue(
+          path,
+          {'copy_me', 'match_it'},
+          hasPostAssessment: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('is not due while a path game is outstanding', () {
+      expect(
+        LearningPathService.postAssessmentDue(
+          path,
+          {'copy_me'},
+          hasPostAssessment: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('is not due when the post-assessment was already taken', () {
+      expect(
+        LearningPathService.postAssessmentDue(
+          path,
+          {'copy_me', 'match_it'},
+          hasPostAssessment: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('is never due for an empty path', () {
+      expect(
+        LearningPathService.postAssessmentDue(
+          const [],
+          {'copy_me'},
+          hasPostAssessment: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('one-time persistence in the provider', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 

@@ -1,5 +1,6 @@
 import 'package:aumazing/core/services/auth_service.dart';
 import 'package:aumazing/features/pre_assessment/assessment_result_view.dart';
+import 'package:aumazing/features/questionnaire/home_observation_context.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/model/support_profile.dart';
@@ -42,6 +43,7 @@ void main() {
     expect(service.seenPreviousAreas, isEmpty);
     expect(service.seenFallback, contains('Review each skill area'));
     expect(service.seenLanguage, 'en');
+    expect(service.seenParentContext, isNull);
   });
 
   testWidgets('an unreachable summarizer leaves the rubric summary alone', (
@@ -96,6 +98,39 @@ void main() {
       {'name': 'Communication', 'level': 'Emerging'},
     ]);
   });
+
+  testWidgets('the result passes optional home observations for its own run', (
+    tester,
+  ) async {
+    final service = _FakeSummaryService(
+      const AssessmentSummary(text: _aiText, isAi: true),
+    );
+    final home = HomeObservationContext([
+      HomeObservation(
+        runId: 'run-1',
+        type: 'pre',
+        completedAt: DateTime(2026, 5, 12),
+        templateId: 'home',
+        version: 1,
+        status: 'draft',
+        cycle: 1,
+        scores: const {'communication': 75},
+      ),
+    ]);
+    await tester.pumpWidget(
+      _app(
+        summaryService: service,
+        homeLoader: (child, run, phase) async {
+          expect((child, run, phase), ('child-1', 'run-1', 'pre'));
+          return home;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(service.seenParentContext, home.toPayload());
+    expect(service.seenCacheScope, 'child-1:run-1');
+    expect(service.seenAreas, isNotEmpty);
+  });
 }
 
 const _aiText =
@@ -106,6 +141,7 @@ Widget _app({
   required AssessmentSummaryService summaryService,
   String assessmentType = 'pre',
   ResultProgress? progress,
+  HomeObservationLoader? homeLoader,
 }) => ChangeNotifierProvider<ChildProvider>(
   create: (_) => _TestChildProvider(),
   child: MaterialApp(
@@ -119,6 +155,8 @@ Widget _app({
       childDisplayName: 'Test',
       showCelebration: false,
       summaryService: summaryService,
+      homeObservationLoader:
+          homeLoader ?? (_, _, _) async => const HomeObservationContext(),
     ),
   ),
 );
@@ -132,6 +170,8 @@ class _FakeSummaryService extends AssessmentSummaryService {
   List<Map<String, String>>? seenPreviousAreas;
   String? seenFallback;
   String? seenLanguage;
+  Map<String, dynamic>? seenParentContext;
+  String? seenCacheScope;
 
   @override
   Future<AssessmentSummary> summarize({
@@ -142,11 +182,15 @@ class _FakeSummaryService extends AssessmentSummaryService {
     required String fallback,
     List<Map<String, String>>? previousAreas,
     String languageCode = 'en',
+    Map<String, dynamic>? parentContext,
+    String cacheScope = '',
   }) async {
     seenAreas = areas;
     seenPreviousAreas = previousAreas;
     seenFallback = fallback;
     seenLanguage = languageCode;
+    seenParentContext = parentContext;
+    seenCacheScope = cacheScope;
     return _reply;
   }
 }

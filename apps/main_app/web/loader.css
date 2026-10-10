@@ -1,0 +1,120 @@
+/* The loading page shown while offline.js saves the games' files. Sits under
+   the iOS install banner (z-index 10000) so that banner stays usable. */
+.aumazing-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: #afeade;
+  color: #1f3b36;
+  font-family: "Nunito", ui-rounded, "SF Pro Rounded", system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  transition: opacity 0.35s ease;
+}
+
+.aumazing-loader-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.aumazing-loader-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 24px;
+  border-radius: 24px;
+  background: #fffdf5;
+  box-shadow: 0 12px 32px #1f3b3622;
+  text-align: center;
+}
+
+.aumazing-loader-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  animation: aumazing-loader-bob 2.4s ease-in-out infinite;
+}
+
+.aumazing-loader h1 {
+  margin: 16px 0 6px;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.aumazing-loader p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #3d5f58;
+}
+
+.aumazing-loader-meter {
+  height: 14px;
+  margin: 20px 0 8px;
+  border-radius: 999px;
+  background: #d9f3ec;
+  overflow: hidden;
+}
+
+.aumazing-loader-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3aa88f, #5c8fd6);
+  transition: width 0.25s ease;
+}
+
+.aumazing-loader:not(.aumazing-loader-downloading) .aumazing-loader-meter,
+.aumazing-loader:not(.aumazing-loader-downloading) .aumazing-loader-note {
+  display: none;
+}
+
+.aumazing-loader-note {
+  margin-top: 14px !important;
+  font-size: 0.8rem !important;
+}
+
+.aumazing-loader-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.aumazing-loader-actions[hidden],
+.aumazing-loader-actions button[hidden] {
+  display: none;
+}
+
+.aumazing-loader-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#aumazing-loader-retry {
+  background: #3aa88f;
+  color: #ffffff;
+}
+
+#aumazing-loader-skip {
+  background: transparent;
+  color: #1f3b36;
+  text-decoration: underline;
+}
+
+@keyframes aumazing-loader-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aumazing-loader-logo { animation: none; }
+  .aumazing-loader-bar { transition: none; }
+}

@@ -110,6 +110,24 @@ void main() {
     }
   });
 
+  /// The dashboard's start-the-pre-assessment prompt is spoken to the parent,
+  /// always from an adult pack (see parentVoiceFolder), so only those carry it.
+  /// A missing clip would fall back to the language default without a sound
+  /// of complaint, so each adult pack is checked for its own recording.
+  group('the parent pre-assessment prompt is in every adult pack', () {
+    for (final pack in kVoicePacks.where((p) => p.tier == 'adult')) {
+      test('${pack.id} bundles its own prompt recording', () async {
+        final path = VoiceOverService.assetPathCandidates(
+          VoiceOverCue.parentStartPreAssessment,
+          pack.assetFolder,
+        ).first;
+        final data = await rootBundle.load(path);
+        expect(data.lengthInBytes, greaterThan(0),
+            reason: '$path is bundled but empty');
+      });
+    }
+  });
+
   test('the end-of-game cheer is bundled', () async {
     final data = await rootBundle
         .load('packages/shared_audio/assets/audio/sfx/cheer_clap.wav');

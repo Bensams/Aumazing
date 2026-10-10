@@ -41,7 +41,10 @@ android {
 
     defaultConfig {
         applicationId = "app.aumazing"
-        minSdk = flutter.minSdkVersion
+        // Pinned rather than inherited from flutter.minSdkVersion: the manuscript
+        // declares API 24 as the supported minimum, and a toolchain upgrade must
+        // not move that floor silently.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

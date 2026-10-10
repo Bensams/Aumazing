@@ -13,7 +13,6 @@ import '../model/gameplay_session.dart';
 import '../model/support_profile.dart';
 import '../features/pre_assessment/sensory/sensory_round_metrics.dart';
 import '../model/area_level.dart';
-import '../services/ai_assessment_service.dart';
 import '../services/ai_prediction_fallback_service.dart';
 import '../services/entitlement_service.dart';
 import '../services/local_recommendation_rules.dart';
@@ -22,7 +21,6 @@ import '../services/research_consent_service.dart';
 import '../services/support_profile_builder.dart';
 import '../services/assessment_completeness.dart';
 import '../services/assessment_service.dart';
-import '../core/services/connectivity_service.dart';
 import '../core/services/local_db_service.dart' as core_db;
 import '../services/rubric/rubric.dart';
 
@@ -267,7 +265,9 @@ class AssessmentProvider extends ChangeNotifier {
       _preSnapshot = null;
       _postSnapshot = null;
       _pathCompleted = {};
+      _pathAttempts = {};
       _pathVictoryShownSignature = null;
+      _postAssessmentInProgress = false;
     }
     _loadedChildId = childId;
     _isLoading = true;
@@ -305,13 +305,15 @@ class AssessmentProvider extends ChangeNotifier {
       await _restoreSupportProfile(childId);
       await _restoreSnapshots(childId);
       await _restorePathProgress(childId);
+      await _restorePathAttempts(childId);
       await _restorePathVictory(childId);
+      await checkPostAssessmentInProgress(childId);
 
       // A rubric-synthesized prediction is provisional — try to replace it
       // with a real model prediction in the background now that we may be
       // back online. Fire-and-forget: the dashboard renders with the rubric
       // result and refreshes via notifyListeners() if the upgrade lands.
-      unawaited(upgradeRubricPredictionIfOnline(childId));
+      unawaited(upgradeRubricPrediction(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] loadAssessments error: $e');
     } finally {
@@ -435,15 +437,16 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Upgrades a rubric-synthesized prediction to a real model prediction.
   ///
-  /// When an assessment finishes offline, [predictWithAI] falls back to
-  /// labels derived from the rubric (`modelSource == 'rubric_based'`) and
-  /// that fallback would otherwise stick forever. Called on dashboard open
-  /// ([loadAssessments]): when online, it re-runs the prediction over the
-  /// original run's persisted sessions and replaces the stored fallback.
-  /// No-op when the stored prediction already came from a real model, when
-  /// still offline, or when the run's sessions can't be found. Path progress
-  /// is kept — the upgrade refines levels, it isn't a new assessment.
-  Future<void> upgradeRubricPredictionIfOnline(String childId) async {
+  /// When the on-device model could not run at assessment time,
+  /// [predictWithAI] falls back to labels derived from the rubric
+  /// (`modelSource == 'rubric_based'`) and that fallback would otherwise
+  /// stick forever. Called on dashboard open ([loadAssessments]): it re-runs
+  /// the on-device model over the original run's persisted sessions and
+  /// replaces the stored fallback. No-op when the stored prediction already
+  /// came from the model, when the model is still unavailable, or when the
+  /// run's sessions can't be found. Path progress is kept — the upgrade
+  /// refines levels, it isn't a new assessment.
+  Future<void> upgradeRubricPrediction(String childId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getString(_aiPredictionSourceKey(childId)) != 'rubric_based') {
@@ -451,7 +454,6 @@ class AssessmentProvider extends ChangeNotifier {
       }
       final runId = prefs.getString(_aiPredictionRunKey(childId));
       if (runId == null) return;
-      if (!await connectivityService.checkConnectivity()) return;
 
       final sessions =
           (await _localDb.getGameSessions(
@@ -460,7 +462,6 @@ class AssessmentProvider extends ChangeNotifier {
       if (sessions.isEmpty) return;
 
       final onDevice = OnDeviceAiAssessmentService();
-      final service = AiAssessmentService();
       try {
         final prediction = await const AiPredictionFallbackService().predict(
           onDevice:
@@ -468,17 +469,11 @@ class AssessmentProvider extends ChangeNotifier {
                 childId: childId,
                 sessions: sessions,
               ),
-          cloud:
-              () => service.predictFromSessions(
-                childId: childId,
-                sessions: sessions,
-              ),
           rubric: () async => null,
         );
-        final modelSource =
-            prediction?.onDevice == true ? 'xgboost_onnx' : 'xgboost';
-        // Still unreachable — keep the rubric fallback and retry on the
-        // next dashboard open.
+        const modelSource = 'xgboost_onnx';
+        // Model still unavailable — keep the rubric fallback and retry on
+        // the next dashboard open.
         if (prediction == null) return;
         // The parent may have switched children while the model ran — the
         // upgraded prediction then belongs to a child no longer on screen,
@@ -514,7 +509,6 @@ class AssessmentProvider extends ChangeNotifier {
         notifyListeners();
       } finally {
         onDevice.dispose();
-        service.dispose();
       }
     } catch (e) {
       debugPrint('[AssessmentProvider] upgradeRubricPrediction failed: $e');
@@ -664,6 +658,49 @@ class AssessmentProvider extends ChangeNotifier {
     required String childId,
     required String type,
     DateTime? now,
+  }) => _lookUpResumableRun(
+    childId: childId,
+    type: type,
+    now: now,
+    closeStale: true,
+  );
+
+  /// Whether [childId] started a post-assessment and left it before it
+  /// finished — a run [findResumableRun] would offer to pick back up.
+  ///
+  /// Kept current by [loadAssessments], so the parent dashboard can say
+  /// "Continue" rather than "Start" for it.
+  bool get postAssessmentInProgress => _postAssessmentInProgress;
+  bool _postAssessmentInProgress = false;
+
+  /// Re-reads [postAssessmentInProgress] for [childId].
+  ///
+  /// Read-only, unlike [findResumableRun]: it runs on every dashboard reload,
+  /// so it must never close a stale run as a side effect — that stays with
+  /// the post-assessment screen, where the parent is actually asked.
+  Future<void> checkPostAssessmentInProgress(
+    String childId, {
+    DateTime? now,
+  }) async {
+    final run = await _lookUpResumableRun(
+      childId: childId,
+      type: 'post',
+      now: now,
+      closeStale: false,
+    );
+    // A switch to another child while the lookup ran — not this child's flag.
+    if (_loadedChildId != null && _loadedChildId != childId) return;
+    final inProgress = run != null;
+    if (inProgress == _postAssessmentInProgress) return;
+    _postAssessmentInProgress = inProgress;
+    notifyListeners();
+  }
+
+  Future<OpenAssessmentRun?> _lookUpResumableRun({
+    required String childId,
+    required String type,
+    required bool closeStale,
+    DateTime? now,
   }) async {
     try {
       final open = await _assessmentService.openAssessmentRun(childId);
@@ -677,7 +714,7 @@ class AssessmentProvider extends ChangeNotifier {
       if ((now ?? DateTime.now()).difference(open.startedAt) > resumeWindow) {
         // Too old to describe the child sitting down today. Close it here so
         // stale open runs cannot pile up unanswered.
-        await _assessmentService.abandonOpenRuns(childId);
+        if (closeStale) await _assessmentService.abandonOpenRuns(childId);
         return null;
       }
 
@@ -850,16 +887,76 @@ class AssessmentProvider extends ChangeNotifier {
       if (analytics != null) _currentRunAnalytics[gameId] = analytics;
     }
 
-    // Non-assessment completions advance the learning path (sequential
-    // unlock). Tested on `isAssessment` rather than on the literal
-    // 'practice': a step opened from the path map records itself as
-    // 'recommended_module' (see SessionOrigin), and comparing to the literal
-    // would have stopped the path advancing the moment it was labelled.
-    if (!isAssessment) {
-      await markPathGameCompleted(childId, gameId);
+    // A play of a learning-path step advances the path (sequential unlock)
+    // only when it earns a Strength; anything below that keeps the next step
+    // locked so the child plays this one again. Every path play is counted,
+    // so the parent can see how many tries a step took. Free practice from
+    // the lobby ('practice') neither counts as a try nor unlocks a step.
+    if (context == recommendedModuleContext) {
+      final label = const PathMastery().labelFor(session);
+      await _recordPathAttempt(childId, gameId, label, session.endedAt);
+      if (label == PerformanceLabel.strength) {
+        await markPathGameCompleted(childId, gameId);
+      }
     }
     notifyListeners();
     return session;
+  }
+
+  /// The recorded context of a play launched from the learning path (see
+  /// SessionOrigin).
+  static const recommendedModuleContext = 'recommended_module';
+
+  // ── Learning-path attempts (tries until Strength) ──────────────────────
+
+  /// Per path game: how many times it was played and which try first earned
+  /// a Strength.
+  Map<String, PathAttemptRecord> get pathAttempts =>
+      Map.unmodifiable(_pathAttempts);
+  Map<String, PathAttemptRecord> _pathAttempts = {};
+
+  /// The label of the most recent path play of [gameId], or null.
+  String? lastPathLabel(String gameId) => _pathAttempts[gameId]?.lastLabel;
+
+  static String _pathAttemptsKey(String childId) => 'path_attempts_$childId';
+
+  Future<void> _recordPathAttempt(
+    String childId,
+    String gameId,
+    PerformanceLabel label,
+    DateTime at,
+  ) async {
+    final previous =
+        _pathAttempts[gameId] ??
+        PathAttemptRecord(gameId: gameId, attempts: 0, lastLabel: '');
+    _pathAttempts = {..._pathAttempts, gameId: previous.next(label, at)};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _pathAttemptsKey(childId),
+        jsonEncode([for (final r in _pathAttempts.values) r.toMap()]),
+      );
+    } catch (e) {
+      debugPrint('[AssessmentProvider] persist path attempts failed: $e');
+    }
+  }
+
+  Future<void> _restorePathAttempts(String childId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (childId != _loadedChildId) return; // switched away mid-restore
+      final raw = prefs.getString(_pathAttemptsKey(childId));
+      final list = raw == null ? const [] : jsonDecode(raw) as List;
+      _pathAttempts = {
+        for (final item in list)
+          if (item is Map)
+            item['game_id'] as String: PathAttemptRecord.fromMap(
+              Map<String, dynamic>.from(item),
+            ),
+      };
+    } catch (e) {
+      debugPrint('[AssessmentProvider] restore path attempts failed: $e');
+    }
   }
 
   // ── Learning-path progress (sequential unlock) ─────────────────────────
@@ -941,6 +1038,8 @@ class AssessmentProvider extends ChangeNotifier {
   /// path, so the child starts the new sequence from step 1.
   Future<void> _resetPathProgress(String childId) async {
     _pathCompleted = {};
+    // Tries are counted per path: a new recommendation starts its own count.
+    _pathAttempts = {};
     // A fresh recommendation starts fresh: the previous path's victory no
     // longer applies, and the new path's (different signature) has not been
     // celebrated yet. Clearing the stored signature is belt-and-suspenders on
@@ -949,6 +1048,7 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_pathProgressKey(childId));
+      await prefs.remove(_pathAttemptsKey(childId));
       await prefs.remove(_pathVictoryKey(childId));
     } catch (e) {
       debugPrint('[AssessmentProvider] reset path progress failed: $e');
@@ -1350,13 +1450,13 @@ class AssessmentProvider extends ChangeNotifier {
     }
   }
 
-  /// Predict developmental profile using the AI Assessment API.
+  /// Predict developmental profile using the on-device XGBoost model.
   ///
   /// Predicts from the *current run's* sessions only — practice play and
   /// abandoned runs are filtered out — and attributes the result to that
   /// run's type: a post-assessment prediction labels the post results and
-  /// never rewrites the pre-assessment ones. Returns null if the API is
-  /// unreachable, allowing the caller to fall back to rule-based scoring.
+  /// never rewrites the pre-assessment ones. Falls back to rubric-derived
+  /// labels when the model is unavailable.
   Future<AiAssessmentResponse?> predictWithAI(
     String childId, {
     String? assessmentType,
@@ -1376,10 +1476,9 @@ class AssessmentProvider extends ChangeNotifier {
       return null;
     }
     final onDevice = OnDeviceAiAssessmentService();
-    final service = AiAssessmentService();
     try {
-      // Prefer the injected generator in focused tests; production keeps the
-      // on-device, cloud, and rubric fallback chain unchanged.
+      // Prefer the injected generator in focused tests; production runs the
+      // on-device model with rubric scoring as the fallback.
       var modelSource = 'xgboost_onnx';
       var rubricUsed = false;
       final prediction = _predictionGeneratorOverride != null
@@ -1393,11 +1492,6 @@ class AssessmentProvider extends ChangeNotifier {
                     childId: childId,
                     sessions: runSessionList,
                   ),
-              cloud:
-                  () => service.predictFromSessions(
-                    childId: childId,
-                    sessions: runSessionList,
-                  ),
               rubric: () async {
                 if (_rubricResult == null) return null;
                 rubricUsed = true;
@@ -1406,13 +1500,11 @@ class AssessmentProvider extends ChangeNotifier {
             );
       if (prediction?.onDevice == true) {
         debugPrint('[AssessmentProvider] ✅ Used on-device ONNX model');
-      } else if (prediction != null && !rubricUsed) {
-        modelSource = 'xgboost';
       }
 
       // Last resort: synthesize the prediction from the rubric labels so a
       // completed assessment ALWAYS yields area levels and a learning path,
-      // even when the ONNX assets fail and no cloud server exists.
+      // even when the ONNX assets fail to load.
       if (rubricUsed) {
         modelSource = 'rubric_based';
         debugPrint(
@@ -1480,7 +1572,6 @@ class AssessmentProvider extends ChangeNotifier {
       return null;
     } finally {
       onDevice.dispose();
-      service.dispose();
       // Clear sessions now that both finalization and AI prediction are done
       _currentSessions.clear();
     }
@@ -1488,8 +1579,7 @@ class AssessmentProvider extends ChangeNotifier {
 
   /// Builds an [AiAssessmentResponse] from rubric labels (Strength=2,
   /// Emerging=1, Needs Support=0) with locally derived module details —
-  /// the offline fallback when neither the ONNX model nor a cloud API is
-  /// available.
+  /// the fallback when the on-device ONNX model is unavailable.
   AiAssessmentResponse _predictionFromRubric(RubricResult rubric) {
     int perf(PerformanceLabel label) => switch (label) {
       PerformanceLabel.strength => 2,
@@ -1574,7 +1664,9 @@ class AssessmentProvider extends ChangeNotifier {
     // Path progress is per child and restored on load; dropping it here stops
     // one child's completed steps showing under another after a switch.
     _pathCompleted = {};
+    _pathAttempts = {};
     _pathVictoryShownSignature = null;
+    _postAssessmentInProgress = false;
     // Invalidate any load still in flight: its child is no longer loaded,
     // so its late writes are discarded rather than resurrected (AUM-160).
     _loadedChildId = null;

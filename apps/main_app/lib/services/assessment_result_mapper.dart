@@ -110,8 +110,6 @@ abstract final class AssessmentResultMapper {
       switch (result.modelSource) {
         case 'xgboost_onnx':
           return AssessmentAnalysisSource.onDeviceAi;
-        case 'xgboost':
-          return AssessmentAnalysisSource.cloudAi;
         case 'rubric_based':
           return AssessmentAnalysisSource.ruleBased;
       }
@@ -119,7 +117,7 @@ abstract final class AssessmentResultMapper {
     if (aiResponse == null) return AssessmentAnalysisSource.ruleBased;
     return aiResponse.onDevice
         ? AssessmentAnalysisSource.onDeviceAi
-        : AssessmentAnalysisSource.cloudAi;
+        : AssessmentAnalysisSource.ruleBased;
   }
 
   // ── Developmental areas ──────────────────────────────────────────────

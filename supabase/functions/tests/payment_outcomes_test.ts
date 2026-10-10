@@ -630,3 +630,86 @@ Deno.test("a missing created_at falls back to the receive time", () => {
 
   assertEquals(parseEvent(body, NOW)?.occurredAt.getTime(), NOW.getTime());
 });
+
+// ───────────────────── AUM-349: extra child-profile slots ─────────────────
+
+const SLOT_PRICE = 3000;
+
+function pendingSlot(overrides: Partial<StoredPayment> = {}): StoredPayment {
+  return pendingPayment({ amount: SLOT_PRICE, product: "profile_slot", ...overrides });
+}
+
+Deno.test("a paid profile slot adds one slot and never grants Premium", () => {
+  const decision = run(
+    parsed("checkout_session.payment.paid", { amount: SLOT_PRICE }),
+    pendingSlot(),
+  );
+  assertEquals(decision.reason, "slot_granted");
+  assertEquals(decision.apply?.effect, "grant_slot");
+  assertEquals(decision.apply?.expectedStatus, "pending");
+  assertEquals(decision.apply?.newStatus, "paid");
+});
+
+Deno.test("the second paid event for one slot purchase adds nothing", () => {
+  const decision = run(
+    parsed("payment.paid", { id: "evt_2", amount: SLOT_PRICE }),
+    pendingSlot({ status: "paid" }),
+    // Even with no Premium on the account, the Premium repair path must
+    // not run for a slot: that would double-count.
+    null,
+  );
+  assertEquals(decision.reason, "noop_slot_already_paid");
+  assertEquals(decision.apply, null);
+});
+
+Deno.test("an underpaid profile slot is refused", () => {
+  const decision = run(
+    parsed("checkout_session.payment.paid", { amount: SLOT_PRICE - 1 }),
+    pendingSlot(),
+  );
+  assertEquals(decision.reason, "rejected_grant_amount_mismatch");
+  assertEquals(decision.apply, null);
+});
+
+Deno.test("a slot paid under another account's metadata is refused", () => {
+  const decision = run(
+    parsed("checkout_session.payment.paid", { amount: SLOT_PRICE, userId: OTHER_PARENT }),
+    pendingSlot(),
+  );
+  assertEquals(decision.reason, "rejected_grant_owner_mismatch");
+  assertEquals(decision.apply, null);
+});
+
+Deno.test("a failed slot checkout adds nothing", () => {
+  const decision = run(parsed("payment.failed"), pendingSlot());
+  assertEquals(decision.apply?.effect, "none");
+  assertEquals(decision.apply?.newStatus, "failed");
+});
+
+Deno.test("a refunded slot takes exactly one slot back, once", () => {
+  const first = run(
+    parsed("payment.refunded", { amount: SLOT_PRICE }),
+    pendingSlot({ status: "paid" }),
+    activeEntitlement(),
+  );
+  assertEquals(first.reason, "slot_revoked");
+  assertEquals(first.apply?.effect, "revoke_slot");
+  assertEquals(first.apply?.newStatus, "refunded");
+
+  const again = run(
+    parsed("payment.refunded", { id: "evt_3", amount: SLOT_PRICE }),
+    pendingSlot({ status: "refunded" }),
+    activeEntitlement(),
+  );
+  assertEquals(again.reason, "noop_slot_already_refunded");
+  assertEquals(again.apply, null);
+});
+
+Deno.test("refunding a slot never touches Premium", () => {
+  const decision = run(
+    parsed("payment.refunded", { amount: SLOT_PRICE }),
+    pendingSlot({ status: "paid" }),
+    activeEntitlement(),
+  );
+  assertFalse(decision.apply?.effect === "revoke");
+});

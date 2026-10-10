@@ -196,11 +196,6 @@ have to work out how many people are in the room first.
 - `apps/main_app/lib/services/active_games_service.dart`: add
   `'Sabay Tayo!': 'sabay_tayo'` to `_titleToGameId`.
 - `apps/main_app/lib/services/recommendation_filter.dart`: same title→id entry.
-- `ai_assessment/app/rules.py`: add `{"game_id": "sabay_tayo", "name": "Sabay Tayo!"}`
-  to `AREA_MODULE_MAP["social"]` — **listed first**, ahead of `my_turn_your_turn`,
-  since joint attention precedes turn-taking developmentally and this is the
-  only module that trains it directly. (`"social"` currently holds exactly one
-  game; that is the gap this game closes.)
 
 ### 6. Voice-over
 

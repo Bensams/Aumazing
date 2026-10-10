@@ -1,5 +1,10 @@
 import 'package:aumazing/core/services/local_db_service.dart';
+import 'package:aumazing/core/config/payment_simulation_config.dart';
+import 'package:aumazing/features/premium/mock_paymongo_checkout_screen.dart';
+import 'package:aumazing/features/premium/profile_slot_checkout.dart';
 import 'package:aumazing/features/settings/manage_children_screen.dart';
+import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart';
+import 'package:aumazing/services/entitlement_service.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
@@ -8,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_haptic/shared_haptic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/fake_auth.dart';
@@ -35,8 +41,9 @@ void main() {
 
   Future<ChildProvider> pumpScreen(
     WidgetTester tester,
-    List<ChildProfile> children,
-  ) async {
+    List<ChildProfile> children, {
+    ProfileSlotCheckout? checkout,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(900, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -58,8 +65,11 @@ void main() {
             create: (_) => ProgressProvider(),
           ),
           Provider<AudioService>(create: (_) => _FakeAudioService()),
+          Provider<HapticService>.value(value: HapticService()),
         ],
-        child: const MaterialApp(home: ManageChildrenScreen()),
+        child: MaterialApp(
+          home: ManageChildrenScreen(profileSlotCheckout: checkout),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -121,6 +131,145 @@ void main() {
     expect(find.byType(Dialog), findsWidgets);
     expect(find.byKey(const Key('confirm-delete-child')), findsNothing);
     expect(provider.children, hasLength(2));
+  });
+
+  group('profile allowance (AUM-343)', () {
+    final entitlement = EntitlementService.instance;
+
+    setUp(() {
+      entitlement.debugSetRealPremium(false);
+      entitlement.debugSetExtraProfileSlots(0);
+      entitlement.clearSimulatedPurchase();
+    });
+    tearDown(() {
+      entitlement.debugSetRealPremium(false);
+      entitlement.debugSetExtraProfileSlots(0);
+      PaymentSimulationConfig.debugAvailableOverride = null;
+    });
+
+    Future<void> tapAdd(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const Key('add-child-button')));
+      await tester.tap(find.byKey(const Key('add-child-button')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('says how many profiles are in use', (tester) async {
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      expect(find.textContaining('Profiles: 1 of 1.'), findsOneWidget);
+    });
+
+    testWidgets('a second child on the free plan asks for Premium', (
+      tester,
+    ) async {
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      await tapAdd(tester);
+
+      expect(find.byKey(const Key('needs-premium-dialog')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('needs-premium-dialog')),
+          matching: find.textContaining('₱30.00 each'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('needs-premium-dialog')), findsNothing);
+    });
+
+    testWidgets('Premium with every slot used offers one for ₱30', (
+      tester,
+    ) async {
+      PaymentSimulationConfig.debugAvailableOverride = true;
+      entitlement.debugSetRealPremium(true);
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+      ]);
+      await tapAdd(tester);
+
+      expect(find.byKey(const Key('buy-profile-dialog')), findsOneWidget);
+      await tester.tap(find.text('Continue to payment'));
+      await tester.pumpAndSettle();
+
+      // The clearly-labelled simulated checkout, for the one-time price.
+      final checkout = tester.widget<MockPaymongoCheckoutScreen>(
+        find.byType(MockPaymongoCheckoutScreen),
+      );
+      expect(checkout.amountLabel, '₱30.00');
+      expect(checkout.planLabel, contains('Extra child profile'));
+    });
+
+    testWidgets('a real build sells the slot through PayMongo (AUM-349)', (
+      tester,
+    ) async {
+      PaymentSimulationConfig.debugAvailableOverride = false;
+      entitlement.debugSetRealPremium(true);
+      int? askedWith;
+      await pumpScreen(
+        tester,
+        [child('a', 'Ana', createdAt: DateTime(2026, 1, 1))],
+        checkout: (context, {required slotsBefore}) async {
+          askedWith = slotsBefore;
+          return ProfileSlotPurchase.added;
+        },
+      );
+      await tapAdd(tester);
+      await tester.tap(find.text('Continue to payment'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MockPaymongoCheckoutScreen), findsNothing);
+      // The purchase is judged against the real slots held before it.
+      expect(askedWith, 0);
+      // A confirmed slot goes straight on to setting up the child.
+      expect(find.byType(ChildProfileSetupScreen), findsOneWidget);
+      // Dispose the setup screen so its audio restore runs, then let the
+      // audio backstop timers finish.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    for (final (result, message) in [
+      (ProfileSlotPurchase.pending, 'Payment received'),
+      (ProfileSlotPurchase.premiumRequired, 'need an active Premium'),
+      (ProfileSlotPurchase.failed, 'Could not start the payment'),
+    ]) {
+      testWidgets('a ${result.name} purchase adds no child', (tester) async {
+        PaymentSimulationConfig.debugAvailableOverride = false;
+        entitlement.debugSetRealPremium(true);
+        await pumpScreen(
+          tester,
+          [child('a', 'Ana', createdAt: DateTime(2026, 1, 1))],
+          checkout: (context, {required slotsBefore}) async => result,
+        );
+        await tapAdd(tester);
+        await tester.tap(find.text('Continue to payment'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ChildProfileSetupScreen), findsNothing);
+        expect(find.textContaining(message), findsOneWidget);
+      });
+    }
+
+    testWidgets('children already on the account are never taken away', (
+      tester,
+    ) async {
+      // Three children, free plan: all three are listed and usable; only
+      // adding a fourth is gated.
+      await pumpScreen(tester, [
+        child('a', 'Ana', createdAt: DateTime(2026, 1, 1)),
+        child('b', 'Bea', createdAt: DateTime(2026, 2, 1)),
+        child('c', 'Cai', createdAt: DateTime(2026, 3, 1)),
+      ]);
+      expect(find.text('Ana'), findsOneWidget);
+      expect(find.text('Bea'), findsOneWidget);
+      expect(find.text('Cai'), findsOneWidget);
+      expect(find.textContaining('Profiles: 3 of 3.'), findsOneWidget);
+    });
   });
 }
 

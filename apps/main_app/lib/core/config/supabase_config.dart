@@ -7,7 +7,7 @@
 ///
 /// The Supabase URL and anon (publishable) key have safe defaults so the
 /// app runs even without the define file — they are public by design (RLS
-/// enforces all data access), mirroring [ApiConfig.aiAssessmentBaseUrl].
+/// enforces all data access).
 /// The sensitive OAuth values have NO default and must be supplied via
 /// the define file for social login to work.
 class SupabaseConfig {

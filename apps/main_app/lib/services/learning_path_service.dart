@@ -150,6 +150,17 @@ class LearningPathService {
       path.isNotEmpty &&
       path.every((e) => completedGameIds.contains(e.game.id));
 
+  /// Whether the post-assessment is due: every game on [path] is complete and
+  /// this cycle has no post-assessment yet. The one rule behind both the
+  /// automatic hand-over after the path's last game and the parent
+  /// dashboard's fallback button, so the two cannot disagree.
+  static bool postAssessmentDue(
+    List<LearningPathEntry> path,
+    Set<String> completedGameIds, {
+    required bool hasPostAssessment,
+  }) =>
+      !hasPostAssessment && isComplete(path, completedGameIds);
+
   /// A stable identity for [path] — the ordered game ids joined together.
   ///
   /// Two genuinely different recommendations (different games, or a different

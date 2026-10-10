@@ -15,8 +15,9 @@ const _sizes = <String, Size>{
 
 void main() {
   for (final entry in _sizes.entries) {
-    testWidgets('button labels stay on one line — ${entry.key}',
-        (tester) async {
+    testWidgets('button labels stay on one line — ${entry.key}', (
+      tester,
+    ) async {
       tester.view.physicalSize = entry.value;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);

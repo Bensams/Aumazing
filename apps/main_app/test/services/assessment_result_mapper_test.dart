@@ -201,16 +201,6 @@ void main() {
       expect(model.confidencePercent, 82);
     });
 
-    test('cloud results are labelled AI Analysis', () {
-      final model = AssessmentResultMapper.build(
-        results: [_result('copy_me', modelSource: 'xgboost')],
-        profile: _profile,
-        aiResponse: _ai(onDevice: false),
-      );
-      expect(model.source, AssessmentAnalysisSource.cloudAi);
-      expect(model.source.label, 'AI Analysis');
-    });
-
     test('a rubric-synthesized prediction is Rule-Based, not AI', () {
       // The offline fallback is delivered as an AiAssessmentResponse with
       // onDevice: true — the stored model source is what decides.

@@ -414,7 +414,14 @@ class _DoWhatISayScreenState extends State<DoWhatISayScreen>
                     .activePalette
                     .gameBackgroundFor('do_what_i_say'),
               ),
-              child: GameWidget(game: _game),
+              child: Semantics(
+                container: true,
+                label: 'Do What I Say play area',
+                child: GameWidget(
+                  key: const Key('game.canvas.do_what_i_say'),
+                  game: _game,
+                ),
+              ),
             ),
           ),
 

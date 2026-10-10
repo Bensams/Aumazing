@@ -187,6 +187,82 @@ void main() {
     expect(valueAt(tester, 'screenTime.dailyLimit'), '30m');
     expect(valueAt(tester, 'screenTime.sessionLimit'), '10m');
   });
+
+  group('custom limits', () {
+    Future<void> openCustom(WidgetTester tester, String chipKey) async {
+      final chip = find.byKey(Key(chipKey));
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('customMinutes.value')), findsOneWidget);
+    }
+
+    testWidgets('a parent can set a daily limit that is not a preset', (
+      tester,
+    ) async {
+      await openScreenTime(tester);
+      await applyState(tester, dailyMinutes: 30);
+
+      await openCustom(tester, 'screenTime.customDaily');
+      // 30 → 35 → 40: five-minute steps once the value is 30 or more.
+      await tester.tap(find.byKey(const Key('customMinutes.increase')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('customMinutes.increase')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('customMinutes.save')));
+      await tester.pumpAndSettle();
+
+      expect(service.limitMinutes, 40);
+      expect(valueAt(tester, 'screenTime.dailyLimit'), '40m');
+      expect(find.text('Custom: 40 min'), findsOneWidget,
+          reason: 'the custom chip shows the value in force');
+    });
+
+    testWidgets('a custom session limit steps by single minutes when short', (
+      tester,
+    ) async {
+      await openScreenTime(tester);
+      await applyState(tester, sessionMinutes: 10);
+
+      await openCustom(tester, 'screenTime.customSession');
+      await tester.tap(find.byKey(const Key('customMinutes.increase')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('customMinutes.increase')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('customMinutes.save')));
+      await tester.pumpAndSettle();
+
+      expect(service.sessionLimitMinutes, 12);
+      expect(valueAt(tester, 'screenTime.sessionLimit'), '12m');
+    });
+
+    testWidgets('cancel leaves the limit alone', (tester) async {
+      await openScreenTime(tester);
+      await applyState(tester, dailyMinutes: 30);
+
+      await openCustom(tester, 'screenTime.customDaily');
+      await tester.tap(find.byKey(const Key('customMinutes.increase')));
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(service.limitMinutes, 30);
+      expect(find.text('Custom…'), findsNWidgets(2),
+          reason: 'a preset in force leaves both custom chips unselected');
+    });
+
+    testWidgets('the picker stops at its bounds', (tester) async {
+      await openScreenTime(tester);
+      await applyState(tester, sessionMinutes: 1);
+
+      await openCustom(tester, 'screenTime.customSession');
+      final decrease = tester.widget<IconButton>(
+        find.byKey(const Key('customMinutes.decrease')),
+      );
+      expect(decrease.onPressed, isNull,
+          reason: 'one minute is the shortest session a parent can set');
+    });
+  });
 }
 
 class _TestChildProvider extends ChildProvider {

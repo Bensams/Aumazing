@@ -299,3 +299,18 @@ String? fallbackVoiceFolder(String assetFolder) {
   final fallback = defaultVoicePackForLanguage(pack.languageSlug).assetFolder;
   return fallback == assetFolder ? null : fallback;
 }
+
+/// The folder to speak a parent-facing line from, for a child whose narrator
+/// lives in [assetFolder].
+///
+/// A child who plays with a girl's or a boy's voice should not have that same
+/// child voice addressing their parent, so anything below the adult tier —
+/// and the untiered human pack — hands over to its language's default adult
+/// narrator. An adult pack is kept as chosen, so the parent hears the voice
+/// they picked. Unknown folders resolve like any other code.
+String parentVoiceFolder(String assetFolder) {
+  final pack = voicePackByAssetFolder(assetFolder);
+  if (pack == null) return resolveVoiceFolder(assetFolder);
+  if (pack.tier == 'adult') return pack.assetFolder;
+  return defaultVoicePackForLanguage(pack.languageSlug).assetFolder;
+}

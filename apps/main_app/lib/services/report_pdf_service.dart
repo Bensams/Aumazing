@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:game_core/game_core.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -51,7 +52,10 @@ abstract interface class ReportPdfSharer {
   });
 }
 
-/// Builds structured A4 parent reports and shares a temporary local PDF.
+/// Builds structured A4 parent reports and shares them as a PDF — through a
+/// temporary local file on a device, or straight from memory in the browser,
+/// which has no file system (the browser opens its share sheet, or downloads
+/// the PDF where sharing files is not supported).
 ///
 /// Document generation is pure with respect to app data: callers hand in the
 /// already-rendered assessment model or already-loaded history snapshot. Only
@@ -329,6 +333,20 @@ class ReportPdfService implements ReportPdfSharer {
   }
 
   Future<void> _writeAndShare(ReportPdfData report) async {
+    if (kIsWeb) {
+      await _shareCallback(
+        [
+          XFile.fromData(
+            report.bytes,
+            name: report.filename,
+            mimeType: 'application/pdf',
+          ),
+        ],
+        subject: 'Aumazing parent report',
+        text: 'Aumazing parent report for ${_subjectName(report.plainText)}.',
+      );
+      return;
+    }
     final directory = await _temporaryDirectoryProvider();
     final file = File(
       '${directory.path}${Platform.pathSeparator}${report.filename}',

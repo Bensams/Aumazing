@@ -34,6 +34,11 @@ SERVICE = os.path.join(SHARED, 'lib', 'src', 'voice_over_service.dart')
 REGISTRY = os.path.join(SHARED, 'lib', 'src', 'voice_pack.dart')
 ASSETS = os.path.join(SHARED, 'assets', 'audio')
 
+# Lines spoken to the parent rather than the child. They are recorded in the
+# adult packs only -- the app's parentVoiceFolder() never plays them from a
+# young or child voice -- so their absence elsewhere is not a coverage gap.
+ADULT_ONLY = {'milestone/StartPreAssessment.wav'}
+
 
 def read(path):
     with open(path, encoding='utf-8') as f:
@@ -128,6 +133,8 @@ def main():
     for folder, ext in packs:
         absent = []
         for rel in sorted(mapped):
+            if rel in ADULT_ONLY and '_adult_' not in folder:
+                continue
             target = os.path.join(ASSETS, 'voice_over', folder,
                                   os.path.splitext(rel)[0] + ext)
             if not os.path.isfile(target):

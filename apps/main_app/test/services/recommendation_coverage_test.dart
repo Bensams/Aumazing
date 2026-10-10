@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:game_core/game_core.dart';
@@ -35,37 +33,6 @@ void main() {
               'must be identical.');
       expect(supportedIds, hasLength(12),
           reason: 'The practice catalog is the 12 known games.');
-    });
-  });
-
-  group('Cloud registration (rules.py)', () {
-    test('every practice game is registered in the cloud recommender', () {
-      // flutter test runs with cwd = the package root (apps/main_app). The
-      // cloud recommender lives one repo level up in ai_assessment/.
-      final rulesFile = File('../../ai_assessment/app/rules.py');
-      expect(rulesFile.existsSync(), isTrue,
-          reason: 'Could not find ai_assessment/app/rules.py relative to the '
-              'test package root (apps/main_app). Resolved as: '
-              '${rulesFile.absolute.path}');
-      final content = rulesFile.readAsStringSync();
-
-      final cloudIds = RegExp(r'"game_id"\s*:\s*"([a-z_]+)"')
-          .allMatches(content)
-          .map((m) => m.group(1)!)
-          .toSet();
-
-      expect(cloudIds, isNotEmpty,
-          reason: 'rules.py AREA_MODULE_MAP contains no "game_id" entries.');
-
-      final notInCloud = supportedIds.difference(cloudIds);
-      expect(notInCloud, isEmpty,
-          reason: 'Practice game(s) missing from rules.py AREA_MODULE_MAP: '
-              '$notInCloud');
-
-      final phantom = cloudIds.difference(registryIds);
-      expect(phantom, isEmpty,
-          reason: 'rules.py references game id(s) not in GameRegistry: '
-              '$phantom');
     });
   });
 

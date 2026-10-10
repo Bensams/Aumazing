@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:questionnaire_core/questionnaire_core.dart';
 
 import '../../model/ai_assessment_response.dart';
 import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
+import '../questionnaire/home_questionnaire_flow.dart';
+import '../questionnaire/questionnaire_template_repository.dart';
+import '../questionnaire/session_observation_screen.dart';
 import 'game_summary_dialog.dart';
 import 'pre_assessment_result_screen.dart';
 
@@ -21,7 +25,25 @@ class WaitingForParentScreen extends StatelessWidget {
     required this.profile,
     this.aiResponse,
     this.voiceOverFactory,
+    this.childId,
+    this.assessmentRunId,
+    this.showQuestionnaire = true,
+    this.templateRepository,
   });
+
+  /// Where the questionnaire's active template comes from. Injectable for
+  /// tests; the app uses the shared repository.
+  final QuestionnaireTemplateRepository? templateRepository;
+
+  /// The child and the finished run, so the parent questionnaire is stored
+  /// against them. The run id is captured before the run is closed.
+  final String? childId;
+  final String? assessmentRunId;
+
+  /// Whether the adult's questions — what they saw (AUM-351), then the
+  /// parent questionnaire — come between verification and the results. On
+  /// in the app; tests about the hand-off itself turn it off.
+  final bool showQuestionnaire;
 
   final List<AssessmentResult> results;
   final SupportProfile profile;
@@ -39,28 +61,72 @@ class WaitingForParentScreen extends StatelessWidget {
       subtitle: MilestoneKind.preAssessment.subtitle,
       milestoneVoiceCue: MilestoneKind.preAssessment.voiceCue,
       voiceOverFactory: voiceOverFactory,
-      onParentVerified: _showSummary,
+      onParentVerified: _afterVerification,
     );
   }
+
+  /// The parent has the device: what they saw while the child played, then
+  /// their questionnaire — both before any result is on screen — then the
+  /// summary.
+  Future<void> _afterVerification(BuildContext context) async {
+    final childId = this.childId;
+    if (!showQuestionnaire || childId == null) {
+      _showSummary(context);
+      return;
+    }
+    // The games this run played, in order, each once.
+    final played = {for (final r in results) r.gameId}.toList();
+    // The practitioner-authored observation questions when active, else the
+    // bundled ones; bounded by the repository's short timeout.
+    final observation = await (templateRepository ??
+            QuestionnaireTemplateRepository.instance)
+        .choiceTemplateFor(TemplateKind.observation, 'pre');
+    if (!context.mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => SessionObservationScreen(
+              template: observation,
+              assessmentType: 'pre',
+              childId: childId,
+              assessmentRunId: assessmentRunId,
+              gameIds: played,
+              onDone: (next) => _showQuestionnaire(next, childId),
+            ),
+      ),
+    );
+  }
+
+  Future<void> _showQuestionnaire(BuildContext context, String childId) =>
+      HomeQuestionnaireFlow.show(
+        context,
+        assessmentType: 'pre',
+        childId: childId,
+        assessmentRunId: assessmentRunId,
+        onDone: _showSummary,
+        repository: templateRepository,
+      );
 
   void _showSummary(BuildContext context) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (summaryContext) => GameSummaryDialog(
-          results: results,
-          aiResponse: aiResponse,
-          onContinue: () {
-            Navigator.of(summaryContext).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => PreAssessmentResultScreen(
-                  profile: profile,
-                  results: results,
-                  aiResponse: aiResponse,
-                ),
-              ),
-            );
-          },
-        ),
+        builder:
+            (summaryContext) => GameSummaryDialog(
+              results: results,
+              aiResponse: aiResponse,
+              onContinue: () {
+                Navigator.of(summaryContext).pushReplacement(
+                  MaterialPageRoute(
+                    builder:
+                        (_) => PreAssessmentResultScreen(
+                          profile: profile,
+                          results: results,
+                          aiResponse: aiResponse,
+                        ),
+                  ),
+                );
+              },
+            ),
       ),
     );
   }

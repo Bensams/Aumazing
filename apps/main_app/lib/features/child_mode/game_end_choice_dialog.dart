@@ -9,6 +9,7 @@ import '../../providers/child_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../../providers/stars_provider.dart';
 import '../../model/module_progress.dart';
+import '../post_assessment/post_assessment_progress_screen.dart';
 import '../stars/star_catalogue.dart';
 import '../stars/widgets/star_earned_overlay.dart';
 import '../../services/active_games_service.dart';
@@ -96,8 +97,9 @@ class GameEndChoiceDialog {
 
     // Milestone: this practice completion just finished every game on the
     // child's current recommended path. Celebrate it — once — instead of
-    // offering a misleading "Next", then return them to the path map so the
-    // fully-completed path is visible.
+    // offering a misleading "Next", then offer the post-assessment when it is
+    // due (or return them to the path map so the fully-completed path is
+    // visible).
     if (await _maybeShowPathVictory(
       context,
       path,
@@ -110,12 +112,16 @@ class GameEndChoiceDialog {
     if (!context.mounted) return;
 
     var pathNext = LearningPathService.nextOnPath(path, currentGameId);
+    // The next step the child has not unlocked yet: this path game has not
+    // earned a Strength, so it must be played again before moving on.
+    LearningPathEntry? lockedNext;
     if (pathNext != null) {
-      // Sequential unlock: only offer the next step if it's actually open
-      // (it normally is — finishing the current game just unlocked it).
+      // Sequential unlock: only offer the next step if it's actually open —
+      // it opens once the current step earns a Strength.
       final completed = context.read<AssessmentProvider>().pathCompletedGameIds;
       final nextIndex = path.indexWhere((e) => e.game.id == pathNext!.game.id);
       if (!LearningPathService.isUnlocked(path, nextIndex, completed)) {
+        lockedNext = pathNext;
         pathNext = null;
       }
     }
@@ -139,6 +145,8 @@ class GameEndChoiceDialog {
               nextGameIcon: next?.icon,
               nextGameLogo: next?.logoAsset,
               nextGameName: next?.name,
+              lockedNextIcon: lockedNext?.game.icon,
+              lockedNextLogo: lockedNext?.game.logoAsset,
             ),
           ),
     );
@@ -277,6 +285,40 @@ class GameEndChoiceDialog {
     );
     if (!context.mounted) return true;
 
+    // The path was the recommended module, so finishing it is what the
+    // post-assessment waits for. The child is still holding the device and
+    // still in the flow — offer it right here rather than parking it behind a
+    // button on the parent dashboard. The child decides: Continue replaces the
+    // finished game with the post-assessment (so leaving it early lands back
+    // on the lobby's path map); Lobby leaves it for later, where the parent
+    // dashboard still offers it.
+    if (LearningPathService.postAssessmentDue(
+      path,
+      completed,
+      hasPostAssessment: assess.hasPostAssessment,
+    )) {
+      final palette = context.read<ChildProvider>().activePalette;
+      final start = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black26,
+        builder:
+            (_) => PopScope(
+              canPop: false,
+              child: _PostAssessmentOfferContent(palette: palette),
+            ),
+      );
+      if (!context.mounted) return true;
+      if (start == true) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const PostAssessmentProgressScreen(),
+          ),
+        );
+        return true;
+      }
+    }
+
     // Back to the lobby / path map, where the finished path is now visible.
     Navigator.of(context).pop();
     return true;
@@ -361,6 +403,8 @@ class _GameEndChoiceContent extends StatelessWidget {
     required this.nextGameIcon,
     required this.nextGameLogo,
     required this.nextGameName,
+    this.lockedNextIcon,
+    this.lockedNextLogo,
   });
 
   final GamePalette palette;
@@ -369,6 +413,156 @@ class _GameEndChoiceContent extends StatelessWidget {
   final IconData? nextGameIcon;
   final String? nextGameLogo;
   final String? nextGameName;
+
+  /// The next path step, shown locked because this step has not earned a
+  /// Strength yet; null when nothing is locked.
+  final IconData? lockedNextIcon;
+  final String? lockedNextLogo;
+
+  bool get _needsStrength => lockedNextIcon != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Back to the lobby
+        Flexible(
+          child: _ChoiceButton(
+            background: AppColors.white,
+            borderColor: palette.primary.withValues(alpha: 0.4),
+            iconColor: palette.primary,
+            icon: Icons.home_rounded,
+            label: 'Lobby',
+            labelColor: palette.primary,
+            onTap: () => Navigator.of(context).pop(_EndChoice.lobby),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        // Play the same game again — sits between Lobby and Next so the
+        // familiar choice is the easiest one to reach. While the next step is
+        // locked it is the only way forward, so it takes the filled style.
+        Flexible(
+          child: _ChoiceButton(
+            key: const ValueKey('gameEndAgain'),
+            background: _needsStrength ? palette.primary : AppColors.white,
+            borderColor: palette.primary,
+            iconColor: _needsStrength ? palette.onPrimary : palette.primary,
+            icon: currentGameIcon ?? Icons.replay_rounded,
+            logoAsset: currentGameLogo,
+            badgeIcon: Icons.replay_rounded,
+            label: _needsStrength ? 'Try again' : 'Again',
+            labelColor: _needsStrength ? palette.onPrimary : palette.primary,
+            onTap: () => Navigator.of(context).pop(_EndChoice.again),
+          ),
+        ),
+        // Play the next game
+        if (nextGameIcon != null) ...[
+          const SizedBox(width: AppSpacing.lg),
+          Flexible(
+            child: _ChoiceButton(
+              background: palette.primary,
+              borderColor: palette.primary,
+              iconColor: palette.onPrimary,
+              icon: nextGameIcon!,
+              logoAsset: nextGameLogo,
+              badgeIcon: Icons.play_arrow_rounded,
+              label: nextGameName ?? 'Next',
+              labelColor: palette.onPrimary,
+              onTap: () => Navigator.of(context).pop(_EndChoice.next),
+            ),
+          ),
+        ] else if (_needsStrength) ...[
+          // The next step, visibly locked: the child sees there is more to
+          // come and that playing this game again opens it.
+          const SizedBox(width: AppSpacing.lg),
+          Flexible(
+            child: Opacity(
+              key: const ValueKey('gameEndLockedNext'),
+              opacity: 0.45,
+              child: _ChoiceButton(
+                background: AppColors.white,
+                borderColor: AppColors.mutedForeground,
+                iconColor: AppColors.mutedForeground,
+                icon: lockedNextIcon!,
+                logoAsset: lockedNextLogo,
+                badgeIcon: Icons.lock_rounded,
+                label: 'Locked',
+                labelColor: AppColors.mutedForeground,
+                onTap: null,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child:
+            _needsStrength
+                ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Picture-first nudge: a star beside the line says "earn
+                    // the star to open the next game" for a child who cannot
+                    // read it yet; the voice of the dialog is the layout.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFC83D),
+                          size: 32,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            'Almost! Play again to unlock the next game.',
+                            key: const ValueKey('gameEndNeedsStrength'),
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: palette.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    buttons,
+                  ],
+                )
+                : buttons,
+      ),
+    );
+  }
+}
+
+/// Shown right after the learning-path victory while the post-assessment is
+/// due: the child may continue straight into it or go back to the lobby.
+///
+/// Same icon-first layout as the post-game choice. Continue is the filled,
+/// larger-weight button because it is the step the path was leading to; the
+/// lobby is still one tap away so the child is never forced into it.
+class _PostAssessmentOfferContent extends StatelessWidget {
+  const _PostAssessmentOfferContent({required this.palette});
+
+  final GamePalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -388,54 +582,63 @@ class _GameEndChoiceContent extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Back to the lobby
-            Flexible(
-              child: _ChoiceButton(
-                background: AppColors.white,
-                borderColor: palette.primary.withValues(alpha: 0.4),
-                iconColor: palette.primary,
-                icon: Icons.home_rounded,
-                label: 'Lobby',
-                labelColor: palette.primary,
-                onTap: () => Navigator.of(context).pop(_EndChoice.lobby),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            // Play the same game again — sits between Lobby and Next so the
-            // familiar choice is the easiest one to reach.
-            Flexible(
-              child: _ChoiceButton(
-                background: AppColors.white,
-                borderColor: palette.primary,
-                iconColor: palette.primary,
-                icon: currentGameIcon ?? Icons.replay_rounded,
-                logoAsset: currentGameLogo,
-                badgeIcon: Icons.replay_rounded,
-                label: 'Again',
-                labelColor: palette.primary,
-                onTap: () => Navigator.of(context).pop(_EndChoice.again),
-              ),
-            ),
-            // Play the next game
-            if (nextGameIcon != null) ...[
-              const SizedBox(width: AppSpacing.lg),
-              Flexible(
-                child: _ChoiceButton(
-                  background: palette.primary,
-                  borderColor: palette.primary,
-                  iconColor: palette.onPrimary,
-                  icon: nextGameIcon!,
-                  logoAsset: nextGameLogo,
-                  badgeIcon: Icons.play_arrow_rounded,
-                  label: nextGameName ?? 'Next',
-                  labelColor: palette.onPrimary,
-                  onTap: () => Navigator.of(context).pop(_EndChoice.next),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Color(0xFFFFC83D),
+                  size: 32,
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(
+                    'Show what you learned!',
+                    key: const ValueKey('postAssessmentOffer'),
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: palette.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: _ChoiceButton(
+                    key: const ValueKey('postAssessmentLater'),
+                    background: AppColors.white,
+                    borderColor: palette.primary.withValues(alpha: 0.4),
+                    iconColor: palette.primary,
+                    icon: Icons.home_rounded,
+                    label: 'Lobby',
+                    labelColor: palette.primary,
+                    onTap: () => Navigator.of(context).pop(false),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Flexible(
+                  child: _ChoiceButton(
+                    key: const ValueKey('postAssessmentContinue'),
+                    background: palette.primary,
+                    borderColor: palette.primary,
+                    iconColor: palette.onPrimary,
+                    icon: Icons.emoji_events_rounded,
+                    badgeIcon: Icons.play_arrow_rounded,
+                    label: 'Continue',
+                    labelColor: palette.onPrimary,
+                    onTap: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -447,6 +650,7 @@ class _GameEndChoiceContent extends StatelessWidget {
 /// text, high contrast).
 class _ChoiceButton extends StatelessWidget {
   const _ChoiceButton({
+    super.key,
     required this.background,
     required this.borderColor,
     required this.iconColor,
@@ -469,7 +673,7 @@ class _ChoiceButton extends StatelessWidget {
   final IconData? badgeIcon;
   final String label;
   final Color labelColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

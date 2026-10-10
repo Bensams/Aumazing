@@ -373,6 +373,48 @@ void main() {
     });
   });
 
+  group('the dashboard\'s "post-assessment in progress" flag', () {
+    test('is set for a post run the child left part-way', () async {
+      gateway.storedRun = _openRun(type: 'post');
+
+      await provider.checkPostAssessmentInProgress('child-1', now: _now);
+
+      expect(provider.postAssessmentInProgress, isTrue);
+    });
+
+    test('is not set when nothing is open, or only a pre run is', () async {
+      await provider.checkPostAssessmentInProgress('child-1', now: _now);
+      expect(provider.postAssessmentInProgress, isFalse);
+
+      gateway.storedRun = _openRun(type: 'pre');
+      await provider.checkPostAssessmentInProgress('child-1', now: _now);
+      expect(provider.postAssessmentInProgress, isFalse);
+    });
+
+    test('never closes a stale run — only the post-assessment screen does',
+        () async {
+      gateway.storedRun = _openRun(
+        type: 'post',
+        age: const Duration(days: 8),
+      );
+
+      await provider.checkPostAssessmentInProgress('child-1', now: _now);
+
+      expect(provider.postAssessmentInProgress, isFalse);
+      expect(gateway.abandonedFor, isEmpty);
+      expect(gateway.storedRun, isNotNull);
+    });
+
+    test('is dropped by clear()', () async {
+      gateway.storedRun = _openRun(type: 'post');
+      await provider.checkPostAssessmentInProgress('child-1', now: _now);
+
+      provider.clear();
+
+      expect(provider.postAssessmentInProgress, isFalse);
+    });
+  });
+
   group('continuing an interrupted run', () {
     test('the run is adopted, sessions and all, after a restart', () async {
       // The provider that played the first two games is gone — this one has

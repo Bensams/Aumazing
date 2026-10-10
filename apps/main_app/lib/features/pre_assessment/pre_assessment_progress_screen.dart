@@ -19,10 +19,12 @@ import '../games/match_it/match_it_screen.dart';
 import '../rewards/widgets/reward_overlay.dart';
 import '../../widgets/mascot_host.dart';
 import '../../widgets/resume_assessment_dialog.dart';
+import 'learn_first_screen.dart';
 
 import 'sensory/sensory.dart';
 import 'sensory/pre_assessment_round_plan.dart';
 import 'waiting_for_parent_screen.dart';
+import '../questionnaire/observer_intake_screen.dart';
 
 /// Orchestrates the sequential pre-assessment game flow.
 ///
@@ -38,9 +40,21 @@ class PreAssessmentProgressScreen extends StatefulWidget {
   /// The parent's consent decision from [SensoryConsentDialog].
   final SensoryConsentResult sensoryConsentResult;
 
+  /// Whether a new run opens with the "Let's learn first" familiarisation
+  /// step. Always on in the app; off in tests that are about something else,
+  /// so they do not have to walk through it first.
+  final bool showLearnFirst;
+
+  /// Whether a new run first asks the watching adult who they are and about
+  /// the child (AUM-351). Always on in the app; off in tests that are about
+  /// something else.
+  final bool showObserverIntake;
+
   const PreAssessmentProgressScreen({
     super.key,
     required this.sensoryConsentResult,
+    this.showLearnFirst = true,
+    this.showObserverIntake = true,
   });
 
   @override
@@ -72,6 +86,10 @@ class _PreAssessmentProgressScreenState
   /// A resumed run skips them: they are recorded play, and replaying them
   /// would ask the child to redo work the assessment already has.
   Set<String> _alreadyPlayed = const {};
+
+  /// True when this screen started a new run rather than resuming one: only
+  /// a new run asks the observer's questions.
+  bool _freshRun = false;
 
   /// Controls per-round sensory settings (music/haptic toggling).
   late final SensoryRoundController _sensoryController;
@@ -149,6 +167,7 @@ class _PreAssessmentProgressScreenState
       } else {
         _alreadyPlayed = const {};
         _currentGameIndex = 0;
+        _freshRun = true;
         await assessProv.startAssessmentRun(childId: childId, type: 'pre');
         await _saveSensoryConsent(assessProv.currentAssessmentRunId, childId);
       }
@@ -171,7 +190,41 @@ class _PreAssessmentProgressScreenState
       _finishAssessment();
       return;
     }
+    // The adult answers before the child starts, never during play.
+    if (widget.showObserverIntake && _freshRun) {
+      await ObserverIntakeScreen.show(
+        context,
+        assessmentType: 'pre',
+        childId: childId,
+        assessmentRunId:
+            context.read<AssessmentProvider>().currentAssessmentRunId,
+      );
+      if (!mounted) return;
+    }
+    if (widget.showLearnFirst && _alreadyPlayed.isEmpty) {
+      await _runLearnFirst();
+      if (!mounted) return;
+    }
     _startCountdown();
+  }
+
+  /// Runs the familiarisation step for a new run and logs how it went.
+  ///
+  /// Only a fresh run gets it: a resumed run already had it before it was
+  /// interrupted, and repeating it mid-assessment would put unscored exposure
+  /// between scored games.
+  Future<void> _runLearnFirst() async {
+    final outcome = await LearnFirstScreen.show(
+      context,
+      assessmentType: 'pre',
+    );
+    if (!mounted) return;
+    await LearnFirstLog.instance.record(
+      childId: _childId,
+      assessmentRunId: context.read<AssessmentProvider>().currentAssessmentRunId,
+      assessmentType: 'pre',
+      outcome: outcome,
+    );
   }
 
   /// The first activity of the run that has no session yet.
@@ -401,6 +454,8 @@ class _PreAssessmentProgressScreenState
 
     final assessProv = context.read<AssessmentProvider>();
     final childId = _childId;
+    // Captured now: finishing closes the run and forgets its id.
+    final runId = assessProv.currentAssessmentRunId;
 
     try {
       // -- Sensory preference analysis --------------------------------
@@ -460,9 +515,9 @@ class _PreAssessmentProgressScreenState
 
       if (!mounted) return;
 
-      // Call AI Assessment API for XGBoost-based prediction. It runs before
+      // Run the on-device XGBoost prediction. It runs before
       // any reload, because the prediction needs this run's sessions.
-      debugPrint('[PreAssessment] Calling AI Assessment API...');
+      debugPrint('[PreAssessment] Running on-device AI prediction...');
       final aiResponse =
           await assessProv.predictWithAI(childId, assessmentType: 'pre');
 
@@ -494,6 +549,8 @@ class _PreAssessmentProgressScreenState
             results: snapshot.results.isNotEmpty ? snapshot.results : _results,
             profile: profile,
             aiResponse: aiResponse,
+            childId: childId,
+            assessmentRunId: runId,
           ),
         ),
       );

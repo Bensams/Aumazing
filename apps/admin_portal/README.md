@@ -42,3 +42,51 @@ put client secrets in this repo or in dart-defines.
 
 Credentials stay in the Supabase project settings. This app only uses the
 existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` dart-defines.
+
+## Writing questionnaires
+
+Practitioners enter an ordinary questionnaire title and the wording parents
+will read. Internal questionnaire, question and answer identifiers are created
+automatically; existing identifiers are preserved when wording changes.
+
+The editor guides practitioners through details, questions, and previewing.
+Home questions use numbered cards with skill-area guidance and coverage counts.
+Questions can be duplicated, moved, or removed with an undo action. A parent
+preview is available at every screen size; its answers are never saved.
+Additional result settings are expandable within before/after-session questions.
+
+For a questionnaire already in use, select **Create a revised version**. The
+current questionnaire stays available until an administrator activates the
+revision. Saving alone does not activate a questionnaire.
+
+## Premium for parent accounts
+
+Every new account starts with a free month of Premium (30 days, once per
+account). A guest keeps the days left when they link their account.
+
+On **Accounts**, an administrator can **Grant Premium** for 30, 60 or 90 days.
+The days are added on top of any Premium the account already has. Grants work
+only for linked accounts: a guest must link first, because Premium given to a
+guest is lost with the device. **End Premium** ends Premium that was given (a
+grant or the free month); paid Premium is ended by refunding it through
+PayMongo. Both actions need a reason and are written to the audit log.
+
+## Production hosting
+
+The frontend is hosted on Vercel in the `ecnovators` team's `aumazing-portal`
+project at **https://portal.ecnovators.me/**. Supabase provides the backend.
+Deploy the compiled Flutter web output, rather than the repository source.
+### Background reuse and session check-ins
+
+The before-session editor includes **When to ask**: background can be reused on
+later assessments, while **Ask each session** starts with a fresh answer. Existing
+intake templates without a `timing` setting retain their background meaning.
+Question identity, wording and choices are checked before reuse; copied revisions
+preserve this setting. Keep session questions short. After-session game questions
+are shown only for games the adult selects for extra details, and session-only
+check-in templates are accepted.
+
+These settings are stored in existing template item JSON and need no schema
+migration. Publish the updated frontend through Vercel at
+https://portal.ecnovators.me/ after verification. The installed mobile app also
+needs rebuilding to use these settings.

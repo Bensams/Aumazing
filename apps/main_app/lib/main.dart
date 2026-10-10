@@ -12,12 +12,14 @@ import 'core/config/supabase_config.dart';
 import 'core/services/db_web_factory.dart';
 import 'core/offline_first_integration.dart';
 import 'dev/developer_tools_overlay.dart';
+import 'features/app_update/app_update_service.dart';
 import 'features/parent_lock/parent_pin_delegate.dart';
 import 'features/splash/splash_screen.dart';
 import 'providers/assessment_provider.dart';
 import 'providers/child_provider.dart';
 import 'providers/progress_provider.dart';
 import 'providers/stars_provider.dart';
+import 'features/premium/web_checkout_return.dart';
 import 'services/entitlement_service.dart';
 import 'services/parent_pin_service.dart';
 import 'services/rubric/rubric_threshold_service.dart';
@@ -78,6 +80,10 @@ Future<void> main() async {
     '(copy env/dev.example.json and fill in the values).',
   );
 
+  // Web: note how a Premium checkout ended (`?payment=`) before anything
+  // else reads the address, and tidy it out of the address bar.
+  WebCheckoutReturn.captureFromUrl();
+
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
@@ -93,6 +99,10 @@ Future<void> main() async {
   // Admin-configured rubric thresholds: cache-first with hardcoded
   // defaults, so scoring works offline; refreshed in the background.
   RubricThresholdService.instance.load();
+
+  // Sideloaded Android build: look for a newer published APK in the
+  // background. Offline or failing, it stays quiet (never blocks launch).
+  AppUpdateService.instance.check(quiet: true);
 
   // Parent lock: load the account's PIN state (and follow account changes),
   // then install the delegate so every ParentVerificationDialog call site
@@ -194,7 +204,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 builder:
                     (context, child) => DeveloperToolsOverlay.wrap(
                       context,
-                      RotateToPlayGate(child: child),
+                      RotateToPlayGate(
+                        child: WebCheckoutReturnBanner(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
+                      ),
                     ),
                 home: const AumazingSplashScreen(),
               ),
