@@ -1,5 +1,12 @@
 // Where PayMongo sends a parent after web checkout (create-checkout).
 
+// Sites hosting the web app: the GitHub Pages front page and its copy at
+// app.ecnovators.me. Overridden by the ALLOWED_RETURN_ORIGINS secret.
+export const DEFAULT_RETURN_ORIGINS = [
+  "https://bensams.github.io",
+  "https://app.ecnovators.me",
+];
+
 // The web app's return address, or null when absent or not allowed. Only
 // known origins are accepted, so the checkout cannot be used to send a parent
 // to someone else's site after paying.

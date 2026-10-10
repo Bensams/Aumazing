@@ -1,5 +1,9 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { allowedReturnUrl, withOutcome } from "../_shared/return_url.ts";
+import {
+  allowedReturnUrl,
+  DEFAULT_RETURN_ORIGINS,
+  withOutcome,
+} from "../_shared/return_url.ts";
 
 const allowed = ["https://bensams.github.io"];
 
@@ -43,4 +47,20 @@ Deno.test("allows local development servers", () => {
     "http://localhost:8095",
   );
   assertEquals(allowedReturnUrl("http://127.0.0.1:5000/", allowed)?.origin, "http://127.0.0.1:5000");
+});
+
+Deno.test("by default accepts both web app sites and nothing else", () => {
+  for (const url of [
+    "https://bensams.github.io/Aumazing-Front-Page/app/",
+    "https://app.ecnovators.me/app/",
+  ]) {
+    assertEquals(allowedReturnUrl(url, DEFAULT_RETURN_ORIGINS)?.href, url);
+  }
+  for (const url of [
+    "https://portal.ecnovators.me/",
+    "https://app.ecnovators.me.evil.example/app/",
+    "http://app.ecnovators.me/app/",
+  ]) {
+    assertEquals(allowedReturnUrl(url, DEFAULT_RETURN_ORIGINS), null);
+  }
 });

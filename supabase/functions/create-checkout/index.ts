@@ -17,10 +17,15 @@
 //   PAYMONGO_SECRET_KEY  — sk_test_... (sandbox)
 // Optional:
 //   ALLOWED_RETURN_ORIGINS — comma-separated origins the web app may return
-//     to (default: the GitHub Pages site, plus localhost for development).
+//     to (default: the GitHub Pages site and app.ecnovators.me, plus
+//     localhost for development).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { allowedReturnUrl, withOutcome } from "../_shared/return_url.ts";
+import {
+  allowedReturnUrl,
+  DEFAULT_RETURN_ORIGINS,
+  withOutcome,
+} from "../_shared/return_url.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,8 +55,6 @@ type Product = keyof typeof PRODUCTS;
 // resolve to a real page.
 const SUCCESS_URL = "https://aumazing.app/payment/success";
 const CANCEL_URL = "https://aumazing.app/payment/cancel";
-
-const DEFAULT_RETURN_ORIGINS = ["https://bensams.github.io"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
