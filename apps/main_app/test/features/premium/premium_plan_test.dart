@@ -17,8 +17,8 @@ void main() {
     PaymentSimulationConfig.debugAvailableOverride = null;
   });
 
-  PremiumPlan planWith({bool premium = true, DateTime? until}) {
-    entitlement.debugSetRealPremium(premium, until: until);
+  PremiumPlan planWith({bool premium = true, DateTime? until, String? source}) {
+    entitlement.debugSetRealPremium(premium, until: until, source: source);
     return PremiumPlan.of(entitlement, now: now);
   }
 
@@ -87,5 +87,46 @@ void main() {
   test('carries the extra child profiles bought', () {
     entitlement.debugSetExtraProfileSlots(2);
     expect(PremiumPlan.of(entitlement, now: now).extraProfiles, 2);
+  });
+
+  // AUM-357 — every new account starts with a free month, and administrators
+  // can give Premium; neither is described as paid.
+  test('the free month is named as such, not as paid Premium', () {
+    final plan = planWith(
+      until: now.add(const Duration(days: 20)),
+      source: 'free_month',
+    );
+    expect(plan.kind, PremiumPlanKind.active);
+    expect(plan.isFreeMonth, isTrue);
+    expect(plan.originLabel, 'free month');
+    expect(plan.summary, startsWith('Free month of Premium until '));
+  });
+
+  test('an ended free month says so', () {
+    final plan = planWith(
+      premium: true,
+      until: now.subtract(const Duration(days: 1)),
+      source: 'free_month',
+    );
+    expect(plan.kind, PremiumPlanKind.ended);
+    expect(plan.summary, startsWith('Free plan · free month ended '));
+  });
+
+  test('administrator-given Premium is a gift', () {
+    final plan = planWith(
+      until: now.add(const Duration(days: 40)),
+      source: 'admin_grant',
+    );
+    expect(plan.isGift, isTrue);
+    expect(plan.summary, startsWith('Premium (gift) until '));
+  });
+
+  test('paid Premium keeps its usual wording', () {
+    final plan = planWith(
+      until: now.add(const Duration(days: 10)),
+      source: 'paymongo',
+    );
+    expect(plan.originLabel, isNull);
+    expect(plan.summary, startsWith('Premium until '));
   });
 }

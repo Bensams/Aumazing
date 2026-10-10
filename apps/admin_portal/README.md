@@ -59,6 +59,18 @@ For a questionnaire already in use, select **Create a revised version**. The
 current questionnaire stays available until an administrator activates the
 revision. Saving alone does not activate a questionnaire.
 
+## Premium for parent accounts
+
+Every new account starts with a free month of Premium (30 days, once per
+account). A guest keeps the days left when they link their account.
+
+On **Accounts**, an administrator can **Grant Premium** for 30, 60 or 90 days.
+The days are added on top of any Premium the account already has. Grants work
+only for linked accounts: a guest must link first, because Premium given to a
+guest is lost with the device. **End Premium** ends Premium that was given (a
+grant or the free month); paid Premium is ended by refunding it through
+PayMongo. Both actions need a reason and are written to the audit log.
+
 ## Production hosting
 
 The frontend is hosted on Vercel in the `ecnovators` team's `aumazing-portal`
