@@ -123,6 +123,16 @@ class _SessionObservationCardState extends State<SessionObservationCard> {
               ),
             ),
           ],
+          if (observation != null && observation.sessionSummary.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'This session: ${observation.sessionSummary.join(' · ')}',
+              key: const Key('session-observation-check-in'),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
           if (sessionFlags.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             for (final flag in sessionFlags) _Flag(flag),

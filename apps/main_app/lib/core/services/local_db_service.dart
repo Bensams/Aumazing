@@ -94,6 +94,8 @@ Future<void> migrateChildrenTableToBirthDateSchema(Database db) async {
 /// The UI always reads from this local database. Sync happens
 /// separately via SyncService when connectivity allows.
 class LocalDbService {
+  /// Lets summaries refresh when a parent adds or updates home observations.
+  final caregiverQuestionnaireRevision = ValueNotifier<int>(0);
   static const _dbName = 'aumazing_offline.db';
   static const _dbVersion = 22; // v22: questionnaire assessment_run_id
 
@@ -2023,18 +2025,23 @@ class LocalDbService {
   }) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
-    await db.insert(LocalTables.caregiverQuestionnaires, {
-      'id': id,
-      'child_id': childId,
-      'assessment_run_id': assessmentRunId,
-      'questionnaire_type': questionnaireType,
-      'responses': jsonEncode(responses),
-      'completed_at': now,
-      'sync_status': SyncStatus.pending.value,
-      'updated_at': now,
-      'local_created_at': now,
-      'owner_id': ownerId,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+      LocalTables.caregiverQuestionnaires,
+      {
+        'id': id,
+        'child_id': childId,
+        'assessment_run_id': assessmentRunId,
+        'questionnaire_type': questionnaireType,
+        'responses': jsonEncode(responses),
+        'completed_at': now,
+        'sync_status': SyncStatus.pending.value,
+        'updated_at': now,
+        'local_created_at': now,
+        'owner_id': ownerId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    caregiverQuestionnaireRevision.value++;
   }
 
   /// Every stored questionnaire for [childId], newest first.

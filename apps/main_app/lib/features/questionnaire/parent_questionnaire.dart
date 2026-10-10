@@ -18,6 +18,19 @@
 /// answer can never be mistaken later for a validated instrument's.
 library;
 
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+
+/// A saved description of the item set, independent of its display order.
+/// Matching signatures allow unchanged questions in later revisions to compare.
+String questionnaireSchemaSignature(QuestionnaireTemplate template) {
+  final items = [
+    for (final item in template.items)
+      [item.id, item.domain.key, item.text.trim()],
+  ]..sort((a, b) => a.first.compareTo(b.first));
+  return sha256.convert(utf8.encode(jsonEncode(items))).toString();
+}
+
 /// The four domains the assessment reports on, with the labels the parent
 /// dashboard already uses.
 enum QuestionnaireDomain {

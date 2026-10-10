@@ -9,12 +9,14 @@
 // including how many tries each game took to reach Strength), the
 // post-assessment and any later assessment cycle. Free practice is filtered
 // out by the app before the request is built. Data minimization: only skill
-// levels, accuracy percentages, counts and game names are sent — never the
+// levels, accuracy percentages, counts, game names and bounded parent-reported
+// home frequencies with dates are sent — never the
 // child's name or any identifier.
 //
 // The app treats this as best-effort: when both providers fail it writes
 // the summary on the device instead and labels it as such.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { parentContextPrompt } from '../_shared/parent_context.ts';
 import { generateWithFallback, parseJsonObject } from '../_shared/llm.ts';
 
 const corsHeaders = {
@@ -64,7 +66,7 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const assessments: Assessment[] = Array.isArray(body.assessments)
-      ? body.assessments.slice(0, 12)
+      ? body.assessments.slice(-12)
       : [];
     const activities: Activity[] = Array.isArray(body.recommended_activities)
       ? body.recommended_activities.slice(0, 15)
@@ -139,6 +141,8 @@ Deno.serve(async (req: Request) => {
       '',
       `Recommended activities (My Path), ${recommendedPlays} plays in total:`,
       activityLines.join('\n') || '- (none yet)',
+      '',
+      parentContextPrompt(body.parent_context),
     ].join('\n');
 
     const result = await generateWithFallback(admin, prompt, {

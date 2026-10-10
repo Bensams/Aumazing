@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:shared_ui/shared_ui.dart';
 
 import '../../core/services/local_db_service.dart';
 import 'parent_questionnaire.dart';
+import 'home_observation_context.dart';
 
 /// Loads every stored questionnaire row for a child. Injectable for tests.
 typedef QuestionnaireLoader =
@@ -13,17 +12,18 @@ typedef QuestionnaireLoader =
 /// "What you noticed at home" — the parent's own before/after answers, shown
 /// on the post-assessment results next to the change the games measured.
 ///
-/// Uses the most recent pre and post questionnaire for the child. Shows
-/// nothing unless both exist: half a comparison is not a comparison, and a
-/// parent who skipped either questionnaire should not see an empty card.
+/// Compares compatible questions within the post run's assessment cycle.
+/// A skipped questionnaire never borrows an answer from an older cycle.
 class ParentQuestionnaireComparisonCard extends StatefulWidget {
   const ParentQuestionnaireComparisonCard({
     super.key,
     required this.childId,
+    this.assessmentRunId,
     this.loader,
   });
 
   final String childId;
+  final String? assessmentRunId;
   final QuestionnaireLoader? loader;
 
   @override
@@ -46,42 +46,48 @@ class _ParentQuestionnaireComparisonCardState
     try {
       final rows = await (widget.loader ??
           localDbService.getCaregiverQuestionnaires)(widget.childId);
-      final pre = _latestScores(rows, 'pre');
-      final post = _latestScores(rows, 'post');
+      List<HomeObservation> reports;
+      if (widget.assessmentRunId != null) {
+        final runs = await localDbService.getAssessmentRuns(
+          childId: widget.childId,
+        );
+        reports =
+            HomeObservationContext.fromRows(
+              rows: rows,
+              runs: [
+                for (final r in runs)
+                  if (r.isCompleted)
+                    (
+                      id: r.id,
+                      type: r.type,
+                      completedAt: r.completedAt ?? r.startedAt,
+                    ),
+              ],
+              childId: widget.childId,
+              currentRunId: widget.assessmentRunId,
+            ).observations;
+      } else {
+        reports = [
+          for (final r in rows)
+            if (HomeObservation.fromRow(r) case final HomeObservation report)
+              report,
+        ]..sort((a, b) => a.completedAt.compareTo(b.completedAt));
+      }
+      final before = reports.where((r) => r.type == 'pre').lastOrNull;
+      final after = reports.where((r) => r.type == 'post').lastOrNull;
+      final compatible =
+          before != null &&
+          after != null &&
+          before.completedAt.isBefore(after.completedAt) &&
+          after.comparableTo(before);
       if (!mounted) return;
       setState(() {
-        _pre = pre;
-        _post = post;
+        _pre = compatible ? before.scores : null;
+        _post = compatible ? after.scores : null;
       });
     } catch (e) {
       debugPrint('[QuestionnaireComparison] load failed: $e');
     }
-  }
-
-  /// Domain scores of the newest row of [type], or null when there is none.
-  static Map<String, double?>? _latestScores(
-    List<Map<String, dynamic>> rows,
-    String type,
-  ) {
-    final ofType =
-        rows.where((r) => r['questionnaire_type'] == type).toList()..sort(
-          (a, b) => '${b['completed_at']}'.compareTo('${a['completed_at']}'),
-        );
-    for (final row in ofType) {
-      try {
-        final decoded = jsonDecode(row['responses'] as String? ?? '{}');
-        final scores = decoded is Map ? decoded['domain_scores'] : null;
-        if (scores is Map) {
-          return {
-            for (final d in QuestionnaireDomain.values)
-              d.key: (scores[d.key] as num?)?.toDouble(),
-          };
-        }
-      } catch (_) {
-        // A malformed row is skipped; an older valid one may still serve.
-      }
-    }
-    return null;
   }
 
   @override

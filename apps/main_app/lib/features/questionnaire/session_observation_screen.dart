@@ -22,8 +22,8 @@ const kAssessmentGameIds = [
 
 /// "What did you see?" (AUM-351): once the adult has taken the device back
 /// after the last game, and before any result is on screen, they answer the
-/// practitioner-authored observation questions (AUM-352) — the per-game ones
-/// for each game the child played, then the session ones.
+/// practitioner-authored session check-in (AUM-352), with additional questions
+/// only for played games the adult selects for extra details.
 ///
 /// Optional: **Skip for now** continues without saving anything.
 class SessionObservationScreen extends StatefulWidget {
@@ -65,6 +65,7 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
     for (final id in widget.gameIds) id: <String, Object?>{},
   };
   final Map<String, Object?> _session = {};
+  final Set<String> _detailGames = {};
   ObserverRole? _role;
   bool _saving = false;
   bool _done = false;
@@ -77,7 +78,7 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
   bool get _sessionComplete =>
       _template.isComplete(_session, QuestionScope.session);
 
-  bool get _complete => widget.gameIds.every(_gameComplete) && _sessionComplete;
+  bool get _complete => _detailGames.every(_gameComplete) && _sessionComplete;
 
   @override
   void initState() {
@@ -91,8 +92,7 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
       final rows = await (widget.loader ??
           localDbService.getCaregiverQuestionnaires)(widget.childId);
       for (final row in rows) {
-        if (row['questionnaire_type'] !=
-                intakeTypeFor(widget.assessmentType) ||
+        if (row['questionnaire_type'] != intakeTypeFor(widget.assessmentType) ||
             row['assessment_run_id'] != widget.assessmentRunId) {
           continue;
         }
@@ -118,9 +118,7 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
     final record = ObservationRecord.answer(
       _template,
       role: _role,
-      games: {
-        for (final entry in _games.entries) entry.key: _clean(entry.value),
-      },
+      games: {for (final id in _detailGames) id: _clean(_games[id]!)},
       session: _clean(_session),
     );
     try {
@@ -170,9 +168,9 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
     final template = _template;
     final sessionQuestions = template.questionsFor(QuestionScope.session);
     final answered =
-        widget.gameIds.where(_gameComplete).length +
+        _detailGames.where(_gameComplete).length +
         (sessionQuestions.isNotEmpty && _sessionComplete ? 1 : 0);
-    final total = widget.gameIds.length + (sessionQuestions.isEmpty ? 0 : 1);
+    final total = _detailGames.length + (sessionQuestions.isEmpty ? 0 : 1);
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -195,6 +193,14 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
+                    const Text(
+                      'Optional — tell us about the session your child just finished. '
+                      'These are new observations for this session, kept apart from background. '
+                      'You can skip and still see game results and summaries. '
+                      'This check-in does not change scores.',
+                      key: Key('observation.optionalNote'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     if (template.intro.isNotEmpty)
                       Text(
                         template.intro,
@@ -212,7 +218,60 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
                         ),
                       ),
                     ],
-                    for (final id in widget.gameIds) ...[
+                    if (sessionQuestions.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      AppCard(
+                        key: const Key('observation.session'),
+                        padding: AppSpacing.paddingMd,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final q in sessionQuestions)
+                              TemplateQuestionField(
+                                keyPrefix: 'observation.session',
+                                question: q,
+                                value: _session[q.id],
+                                onChanged:
+                                    (v) => setState(() => _session[q.id] = v),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (template.questionsFor(QuestionScope.game).isNotEmpty &&
+                        widget.gameIds.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const Text(
+                        'Did a game need extra explanation? (optional)',
+                        key: Key('observation.detailsNote'),
+                      ),
+                      const Text(
+                        'Choose a game only if you noticed difficulty, gave help, or want to add details.',
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final id in widget.gameIds)
+                            FilterChip(
+                              key: Key('observation.details.$id'),
+                              label: Text(AssessmentResultMapper.gameName(id)),
+                              selected: _detailGames.contains(id),
+                              onSelected:
+                                  (selected) => setState(() {
+                                    if (selected) {
+                                      _detailGames.add(id);
+                                    } else {
+                                      _detailGames.remove(id);
+                                      _games[id]!.clear();
+                                    }
+                                  }),
+                            ),
+                        ],
+                      ),
+                    ],
+                    for (final id in widget.gameIds.where(
+                      _detailGames.contains,
+                    )) ...[
                       const SizedBox(height: AppSpacing.md),
                       AppCard(
                         key: Key('observation.game.$id'),
@@ -251,27 +310,8 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
                                 question: q,
                                 value: _games[id]![q.id],
                                 onChanged:
-                                    (v) => setState(() => _games[id]![q.id] = v),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (sessionQuestions.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      AppCard(
-                        key: const Key('observation.session'),
-                        padding: AppSpacing.paddingMd,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final q in sessionQuestions)
-                              TemplateQuestionField(
-                                keyPrefix: 'observation.session',
-                                question: q,
-                                value: _session[q.id],
-                                onChanged:
-                                    (v) => setState(() => _session[q.id] = v),
+                                    (v) =>
+                                        setState(() => _games[id]![q.id] = v),
                               ),
                           ],
                         ),

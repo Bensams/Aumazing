@@ -56,9 +56,11 @@ class ObservationChoiceRow<T> extends StatelessWidget {
                       key: Key('$keyPrefix.${id(v)}'),
                       label: Text(label(v)),
                       selected: on,
-                      selectedColor: AppColors.primaryPurple,
+                      selectedColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.textSecondary),
                       labelStyle: AppTextStyles.bodySmall.copyWith(
                         color: on ? AppColors.white : AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                       onSelected: (_) => onSelected(v),
                     );

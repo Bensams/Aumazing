@@ -13,6 +13,7 @@ import 'package:aumazing/providers/assessment_provider.dart';
 import 'package:aumazing/providers/child_provider.dart';
 import 'package:aumazing/services/assessment_service.dart';
 import 'package:aumazing/widgets/resume_assessment_dialog.dart';
+import 'package:aumazing/features/questionnaire/observer_intake_screen.dart';
 
 /// The post-assessment entry point must ask about an interrupted run *before*
 /// starting a new one — starting one closes the run worth offering (AUM-154).
@@ -29,20 +30,23 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  Widget app(AssessmentProvider provider) => MultiProvider(
-    providers: [
-      ChangeNotifierProvider<ChildProvider>(create: (_) => _TestChildProvider()),
-      ChangeNotifierProvider<AssessmentProvider>.value(value: provider),
-    ],
-    child: MaterialApp(
-      theme: AppTheme.light,
-      // The familiarisation step has its own tests; these are about resume.
-      home: const PostAssessmentProgressScreen(
-        showLearnFirst: false,
-        showObserverIntake: false,
-      ),
-    ),
-  );
+  Widget app(AssessmentProvider provider, {bool observerIntake = false}) =>
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ChildProvider>(
+            create: (_) => _TestChildProvider(),
+          ),
+          ChangeNotifierProvider<AssessmentProvider>.value(value: provider),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          // The familiarisation step has its own tests; these are about resume.
+          home: PostAssessmentProgressScreen(
+            showLearnFirst: false,
+            showObserverIntake: observerIntake,
+          ),
+        ),
+      );
 
   testWidgets('an interrupted run is offered back to the parent', (
     tester,
@@ -79,6 +83,20 @@ void main() {
     expect(find.text('Post-Assessment — Game 3 of 4'), findsOneWidget);
     expect(find.text('My Turn, Your Turn'), findsOneWidget);
   });
+
+  testWidgets(
+    'resuming an unfinished post-assessment skips the optional intake',
+    (tester) async {
+      final provider = _ScriptedAssessmentProvider(resumable: _openRun());
+      await tester.pumpWidget(app(provider, observerIntake: true));
+      await pumpFrames(tester);
+      await tester.tap(find.text(ResumeAssessmentDialog.continueLabel));
+      await pumpFrames(tester);
+      expect(find.byType(ObserverIntakeScreen), findsNothing);
+      expect(find.text('Play!'), findsOneWidget);
+      expect(provider.startAttempts, 0);
+    },
+  );
 
   testWidgets('Start over begins a clean run from the first activity', (
     tester,

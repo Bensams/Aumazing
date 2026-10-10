@@ -847,10 +847,14 @@ class SyncService {
           );
         }
 
-        pulled += await _hydrateTable(
+        final homeReportsPulled = await _hydrateTable(
           LocalTables.caregiverQuestionnaires, 'child_id', childIds,
           _mapQuestionnaireToLocal,
         );
+        pulled += homeReportsPulled;
+        if (homeReportsPulled > 0) {
+          _localDb.caregiverQuestionnaireRevision.value++;
+        }
         pulled += await _hydrateExpandedTable(
           LocalTables.assessmentResults, 'child_id', childIds,
           (r) => _expandAssessmentResultToLocal(r, runTypeById),

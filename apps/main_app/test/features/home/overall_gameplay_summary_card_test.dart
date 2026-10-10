@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:aumazing/core/services/local_db_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_ui/shared_ui.dart';
 
@@ -12,6 +14,7 @@ class _FakeService extends OverallGameplaySummaryService {
 
   final OverallGameplaySummary? result;
   int forcedRefreshes = 0;
+  int inputLoads = 0;
 
   static const input = GameplaySummaryInput(
     assessments: [],
@@ -42,7 +45,10 @@ class _FakeService extends OverallGameplaySummaryService {
     required String childId,
     List<String> pathGameIds = const [],
     Map<String, PathAttemptRecord> pathAttempts = const {},
-  }) async => input;
+  }) async {
+    inputLoads++;
+    return input;
+  }
 
   @override
   Future<OverallGameplaySummary?> summarize({
@@ -56,12 +62,38 @@ class _FakeService extends OverallGameplaySummaryService {
   }
 }
 
-Widget _host(OverallGameplaySummaryService service) => MaterialApp(
+class _DelayedService extends _FakeService {
+  _DelayedService() : super(null);
+  final first = Completer<GameplaySummaryInput>();
+  final second = Completer<GameplaySummaryInput>();
+  final summarizedChildren = <String>[];
+  @override
+  Future<GameplaySummaryInput> buildInput({
+    required String childId,
+    List<String> pathGameIds = const [],
+    Map<String, PathAttemptRecord> pathAttempts = const {},
+  }) => childId == 'child-1' ? first.future : second.future;
+  @override
+  Future<OverallGameplaySummary?> summarize({
+    required String childId,
+    required GameplaySummaryInput input,
+    String languageCode = 'en',
+    bool forceRefresh = false,
+  }) async {
+    summarizedChildren.add(childId);
+    return null;
+  }
+}
+
+Widget _host(
+  OverallGameplaySummaryService service, {
+  String childId = 'child-1',
+}) => MaterialApp(
   theme: AppTheme.light,
   home: Scaffold(
     body: SingleChildScrollView(
       child: OverallGameplaySummaryCard(
-        childId: 'child-1',
+        childId: childId,
         pathGameIds: const ['trace_it', 'hintay'],
         pathAttempts: const {},
         refreshToken: 0,
@@ -72,6 +104,32 @@ Widget _host(OverallGameplaySummaryService service) => MaterialApp(
 );
 
 void main() {
+  testWidgets('a saved home report refreshes an already visible card', (
+    tester,
+  ) async {
+    final service = _FakeService(null);
+    await tester.pumpWidget(_host(service));
+    await tester.pumpAndSettle();
+    expect(service.inputLoads, 1);
+    localDbService.caregiverQuestionnaireRevision.value++;
+    await tester.pumpAndSettle();
+    expect(service.inputLoads, 2);
+  });
+
+  testWidgets(
+    'switching children cannot cache an old child input for the new child',
+    (tester) async {
+      final service = _DelayedService();
+      await tester.pumpWidget(_host(service));
+      await tester.pumpWidget(_host(service, childId: 'child-2'));
+      service.first.complete(_FakeService.input);
+      await tester.pump();
+      expect(service.summarizedChildren, isEmpty);
+      service.second.complete(_FakeService.input);
+      await tester.pumpAndSettle();
+      expect(service.summarizedChildren, ['child-2']);
+    },
+  );
   testWidgets('a Gemini summary is labelled as AI and lists the questions', (
     tester,
   ) async {
