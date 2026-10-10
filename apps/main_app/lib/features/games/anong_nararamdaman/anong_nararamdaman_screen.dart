@@ -341,7 +341,14 @@ class _AnongNararamdamanScreenState extends State<AnongNararamdamanScreen>
                   .activePalette
                   .gameBackgroundFor('anong_nararamdaman'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Anong Nararamdaman play area',
+              child: GameWidget(
+                key: const Key('game.canvas.anong_nararamdaman'),
+                game: _game,
+              ),
+            ),
           ),
 
           // Three-star sparkle overlay when a round is completed

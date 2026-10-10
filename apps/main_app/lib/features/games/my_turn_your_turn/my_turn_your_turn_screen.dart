@@ -131,10 +131,11 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
       onPlayCelebrationVo: () => _voiceOverService.playRewardCelebration(),
       // Game-specific voice-overs
       onPlayMyTurnVo:
-          () => _myTurnCue = _voiceOverService.play(
-            VoiceOverCue.myTurn,
-            awaitCompletion: true,
-          ),
+          () =>
+              _myTurnCue = _voiceOverService.play(
+                VoiceOverCue.myTurn,
+                awaitCompletion: true,
+              ),
       onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.yourTurn),
       onPlayWaitVo: () async {
         // Let "My turn!" finish before "Wait" speaks, and skip the debounce:
@@ -383,7 +384,14 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
                     .activePalette
                     .gameBackgroundFor('my_turn_your_turn'),
               ),
-              child: GameWidget(game: _game),
+              child: Semantics(
+                container: true,
+                label: 'My Turn, Your Turn play area',
+                child: GameWidget(
+                  key: const Key('game.canvas.my_turn_your_turn'),
+                  game: _game,
+                ),
+              ),
             ),
           ),
 

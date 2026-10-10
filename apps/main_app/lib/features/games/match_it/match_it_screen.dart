@@ -346,7 +346,14 @@ class _MatchItScreenState extends State<MatchItScreen>
                     .activePalette
                     .gameBackgroundFor('match_it'),
               ),
-              child: GameWidget(game: _game),
+              child: Semantics(
+                container: true,
+                label: 'Match It play area',
+                child: GameWidget(
+                  key: const Key('game.canvas.match_it'),
+                  game: _game,
+                ),
+              ),
             ),
           ),
 

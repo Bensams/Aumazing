@@ -265,7 +265,14 @@ class _TulongKaibiganScreenState extends State<TulongKaibiganScreen>
                   .activePalette
                   .gameBackgroundFor('tulong_kaibigan'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Tulong Kaibigan play area',
+              child: GameWidget(
+                key: const Key('game.canvas.tulong_kaibigan'),
+                game: _game,
+              ),
+            ),
           ),
           ChildModeTopBar(
             totalSteps: _totalRounds,

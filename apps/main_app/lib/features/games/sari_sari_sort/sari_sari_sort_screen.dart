@@ -329,7 +329,14 @@ class _SariSariSortScreenState extends State<SariSariSortScreen>
                     .activePalette
                     .gameBackgroundFor('sari_sari_sort'),
               ),
-              child: GameWidget(game: _game),
+              child: Semantics(
+                container: true,
+                label: 'Sari-Sari Sort play area',
+                child: GameWidget(
+                  key: const Key('game.canvas.sari_sari_sort'),
+                  game: _game,
+                ),
+              ),
             ),
           ),
 

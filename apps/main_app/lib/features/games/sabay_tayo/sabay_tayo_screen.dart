@@ -310,7 +310,14 @@ class _SabayTayoScreenState extends State<SabayTayoScreen>
                   .activePalette
                   .gameBackgroundFor('sabay_tayo'),
             ),
-            child: GameWidget(game: _game),
+            child: Semantics(
+              container: true,
+              label: 'Sabay Tayo play area',
+              child: GameWidget(
+                key: const Key('game.canvas.sabay_tayo'),
+                game: _game,
+              ),
+            ),
           ),
 
           // Three-star sparkle overlay when a round is completed
