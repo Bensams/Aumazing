@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../../shared/fingertip_drag.dart';
+import '../../shared/font_aware_text.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../sari_sari_sort_game.dart' show StoreCategory;
 import '../seed_art_cache.dart';
@@ -75,7 +76,8 @@ class StoreItemData {
 /// game decides whether the drop was correct via [onDropped]; this component
 /// only handles movement, lift/return animations, and the locked (sorted)
 /// state.
-class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag {
+class DraggableItem extends PositionComponent
+    with DragCallbacks, FingertipDrag, FontAwareText {
   DraggableItem({
     required this.data,
     required this.color,
@@ -154,8 +156,7 @@ class DraggableItem extends PositionComponent with DragCallbacks, FingertipDrag 
   static const double _cornerRadius = 22.0;
 
   @override
-  Future<void> onLoad() async {
-    await super.onLoad();
+  void buildTextPaints() {
     _emojiPaint = TextPaint(
       style: TextStyle(fontSize: size.y * 0.42),
     );

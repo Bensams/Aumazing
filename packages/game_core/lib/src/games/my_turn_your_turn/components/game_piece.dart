@@ -7,6 +7,7 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart' show TextStyle;
 
 import '../../shared/fingertip_drag.dart';
+import '../../shared/font_aware_text.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// A round token that lives in a side tray — either a buddy piece (left) or the
@@ -16,7 +17,7 @@ import '../../shared/shape_painter_3d.dart';
 /// pieces are interactive during the child's turn: tap to select, or drag onto
 /// a slot to place.
 class GamePiece extends PositionComponent
-    with TapCallbacks, DragCallbacks, FingertipDrag {
+    with TapCallbacks, DragCallbacks, FingertipDrag, FontAwareText {
   GamePiece({
     required this.emoji,
     required this.color,
@@ -70,6 +71,10 @@ class GamePiece extends PositionComponent
   Future<void> onLoad() async {
     await super.onLoad();
     _homePosition = position.clone();
+  }
+
+  @override
+  void buildTextPaints() {
     _emojiPaint = TextPaint(style: TextStyle(fontSize: size.y * 0.5));
   }
 

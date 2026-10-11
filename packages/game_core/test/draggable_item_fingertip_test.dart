@@ -10,6 +10,8 @@ import 'package:game_core/src/games/sari_sari_sort/sari_sari_sort_game.dart';
 /// A dragged item must end up centred on the child's fingertip, so the point
 /// they aim at is the point that gets hit-tested against the baskets.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const item = StoreItemData(
     name: 'Gatas',
     en: 'Milk',

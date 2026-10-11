@@ -6,6 +6,7 @@ import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/painting.dart' show TextStyle;
 
 import '../../config/game_motion.dart';
+import 'font_aware_text.dart';
 
 /// An animated "ghost hand" (👆) that demonstrates the required gesture.
 ///
@@ -17,7 +18,7 @@ import '../../config/game_motion.dart';
 /// The component removes itself when the demo finishes. Under
 /// [GameMotion.reduced] the drag demo degrades to a stationary pulse at the
 /// target so no large motion is shown.
-class GhostHand extends PositionComponent {
+class GhostHand extends PositionComponent with FontAwareText {
   GhostHand.drag({
     required Vector2 from,
     required Vector2 to,
@@ -49,11 +50,15 @@ class GhostHand extends PositionComponent {
   late TextPaint _handPaint;
 
   @override
-  Future<void> onLoad() async {
-    await super.onLoad();
+  void buildTextPaints() {
     _handPaint = TextPaint(
       style: TextStyle(fontSize: size.y * 0.72),
     );
+  }
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
 
     if (_tapOnly || GameMotion.reduced) {
       // Stationary demo: sit on the target and pulse twice.

@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import '../../../config/game_motion.dart';
+import '../../shared/font_aware_text.dart';
 import '../../shared/shape_painter_3d.dart';
 import '../sari_sari_sort_game.dart' show StoreCategory;
 
@@ -14,7 +15,7 @@ import '../sari_sari_sort_game.dart' show StoreCategory;
 /// Renders a labelled, colored basket. The owning game hit-tests dropped items
 /// against [containsPoint]. Supports a pulsing hint highlight (same visual
 /// language as the other Aumazing games) for idle / wrong-answer guidance.
-class CategoryBin extends PositionComponent {
+class CategoryBin extends PositionComponent with FontAwareText {
   CategoryBin({
     required this.category,
     required this.label,
@@ -64,8 +65,7 @@ class CategoryBin extends PositionComponent {
   static const double _pictureFraction = 0.36;
 
   @override
-  Future<void> onLoad() async {
-    await super.onLoad();
+  void buildTextPaints() {
     _emojiPaint = TextPaint(
       style: TextStyle(fontSize: size.y * 0.46),
     );

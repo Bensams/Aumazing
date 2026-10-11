@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 import 'package:shared_ui/shared_ui.dart' show GameLanguage;
 
 import '../../../config/game_motion.dart';
+import '../../shared/font_aware_text.dart';
 import '../../shared/shape_painter_3d.dart';
 
 /// One of the things the buddy can look at.
@@ -60,7 +61,7 @@ class AttentionObjectData {
 /// distractors are the ones given idle motion, not the target. A child who taps
 /// the liveliest thing on screen is not sharing attention, and the game has to
 /// be able to tell the difference.
-class AttentionObject extends PositionComponent {
+class AttentionObject extends PositionComponent with FontAwareText {
   AttentionObject({
     required this.data,
     required this.language,
@@ -108,8 +109,7 @@ class AttentionObject extends PositionComponent {
   static const double tapTolerance = 0.20;
 
   @override
-  Future<void> onLoad() async {
-    await super.onLoad();
+  void buildTextPaints() {
     _emojiPaint = TextPaint(style: TextStyle(fontSize: size.y * 0.42));
     _labelPaint = TextPaint(
       style: TextStyle(

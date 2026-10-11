@@ -6,13 +6,14 @@ import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/painting.dart' show TextStyle;
 
 import '../../../config/game_motion.dart';
+import '../../shared/font_aware_text.dart';
 
 /// A "ghost finger" (👆) that travels along a stroke path to demonstrate
 /// how to trace it. Removes itself when the demo finishes.
 ///
 /// Under [GameMotion.reduced] it degrades to a stationary pulse at the
 /// stroke's start point so no large motion is shown.
-class TraceGuideDot extends PositionComponent {
+class TraceGuideDot extends PositionComponent with FontAwareText {
   TraceGuideDot({
     required List<Vector2> path,
     double handSize = 64,
@@ -35,9 +36,13 @@ class TraceGuideDot extends PositionComponent {
   bool _travelling = true;
 
   @override
+  void buildTextPaints() {
+    _handPaint = TextPaint(style: TextStyle(fontSize: size.y * 0.72));
+  }
+
+  @override
   Future<void> onLoad() async {
     await super.onLoad();
-    _handPaint = TextPaint(style: TextStyle(fontSize: size.y * 0.72));
 
     if (GameMotion.reduced || _path.length < 2) {
       // Stationary demo: pulse twice at the start point, then disappear.
