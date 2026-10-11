@@ -6,7 +6,6 @@ import '../../model/assessment_result.dart';
 import '../../model/support_profile.dart';
 import '../../widgets/assessment_handoff.dart';
 import '../../widgets/milestone_victory_scene.dart';
-import '../questionnaire/home_questionnaire_flow.dart';
 import '../questionnaire/questionnaire_template_repository.dart';
 import '../questionnaire/session_observation_screen.dart';
 import 'game_summary_dialog.dart';
@@ -40,9 +39,10 @@ class WaitingForParentScreen extends StatelessWidget {
   final String? childId;
   final String? assessmentRunId;
 
-  /// Whether the adult's questions — what they saw (AUM-351), then the
-  /// parent questionnaire — come between verification and the results. On
-  /// in the app; tests about the hand-off itself turn it off.
+  /// Whether the adult's "What did you see?" questions (AUM-351) come
+  /// between verification and the results. On in the app; tests about the
+  /// hand-off itself turn it off. The home questionnaire is not asked here:
+  /// it comes once, at child profile setup (AUM-364).
   final bool showQuestionnaire;
 
   final List<AssessmentResult> results;
@@ -65,9 +65,8 @@ class WaitingForParentScreen extends StatelessWidget {
     );
   }
 
-  /// The parent has the device: what they saw while the child played, then
-  /// their questionnaire — both before any result is on screen — then the
-  /// summary.
+  /// The parent has the device: what they saw while the child played —
+  /// before any result is on screen — then the summary.
   Future<void> _afterVerification(BuildContext context) async {
     final childId = this.childId;
     if (!showQuestionnaire || childId == null) {
@@ -91,21 +90,13 @@ class WaitingForParentScreen extends StatelessWidget {
               childId: childId,
               assessmentRunId: assessmentRunId,
               gameIds: played,
-              onDone: (next) => _showQuestionnaire(next, childId),
+              // The home questionnaire was asked when the profile was set
+              // up (AUM-364), so the summary follows straight away.
+              onDone: _showSummary,
             ),
       ),
     );
   }
-
-  Future<void> _showQuestionnaire(BuildContext context, String childId) =>
-      HomeQuestionnaireFlow.show(
-        context,
-        assessmentType: 'pre',
-        childId: childId,
-        assessmentRunId: assessmentRunId,
-        onDone: _showSummary,
-        repository: templateRepository,
-      );
 
   void _showSummary(BuildContext context) {
     Navigator.of(context).pushReplacement(

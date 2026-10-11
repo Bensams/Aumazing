@@ -552,7 +552,7 @@ class _TemplateEditorPageState extends State<TemplateEditorPage> {
                 ),
                 items: [
                   for (final s in AssessmentScope.values)
-                    DropdownMenuItem(value: s, child: Text(s.label)),
+                    DropdownMenuItem(value: s, child: Text(s.labelFor(_kind))),
                 ],
                 onChanged: (s) => setState(() => _scope = s ?? _scope),
               ),

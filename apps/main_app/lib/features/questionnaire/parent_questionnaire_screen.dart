@@ -16,12 +16,15 @@ typedef QuestionnaireSaver =
       required Map<String, dynamic> responses,
     });
 
-/// The parent questionnaire, shown once the parent has taken the device back
-/// after the child's last assessment game — before any result is on screen,
-/// so what the parent reports is not coloured by what the games found.
+/// The parent questionnaire about home life. It is asked twice per child
+/// (AUM-364): once when the profile is set up ([atSetup], the "before"), and
+/// after a post-assessment, once the parent has taken the device back and
+/// before any result is on screen, so what the parent reports is not coloured
+/// by what the games found.
 ///
-/// Optional: **Skip for now** continues without saving anything. Answers are
-/// saved to the local database and sync like every other record.
+/// Optional: **Skip for now** (just **Skip** at setup) continues without
+/// saving anything. Answers are saved to the local database and sync like
+/// every other record.
 class ParentQuestionnaireScreen extends StatefulWidget {
   const ParentQuestionnaireScreen({
     super.key,
@@ -31,6 +34,7 @@ class ParentQuestionnaireScreen extends StatefulWidget {
     required this.onDone,
     this.template = kParentQuestionnaireDraft,
     this.saver,
+    this.atSetup = false,
   });
 
   /// `pre` or `post`; stored as the questionnaire type.
@@ -43,6 +47,9 @@ class ParentQuestionnaireScreen extends StatefulWidget {
 
   final QuestionnaireTemplate template;
   final QuestionnaireSaver? saver;
+
+  /// Asked right after the child's profile is set up, with no assessment yet.
+  final bool atSetup;
 
   @override
   State<ParentQuestionnaireScreen> createState() =>
@@ -135,7 +142,8 @@ class _ParentQuestionnaireScreenState extends State<ParentQuestionnaireScreen> {
             TextButton(
               key: const Key('questionnaire.skip'),
               onPressed: _saving ? null : _finish,
-              child: const Text('Skip for now'),
+              // At setup it is asked only once, so it is not "for now".
+              child: Text(widget.atSetup ? 'Skip' : 'Skip for now'),
             ),
           ],
         ),
@@ -146,13 +154,20 @@ class _ParentQuestionnaireScreenState extends State<ParentQuestionnaireScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
-                    const Text(
-                      'Optional — your answers help add home observations to '
-                      'the summary. You can skip and still see game results and summaries. '
-                      'We ask at the initial assessment and planned follow-ups after a '
-                      'learning path, rather than after each game. Answer about home '
-                      'life over the last two weeks, not just today’s session.',
-                      key: Key('questionnaire.optionalNote'),
+                    Text(
+                      widget.atSetup
+                          ? 'Optional — tell us how your child does at home. '
+                              'We ask once now, and again after a follow-up '
+                              'assessment so you can compare. You can skip and '
+                              'still use every game and summary. Answer about '
+                              'the last two weeks.'
+                          : 'Optional — your answers add home observations to '
+                              'the summary, beside the ones you gave when you '
+                              'set up your child’s profile. You can skip and '
+                              'still see game results and summaries. Answer '
+                              'about home life over the last two weeks, not '
+                              'just today’s session.',
+                      key: const Key('questionnaire.optionalNote'),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(

@@ -1,3 +1,4 @@
+import 'package:aumazing/features/questionnaire/parent_questionnaire_screen.dart';
 import 'package:aumazing/features/splash/auth/child_profile_setup_screen.dart';
 import 'package:aumazing/model/child_profile.dart';
 import 'package:aumazing/providers/child_provider.dart';
@@ -343,6 +344,9 @@ void main() {
         expect(audio.config.musicVolume, .12);
         expect(audio.playing, isFalse);
         expect(children.saved?.musicEnabled, musicEnabled);
+        // The home questionnaire comes once, right after setup (AUM-364).
+        expect(find.byType(ParentQuestionnaireScreen), findsOneWidget);
+        await tapVisible(find.byKey(const Key('questionnaire.skip')));
         expect(find.text('Add child'), findsOneWidget);
         expect(find.byType(ChildProfileSetupScreen), findsNothing);
       },

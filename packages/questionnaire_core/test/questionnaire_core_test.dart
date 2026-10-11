@@ -187,4 +187,34 @@ void main() {
       );
     });
   });
+
+  group('scope labels', () {
+    test('the home questionnaire\'s "pre" is asked at child setup', () {
+      expect(
+        [for (final s in AssessmentScope.values) s.labelFor(TemplateKind.home)],
+        [
+          'Child setup only',
+          'Post-assessment only',
+          'Child setup and post-assessment',
+        ],
+      );
+      expect(
+        AssessmentScope.pre.inUseFor(TemplateKind.home),
+        'In use at child setup',
+      );
+    });
+
+    test('the session question sets keep the assessment wording', () {
+      for (final kind in [TemplateKind.intake, TemplateKind.observation]) {
+        for (final s in AssessmentScope.values) {
+          expect(s.labelFor(kind), s.label);
+        }
+        expect(AssessmentScope.pre.inUseFor(kind), 'In use for pre-assessment');
+      }
+      expect(
+        AssessmentScope.post.inUseFor(TemplateKind.home),
+        'In use for post-assessment',
+      );
+    });
+  });
 }

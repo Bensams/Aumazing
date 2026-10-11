@@ -9,18 +9,25 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
-    'home reports are due at initial and planned follow-up assessments, not ordinary play',
+    'home reports are due only at post-assessments, not the pre-assessment or ordinary play',
     () {
-      for (final type in ['pre', 'post']) {
-        expect(
-          HomeQuestionnaireFlow.shouldCollect(
-            assessmentType: type,
-            assessmentRunId: 'new',
-            rows: const [],
-          ),
-          isTrue,
-        );
-      }
+      expect(
+        HomeQuestionnaireFlow.shouldCollect(
+          assessmentType: 'post',
+          assessmentRunId: 'new',
+          rows: const [],
+        ),
+        isTrue,
+      );
+      // The "before" is asked at child setup instead (AUM-364).
+      expect(
+        HomeQuestionnaireFlow.shouldCollect(
+          assessmentType: 'pre',
+          assessmentRunId: 'new',
+          rows: const [],
+        ),
+        isFalse,
+      );
       expect(
         HomeQuestionnaireFlow.shouldCollect(
           assessmentType: 'follow_up',
@@ -31,7 +38,7 @@ void main() {
       );
       expect(
         HomeQuestionnaireFlow.shouldCollect(
-          assessmentType: 'pre',
+          assessmentType: 'post',
           assessmentRunId: null,
           rows: const [],
         ),
@@ -44,14 +51,14 @@ void main() {
     () {
       final rows = [
         {
-          'questionnaire_type': 'pre',
+          'questionnaire_type': 'post',
           'assessment_run_id': 'old',
           'responses': {'template_version': 1},
         },
       ];
       expect(
         HomeQuestionnaireFlow.shouldCollect(
-          assessmentType: 'pre',
+          assessmentType: 'post',
           assessmentRunId: 'old',
           rows: rows,
         ),
@@ -81,13 +88,13 @@ void main() {
                   onPressed:
                       () => HomeQuestionnaireFlow.show(
                         context,
-                        assessmentType: 'pre',
+                        assessmentType: 'post',
                         childId: 'child',
                         assessmentRunId: 'run',
                         loader:
                             (_) async => [
                               {
-                                'questionnaire_type': 'pre',
+                                'questionnaire_type': 'post',
                                 'assessment_run_id': 'run',
                                 'responses': {'template_version': 1},
                               },

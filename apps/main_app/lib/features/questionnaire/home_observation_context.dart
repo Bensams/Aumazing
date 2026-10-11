@@ -86,9 +86,24 @@ class HomeObservation {
       return null;
     }
   }
+
+  /// The same report counted in assessment [cycle].
+  HomeObservation inCycle(int? cycle) => HomeObservation(
+    runId: runId,
+    type: type,
+    completedAt: completedAt,
+    templateId: templateId,
+    version: version,
+    status: status,
+    scores: scores,
+    schemaSignature: schemaSignature,
+    cycle: cycle,
+  );
 }
 
-/// Only reports attached to the completed assessments being summarized.
+/// Reports attached to the completed assessments being summarized, plus the
+/// report given when the child's profile was set up (AUM-364), which stands as
+/// the "before" for the pre-assessment and for a later post-assessment.
 /// Child/run identifiers and question wording never enter the provider payload.
 class HomeObservationContext {
   const HomeObservationContext([this.observations = const []]);
@@ -132,14 +147,65 @@ class HomeObservationContext {
         chosen[runId] = observation;
       }
     }
-    final records =
-        chosen.values.toList()
-          ..sort((a, b) => a.completedAt.compareTo(b.completedAt));
-    // A skipped current questionnaire must not borrow a report from a prior run.
-    if (currentRunId != null && !chosen.containsKey(currentRunId)) {
-      return const HomeObservationContext();
+    final setup = _setupReport(rows, childId);
+    final records = chosen.values.toList();
+
+    if (currentRunId != null) {
+      // The pre-assessment no longer asks; it reads the setup report. An
+      // older pre-assessment that has its own report keeps using it.
+      if (current?.$1 == 'pre' && !chosen.containsKey(currentRunId)) {
+        return setup == null
+            ? const HomeObservationContext()
+            : HomeObservationContext([setup.inCycle(current!.$2)]);
+      }
+      // A skipped post questionnaire must not borrow a report from elsewhere.
+      if (!chosen.containsKey(currentRunId)) {
+        return const HomeObservationContext();
+      }
     }
+
+    // A post report with no pre report of its own cycle is compared with the
+    // setup report, when the parent gave that one first.
+    var setupUsed = false;
+    if (setup != null) {
+      for (final post in [...records.where((r) => r.type == 'post')]) {
+        final hasPre = records.any(
+          (r) => r.type == 'pre' && r.cycle == post.cycle,
+        );
+        if (!hasPre && setup.completedAt.isBefore(post.completedAt)) {
+          records.add(setup.inCycle(post.cycle));
+          setupUsed = true;
+        }
+      }
+      // Across all assessments, the setup report is context even before any
+      // post-assessment compares with it.
+      if (currentRunId == null && !setupUsed) {
+        records.add(setup);
+      }
+    }
+    records.sort((a, b) => a.completedAt.compareTo(b.completedAt));
     return HomeObservationContext(records);
+  }
+
+  /// The newest report given outside any assessment run: when the profile was
+  /// set up, or later from the dashboard.
+  static HomeObservation? _setupReport(
+    List<Map<String, dynamic>> rows,
+    String? childId,
+  ) {
+    HomeObservation? latest;
+    for (final row in rows) {
+      if (childId != null && row['child_id'] != childId) continue;
+      if ('${row['assessment_run_id'] ?? ''}'.isNotEmpty) continue;
+      if (row['questionnaire_type'] != 'pre') continue;
+      final observation = HomeObservation.fromRow(row);
+      if (observation == null) continue;
+      if (latest == null ||
+          observation.completedAt.isAfter(latest.completedAt)) {
+        latest = observation;
+      }
+    }
+    return latest;
   }
 
   Map<String, dynamic> toPayload() {
