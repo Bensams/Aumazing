@@ -99,6 +99,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
+          # Tag the commit this APK was built from. Without it the tag lands on
+          # the default branch's head, and its pubspec no longer matches the APK.
+          target_commitish: ${{ github.sha }}
           name: Aumazing ${{ steps.meta.outputs.tag }}
           draft: ${{ inputs.draft }}
           # The first paragraph is shown to parents in the in-app update
