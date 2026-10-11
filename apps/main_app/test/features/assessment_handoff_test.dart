@@ -13,6 +13,9 @@ import 'package:aumazing/features/post_assessment/post_assessment_result_screen.
 import 'package:aumazing/features/pre_assessment/game_summary_dialog.dart';
 import 'package:aumazing/features/pre_assessment/pre_assessment_result_screen.dart';
 import 'package:aumazing/features/pre_assessment/waiting_for_parent_screen.dart';
+import 'package:aumazing/features/questionnaire/parent_questionnaire_screen.dart';
+import 'package:aumazing/features/questionnaire/questionnaire_template_repository.dart';
+import 'package:aumazing/features/questionnaire/session_observation_screen.dart';
 import 'package:aumazing/model/assessment_run_snapshot.dart';
 import 'package:aumazing/model/assessment_result.dart';
 import 'package:aumazing/model/child_profile.dart';
@@ -397,6 +400,34 @@ void main() {
       final dialog =
           tester.widget<GameSummaryDialog>(find.byType(GameSummaryDialog));
       expect(dialog.results, same(results));
+    });
+
+    testWidgets(
+        '"What did you see?" leads straight to the summary, with no home '
+        'questionnaire', (tester) async {
+      ParentVerificationDialog.pinDelegate = _AlwaysCorrectPin();
+      narrator = _RecordingVoiceOver();
+      await tester.pumpWidget(host(WaitingForParentScreen(
+        results: results,
+        profile: profile,
+        childId: 'child-1',
+        assessmentRunId: 'pre-run',
+        templateRepository: QuestionnaireTemplateRepository(
+          fetcher: (_) async => [],
+          choiceFetcher: (_, __) async => [],
+        ),
+        voiceOverFactory: (_) => narrator,
+      )));
+      await reachHandoff(tester);
+      await verifyAsParent(tester);
+
+      expect(find.byType(SessionObservationScreen), findsOneWidget);
+      await tester.tap(find.byKey(const Key('observation.skip')));
+      await tester.pumpAndSettle();
+
+      // The home questionnaire is asked at child setup instead (AUM-364).
+      expect(find.byType(ParentQuestionnaireScreen), findsNothing);
+      expect(find.byType(GameSummaryDialog), findsOneWidget);
     });
   });
 

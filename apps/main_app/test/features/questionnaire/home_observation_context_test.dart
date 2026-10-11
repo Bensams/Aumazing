@@ -77,6 +77,71 @@ void main() {
       }
     },
   );
+  group('the report given at child setup (AUM-364)', () {
+    Map<String, dynamic> setupRow(String date, {String child = 'child1'}) => {
+      ...row('', 'pre', date, child: child),
+      'assessment_run_id': null,
+    };
+    final setup = setupRow('2025-12-20');
+
+    test('is the pre-assessment\'s home context', () {
+      final home = context([setup], run: 'pre1');
+      expect(home.observations, hasLength(1));
+      expect(home.observations.single.type, 'pre');
+      expect(home.observations.single.cycle, 1);
+      // A later cycle's pre-assessment reads it too.
+      expect(context([setup], run: 'pre2').observations.single.cycle, 2);
+    });
+
+    test('is the "before" a post-assessment report compares with', () {
+      final home = context([setup, post]);
+      expect(home.observations.map((o) => o.type), ['pre', 'post']);
+      final records = home.toPayload()['observations'] as List;
+      expect(records.last['comparable_to_pre'], true);
+      expect(records.map((r) => r['cycle']), [1, 1]);
+    });
+
+    test('a skipped post questionnaire does not show it alone', () {
+      expect(context([setup]).isEmpty, isTrue);
+    });
+
+    test('a report given after the post-assessment is not its before', () {
+      final home = context([setupRow('2026-02-15'), post]);
+      expect(home.observations.map((o) => o.type), ['post']);
+      expect(
+        (home.toPayload()['observations'] as List).single['comparable_to_pre'],
+        false,
+      );
+    });
+
+    test('an older pre-assessment keeps its own report', () {
+      final later = setupRow('2026-01-15');
+      expect(
+        context([pre, later], run: 'pre1').observations.single.runId,
+        'pre1',
+      );
+      final home = context([pre, later, post]);
+      expect(home.observations.map((o) => o.runId), ['pre1', 'post1']);
+    });
+
+    test('only this child\'s newest setup report is used', () {
+      expect(
+        context([setupRow('2025-12-20', child: 'other')], run: 'pre1').isEmpty,
+        isTrue,
+      );
+      final newest = setupRow('2025-12-28');
+      expect(
+        context([setup, newest], run: 'pre1').observations.single.completedAt,
+        DateTime(2025, 12, 28),
+      );
+    });
+
+    test('is context across all assessments, once', () {
+      expect(context([setup], run: null).observations, hasLength(1));
+      final home = context([setup, post], run: null);
+      expect(home.observations.map((o) => o.type), ['pre', 'post']);
+    });
+  });
   test('changed legacy revisions do not compare', () {
     final payload =
         context([

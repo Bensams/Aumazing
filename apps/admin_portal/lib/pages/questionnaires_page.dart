@@ -214,9 +214,9 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
             replaced.contains(AssessmentScope.post))) {
       use = 'Not in use — replaced below';
     } else if (replaced.contains(AssessmentScope.pre)) {
-      use = 'In use for post-assessment';
+      use = AssessmentScope.post.inUseFor(kind);
     } else if (replaced.contains(AssessmentScope.post)) {
-      use = 'In use for pre-assessment';
+      use = AssessmentScope.pre.inUseFor(kind);
     } else {
       use = 'In use';
     }
@@ -231,7 +231,7 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
         title: Text('${builtIn['title']}  ·  built into the app'),
         subtitle: Text(
           [
-            AssessmentScope.both.label,
+            AssessmentScope.both.labelFor(kind),
             '${(builtIn['items'] as List).length} questions',
             use,
             'Not yet expert-validated',
@@ -250,8 +250,9 @@ class _QuestionnairesPageState extends State<QuestionnairesPage> {
   Widget _row(Map<String, dynamic> t) {
     final active = t['is_active'] == true;
     final validated = t['status'] == 'validated';
+    final kind = TemplateKind.fromKey(t['kind']) ?? TemplateKind.home;
     final scope =
-        AssessmentScope.fromKey(t['questionnaire_type'])?.label ??
+        AssessmentScope.fromKey(t['questionnaire_type'])?.labelFor(kind) ??
         '${t['questionnaire_type']}';
     final items = t['items'] is List ? (t['items'] as List).length : 0;
     final updated = DateTime.tryParse('${t['updated_at']}');

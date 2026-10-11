@@ -14,6 +14,7 @@ import '../../../model/child_profile.dart';
 import '../../../providers/child_provider.dart';
 import '../../../services/screen_time_service.dart';
 import '../../home/home_screen.dart';
+import '../../questionnaire/setup_home_questionnaire.dart';
 import '../../rewards/widgets/reward_preference_selector.dart';
 import '../../settings/widgets/background_picker.dart';
 import 'widgets/sound_preferences_step.dart';
@@ -430,6 +431,14 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
 
       if (widget.isAdditionalChild) {
         await _restoreActiveAudioState();
+        if (!mounted) return;
+        // The home questionnaire is asked once per child, now, rather than at
+        // every pre-assessment (AUM-364).
+        await SetupHomeQuestionnaire.show(
+          context,
+          childId: profile.id,
+          onDone: (questionnaire) => Navigator.of(questionnaire).pop(),
+        );
         if (mounted) Navigator.of(context).pop(profile);
         return;
       }
@@ -441,16 +450,23 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           '[ChildProfileSetupScreen] Before navigation: isMusicPlaying=${audioService.isMusicPlaying}',
         );
 
-        // Use PageRouteBuilder for smoother transition that won't interrupt audio
-        Navigator.of(context).pushAndRemoveUntil(
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const HomeScreen(),
-            transitionsBuilder:
-                (_, animation, __, child) =>
-                    FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
-          (_) => false,
+        // The home questionnaire comes once, between setup and the dashboard
+        // (AUM-364). Fade routes throughout so the music is not interrupted.
+        await SetupHomeQuestionnaire.show(
+          context,
+          childId: profile.id,
+          replaceAll: true,
+          onDone:
+              (questionnaire) => Navigator.of(questionnaire).pushAndRemoveUntil(
+                PageRouteBuilder(
+                  pageBuilder: (_, __, ___) => const HomeScreen(),
+                  transitionsBuilder:
+                      (_, animation, __, child) =>
+                          FadeTransition(opacity: animation, child: child),
+                  transitionDuration: const Duration(milliseconds: 400),
+                ),
+                (_) => false,
+              ),
         );
       }
     } catch (e) {
