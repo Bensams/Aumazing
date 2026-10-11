@@ -179,6 +179,18 @@ void main() {
             .onPressed !=
         null;
 
+    /// Start is never greyed out: tapped too early, it saves nothing and
+    /// outlines what is still missing.
+    Future<void> expectStartHeld(
+      WidgetTester tester,
+      List<Object?> saved,
+    ) async {
+      await tapKey(tester, 'intake.start');
+      await tester.pumpAndSettle();
+      expect(saved, isEmpty);
+      expect(find.text('Answer this to start the games.'), findsWidgets);
+    }
+
     testWidgets('tells the adult to watch and not to interrupt', (
       tester,
     ) async {
@@ -191,10 +203,22 @@ void main() {
       tester,
     ) async {
       final (saved, popped) = await open(tester);
-      expect(startEnabled(tester), isFalse);
+      expect(find.text('Choose who is watching to start.'), findsOneWidget);
+
+      // Start stays tappable; too early, it points at what is missing.
+      expect(startEnabled(tester), isTrue);
+      await tapKey(tester, 'intake.start');
+      await tester.pumpAndSettle();
+      expect(saved, isEmpty);
+      expect(popped, isEmpty);
+      expect(find.text('Answer this to start the games.'), findsOneWidget);
 
       await tapKey(tester, 'intake.role.teacher');
-      expect(startEnabled(tester), isTrue);
+      expect(find.text('Answer this to start the games.'), findsNothing);
+      expect(
+        find.textContaining('Watching: SPED teacher · 0 of 3 answered'),
+        findsOneWidget,
+      );
       await tapKey(tester, 'intake.diagnosis.evaluating');
       await tapKey(tester, 'intake.school.kinder');
       await tapKey(tester, 'intake.therapies.speech');
@@ -244,7 +268,7 @@ void main() {
             ),
           ],
         );
-        expect(startEnabled(tester), isFalse);
+        await expectStartHeld(tester, saved);
         expect(find.byKey(const Key('intake.school.grade_1')), findsNothing);
         await tapKey(tester, 'intake.reuse');
         await tapKey(tester, 'intake.role.parent');
@@ -339,7 +363,7 @@ void main() {
         );
         await tapKey(tester, 'intake.reuse');
         await tapKey(tester, 'intake.role.parent');
-        expect(startEnabled(tester), isFalse);
+        await expectStartHeld(tester, saved);
         expect(find.text('Good'), findsNothing);
         await tester.enterText(find.byKey(const Key('intake.sleep')), 'Tired');
         await tester.pump();
@@ -380,7 +404,7 @@ void main() {
 
       await tapKey(tester, 'intake.role.parent');
       // A required practitioner question holds the start.
-      expect(startEnabled(tester), isFalse);
+      await expectStartHeld(tester, saved);
       await tapKey(tester, 'intake.language.fil');
       await tapKey(tester, 'intake.start');
       await tester.pumpAndSettle();
