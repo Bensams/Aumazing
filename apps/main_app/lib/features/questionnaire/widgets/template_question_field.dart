@@ -40,6 +40,10 @@ class _TemplateQuestionFieldState extends State<TemplateQuestionField> {
 
   TemplateQuestion get _q => widget.question;
 
+  /// "Choose one" or "Choose any", unless the question already says so.
+  String? _hint(String text) =>
+      _q.text.toLowerCase().contains('choose') ? null : text;
+
   void _toggle(ChoiceOption o) {
     final current = [
       if (widget.value is List)
@@ -87,6 +91,8 @@ class _TemplateQuestionFieldState extends State<TemplateQuestionField> {
           values: _q.options,
           label: (o) => o.label,
           id: (o) => o.id,
+          hint: _hint('Choose one'),
+          isQuiet: (o) => o.quiet,
           isSelected: (o) => widget.value == o.id,
           // Tapping the chosen answer again clears an optional question.
           onSelected:
@@ -101,8 +107,11 @@ class _TemplateQuestionFieldState extends State<TemplateQuestionField> {
           values: _q.options,
           label: (o) => o.label,
           id: (o) => o.id,
+          hint: _hint('Choose any'),
+          isQuiet: (o) => o.quiet,
           isSelected:
-              (o) => widget.value is List && (widget.value as List).contains(o.id),
+              (o) =>
+                  widget.value is List && (widget.value as List).contains(o.id),
           onSelected: _toggle,
         );
     }
