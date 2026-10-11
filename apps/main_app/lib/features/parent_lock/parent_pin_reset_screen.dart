@@ -176,7 +176,7 @@ class _ParentPinResetScreenState extends State<ParentPinResetScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Your new parent PIN is saved.'),
-        backgroundColor: AppColors.mint,
+        backgroundColor: AppColors.statusSuccessDark,
       ),
     );
     Navigator.of(context).pop(true);

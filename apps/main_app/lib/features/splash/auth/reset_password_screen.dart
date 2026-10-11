@@ -182,7 +182,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.mint,
+        backgroundColor: AppColors.statusSuccessDark,
       ),
     );
   }

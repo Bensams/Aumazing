@@ -2589,7 +2589,7 @@ class _ParentLockSettingsScreenState extends State<_ParentLockSettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Parent PIN saved.'),
-        backgroundColor: AppColors.mint,
+        backgroundColor: AppColors.statusSuccessDark,
       ),
     );
   }

@@ -209,7 +209,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(successMessage),
-          backgroundColor: AppColors.mint,
+          backgroundColor: AppColors.statusSuccessDark,
         ),
       );
     }

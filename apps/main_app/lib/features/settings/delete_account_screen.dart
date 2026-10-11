@@ -125,7 +125,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                   'device until it is reinstalled.'
               : 'Your account and its data have been deleted.',
         ),
-        backgroundColor: AppColors.mint,
+        backgroundColor: AppColors.statusSuccessDark,
       ),
     );
   }
