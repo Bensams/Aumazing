@@ -12,7 +12,7 @@ abstract final class AppTheme {
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryPurple,
+        primary: AppColors.primaryPurpleDark,
         onPrimary: AppColors.white,
         secondary: AppColors.secondaryMint,
         onSecondary: AppColors.foreground,
@@ -72,7 +72,7 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.button,
-          borderSide: const BorderSide(color: AppColors.primaryPurple, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.primaryPurpleDark, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadius.button,
@@ -92,7 +92,7 @@ abstract final class AppTheme {
       // ── Elevated buttons ─────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryPurple,
+          backgroundColor: AppColors.primaryPurpleDark,
           foregroundColor: AppColors.white,
           disabledBackgroundColor: AppColors.lavender,
           disabledForegroundColor: AppColors.white.withAlpha(180),
@@ -117,9 +117,9 @@ abstract final class AppTheme {
       // ── Text buttons ─────────────────────────────────────────────────
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryPurple,
+          foregroundColor: AppColors.primaryPurpleDark,
           textStyle: AppTextStyles.labelLarge.copyWith(
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
             fontWeight: FontWeight.w600,
           ),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.button),
@@ -166,9 +166,9 @@ abstract final class AppTheme {
       // ── Bottom navigation ────────────────────────────────────────────
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.white,
-        selectedItemColor: AppColors.primaryPurple,
+        selectedItemColor: AppColors.primaryPurpleDark,
         unselectedItemColor: AppColors.mutedForeground,
-        selectedLabelStyle: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryPurple),
+        selectedLabelStyle: AppTextStyles.labelSmall.copyWith(color: AppColors.primaryPurpleDark),
         unselectedLabelStyle: AppTextStyles.labelSmall,
         type: BottomNavigationBarType.fixed,
         elevation: 0,

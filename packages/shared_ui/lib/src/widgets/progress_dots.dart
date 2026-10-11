@@ -34,7 +34,7 @@ class ProgressDots extends StatelessWidget {
             height: dotSize,
             decoration: BoxDecoration(
               color: isActive
-                  ? (activeColor ?? AppColors.primaryPurple)
+                  ? (activeColor ?? AppColors.primaryPurpleDark)
                   : (inactiveColor ?? AppColors.muted),
               borderRadius: BorderRadius.circular(dotSize / 2),
             ),

@@ -178,7 +178,7 @@ class _ParentQuestionnaireScreenState extends State<ParentQuestionnaireScreen> {
                       Text(
                         domain.label,
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       for (final item in _template.itemsFor(domain))
@@ -263,7 +263,8 @@ class _ItemCard extends StatelessWidget {
                     key: Key('questionnaire.answer.${item.id}.${f.name}'),
                     label: Text(f.label),
                     selected: answer == f,
-                    selectedColor: AppColors.primaryPurple,
+                    selectedColor: AppColors.primaryPurpleDark,
+                    checkmarkColor: AppColors.white,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
                       color:
                           answer == f ? AppColors.white : AppColors.textPrimary,

@@ -593,7 +593,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           ? 'Log in screen'
                                           : 'Sign up screen',
                                   style: AppTextStyles.headlineLarge.copyWith(
-                                    color: AppColors.primaryPurple,
+                                    color: AppColors.primaryPurpleDark,
                                     fontSize: 22,
                                   ),
                                 ),
@@ -710,7 +710,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   child: Text(
                                     'Forgot Password?',
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.primaryPurple,
+                                      color: AppColors.primaryPurpleDark,
                                     ),
                                   ),
                                 ),
@@ -803,7 +803,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                   foregroundColor:
                                       _isOffline
-                                          ? AppColors.primaryPurple
+                                          ? AppColors.primaryPurpleDark
                                           : AppColors.mutedForeground,
                                   // Offline, guest is the recommended path —
                                   // give it primary-button weight.
@@ -817,7 +817,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   side: BorderSide(
                                     color:
                                         _isOffline
-                                            ? AppColors.primaryPurple
+                                            ? AppColors.primaryPurpleDark
                                             : AppColors.border,
                                     width: _isOffline ? 1.5 : 1,
                                   ),
@@ -832,7 +832,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       size: 18,
                                       color:
                                           _hasExistingGuestAccount || _isOffline
-                                              ? AppColors.primaryPurple
+                                              ? AppColors.primaryPurpleDark
                                               : AppColors.mutedForeground,
                                     ),
                                     const SizedBox(width: 8),
@@ -847,7 +847,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         color:
                                             _hasExistingGuestAccount ||
                                                     _isOffline
-                                                ? AppColors.primaryPurple
+                                                ? AppColors.primaryPurpleDark
                                                 : null,
                                       ),
                                     ),
@@ -900,7 +900,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             ? 'Register a new account'
                                             : 'Go to log in',
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.primaryPurple,
+                                      color: AppColors.primaryPurpleDark,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -913,7 +913,7 @@ class _LoginScreenState extends State<LoginScreen>
                               icon: const Icon(Icons.auto_awesome, size: 16),
                               label: const Text('Credits'),
                               style: TextButton.styleFrom(
-                                foregroundColor: AppColors.primaryPurple,
+                                foregroundColor: AppColors.primaryPurpleDark,
                                 visualDensity: VisualDensity.compact,
                               ),
                             ),
@@ -946,7 +946,7 @@ class _LoginScreenState extends State<LoginScreen>
                       : 'Turn background music on',
               child: Icon(
                 _musicOn ? Icons.music_note : Icons.music_off,
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
               ),
             ),
           ),
@@ -968,7 +968,7 @@ class _LoginScreenState extends State<LoginScreen>
             height: 28,
             child: Checkbox(
               value: _privacyAccepted,
-              activeColor: AppColors.primaryPurple,
+              activeColor: AppColors.primaryPurpleDark,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged:
                   _isLoading
@@ -990,7 +990,7 @@ class _LoginScreenState extends State<LoginScreen>
                     TextSpan(
                       text: 'Data Privacy Notice',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         fontWeight: FontWeight.w700,
                         decoration: TextDecoration.underline,
                       ),
@@ -1026,7 +1026,7 @@ class _LoginScreenState extends State<LoginScreen>
               children: [
                 const Icon(
                   Icons.privacy_tip_outlined,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -1110,7 +1110,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: Text(
                   'I Agree',
                   style: AppTextStyles.labelLarge.copyWith(
-                    color: AppColors.primaryPurple,
+                    color: AppColors.primaryPurpleDark,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1145,7 +1145,7 @@ class _LoginScreenState extends State<LoginScreen>
                   Text(
                     '•  ',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                   ),
                   Expanded(
@@ -1201,7 +1201,7 @@ class _LoginScreenState extends State<LoginScreen>
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
             width: 1.5,
           ),
         ),

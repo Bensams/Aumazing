@@ -110,7 +110,7 @@ class PreAssessmentIntroScreen extends StatelessWidget {
         Text(
           'Let\'s Get to Know You!',
           style: AppTextStyles.headlineLarge.copyWith(
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
           ),
           textAlign: TextAlign.center,
         ),
@@ -296,7 +296,7 @@ class _DisclaimerDialog {
               children: [
                 const Icon(
                   Icons.privacy_tip_rounded,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -332,7 +332,7 @@ class _DisclaimerDialog {
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryPurple,
+                  backgroundColor: AppColors.primaryPurpleDark,
                 ),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text('I understand'),

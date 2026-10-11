@@ -56,7 +56,7 @@ class _ResearchConsentContentState extends State<_ResearchConsentContent> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
-          const Icon(Icons.science_rounded, color: AppColors.primaryPurple),
+          const Icon(Icons.science_rounded, color: AppColors.primaryPurpleDark),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -124,7 +124,7 @@ class _ResearchConsentContentState extends State<_ResearchConsentContent> {
       actions: [
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primaryPurple,
+            backgroundColor: AppColors.primaryPurpleDark,
           ),
           onPressed: _saving ? null : _save,
           child: Text(_saving ? 'Saving…' : 'Save my choices'),

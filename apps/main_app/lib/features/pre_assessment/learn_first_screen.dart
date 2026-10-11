@@ -371,9 +371,9 @@ class _LearnFirstScreenState extends State<LearnFirstScreen> {
               shape: BoxShape.circle,
               color:
                   p.index <= _page.index
-                      ? AppColors.primaryPurple
+                      ? AppColors.primaryPurpleDark
                       : AppColors.white,
-              border: Border.all(color: AppColors.primaryPurple),
+              border: Border.all(color: AppColors.primaryPurpleDark),
             ),
           ),
         const SizedBox(width: AppSpacing.sm),
@@ -477,7 +477,7 @@ class _LearnFirstScreenState extends State<LearnFirstScreen> {
                             : AppColors.white,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                       width: 3,
                     ),
                   ),
@@ -493,7 +493,7 @@ class _LearnFirstScreenState extends State<LearnFirstScreen> {
                           : const Icon(
                             Icons.move_to_inbox_rounded,
                             size: 48,
-                            color: AppColors.primaryPurple,
+                            color: AppColors.primaryPurpleDark,
                           ),
                 );
               },
@@ -549,7 +549,7 @@ class _WordTileState extends State<_WordTile> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: AppShadows.card,
               border: Border.all(
-                color: widget.heard ? AppColors.primaryPurple : AppColors.white,
+                color: widget.heard ? AppColors.primaryPurpleDark : AppColors.white,
                 width: 3,
               ),
             ),
@@ -634,7 +634,11 @@ class _NextButton extends StatelessWidget {
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
           backgroundColor:
-              highlight ? AppColors.primaryPurple : AppColors.lavender,
+              highlight ? AppColors.primaryPurpleDark : AppColors.lavender,
+          // White on lavender is only 1.6:1, so the resting button uses
+          // dark text instead.
+          foregroundColor:
+              highlight ? AppColors.white : AppColors.textPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
         ),
         onPressed: onPressed,

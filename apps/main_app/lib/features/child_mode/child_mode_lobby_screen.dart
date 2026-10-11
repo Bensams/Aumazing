@@ -1718,7 +1718,7 @@ class _CategoryButton extends StatelessWidget {
                       ),
                       child: Icon(
                         icon,
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         size: 38,
                       ),
                     ),
@@ -1857,7 +1857,7 @@ class _BreakSoonNoticeState extends State<_BreakSoonNotice> {
                     const Icon(
                       Icons.bedtime_rounded,
                       size: 20,
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -1983,7 +1983,7 @@ class _GameCard extends StatelessWidget {
                                 asset: entry.logoAsset,
                                 size: 104,
                                 fallbackIcon: entry.icon,
-                                fallbackColor: AppColors.primaryPurple,
+                                fallbackColor: AppColors.primaryPurpleDark,
                                 semanticLabel: entry.name,
                               ),
                             ),

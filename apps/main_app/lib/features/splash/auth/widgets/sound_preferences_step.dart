@@ -410,7 +410,8 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
                   ChoiceChip(
                     label: Text(language.label),
                     selected: _value.language == language,
-                    selectedColor: AppColors.primaryPurple,
+                    selectedColor: AppColors.primaryPurpleDark,
+                    checkmarkColor: AppColors.white,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
                       color:
                           _value.language == language
@@ -548,7 +549,8 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
       children: [
         ChoiceChip(
           selected: selected,
-          selectedColor: AppColors.primaryPurple,
+          selectedColor: AppColors.primaryPurpleDark,
+          checkmarkColor: AppColors.white,
           label: Text(pack.label, semanticsLabel: spokenName),
           labelStyle: AppTextStyles.bodySmall.copyWith(
             color: selected ? AppColors.white : AppColors.textPrimary,
@@ -560,7 +562,7 @@ class _SoundPreferencesStepState extends State<SoundPreferencesStep> {
         IconButton(
           onPressed: () => _playVoicePreview(pack),
           icon: const Icon(Icons.volume_up_rounded, size: 22),
-          color: AppColors.primaryPurple,
+          color: AppColors.primaryPurpleDark,
           tooltip: 'Hear $spokenName',
           constraints: const BoxConstraints(
             minWidth: kMinInteractiveDimension,
@@ -749,7 +751,7 @@ class _MusicTrackRow extends StatelessWidget {
                         size: 18,
                         color:
                             selected
-                                ? AppColors.primaryPurple
+                                ? AppColors.primaryPurpleDark
                                 : AppColors.textSecondary,
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -759,7 +761,7 @@ class _MusicTrackRow extends StatelessWidget {
                           style: AppTextStyles.bodySmall.copyWith(
                             color:
                                 selected || playing
-                                    ? AppColors.primaryPurple
+                                    ? AppColors.primaryPurpleDark
                                     : AppColors.textPrimary,
                             fontWeight:
                                 selected || playing
@@ -780,7 +782,7 @@ class _MusicTrackRow extends StatelessWidget {
                 playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
                 size: 20,
               ),
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
               tooltip: onPreview == null ? 'Music is muted' : 'Preview $title',
               constraints: const BoxConstraints(
                 minWidth: kMinInteractiveDimension,
@@ -833,7 +835,7 @@ class _MusicStyleOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
-                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
+                  selected ? AppColors.primaryPurpleDark : AppColors.lavenderLight,
               width: selected ? 2 : 1,
             ),
           ),
@@ -876,7 +878,7 @@ class _MusicStyleOption extends StatelessWidget {
                 const Icon(
                   Icons.check_circle_rounded,
                   size: 20,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
               // Separate hit target: expanding to audition the tracks must not
               // change which style the child gets.
@@ -936,7 +938,7 @@ class _CustomMixOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
-                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
+                  selected ? AppColors.primaryPurpleDark : AppColors.lavenderLight,
               width: selected ? 2 : 1,
             ),
           ),
@@ -970,7 +972,7 @@ class _CustomMixOption extends StatelessWidget {
                 const Icon(
                   Icons.check_circle_rounded,
                   size: 20,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
               Icon(
                 expanded
@@ -1064,7 +1066,7 @@ class _ToggleRow extends StatelessWidget {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeTrackColor: AppColors.primaryPurple,
+          activeTrackColor: AppColors.primaryPurpleDark,
         ),
       ],
     );
@@ -1097,7 +1099,7 @@ class _SliderRow extends StatelessWidget {
             value: value,
             onChanged: onChanged,
             onChangeEnd: onChangeEnd,
-            activeColor: AppColors.primaryPurple,
+            activeColor: AppColors.primaryPurpleDark,
             inactiveColor: AppColors.lavenderLight,
           ),
         ),

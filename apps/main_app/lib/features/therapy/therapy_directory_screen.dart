@@ -559,7 +559,7 @@ class _CenterCard extends StatelessWidget {
             ),
             child: const Icon(
               Icons.local_hospital_rounded,
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
