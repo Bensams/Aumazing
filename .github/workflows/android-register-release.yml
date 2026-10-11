@@ -1,0 +1,148 @@
+name: Android Register Release
+
+# Adds a published APK release to public.app_releases, so installed copies
+# offer it as an in-app update without anyone running SQL by hand.
+#
+# Runs when a release is published on GitHub. Android Publish Release also
+# calls it when that workflow publishes directly, because a release published
+# with the workflow's own token raises no release event. Run it by hand with a
+# tag to retry a registration that failed.
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      APP_RELEASE_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to register, e.g. v1.6.1-run12'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      # Public values: the app ships with both. The release token is what
+      # authorises the write, and register_app_release() checks it.
+      SUPABASE_URL: https://lzvvjlcfoyczikaszrbp.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_LmDmXen9C_J8G_SDMi-LCA_sD23uwZv
+    steps:
+      - name: Read the release
+        id: release
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,body,assets > release.json
+          if [ "$(jq -r .isDraft release.json)" = "true" ]; then
+            echo "::error::$TAG is still a draft. Publish it first; its download link does not work until then."
+            exit 1
+          fi
+          if [ "$(jq -r .isPrerelease release.json)" = "true" ]; then
+            echo "::notice::$TAG is a pre-release, so it is not offered to installed copies."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! jq -e '.assets[] | select(.name == "aumazing.apk")' release.json > /dev/null; then
+            echo "::notice::$TAG has no aumazing.apk, so there is nothing to offer."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.skip == 'false'
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: apps/main_app/pubspec.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Read the version the APK was built with
+        if: steps.release.outputs.skip == 'false'
+        id: version
+        run: |
+          VERSION=$(grep '^version:' apps/main_app/pubspec.yaml | sed 's/version: //' | tr -d '\r')
+          NAME="${VERSION%%+*}"
+          CODE="${VERSION##*+}"
+          case "$TAG" in
+            "v$NAME-"*) ;;
+            *) echo "::error::Tag $TAG does not match pubspec version $VERSION."; exit 1 ;;
+          esac
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
+      # Hash the file as published, so the row always matches what phones
+      # will download.
+      - name: Checksum the published APK
+        if: steps.release.outputs.skip == 'false'
+        id: apk
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern aumazing.apk --dir apk
+          echo "sha256=$(sha256sum apk/aumazing.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/aumazing.apk" >> "$GITHUB_OUTPUT"
+
+      # The update dialog shows plain text, so parents get the release's
+      # opening paragraph with Markdown emphasis removed.
+      - name: Take the parent-facing notes
+        if: steps.release.outputs.skip == 'false'
+        run: |
+          jq -r '.body // ""' release.json | tr -d '\r' \
+            | awk '!found && /^#/ { next } NF { found = 1; print; next } found { exit }' \
+            | sed -e 's/\*\*//g' -e 's/`//g' | tr '\n' ' ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//' > notes.txt
+          if grep -q '^Replace this paragraph' notes.txt; then
+            echo "::error::The release still has the placeholder parent notes. Edit the release's first paragraph, then re-run this workflow with tag $TAG."
+            exit 1
+          fi
+          echo "Parent notes: $(cat notes.txt)"
+
+      - name: Add the in-app update row
+        if: steps.release.outputs.skip == 'false'
+        env:
+          APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          DOWNLOAD_URL: ${{ steps.apk.outputs.url }}
+          SHA256: ${{ steps.apk.outputs.sha256 }}
+        run: |
+          if [ -z "$APP_RELEASE_TOKEN" ]; then
+            echo "::error::Repository secret APP_RELEASE_TOKEN is not set."
+            exit 1
+          fi
+          jq -n \
+            --arg token "$APP_RELEASE_TOKEN" \
+            --arg name "$VERSION_NAME" \
+            --argjson code "$VERSION_CODE" \
+            --arg url "$DOWNLOAD_URL" \
+            --arg sha "$SHA256" \
+            --rawfile notes notes.txt \
+            '{p_token: $token, p_version_name: $name, p_version_code: $code,
+              p_download_url: $url, p_sha256: $sha, p_release_notes: $notes}' > payload.json
+          STATUS=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/register_app_release" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Content-Type: application/json" \
+            --data @payload.json)
+          rm -f payload.json
+          cat response.json; echo
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Registration failed (HTTP $STATUS): $(jq -r '.message // .' response.json)"
+            exit 1
+          fi
+          {
+            echo "## In-app update"
+            echo
+            echo "$VERSION_NAME ($VERSION_CODE): $(jq -r .status response.json)."
+            echo "Installed copies on an older version now offer this update."
+            echo
+            echo "To withdraw it, set \`is_published = false\` on its \`public.app_releases\` row."
+          } >> "$GITHUB_STEP_SUMMARY"

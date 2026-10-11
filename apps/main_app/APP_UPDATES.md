@@ -32,13 +32,33 @@ The web app does not use this. It updates through its service worker.
 ## Publishing a release
 
 1. Bump `version:` in `pubspec.yaml`. The `+N` versionCode must go up.
-2. Run the **Android Publish Release** workflow, then publish the release on
-   GitHub.
-3. The workflow's job summary prints an `INSERT INTO public.app_releases …`
-   statement with the download link and checksum already filled in. Add short
-   parent-facing `release_notes`, then run it in the Supabase SQL editor.
+2. Run the **Android Publish Release** workflow. It creates a draft release
+   by default.
+3. Write the draft's first paragraph for parents in one or two plain
+   sentences. That paragraph is what the update dialog shows.
+4. Install the draft's APK on a test phone, then publish the release.
 
-To withdraw a release, set `is_published = false` on its row.
+Publishing runs **Android Register Release**, which checksums the published
+APK and adds its `public.app_releases` row. Installed copies then offer the
+update on their next launch. It refuses a release that still has the
+placeholder parent notes; fix the notes and re-run it with the tag from the
+Actions tab.
+
+Forced updates stay manual: set `min_supported_code` on the row in the
+Supabase SQL editor only when older builds must update. To withdraw a
+release, set `is_published = false` on its row.
+
+### How the workflow is allowed to write
+
+The workflow calls `register_app_release()` through the public API with the
+`APP_RELEASE_TOKEN` repository secret. The database stores only that token's
+SHA-256 in `app_release_publishers`, and the function can do nothing but add
+a release row that links to this repository's releases. It refuses a second,
+different APK under a version code that is already registered.
+
+To rotate the token, generate a new one, save it as the `APP_RELEASE_TOKEN`
+secret, insert its SHA-256 into `app_release_publishers`, and set
+`revoked_at` on the old row.
 
 ## Pieces
 
@@ -48,3 +68,5 @@ To withdraw a release, set `is_published = false` on its row.
 | `android/.../AppUpdateChannel.kt` | installed version, install permission, installer hand-off |
 | `android/.../res/xml/app_update_paths.xml` | the only folder the installer may read |
 | `supabase/migrations/20261011_app_releases.sql` | table and RLS (public read, administrator write) |
+| `supabase/migrations/20261011_app_release_registration.sql` | `register_app_release()` and the token hashes it checks |
+| `.github/workflows/android-register-release.yml` | adds the row when a release is published |
