@@ -13,6 +13,10 @@ on:
         description: 'Create the GitHub Release as a draft (review before publishing)'
         type: boolean
         default: true
+      parent_notes:
+        description: 'One or two plain sentences for parents, shown in the in-app update dialog (can also be written on the draft)'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -20,6 +24,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     env:
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
     defaults:
@@ -78,29 +84,15 @@ jobs:
           echo "premium_label=$PREMIUM_LABEL" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum build/app/outputs/flutter-apk/aumazing.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
-      # Installed apps learn about a release from public.app_releases, not
-      # from GitHub. Printed rather than run: CI holds no database key, and a
-      # draft release's download link does not work until it is published.
-      - name: Write the in-app update row to the job summary
+      - name: Explain the in-app update to the job summary
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/aumazing.apk"
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## In-app update
 
-          After the release is **published**, run this in the Supabase SQL editor
-          so installed copies offer the update:
-
-          \`\`\`sql
-          INSERT INTO public.app_releases
-            (version_name, version_code, download_url, sha256, release_notes)
-          VALUES
-            ('${VERSION%%+*}', ${VERSION##*+}, '$URL',
-             '${{ steps.meta.outputs.sha256 }}', NULL);
-          \`\`\`
-
-          Set \`release_notes\` to a short parent-facing summary, and
-          \`min_supported_code\` only when older builds must update.
+          Publishing this release runs **Android Register Release**, which adds
+          its \`public.app_releases\` row so installed copies offer the update.
+          The release notes' first paragraph is what parents see in the update
+          dialog, so make sure it is written for them before publishing.
           EOF
 
       - name: Create GitHub Release
@@ -109,32 +101,30 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: Aumazing ${{ steps.meta.outputs.tag }}
           draft: ${{ inputs.draft }}
+          # The first paragraph is shown to parents in the in-app update
+          # dialog. Android Register Release refuses to publish the placeholder.
           body: |
-            Aumazing ${{ steps.meta.outputs.version }} makes assessment progress
-            easier for parents to understand and improves wireless development reliability.
+            ${{ inputs.parent_notes || 'Replace this paragraph with one or two plain sentences for parents before publishing. It is shown in the app''s update dialog.' }}
 
-            ## Features added
+            ## Changes
 
-            - Reorganized parent assessment summaries around Communication,
-              Play Skills, Social Interaction, and Attention & Focus instead of
-              exposing individual game names as the primary interpretation.
-            - Kept supporting activity percentages visible alongside the
-              parent-friendly skill bands, with unavailable evidence clearly labelled.
-            - Updated Advanced Trends to compare pre- and post-assessment skill
-              domains, showing percentage-point movement separately from band changes.
-
-            ## Fixes
-
-            - Made the wireless runner automatically match an attached USB phone
-              to its rotating Android wireless-debugging endpoint.
-            - Made wireless connection checks use the live ADB device state and
-              wait for the phone's TCP listener instead of relying on fixed timing.
-            - Added clearer guidance when Wi-Fi client isolation prevents the PC
-              from reaching the phone.
+            - Describe each change here.
 
             ## Build details
 
             - App version: ${{ steps.meta.outputs.version }}
             - Source: ${{ github.ref_name }} @ ${{ github.sha }}
             - Premium: ${{ steps.meta.outputs.premium_label }}
+            - SHA-256: ${{ steps.meta.outputs.sha256 }}
           files: apps/main_app/build/app/outputs/flutter-apk/aumazing.apk
+
+  # A release this workflow publishes itself raises no release event, so it
+  # registers the in-app update directly. Drafts register when published.
+  register:
+    needs: build-and-release
+    if: ${{ !inputs.draft }}
+    uses: ./.github/workflows/android-register-release.yml
+    with:
+      tag: ${{ needs.build-and-release.outputs.tag }}
+    secrets:
+      APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
