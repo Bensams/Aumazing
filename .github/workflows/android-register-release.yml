@@ -39,9 +39,11 @@ jobs:
       SUPABASE_URL: https://lzvvjlcfoyczikaszrbp.supabase.co
       SUPABASE_PUBLISHABLE_KEY: sb_publishable_LmDmXen9C_J8G_SDMi-LCA_sD23uwZv
     steps:
+      # Kept in RUNNER_TEMP: actions/checkout below empties the workspace.
       - name: Read the release
         id: release
         run: |
+          cd "$RUNNER_TEMP"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease,body,assets > release.json
           if [ "$(jq -r .isDraft release.json)" = "true" ]; then
@@ -96,11 +98,16 @@ jobs:
       - name: Take the parent-facing notes
         if: steps.release.outputs.skip == 'false'
         run: |
-          jq -r '.body // ""' release.json | tr -d '\r' \
+          set -o pipefail
+          jq -r '.body // ""' "$RUNNER_TEMP/release.json" | tr -d '\r' \
             | awk '!found && /^#/ { next } NF { found = 1; print; next } found { exit }' \
             | sed -e 's/\*\*//g' -e 's/`//g' | tr '\n' ' ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//' > notes.txt
           if grep -q '^Replace this paragraph' notes.txt; then
             echo "::error::The release still has the placeholder parent notes. Edit the release's first paragraph, then re-run this workflow with tag $TAG."
+            exit 1
+          fi
+          if [ ! -s notes.txt ]; then
+            echo "::error::The release has no parent notes. Write its first paragraph for parents, then re-run this workflow with tag $TAG."
             exit 1
           fi
           echo "Parent notes: $(cat notes.txt)"
