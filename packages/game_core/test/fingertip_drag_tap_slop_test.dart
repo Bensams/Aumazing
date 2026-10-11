@@ -15,6 +15,8 @@ import 'package:game_core/src/games/my_turn_your_turn/components/game_piece.dart
 /// Sari-Sari Sort is drag-only and has no such threshold — it is covered by
 /// draggable_item_fingertip_test.dart.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late FlameGame game;
 
   setUp(() {
