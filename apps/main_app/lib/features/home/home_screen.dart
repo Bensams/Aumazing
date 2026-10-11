@@ -1875,7 +1875,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         leading: const Icon(
                           Icons.emoji_events_rounded,
                           size: 18,
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                         content: Text(
                           assessProv.postAssessmentInProgress
@@ -1959,7 +1959,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Text(
                       isPost ? 'Latest post-assessment' : 'First assessment',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2106,7 +2106,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Icon(
                         Icons.insights_rounded,
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(

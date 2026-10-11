@@ -78,7 +78,7 @@ class AssessmentResultHeader extends StatelessWidget {
                 height: 48,
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                   tooltip: 'Back',
                   onPressed: onBack,
                 ),
@@ -89,7 +89,7 @@ class AssessmentResultHeader extends StatelessWidget {
               child: Text(
                 _eyebrow,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                   letterSpacing: 1.4,
                   fontWeight: FontWeight.w700,
                 ),
@@ -142,7 +142,7 @@ class AssessmentSourceTag extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: source.isAi ? AppColors.primaryPurple : AppColors.skyBlue,
+              color: source.isAi ? AppColors.primaryPurpleDark : AppColors.skyBlue,
               shape: BoxShape.circle,
             ),
           ),

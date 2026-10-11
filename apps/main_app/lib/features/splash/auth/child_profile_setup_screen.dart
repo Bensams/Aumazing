@@ -537,11 +537,11 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                 ? AppBar(
                   backgroundColor: Colors.transparent,
                   elevation: 0,
-                  foregroundColor: AppColors.primaryPurple,
+                  foregroundColor: AppColors.primaryPurpleDark,
                   title: Text(
                     'Add Child',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                   ),
                 )
@@ -884,7 +884,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             ChoiceChip(
               label: const Text('Off'),
               selected: _screenTimeLimitMinutes == null,
-              selectedColor: AppColors.primaryPurple,
+              selectedColor: AppColors.primaryPurpleDark,
+              checkmarkColor: AppColors.white,
               labelStyle: AppTextStyles.bodySmall.copyWith(
                 color:
                     _screenTimeLimitMinutes == null
@@ -903,7 +904,8 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
                   minutes == recommended ? '$minutes min ★' : '$minutes min',
                 ),
                 selected: _screenTimeLimitMinutes == minutes,
-                selectedColor: AppColors.primaryPurple,
+                selectedColor: AppColors.primaryPurpleDark,
+                checkmarkColor: AppColors.white,
                 labelStyle: AppTextStyles.bodySmall.copyWith(
                   color:
                       _screenTimeLimitMinutes == minutes
@@ -953,7 +955,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             color: AppColors.lavenderLight,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, size: 48, color: AppColors.primaryPurple),
+          child: Icon(icon, size: 48, color: AppColors.primaryPurpleDark),
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
@@ -969,7 +971,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
           title,
           textAlign: TextAlign.center,
           style: AppTextStyles.headlineLarge.copyWith(
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -997,7 +999,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             child: Icon(
               Icons.child_care_rounded,
               size: compact ? 40 : 48,
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
           SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
@@ -1014,7 +1016,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
             'Tell us about your child',
             textAlign: TextAlign.center,
             style: AppTextStyles.headlineLarge.copyWith(
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
               fontSize: compact ? 20 : null,
             ),
           ),
@@ -1082,7 +1084,7 @@ class _ChildProfileSetupScreenState extends State<ChildProfileSetupScreen> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                   width: 1.5,
                 ),
               ),

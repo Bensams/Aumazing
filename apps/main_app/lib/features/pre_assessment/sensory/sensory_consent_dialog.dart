@@ -56,7 +56,7 @@ class SensoryConsentDialog extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.tune_rounded,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                   size: 28,
                 ),
               ),
@@ -201,7 +201,7 @@ class _InfoRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: AppColors.primaryPurple),
+        Icon(icon, size: 20, color: AppColors.primaryPurpleDark),
         const SizedBox(width: AppSpacing.xs),
         Expanded(
           child: Text(

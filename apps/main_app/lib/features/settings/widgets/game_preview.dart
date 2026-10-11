@@ -44,7 +44,7 @@ class GamePreview extends StatelessWidget {
 
   /// The colour of the one card drawn in its selected state, matching the
   /// selection border the games themselves use.
-  static const Color selectionBorder = AppColors.primaryPurple;
+  static const Color selectionBorder = AppColors.primaryPurpleDark;
 
   @override
   Widget build(BuildContext context) {

@@ -332,7 +332,7 @@ class _AssessmentHandoffScreenState extends State<AssessmentHandoffScreen> {
                 Text(
                   'Great Job!',
                   style: AppTextStyles.headlineLarge.copyWith(
-                    color: AppColors.primaryPurple,
+                    color: AppColors.primaryPurpleDark,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

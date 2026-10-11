@@ -261,7 +261,7 @@ class _ParentPinResetScreenState extends State<ParentPinResetScreen> {
             child: Icon(
               _codeVerified ? Icons.lock_open : Icons.lock_reset,
               size: 56,
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -269,7 +269,7 @@ class _ParentPinResetScreenState extends State<ParentPinResetScreen> {
             title,
             textAlign: TextAlign.center,
             style: AppTextStyles.headlineLarge.copyWith(
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -289,7 +289,7 @@ class _ParentPinResetScreenState extends State<ParentPinResetScreen> {
               widget.email,
               textAlign: TextAlign.center,
               style: AppTextStyles.titleLarge.copyWith(
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
               ),
             ),
           ],
@@ -331,7 +331,7 @@ class _ParentPinResetScreenState extends State<ParentPinResetScreen> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         width: 2,
                       ),
                     ),

@@ -49,7 +49,7 @@ class CreditsDialog extends StatelessWidget {
                             Text(
                               'Aumazing',
                               style: AppTextStyles.headlineMedium.copyWith(
-                                color: AppColors.primaryPurple,
+                                color: AppColors.primaryPurpleDark,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
                               ),
@@ -258,7 +258,7 @@ class _SectionTitle extends StatelessWidget {
     child: Text(
       text,
       style: AppTextStyles.labelSmall.copyWith(
-        color: AppColors.primaryPurple,
+        color: AppColors.primaryPurpleDark,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.8,
       ),
@@ -437,7 +437,7 @@ class _BulletPoint extends StatelessWidget {
             width: 4,
             height: 4,
             decoration: const BoxDecoration(
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
               shape: BoxShape.circle,
             ),
           ),

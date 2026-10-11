@@ -304,7 +304,7 @@ class GameSummaryDialog extends StatelessWidget {
               Icons.touch_app_rounded,
               'Total Taps',
               '$_totalTaps',
-              AppColors.primaryPurple,
+              AppColors.primaryPurpleDark,
             ),
           ),
           Container(width: 1, height: 36, color: AppColors.border),

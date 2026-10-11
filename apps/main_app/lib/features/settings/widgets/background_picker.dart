@@ -251,7 +251,7 @@ class _SwatchRow extends StatelessWidget {
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isSelected
-                              ? AppColors.primaryPurple
+                              ? AppColors.primaryPurpleDark
                               : AppColors.border,
                           width: isSelected ? 3 : 1,
                         ),
@@ -310,7 +310,7 @@ class _StopChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppColors.primaryPurple : AppColors.border,
+              color: selected ? AppColors.primaryPurpleDark : AppColors.border,
               width: selected ? 2 : 1,
             ),
           ),
