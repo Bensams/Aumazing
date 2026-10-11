@@ -458,6 +458,12 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                           const SizedBox(width: AppSpacing.sm),
                           FilledButton(
                             key: const Key('intake.start'),
+                            // The theme's purple is too light behind white
+                            // text now that Start is never greyed out.
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.textPrimary,
+                              foregroundColor: AppColors.white,
+                            ),
                             onPressed:
                                 _saving || _loading ? null : _onStartPressed,
                             child: const Text('Start the games'),

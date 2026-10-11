@@ -6,8 +6,8 @@ import 'package:shared_ui/shared_ui.dart';
 ///
 /// Single choice by default ([selected]); pass [isSelected] for a
 /// choose-any question. A chosen chip is filled with a check mark, and
-/// [isQuiet] answers ("Prefer not to say", "None") sit back with a lighter
-/// outline so they do not read as a finding.
+/// [isQuiet] answers ("Prefer not to say", "None") sit back on a soft grey
+/// fill so they do not read as a finding.
 class ObservationChoiceRow<T> extends StatelessWidget {
   const ObservationChoiceRow({
     super.key,
@@ -78,26 +78,19 @@ class ObservationChoiceRow<T> extends StatelessWidget {
                       showCheckmark: true,
                       checkmarkColor: AppColors.white,
                       backgroundColor:
-                          quiet ? Colors.transparent : AppColors.white,
+                          quiet ? AppColors.muted : AppColors.white,
                       selectedColor: AppColors.textPrimary,
-                      side:
-                          on
-                              ? const BorderSide(color: AppColors.textPrimary)
-                              : BorderSide(
-                                color:
-                                    quiet
-                                        ? AppColors.mutedForeground
-                                        : AppColors.textSecondary,
-                              ),
-                      labelStyle: AppTextStyles.bodySmall.copyWith(
+                      side: BorderSide(
                         color:
                             on
-                                ? AppColors.white
+                                ? AppColors.textPrimary
                                 : quiet
-                                ? AppColors.textSecondary
-                                : AppColors.textPrimary,
-                        fontWeight:
-                            quiet && !on ? FontWeight.w500 : FontWeight.w700,
+                                ? AppColors.mutedForeground
+                                : AppColors.textSecondary,
+                      ),
+                      labelStyle: AppTextStyles.bodySmall.copyWith(
+                        color: on ? AppColors.white : AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                       onSelected: (_) => onSelected(v),
                     );
