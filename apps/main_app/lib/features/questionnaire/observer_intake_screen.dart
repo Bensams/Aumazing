@@ -280,147 +280,158 @@ class _ObserverIntakeScreenState extends State<ObserverIntakeScreen> {
                       AppSpacing.md,
                       (constraints.maxWidth - _maxContentWidth) / 2,
                     );
+                    // One child holding every card, so they are all built
+                    // up front and Start can scroll to a missing card that
+                    // is still off screen.
                     return ListView(
                       padding: EdgeInsets.symmetric(
                         horizontal: side,
                         vertical: AppSpacing.md,
                       ),
                       children: [
-                        Text(
-                          'Optional — background helps explain your child’s needs. '
-                          'You can skip and still play the games and see results and summaries. '
-                          'It does not change scores.',
-                          key: const Key('intake.optionalNote'),
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        if (_loading) const LinearProgressIndicator(),
-                        if (template.intro.isNotEmpty)
-                          AppCard(
-                            key: const Key('intake.instructions'),
-                            padding: AppSpacing.paddingMd,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  '👀',
-                                  style: TextStyle(fontSize: 28),
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Text(
-                                    template.intro,
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Optional — background helps explain your child’s needs. '
+                              'You can skip and still play the games and see results and summaries. '
+                              'It does not change scores.',
+                              key: const Key('intake.optionalNote'),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                        const SizedBox(height: AppSpacing.lg),
-                        if (hasPrevious)
-                          _QuestionCard(
-                            key: _backgroundCard,
-                            missing: _showMissing && _backgroundMode == null,
-                            child: Column(
-                              key: const Key('intake.previousNote'),
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ObservationChoiceRow<String>(
-                                  keyPrefix: 'intake',
-                                  question:
-                                      'Background is available from an '
-                                      'earlier questionnaire.',
-                                  hint:
-                                      'Reusing it keeps the original dates '
-                                      'and labels it as earlier information.',
-                                  values: const ['reuse', 'update'],
-                                  label:
-                                      (v) =>
-                                          v == 'reuse'
-                                              ? 'Use previous answers'
-                                              : 'Update answers',
-                                  id: (v) => v,
-                                  selected: _backgroundMode,
-                                  onSelected: (v) {
-                                    if (!_saving) _chooseBackground(v);
-                                  },
-                                ),
-                                if (_backgroundMode == 'reuse')
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: AppSpacing.xs,
+                            const SizedBox(height: AppSpacing.sm),
+                            if (_loading) const LinearProgressIndicator(),
+                            if (template.intro.isNotEmpty)
+                              AppCard(
+                                key: const Key('intake.instructions'),
+                                padding: AppSpacing.paddingMd,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '👀',
+                                      style: TextStyle(fontSize: 28),
                                     ),
-                                    child: Text(
-                                      'Previous background selected. Answer '
-                                      'only what is new or needed today.',
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.textSecondary,
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Text(
+                                        template.intro,
+                                        style: AppTextStyles.bodyMedium
+                                            .copyWith(
+                                              color: AppColors.textPrimary,
+                                            ),
                                       ),
                                     ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        _QuestionCard(
-                          key: _roleCard,
-                          missing: _showMissing && _role == null,
-                          child: ObservationChoiceRow<ObserverRole>(
-                            keyPrefix: 'intake.role',
-                            question: 'Who is watching?',
-                            hint: 'Choose one · needed to start',
-                            values: ObserverRole.values,
-                            label: (v) => v.label,
-                            id: (v) => v.key,
-                            selected: _role,
-                            onSelected: (v) => setState(() => _role = v),
-                          ),
-                        ),
-                        if (template.questions.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'About your child',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'Saved with this assessment to help read the '
-                            'results. It does not change any score.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          for (final q in template.questions.where(
-                            _showQuestion,
-                          ))
-                            _QuestionCard(
-                              key: _questionCards.putIfAbsent(
-                                q.id,
-                                GlobalKey.new,
-                              ),
-                              missing: _showMissing && _isMissing(q),
-                              child: TemplateQuestionField(
-                                key: ValueKey(
-                                  'intake.${q.id}.$_prefillGeneration',
+                                  ],
                                 ),
-                                keyPrefix: 'intake',
-                                question: q,
-                                value: _answers[q.id],
-                                onChanged:
-                                    (v) => setState(() {
-                                      _answers[q.id] = v;
-                                      _edited.add(q.id);
-                                    }),
+                              ),
+                            const SizedBox(height: AppSpacing.lg),
+                            if (hasPrevious)
+                              _QuestionCard(
+                                key: _backgroundCard,
+                                missing:
+                                    _showMissing && _backgroundMode == null,
+                                child: Column(
+                                  key: const Key('intake.previousNote'),
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ObservationChoiceRow<String>(
+                                      keyPrefix: 'intake',
+                                      question:
+                                          'Background is available from an '
+                                          'earlier questionnaire.',
+                                      hint:
+                                          'Reusing it keeps the original dates '
+                                          'and labels it as earlier information.',
+                                      values: const ['reuse', 'update'],
+                                      label:
+                                          (v) =>
+                                              v == 'reuse'
+                                                  ? 'Use previous answers'
+                                                  : 'Update answers',
+                                      id: (v) => v,
+                                      selected: _backgroundMode,
+                                      onSelected: (v) {
+                                        if (!_saving) _chooseBackground(v);
+                                      },
+                                    ),
+                                    if (_backgroundMode == 'reuse')
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpacing.xs,
+                                        ),
+                                        child: Text(
+                                          'Previous background selected. Answer '
+                                          'only what is new or needed today.',
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
+                                                color: AppColors.textSecondary,
+                                              ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            _QuestionCard(
+                              key: _roleCard,
+                              missing: _showMissing && _role == null,
+                              child: ObservationChoiceRow<ObserverRole>(
+                                keyPrefix: 'intake.role',
+                                question: 'Who is watching?',
+                                hint: 'Choose one · needed to start',
+                                values: ObserverRole.values,
+                                label: (v) => v.label,
+                                id: (v) => v.key,
+                                selected: _role,
+                                onSelected: (v) => setState(() => _role = v),
                               ),
                             ),
-                        ],
+                            if (template.questions.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                'About your child',
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Saved with this assessment to help read the '
+                                'results. It does not change any score.',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              for (final q in template.questions.where(
+                                _showQuestion,
+                              ))
+                                _QuestionCard(
+                                  key: _questionCards.putIfAbsent(
+                                    q.id,
+                                    GlobalKey.new,
+                                  ),
+                                  missing: _showMissing && _isMissing(q),
+                                  child: TemplateQuestionField(
+                                    key: ValueKey(
+                                      'intake.${q.id}.$_prefillGeneration',
+                                    ),
+                                    keyPrefix: 'intake',
+                                    question: q,
+                                    value: _answers[q.id],
+                                    onChanged:
+                                        (v) => setState(() {
+                                          _answers[q.id] = v;
+                                          _edited.add(q.id);
+                                        }),
+                                  ),
+                                ),
+                            ],
+                          ],
+                        ),
                       ],
                     );
                   },

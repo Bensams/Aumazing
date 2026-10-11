@@ -376,6 +376,53 @@ void main() {
       },
     );
 
+    testWidgets('Start scrolls to a required question far down the page', (
+      tester,
+    ) async {
+      final long = ChoiceTemplate(
+        key: 'long_intake',
+        version: 1,
+        status: 'validated',
+        kind: TemplateKind.intake,
+        title: 'Before your child starts',
+        intro: '',
+        questions: [
+          for (var i = 0; i < 8; i++)
+            TemplateQuestion(
+              id: 'optional_$i',
+              text: 'Optional question $i',
+              type: QuestionType.single,
+              options: const [
+                ChoiceOption(id: 'a', label: 'A'),
+                ChoiceOption(id: 'b', label: 'B'),
+              ],
+            ),
+          const TemplateQuestion(
+            id: 'last',
+            text: 'Required last question',
+            type: QuestionType.single,
+            required: true,
+            options: [
+              ChoiceOption(id: 'yes', label: 'Yes'),
+              ChoiceOption(id: 'no', label: 'No'),
+            ],
+          ),
+        ],
+      );
+      final (saved, _) = await open(tester, template: long);
+      // A phone in landscape: the last card starts well below the screen.
+      await tester.binding.setSurfaceSize(const Size(802, 360));
+      await tester.pumpAndSettle();
+      await tapKey(tester, 'intake.role.parent');
+      await tapKey(tester, 'intake.start');
+      await tester.pumpAndSettle();
+
+      expect(saved, isEmpty);
+      final missing = find.text('Answer this to start the games.');
+      expect(missing, findsOneWidget);
+      expect(tester.getRect(missing).bottom, lessThan(360));
+    });
+
     testWidgets('asks a practitioner\'s own questions', (tester) async {
       const custom = ChoiceTemplate(
         key: 'sped_intake',
