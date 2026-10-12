@@ -395,6 +395,10 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
               child: MyTurnYourTurnScreen(
                 assessmentContext: widget.assessmentContext,
                 sensoryController: widget.sensoryController,
+                // Keep the tier: a retry on Hard must stay Hard, or the wait
+                // timer that Hard fades out would come back.
+                difficulty: widget.difficulty,
+                roundsOverride: widget.roundsOverride,
               ),
             ),
       ),
