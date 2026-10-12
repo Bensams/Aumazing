@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +18,7 @@ import '../../child_mode/game_end_choice_dialog.dart';
 import '../../home/home_screen.dart';
 import '../../../widgets/mascot.dart';
 import '../../../widgets/mascot_host.dart';
+import 'widgets/turn_goal_card.dart';
 
 /// Screen wrapper for the My Turn Your Turn game during pre-assessment.
 class MyTurnYourTurnScreen extends StatefulWidget {
@@ -65,8 +68,20 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
 
   Offset? _lastTapPosition;
   bool _showStarSparkle = false;
-  String _voiceOverText = 'Wait for Buddy… 🐻';
+  // The words the game opens with ("Let's take turns.", set in initState in
+  // the child's language); each turn change replaces them.
+  late String _voiceOverText;
   late final MyTurnYourTurnGame _game;
+
+  // ── Goal card (practice only) ─────────────────────────────────────────
+  bool _goalVisible = false;
+  String _goalBuddyEmoji = '';
+  Completer<void>? _goalDone;
+  Timer? _goalTimer;
+
+  /// The card starts the game on its own after this, so a child who does not
+  /// tap is never left waiting.
+  static const _goalAutoStart = Duration(seconds: 6);
 
   /// Developer auto-play/skip handle. Null in a normal build.
   DeveloperGameSession? _devSession;
@@ -82,6 +97,7 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
   void initState() {
     super.initState();
     _sessionStartTime = DateTime.now();
+    _voiceOverText = context.read<ChildProvider>().strings.turnGoalTitle;
 
     // Apply sensory config for round 1 at game initialization (pre-assessment only)
     widget.sensoryController?.applyRoundConfig(1);
@@ -137,6 +153,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
                 awaitCompletion: true,
               ),
       onPlayYourTurnVo: () => _voiceOverService.play(VoiceOverCue.yourTurn),
+      // Practice play opens with the goal card; assessment starts straight
+      // away (the game also refuses the card outside practice).
+      onShowGoal: widget.assessmentContext == 'practice' ? _showGoal : null,
       onPlayWaitVo: () async {
         // Let "My turn!" finish before "Wait" speaks, and skip the debounce:
         // the two fire back-to-back, and the debounce would silently drop
@@ -176,9 +195,12 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
       onTurnChanged: (isBuddy) {
         if (mounted) {
           setState(() {
-            // Update voice over text based on whose turn it is
+            // Update voice over text based on whose turn it is, naming the
+            // buddy the child actually sees (picked at random per game).
             _voiceOverText =
-                isBuddy ? 'Wait for Buddy… 🐻' : 'Your turn! Tap a spot! ⭐';
+                isBuddy
+                    ? 'Wait for Buddy… ${_game.buddyEmoji}'
+                    : 'Your turn! Tap a spot! ⭐';
           });
         }
       },
@@ -292,6 +314,37 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
     );
   }
 
+  /// Shows the goal card over the laid-out board. The game holds the buddy's
+  /// first turn until the returned Future completes.
+  Future<void> _showGoal(String buddyEmoji) {
+    final done = Completer<void>();
+    _goalDone = done;
+    // The game calls this while it loads, which can be mid-build: show the
+    // card on the next frame instead of calling setState here.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || done.isCompleted) {
+        _finishGoal();
+        return;
+      }
+      setState(() {
+        _goalBuddyEmoji = buddyEmoji;
+        _goalVisible = true;
+      });
+      _goalTimer = Timer(_goalAutoStart, _finishGoal);
+    });
+    return done.future;
+  }
+
+  /// Hides the goal card and lets the buddy take its first turn.
+  void _finishGoal() {
+    _goalTimer?.cancel();
+    _goalTimer = null;
+    final done = _goalDone;
+    _goalDone = null;
+    if (done != null && !done.isCompleted) done.complete();
+    if (mounted && _goalVisible) setState(() => _goalVisible = false);
+  }
+
   void _showRewardThenPop() {
     final childProvider = context.read<ChildProvider>();
 
@@ -342,6 +395,10 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
               child: MyTurnYourTurnScreen(
                 assessmentContext: widget.assessmentContext,
                 sensoryController: widget.sensoryController,
+                // Keep the tier: a retry on Hard must stay Hard, or the wait
+                // timer that Hard fades out would come back.
+                difficulty: widget.difficulty,
+                roundsOverride: widget.roundsOverride,
               ),
             ),
       ),
@@ -350,6 +407,9 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
 
   @override
   void dispose() {
+    _goalTimer?.cancel();
+    final goal = _goalDone;
+    if (goal != null && !goal.isCompleted) goal.complete();
     DeveloperAutomationRegistry.instance.unregister(_devSession);
     _voiceOverService.dispose();
     super.dispose();
@@ -408,6 +468,19 @@ class _MyTurnYourTurnScreenState extends State<MyTurnYourTurnScreen>
                   _showStarSparkle = false;
                 });
               },
+            ),
+
+          // Practice: the goal before the first round. Under the top bar so
+          // the parent lock and menu stay reachable.
+          if (_goalVisible)
+            Positioned.fill(
+              child: TurnGoalCard(
+                buddyEmoji: _goalBuddyEmoji,
+                childEmoji:
+                    context.read<ChildProvider>().profile?.avatarEmoji ?? '⭐',
+                strings: context.read<ChildProvider>().strings,
+                onStart: _finishGoal,
+              ),
             ),
 
           // Flutter: Top bar with progress + parent lock (overlay)
