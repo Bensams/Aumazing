@@ -169,7 +169,8 @@ class _ChildProfileEditScreenState extends State<ChildProfileEditScreen> {
                   ChoiceChip(
                     label: Text(option.$2),
                     selected: _sex == option.$1,
-                    selectedColor: AppColors.primaryPurple,
+                    selectedColor: AppColors.primaryPurpleDark,
+                    checkmarkColor: AppColors.white,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
                       color: _sex == option.$1
                           ? AppColors.white
@@ -203,7 +204,7 @@ class _ChildProfileEditScreenState extends State<ChildProfileEditScreen> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: _avatar == emoji
-                              ? AppColors.primaryPurple
+                              ? AppColors.primaryPurpleDark
                               : Colors.transparent,
                           width: 2.5,
                         ),

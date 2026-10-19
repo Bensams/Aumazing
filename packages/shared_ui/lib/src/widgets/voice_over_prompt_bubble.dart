@@ -137,7 +137,7 @@ class _VoiceOverPromptBubbleState extends State<VoiceOverPromptBubble> {
                     children: [
                       const Icon(
                         Icons.volume_up_rounded,
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         size: 22,
                       ),
                       const SizedBox(width: AppSpacing.sm),

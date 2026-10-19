@@ -54,7 +54,7 @@ class AssessmentLearningPathCard extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.lock_outline_rounded,
-                        color: AppColors.primaryPurple,
+                        color: AppColors.primaryPurpleDark,
                         size: 20,
                       ),
                       const SizedBox(width: 8),

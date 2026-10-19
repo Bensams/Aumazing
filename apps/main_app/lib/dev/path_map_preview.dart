@@ -165,7 +165,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
             child: const Padding(
               padding: EdgeInsets.all(8),
               child: Icon(Icons.arrow_back_rounded,
-                  color: AppColors.primaryPurple),
+                  color: AppColors.primaryPurpleDark),
             ),
           ),
           const SizedBox(width: 8),
@@ -182,7 +182,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                 Text(
                   'My Path',
                   style: AppTextStyles.displayMedium.copyWith(
-                    color: AppColors.primaryPurple,
+                    color: AppColors.primaryPurpleDark,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -197,7 +197,7 @@ class _PreviewScreenState extends State<_PreviewScreen> {
                   child: Text(
                     'Level 2',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_audio/shared_audio.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 import '../../providers/child_provider.dart';
 import '../home/home_screen.dart';
@@ -236,7 +237,7 @@ class _GameFlowScreenState extends State<GameFlowScreen> {
                               shape: BoxShape.circle,
                               color:
                                   index <= _currentGameIndex
-                                      ? const Color(0xFF9B82C4)
+                                      ? AppColors.primaryPurpleDark
                                       : const Color(0xFFE0E0E0),
                             ),
                           ),

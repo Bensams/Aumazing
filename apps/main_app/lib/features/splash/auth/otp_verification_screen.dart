@@ -196,14 +196,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         child: const Icon(
                           Icons.mark_email_read_outlined,
                           size: 56,
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
                         'Verify Your Email',
                         style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -219,7 +219,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         widget.email,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.titleLarge.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                     ],
@@ -251,7 +251,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: const BorderSide(
-                                color: AppColors.primaryPurple,
+                                color: AppColors.primaryPurpleDark,
                                 width: 2,
                               ),
                             ),

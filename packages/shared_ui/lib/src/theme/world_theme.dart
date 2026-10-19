@@ -123,8 +123,8 @@ abstract final class WorldStyles {
     kind: WorldBackdropKind.none,
     trailTravelled: Color(0xD99B82C4), // primaryPurple @ 85%
     trailAhead: Color(0x738A8A9B), // mutedForeground @ 45%
-    badgeCurrent: AppColors.primaryPurple,
-    badgeAvailable: AppColors.primaryPurple,
+    badgeCurrent: AppColors.primaryPurpleDark,
+    badgeAvailable: AppColors.primaryPurpleDark,
     badgeLocked: AppColors.mutedForeground,
     badgeDone: Color(0xFF43A047),
     currentRing: AppColors.white,

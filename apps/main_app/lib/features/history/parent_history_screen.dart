@@ -209,7 +209,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
             tooltip: 'Back',
             icon: const Icon(
               Icons.arrow_back_rounded,
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
         ),
@@ -221,7 +221,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
               Text(
                 'History & Progress',
                 style: AppTextStyles.headlineSmall.copyWith(
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
               ),
               const SizedBox(height: 2),
@@ -256,7 +256,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
                             : null,
                     icon: const Icon(
                       Icons.picture_as_pdf_rounded,
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                   ),
         ),
@@ -470,7 +470,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
             Text(
               'Recommended: ${run.recommendedModule}',
               style: AppTextStyles.bodySmallStrong.copyWith(
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
               ),
             ),
           ],
@@ -490,7 +490,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
 
   Widget _typeBadge(String text, bool isPre) {
     final bg = isPre ? AppColors.lavenderLight : AppColors.mintLight;
-    final fg = isPre ? AppColors.primaryPurple : AppColors.statusSuccessDark;
+    final fg = isPre ? AppColors.primaryPurpleDark : AppColors.statusSuccessDark;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -700,7 +700,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
           const Icon(
             Icons.arrow_forward_rounded,
             size: 16,
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
           ),
           Expanded(
             flex: 2,
@@ -869,7 +869,7 @@ class _ParentHistoryScreenState extends State<ParentHistoryScreen> {
           Text(
             session.score.toString(),
             style: AppTextStyles.titleMedium.copyWith(
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
             ),
           ),
           const SizedBox(width: AppSpacing.sm),

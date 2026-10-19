@@ -290,7 +290,7 @@ class _SessionObservationScreenState extends State<SessionObservationScreen> {
                                   child: Text(
                                     AssessmentResultMapper.gameName(id),
                                     style: AppTextStyles.titleMedium.copyWith(
-                                      color: AppColors.primaryPurple,
+                                      color: AppColors.primaryPurpleDark,
                                     ),
                                   ),
                                 ),

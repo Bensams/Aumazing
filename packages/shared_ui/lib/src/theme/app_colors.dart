@@ -24,7 +24,15 @@ abstract final class AppColors {
   static const Color mutedForeground = Color(0xFF6E6E80);
 
   // ── Functional ───────────────────────────────────────────────────────
+  /// Soft brand purple — tints, gradients and decoration only. Too light
+  /// for text or behind white text (3.3:1 on white); use
+  /// [primaryPurpleDark] there.
   static const Color primaryPurple = Color(0xFF9B82C4);
+
+  /// The same purple, darkened so text clears WCAG 2.2 AA 1.4.3 either way:
+  /// 7.6:1 against white, 5.8:1 on [lavenderLight], 4.7:1 on [lavender].
+  /// For buttons, links, headings, icons and selected fills under white text.
+  static const Color primaryPurpleDark = Color(0xFF6440A0);
   static const Color secondaryMint = Color(0xFFB8E8D4);
 
   /// Decorative red — pastel fill only. Too light for text or icons

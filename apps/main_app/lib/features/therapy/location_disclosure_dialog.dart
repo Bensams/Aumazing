@@ -26,7 +26,7 @@ class LocationDisclosureDialog {
               children: [
                 const Icon(
                   Icons.my_location_rounded,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -87,7 +87,7 @@ class LocationDisclosureDialog {
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryPurple,
+                  backgroundColor: AppColors.primaryPurpleDark,
                 ),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text('Continue'),
@@ -112,7 +112,7 @@ class _DisclosurePoint extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: AppColors.primaryPurple),
+          Icon(icon, size: 18, color: AppColors.primaryPurpleDark),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(

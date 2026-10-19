@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:shared_ui/shared_ui.dart';
 
 import '../../../model/child_profile.dart';
 
@@ -33,7 +34,7 @@ class RewardPreferenceSelector extends StatelessWidget {
         Text(
           'Choose a Reward Style',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: const Color(0xFF9B82C4),
+            color: AppColors.primaryPurpleDark,
             fontWeight: FontWeight.bold,
           ),
           textAlign: TextAlign.center,
@@ -150,7 +151,7 @@ class _RewardOptionCard extends StatelessWidget {
             color: isSelected ? bgColor.withAlpha(150) : Colors.grey.shade50,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? const Color(0xFF9B82C4) : Colors.grey.shade300,
+              color: isSelected ? AppColors.primaryPurpleDark : Colors.grey.shade300,
               width: isSelected ? 3 : 1,
             ),
             boxShadow: isSelected
@@ -189,7 +190,7 @@ class _RewardOptionCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? const Color(0xFF9B82C4) : Colors.grey.shade700,
+                  color: isSelected ? AppColors.primaryPurpleDark : Colors.grey.shade700,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -223,7 +224,7 @@ class _RewardOptionCard extends StatelessWidget {
                   padding: EdgeInsets.only(top: 8),
                   child: Icon(
                     Icons.check_circle,
-                    color: Color(0xFF9B82C4),
+                    color: AppColors.primaryPurpleDark,
                     size: 20,
                   ),
                 ),
@@ -347,7 +348,7 @@ class RewardPreferenceDropdown extends StatelessWidget {
                   if (!useRandomReward && selectedPreference == preference)
                     const Padding(
                       padding: EdgeInsets.only(left: 8),
-                      child: Icon(Icons.check, size: 18, color: Color(0xFF9B82C4)),
+                      child: Icon(Icons.check, size: 18, color: AppColors.primaryPurpleDark),
                     ),
                 ],
               ),
@@ -367,7 +368,7 @@ class RewardPreferenceDropdown extends StatelessWidget {
                 if (useRandomReward || selectedPreference == RewardPreference.random)
                   const Padding(
                     padding: EdgeInsets.only(left: 8),
-                    child: Icon(Icons.check, size: 18, color: Color(0xFF9B82C4)),
+                    child: Icon(Icons.check, size: 18, color: AppColors.primaryPurpleDark),
                   ),
               ],
             ),

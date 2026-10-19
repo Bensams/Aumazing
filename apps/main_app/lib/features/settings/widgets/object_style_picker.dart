@@ -172,7 +172,7 @@ class _CardColourRow extends StatelessWidget {
                       border: Border.all(
                         color:
                             o.colour == selected
-                                ? AppColors.primaryPurple
+                                ? AppColors.primaryPurpleDark
                                 : AppColors.border,
                         width: o.colour == selected ? 3 : 1,
                       ),

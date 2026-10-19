@@ -299,7 +299,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                 child: Text(
                   'Forgot PIN?',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.primaryPurple,
+                    color: AppColors.primaryPurpleDark,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -326,7 +326,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
           ),
           child: const Icon(
             Icons.lock_outline_rounded,
-            color: AppColors.primaryPurple,
+            color: AppColors.primaryPurpleDark,
             size: 18,
           ),
         ),
@@ -411,7 +411,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                   style: AppTextStyles.headlineMedium.copyWith(
                     color: _usesPin
                         ? AppColors.border
-                        : AppColors.primaryPurple,
+                        : AppColors.primaryPurpleDark,
                     letterSpacing: 1.0,
                   ),
                 ),
@@ -423,12 +423,12 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
                   height: 32,
                   decoration: BoxDecoration(
                     color: i < _enteredCode.length
-                        ? AppColors.primaryPurple
+                        ? AppColors.primaryPurpleDark
                         : AppColors.white,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: i < _enteredCode.length
-                          ? AppColors.primaryPurple
+                          ? AppColors.primaryPurpleDark
                           : AppColors.border,
                       width: 2,
                     ),
@@ -503,7 +503,7 @@ class _ParentVerificationDialogState extends State<ParentVerificationDialog> {
         size: buttonSize,
         semanticLabel: _checking ? 'Checking' : 'Confirm',
         onTap: active ? _onSubmit : null,
-        color: active ? AppColors.primaryPurple : AppColors.disabledFill,
+        color: active ? AppColors.primaryPurpleDark : AppColors.disabledFill,
         child: _checking
             ? const SizedBox(
                 width: 18,

@@ -438,7 +438,7 @@ class _ChildRow extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isActive ? AppColors.primaryPurple : Colors.transparent,
+              color: isActive ? AppColors.primaryPurpleDark : Colors.transparent,
               width: 2.5,
             ),
           ),
@@ -480,7 +480,7 @@ class _ChildRow extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryPurple,
+                              color: AppColors.primaryPurpleDark,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -505,7 +505,7 @@ class _ChildRow extends StatelessWidget {
                       Text(
                         'Tap to make active',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                   ],
@@ -521,7 +521,7 @@ class _ChildRow extends StatelessWidget {
                 IconButton(
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit_rounded),
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                   tooltip: 'Edit ${child.displayName}',
                 ),
                 IconButton(

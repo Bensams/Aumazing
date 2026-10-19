@@ -45,7 +45,7 @@ class SequenceSlot extends PositionComponent {
   static const Color _presetFill = Color(0xFFE8DEFA);
   static const Color _reject = Color(0xFFFFE8DD);
   static const Color _lav = Color(0xFFD4C5E8);
-  static const Color _primary = Color(0xFF9B82C4);
+  static const Color _primary = Color(0xFF6440A0); // AppColors.primaryPurpleDark
   static const Color _ink = Color(0xFF3F3B4A);
 
   bool containsLocal(Vector2 point) {

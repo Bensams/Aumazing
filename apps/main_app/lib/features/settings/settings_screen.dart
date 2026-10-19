@@ -94,14 +94,14 @@ class SettingsScreen extends StatelessWidget {
         const OfflinePlayTile(),
         _CategoryTile(
           icon: Icons.star_rounded,
-          color: AppColors.primaryPurple,
+          color: AppColors.primaryPurpleDark,
           title: 'Stars & Costumes',
           subtitle: 'Character, how stars are earned, shop controls, history',
           onTap: () => _push(context, StarSettingsScreen(palette: palette)),
         ),
         _CategoryTile(
           icon: Icons.child_care_rounded,
-          color: AppColors.primaryPurple,
+          color: AppColors.primaryPurpleDark,
           title: 'Child Preferences',
           subtitle: 'Avatar, theme, game difficulty, language, rewards',
           onTap:
@@ -234,7 +234,8 @@ class _VideoSettingsScreen extends StatelessWidget {
                         return ChoiceChip(
                           label: Text(q.label),
                           selected: selected,
-                          selectedColor: AppColors.primaryPurple,
+                          selectedColor: AppColors.primaryPurpleDark,
+                          checkmarkColor: AppColors.white,
                           labelStyle: AppTextStyles.bodySmall.copyWith(
                             color:
                                 selected
@@ -441,7 +442,7 @@ class _ChildPreferencesScreen extends StatelessWidget {
                                   border: Border.all(
                                     color:
                                         selected
-                                            ? AppColors.primaryPurple
+                                            ? AppColors.primaryPurpleDark
                                             : Colors.transparent,
                                     width: 2.5,
                                   ),
@@ -577,7 +578,8 @@ class _ChildPreferencesScreen extends StatelessWidget {
                             return ChoiceChip(
                               label: Text(tier.$2),
                               selected: selected,
-                              selectedColor: AppColors.primaryPurple,
+                              selectedColor: AppColors.primaryPurpleDark,
+                              checkmarkColor: AppColors.white,
                               labelStyle: AppTextStyles.bodySmall.copyWith(
                                 color:
                                     selected
@@ -620,7 +622,8 @@ class _ChildPreferencesScreen extends StatelessWidget {
                             return ChoiceChip(
                               label: Text(lang.label),
                               selected: selected,
-                              selectedColor: AppColors.primaryPurple,
+                              selectedColor: AppColors.primaryPurpleDark,
+                              checkmarkColor: AppColors.white,
                               labelStyle: AppTextStyles.bodySmall.copyWith(
                                 color:
                                     selected
@@ -746,7 +749,7 @@ class _CustomiseTile extends StatelessWidget {
               Icon(
                 Icons.tune_rounded,
                 size: 20,
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -1129,7 +1132,8 @@ class _VoicePackPickerState extends State<_VoicePackPicker> {
       children: [
         ChoiceChip(
           selected: selected,
-          selectedColor: AppColors.primaryPurple,
+          selectedColor: AppColors.primaryPurpleDark,
+          checkmarkColor: AppColors.white,
           label: Text(pack.label, semanticsLabel: spokenName),
           labelStyle: AppTextStyles.bodySmall.copyWith(
             color: selected ? AppColors.white : AppColors.textPrimary,
@@ -1146,7 +1150,7 @@ class _VoicePackPickerState extends State<_VoicePackPicker> {
         IconButton(
           onPressed: () => _playPreview(pack),
           icon: const Icon(Icons.volume_up_rounded, size: 22),
-          color: AppColors.primaryPurple,
+          color: AppColors.primaryPurpleDark,
           tooltip: 'Hear $spokenName',
           // VisualDensity.compact used to shave 8dp off each axis, quietly
           // defeating the 48dp constraints below and landing these at
@@ -1203,7 +1207,7 @@ class _ScreenTimeStatRow extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 18, color: AppColors.primaryPurple),
+            child: Icon(icon, size: 18, color: AppColors.primaryPurpleDark),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -1264,7 +1268,7 @@ class _SettingToggle extends StatelessWidget {
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeTrackColor: AppColors.primaryPurple,
+            activeTrackColor: AppColors.primaryPurpleDark,
           ),
         ],
       ),
@@ -1305,7 +1309,7 @@ class _SettingSlider extends StatelessWidget {
               value: value,
               onChanged: onChanged,
               onChangeEnd: onChangeEnd,
-              activeColor: AppColors.primaryPurple,
+              activeColor: AppColors.primaryPurpleDark,
               inactiveColor: AppColors.lavenderLight,
             ),
           ),
@@ -1708,7 +1712,7 @@ class _MusicTrackRow extends StatelessWidget {
                         size: 18,
                         color:
                             selected
-                                ? AppColors.primaryPurple
+                                ? AppColors.primaryPurpleDark
                                 : AppColors.textSecondary,
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -1718,7 +1722,7 @@ class _MusicTrackRow extends StatelessWidget {
                           style: AppTextStyles.bodySmall.copyWith(
                             color:
                                 selected || playing
-                                    ? AppColors.primaryPurple
+                                    ? AppColors.primaryPurpleDark
                                     : AppColors.textPrimary,
                             fontWeight:
                                 selected || playing
@@ -1739,7 +1743,7 @@ class _MusicTrackRow extends StatelessWidget {
                 playing ? Icons.volume_up_rounded : Icons.play_circle_outline,
                 size: 20,
               ),
-              color: AppColors.primaryPurple,
+              color: AppColors.primaryPurpleDark,
               tooltip: onPreview == null ? 'Music is muted' : 'Preview $title',
               constraints: const BoxConstraints(
                 minWidth: kMinInteractiveDimension,
@@ -1795,7 +1799,7 @@ class _MusicCategoryOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
-                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
+                  selected ? AppColors.primaryPurpleDark : AppColors.lavenderLight,
               width: selected ? 2 : 1,
             ),
           ),
@@ -1838,7 +1842,7 @@ class _MusicCategoryOption extends StatelessWidget {
                 const Icon(
                   Icons.check_circle_rounded,
                   size: 20,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
               // Separate hit target: expanding to audition the tracks must not
               // change which style the child gets.
@@ -1898,7 +1902,7 @@ class _CustomMixOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
-                  selected ? AppColors.primaryPurple : AppColors.lavenderLight,
+                  selected ? AppColors.primaryPurpleDark : AppColors.lavenderLight,
               width: selected ? 2 : 1,
             ),
           ),
@@ -1932,7 +1936,7 @@ class _CustomMixOption extends StatelessWidget {
                 const Icon(
                   Icons.check_circle_rounded,
                   size: 20,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
               Icon(
                 expanded
@@ -2033,7 +2037,7 @@ class _WorldOption extends StatelessWidget {
           color: AppColors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? AppColors.primaryPurple : AppColors.border,
+            color: selected ? AppColors.primaryPurpleDark : AppColors.border,
             width: selected ? 2.5 : 1,
           ),
         ),
@@ -2076,7 +2080,7 @@ class _WorldOption extends StatelessWidget {
               style: AppTextStyles.labelSmall.copyWith(
                 color:
                     selected
-                        ? AppColors.primaryPurple
+                        ? AppColors.primaryPurpleDark
                         : AppColors.textSecondary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -2168,7 +2172,8 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
       ),
       label: Text(isCustom ? 'Custom: $current min' : 'Custom…'),
       selected: isCustom,
-      selectedColor: AppColors.primaryPurple,
+      selectedColor: AppColors.primaryPurpleDark,
+      checkmarkColor: AppColors.white,
       labelStyle: AppTextStyles.bodySmall.copyWith(
         color: isCustom ? AppColors.white : AppColors.textPrimary,
       ),
@@ -2296,7 +2301,8 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                     ChoiceChip(
                       label: const Text('Off'),
                       selected: limit == null,
-                      selectedColor: AppColors.primaryPurple,
+                      selectedColor: AppColors.primaryPurpleDark,
+                      checkmarkColor: AppColors.white,
                       labelStyle: AppTextStyles.bodySmall.copyWith(
                         color:
                             limit == null
@@ -2313,7 +2319,8 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                               : '$minutes min',
                         ),
                         selected: limit == minutes,
-                        selectedColor: AppColors.primaryPurple,
+                        selectedColor: AppColors.primaryPurpleDark,
+                        checkmarkColor: AppColors.white,
                         labelStyle: AppTextStyles.bodySmall.copyWith(
                           color:
                               limit == minutes
@@ -2383,7 +2390,8 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                     ChoiceChip(
                       label: const Text('No session limit'),
                       selected: sessionLimit == null,
-                      selectedColor: AppColors.primaryPurple,
+                      selectedColor: AppColors.primaryPurpleDark,
+                      checkmarkColor: AppColors.white,
                       labelStyle: AppTextStyles.bodySmall.copyWith(
                         color:
                             sessionLimit == null
@@ -2397,7 +2405,8 @@ class _ScreenTimeSettingsScreenState extends State<_ScreenTimeSettingsScreen> {
                       ChoiceChip(
                         label: Text('$minutes min'),
                         selected: sessionLimit == minutes,
-                        selectedColor: AppColors.primaryPurple,
+                        selectedColor: AppColors.primaryPurpleDark,
+                        checkmarkColor: AppColors.white,
                         labelStyle: AppTextStyles.bodySmall.copyWith(
                           color:
                               sessionLimit == minutes
@@ -2807,7 +2816,7 @@ class _LockModeOption extends StatelessWidget {
           color: selected ? AppColors.lavenderLight : AppColors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? AppColors.primaryPurple : AppColors.border,
+            color: selected ? AppColors.primaryPurpleDark : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -2820,7 +2829,7 @@ class _LockModeOption extends StatelessWidget {
               color:
                   disabled
                       ? AppColors.mutedForeground
-                      : AppColors.primaryPurple,
+                      : AppColors.primaryPurpleDark,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
@@ -2870,7 +2879,7 @@ class _LockModeOption extends StatelessWidget {
               const Icon(
                 Icons.check_circle_rounded,
                 size: 20,
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
               ),
           ],
         ),

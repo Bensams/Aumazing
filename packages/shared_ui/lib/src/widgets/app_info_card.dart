@@ -24,7 +24,7 @@ class AppInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor ?? AppColors.primaryPurple;
+    final accent = accentColor ?? AppColors.primaryPurpleDark;
 
     return GestureDetector(
       onTap: onTap,

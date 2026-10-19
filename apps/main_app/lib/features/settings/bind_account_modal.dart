@@ -357,7 +357,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _bindAccount,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryPurple,
+                  backgroundColor: AppColors.primaryPurpleDark,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                   alignment: Alignment.center,
@@ -526,7 +526,7 @@ class _BindAccountModalState extends State<BindAccountModal> {
                   color: AppColors.lavenderLight,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: AppColors.primaryPurple),
+                child: Icon(icon, color: AppColors.primaryPurpleDark),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(

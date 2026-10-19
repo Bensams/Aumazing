@@ -277,7 +277,7 @@ class TherapyMapViewState extends State<TherapyMapView> {
                 size: center.id == widget.selectedCenterId ? 44 : 34,
                 color:
                     center.id == widget.selectedCenterId
-                        ? AppColors.primaryPurple
+                        ? AppColors.primaryPurpleDark
                         : AppColors.primaryPurple.withValues(alpha: 0.75),
                 shadows: const [Shadow(color: Colors.black26, blurRadius: 4)],
               ),
@@ -327,7 +327,7 @@ class _MapControlButton extends StatelessWidget {
       elevation: 2,
       child: IconButton(
         onPressed: onTap,
-        icon: Icon(icon, color: AppColors.primaryPurple),
+        icon: Icon(icon, color: AppColors.primaryPurpleDark),
         tooltip: tooltip,
         constraints: const BoxConstraints.tightFor(width: 40, height: 40),
         padding: EdgeInsets.zero,

@@ -94,7 +94,7 @@ class _CircleIconButton extends StatelessWidget {
         shape: const CircleBorder(),
         child: IconButton(
           onPressed: onTap,
-          icon: Icon(icon, color: AppColors.primaryPurple),
+          icon: Icon(icon, color: AppColors.primaryPurpleDark),
           tooltip: tooltip,
           iconSize: 24,
           // Was 44 — below the 48dp minimum touch target (WCAG 2.2 SC 2.5.8),

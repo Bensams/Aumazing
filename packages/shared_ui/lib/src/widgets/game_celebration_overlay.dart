@@ -153,7 +153,7 @@ class _GameCelebrationOverlayState extends State<GameCelebrationOverlay>
                           Text(
                             widget.message,
                             style: AppTextStyles.headlineLarge.copyWith(
-                              color: AppColors.primaryPurple,
+                              color: AppColors.primaryPurpleDark,
                             ),
                             textAlign: TextAlign.center,
                           ),

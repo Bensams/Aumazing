@@ -289,7 +289,7 @@ class _RewardOverlayState extends State<RewardOverlay>
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white.withAlpha(230),
-                            foregroundColor: const Color(0xFF9B82C4),
+                            foregroundColor: AppColors.primaryPurpleDark,
                             padding: EdgeInsets.symmetric(
                               horizontal: isSmallScreen ? 20 : 28,
                               vertical: isSmallScreen ? 10 : 12,
@@ -350,7 +350,7 @@ class _RewardOverlayState extends State<RewardOverlay>
               style: TextStyle(
                 fontSize: isSmallScreen ? 28 : 36,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF9B82C4),
+                color: AppColors.primaryPurpleDark,
               ),
             ),
             SizedBox(height: isSmallScreen ? 12 : 16),
@@ -364,7 +364,7 @@ class _RewardOverlayState extends State<RewardOverlay>
             ),
             SizedBox(height: isSmallScreen ? 20 : 28),
             const CircularProgressIndicator(
-              color: Color(0xFF9B82C4),
+              color: AppColors.primaryPurpleDark,
               strokeWidth: 3,
             ),
           ],

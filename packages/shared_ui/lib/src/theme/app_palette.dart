@@ -180,7 +180,7 @@ abstract final class GamePalettes {
   // ── Neutral — natural soft lavender ──────────────────────────────────
   static const GamePalette neutral = GamePalette(
     theme: GameTheme.neutral,
-    primary: AppColors.primaryPurple,
+    primary: AppColors.primaryPurpleDark,
     accent: AppColors.mint,
     cardSurface: Color(0xFFF1ECFA),
     onPrimary: Color(0xFFFFFFFF),

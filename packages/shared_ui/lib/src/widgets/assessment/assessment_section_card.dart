@@ -203,7 +203,7 @@ class AssessmentKeyValueRow extends StatelessWidget {
                 color: AppColors.lavenderLight,
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(icon, size: 15, color: AppColors.primaryPurple),
+              child: Icon(icon, size: 15, color: AppColors.primaryPurpleDark),
             ),
             const SizedBox(width: 12),
           ],

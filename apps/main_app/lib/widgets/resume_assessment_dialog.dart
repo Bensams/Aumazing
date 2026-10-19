@@ -38,7 +38,7 @@ abstract final class ResumeAssessmentDialog {
               children: [
                 const Icon(
                   Icons.play_circle_outline_rounded,
-                  color: AppColors.primaryPurple,
+                  color: AppColors.primaryPurpleDark,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -70,7 +70,7 @@ abstract final class ResumeAssessmentDialog {
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryPurple,
+                  backgroundColor: AppColors.primaryPurpleDark,
                 ),
                 onPressed:
                     () => Navigator.of(

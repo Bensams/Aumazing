@@ -415,7 +415,7 @@ class _TourCard extends StatelessWidget {
           Row(
             children: [
               if (step.icon != null) ...[
-                Icon(step.icon, size: 20, color: AppColors.primaryPurple),
+                Icon(step.icon, size: 20, color: AppColors.primaryPurpleDark),
                 const SizedBox(width: AppSpacing.xs),
               ],
               Expanded(

@@ -695,7 +695,7 @@ class _PreAssessmentProgressScreenState
                           color: done
                               ? AppColors.mint
                               : i == _currentGameIndex
-                                  ? AppColors.primaryPurple
+                                  ? AppColors.primaryPurpleDark
                                   : AppColors.lavenderLight,
                         ),
                       );
@@ -709,7 +709,7 @@ class _PreAssessmentProgressScreenState
                   Text(
                     gameName,
                     style: AppTextStyles.headlineLarge.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -734,7 +734,7 @@ class _PreAssessmentProgressScreenState
                   Text(
                     'Starting in $_countdown...',
                     style: AppTextStyles.headlineSmall.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

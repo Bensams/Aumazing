@@ -37,7 +37,7 @@ Future<void> showGameCompletionDialog(
               title,
               textAlign: TextAlign.center,
               style: AppTextStyles.headlineSmall.copyWith(
-                color: AppColors.primaryPurple,
+                color: AppColors.primaryPurpleDark,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -67,7 +67,7 @@ Future<void> showGameCompletionDialog(
                   _CompletionIconButton(
                     icon: Icons.arrow_forward_rounded,
                     label: 'Next',
-                    color: AppColors.primaryPurple,
+                    color: AppColors.primaryPurpleDark,
                     onTap: () {
                       Navigator.of(dialogContext).pop();
                       onNext();
@@ -86,7 +86,7 @@ Future<void> showGameCompletionDialog(
                   child: Text(
                     'Continue',
                     style: AppTextStyles.labelLarge
-                        .copyWith(color: AppColors.primaryPurple),
+                        .copyWith(color: AppColors.primaryPurpleDark),
                   ),
                 ),
               ),

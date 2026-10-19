@@ -87,7 +87,7 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
                   Text(
                     'Sensory Preferences',
                     style: AppTextStyles.headlineLarge.copyWith(
-                      color: AppColors.primaryPurple,
+                      color: AppColors.primaryPurpleDark,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -188,7 +188,7 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeTrackColor: AppColors.primaryPurple,
+          activeTrackColor: AppColors.primaryPurpleDark,
         ),
       ],
     );
@@ -209,7 +209,7 @@ class _SensoryPreferencesScreenState extends State<SensoryPreferencesScreen> {
           child: Slider(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.primaryPurple,
+            activeColor: AppColors.primaryPurpleDark,
             inactiveColor: AppColors.lavenderLight,
           ),
         ),

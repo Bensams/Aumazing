@@ -217,7 +217,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         child: Icon(
                           _codeVerified ? Icons.lock_open : Icons.lock_reset,
                           size: 56,
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -226,7 +226,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ? 'Set New Password'
                             : 'Enter Reset Code',
                         style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -248,7 +248,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           widget.email,
                           textAlign: TextAlign.center,
                           style: AppTextStyles.titleLarge.copyWith(
-                            color: AppColors.primaryPurple,
+                            color: AppColors.primaryPurpleDark,
                           ),
                         ),
                       ],
@@ -282,7 +282,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                  color: AppColors.primaryPurple,
+                                  color: AppColors.primaryPurpleDark,
                                   width: 2,
                                 ),
                               ),

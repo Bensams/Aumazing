@@ -112,7 +112,7 @@ class AssessmentOverviewCard extends StatelessWidget {
                       Text(
                         AssessmentLabels.aiSummary,
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                     ],

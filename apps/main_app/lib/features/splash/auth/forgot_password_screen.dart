@@ -101,14 +101,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         child: const Icon(
                           Icons.lock_reset,
                           size: 56,
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
                         'Forgot Password?',
                         style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.primaryPurple,
+                          color: AppColors.primaryPurpleDark,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),

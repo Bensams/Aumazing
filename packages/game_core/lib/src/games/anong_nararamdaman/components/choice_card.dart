@@ -57,7 +57,7 @@ abstract class ChoiceCard extends PositionComponent {
 
   static const Color _surface = Color(0xFFFFFDF8);
   static const Color _outline = Color(0x333F3B4A);
-  static const Color _primary = Color(0xFF9B82C4);
+  static const Color _primary = Color(0xFF6440A0); // AppColors.primaryPurpleDark
   static const Color _butter = Color(0xFFFFF4C4);
 
   /// What the card's picture is; drawn into a square box by the subclass.

@@ -222,7 +222,7 @@ class _OverallGameplaySummaryCardState
                         child: Text(
                           '${i + 1}.',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.primaryPurple,
+                            color: AppColors.primaryPurpleDark,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -314,7 +314,7 @@ class _SourceChip extends StatelessWidget {
         'overallSummarySourceAi',
         'AI · Gemini',
         Icons.auto_awesome_rounded,
-        AppColors.primaryPurple,
+        AppColors.primaryPurpleDark,
         AppColors.lavenderLight,
       ),
       GameplaySummarySource.groq => (

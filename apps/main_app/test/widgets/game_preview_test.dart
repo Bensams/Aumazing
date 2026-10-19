@@ -82,7 +82,7 @@ void main() {
 
     expect(find.textContaining('same outline'), findsOneWidget);
     expect(find.textContaining('selecting'), findsOneWidget);
-    expect(GamePreview.selectionBorder, AppColors.primaryPurple);
+    expect(GamePreview.selectionBorder, AppColors.primaryPurpleDark);
   });
 
   testWidgets('renders at 1px and 8px without overflowing', (tester) async {
