@@ -10,6 +10,7 @@ GameplaySession _play(
   double? completion,
   double? turnTaking,
   int? interruptions,
+  int prompts = 0,
 }) => GameplaySession(
   id: 's',
   childId: 'c',
@@ -19,6 +20,7 @@ GameplaySession _play(
   totalItems: totalItems,
   errorCount: 0,
   totalResponseTimeMs: 0,
+  promptCount: prompts,
   taskCompletionRate: completion,
   turnTakingSuccessRate: turnTaking,
   interruptionCount: interruptions,
@@ -71,6 +73,43 @@ void main() {
           _play('my_turn_your_turn', turnTaking: 0.9, interruptions: 1),
         ),
         PerformanceLabel.strength,
+      );
+    });
+  });
+
+  group('PathMastery — instruction prompts', () {
+    // copy_me and do_what_i_say log their own round instruction as a prompt,
+    // so a flawless play arrives with one prompt per item. That must not
+    // hold the path step locked.
+    for (final game in ['do_what_i_say', 'copy_me']) {
+      test('$game: a perfect play with only the instructions is a Strength',
+          () {
+        expect(
+          mastery.labelFor(
+            _play(game, score: 6, totalItems: 6, prompts: 6),
+          ),
+          PerformanceLabel.strength,
+        );
+      });
+
+      test('$game: real extra prompts beyond the instructions still count',
+          () {
+        // 6 instructions + 3 extra repeats → dependency 0.5, not a Strength.
+        expect(
+          mastery.isStrength(
+            _play(game, score: 6, totalItems: 6, prompts: 9),
+          ),
+          isFalse,
+        );
+      });
+    }
+
+    test('other games are scored on their raw prompt count', () {
+      expect(
+        mastery.isStrength(
+          _play('match_it', score: 10, totalItems: 10, prompts: 10),
+        ),
+        isFalse,
       );
     });
   });
