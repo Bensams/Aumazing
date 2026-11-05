@@ -7,6 +7,7 @@ import 'package:flutter/painting.dart';
 
 import 'components/game_piece.dart';
 import 'components/turn_slot.dart';
+import 'components/turn_tray.dart';
 import '../shared/answer_label.dart';
 import '../shared/ghost_hand.dart';
 import '../../analytics/enhanced_analytics_mixin.dart';
@@ -59,6 +60,7 @@ class MyTurnYourTurnGame extends FlameGame
     this.onPlayMyTurnVo,
     this.onPlayYourTurnVo,
     this.onPlayWaitVo,
+    this.onShowGoal,
   });
 
   final int totalRounds;
@@ -118,6 +120,12 @@ class MyTurnYourTurnGame extends FlameGame
   /// (see [_startBuddyTurn]); a plain void callback simply proceeds at once.
   final FutureOr<void> Function()? onPlayWaitVo;
 
+  /// Practice only: shows the "Buddy, then you" goal before the first round,
+  /// given the buddy's avatar. The board is laid out underneath, and the
+  /// buddy's first turn waits until the returned Future completes. Never
+  /// called in assessment, which starts straight away as it always has.
+  final Future<void> Function(String buddyEmoji)? onShowGoal;
+
   // ── State ───────────────────────────────────────────────────────────
   int _currentRound = 0;
   int _score = 0;
@@ -172,10 +180,31 @@ class MyTurnYourTurnGame extends FlameGame
   /// tap (bounded to a single [_earlyTapWaitBonusMs]); reset every round.
   int _roundWaitBonusMs = 0;
 
+  /// Full length (s) of the buddy wait in flight, including any early-tap
+  /// grace, so the visual timer can show how much of it has passed.
+  double? _buddyWaitTotal;
+
   /// True for the assessment profile: it disables adaptive stepping so its
   /// telemetry stays comparable, and here it also pins a fixed buddy wait and
   /// suppresses the early-tap grace.
   bool get _isAssessment => !profile.adaptiveSteppingEnabled;
+
+  // ── Practice-mode turn cues ──────────────────────────────────────────
+  // Waiting through the buddy's turn is what the assessment measures (early
+  // taps), and a cue that tells the child when to tap would change that
+  // measurement. So the cues exist only in practice; assessment keeps the
+  // plain board it has always had.
+
+  /// Highlights whose turn it is on every turn of practice play.
+  bool get _turnCues => !_isAssessment;
+
+  /// Fills the child's tray border during the buddy's wait. Easy and Medium
+  /// only — Hard fades this support out — but a round stepped down from Hard
+  /// after repeated early taps gets it back for the rest of that round.
+  bool get _showWaitTimer => _turnCues && _tier.level <= 2;
+
+  TurnTray? _buddyTray;
+  TurnTray? _childTray;
 
   /// The buddy wait for the current turn: a fixed interval in assessment, or a
   /// difficulty-based interval (plus any earned early-tap grace) in practice.
@@ -210,8 +239,9 @@ class MyTurnYourTurnGame extends FlameGame
 
   // True colors (not pastels): buddy pieces are real blue, the child's are
   // real green, so "whose turn" reads instantly and matches natural colors.
-  static const Color _buddyColor = Color(0xFF1E88E5);
-  static const Color _childColor = Color(0xFF43A047);
+  // Public so the screen's goal card shows the same two sides.
+  static const Color buddyColor = Color(0xFF1E88E5);
+  static const Color childColor = Color(0xFF43A047);
 
   /// Pool of buddy avatar candidates (matches the child avatar set).
   static const _avatarPool = ['🐻', '🐼', '🦊', '🐨', '🐸', '🦄', '🐙', '🐰'];
@@ -219,6 +249,10 @@ class MyTurnYourTurnGame extends FlameGame
   /// Buddy's avatar — picked once at load from [_avatarPool], always different
   /// from the child's avatar so the two players are easy to tell apart.
   String _buddyEmoji = '🐻';
+
+  /// The buddy's avatar for this game, so the screen's prompt names the
+  /// animal the child actually sees.
+  String get buddyEmoji => _buddyEmoji;
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -240,10 +274,26 @@ class MyTurnYourTurnGame extends FlameGame
     );
     analyticsStartSession();
     onPlayInstructionVo?.call();
-    _setupRound();
+
+    final goal = _isAssessment ? null : onShowGoal?.call(_buddyEmoji);
+    _setupRound(startTurn: goal == null);
+    if (goal != null) unawaited(_startAfterGoal(goal));
   }
 
-  void _setupRound() {
+  /// Starts the buddy's first turn once the goal card is gone, so the child
+  /// is watching the board when the buddy moves.
+  Future<void> _startAfterGoal(Future<void> goal) async {
+    final lifeToken = lifecycleToken;
+    try {
+      await goal;
+    } catch (_) {
+      // A goal card that fails must never keep the game from starting.
+    }
+    if (!isLifecycleTokenValid(lifeToken) || !isMounted) return;
+    _startBuddyTurn();
+  }
+
+  void _setupRound({bool startTurn = true}) {
     _cancelNoResponseTimer();
     _cancelBuddyWait();
     _roundWaitBonusMs = 0;
@@ -253,6 +303,10 @@ class MyTurnYourTurnGame extends FlameGame
     for (final p in [..._buddyPieces, ..._childPieces]) {
       p.removeFromParent();
     }
+    _buddyTray?.removeFromParent();
+    _childTray?.removeFromParent();
+    _buddyTray = null;
+    _childTray = null;
     _slots.clear();
     _buddyPieces.clear();
     _childPieces.clear();
@@ -313,7 +367,7 @@ class MyTurnYourTurnGame extends FlameGame
       final y = trayTop + slotH * i + slotH / 2;
       final buddy = GamePiece(
         emoji: _buddyEmoji,
-        color: _buddyColor,
+        color: buddyColor,
         isChild: false,
         position: Vector2(gameW * 0.09, y),
         size: Vector2.all(pieceSize),
@@ -323,7 +377,7 @@ class MyTurnYourTurnGame extends FlameGame
 
       final child = GamePiece(
         emoji: avatar,
-        color: _childColor,
+        color: childColor,
         isChild: true,
         onTapped: _onChildPieceTapped,
         onPickedUp: _onChildPiecePickedUp,
@@ -335,7 +389,36 @@ class MyTurnYourTurnGame extends FlameGame
       add(child);
     }
 
-    _startBuddyTurn();
+    if (_turnCues) {
+      // One pill per side, hugging that side's column of pieces with room
+      // for a selected (1.15x) piece.
+      final pad = pieceSize * 0.14;
+      final trayW = pieceSize + pad * 2;
+      final trayH = slotH * (_turnsPerSide - 1) + pieceSize + pad * 2;
+      final trayY = trayTop + slotH / 2 - pieceSize / 2 - pad;
+      _buddyTray = TurnTray(
+        color: buddyColor,
+        position: Vector2(gameW * 0.09 - trayW / 2, trayY),
+        size: Vector2(trayW, trayH),
+      );
+      _childTray = TurnTray(
+        color: childColor,
+        position: Vector2(gameW * 0.91 - trayW / 2, trayY),
+        size: Vector2(trayW, trayH),
+      );
+      add(_buddyTray!);
+      add(_childTray!);
+    }
+
+    if (startTurn) _startBuddyTurn();
+  }
+
+  /// Lights up the side whose turn it is. During the buddy's turn the child's
+  /// tray shows the (still empty) wait timer when this tier uses one.
+  void _showTurn({required bool buddy}) {
+    _buddyTray?.active = buddy;
+    _childTray?.active = !buddy;
+    _childTray?.progress = buddy && _showWaitTimer ? 0 : null;
   }
 
   // ── Buddy's turn ─────────────────────────────────────────────────────
@@ -345,6 +428,7 @@ class MyTurnYourTurnGame extends FlameGame
     _cancelNoResponseTimer();
     _cancelBuddyWait();
     onTurnChanged(true);
+    _showTurn(buddy: true);
 
     for (final s in _slots) {
       s.inputEnabled = false;
@@ -374,11 +458,13 @@ class MyTurnYourTurnGame extends FlameGame
     final waitMs = _buddyWaitMs;
     analyticsAddRoundData('buddy_turn_delay_ms', waitMs);
     _buddyWaitRemaining = waitMs / 1000.0;
+    _buddyWaitTotal = _buddyWaitRemaining;
   }
 
   /// Stops any in-flight buddy wait and invalidates pending cue completions.
   void _cancelBuddyWait() {
     _buddyWaitRemaining = null;
+    _buddyWaitTotal = null;
     _buddyWaitToken++;
   }
 
@@ -390,9 +476,17 @@ class MyTurnYourTurnGame extends FlameGame
       final next = remaining - dt;
       if (next <= 0) {
         _buddyWaitRemaining = null;
+        _buddyWaitTotal = null;
+        // The wait is over: the timer closes its loop and stays full until
+        // the child's turn lights the tray.
+        if (_showWaitTimer) _childTray?.progress = 1;
         _buddyPlays();
       } else {
         _buddyWaitRemaining = next;
+        final total = _buddyWaitTotal;
+        if (_showWaitTimer && total != null && total > 0) {
+          _childTray?.progress = 1 - next / total;
+        }
       }
     }
   }
@@ -410,7 +504,7 @@ class MyTurnYourTurnGame extends FlameGame
       onDone: () {
         if (!isMounted) return;
         piece.removeFromParent();
-        slot.fill(color: _buddyColor, emoji: _buddyEmoji, isBuddy: true);
+        slot.fill(color: buddyColor, emoji: _buddyEmoji, isBuddy: true);
         onPlayDropSfx?.call();
         _turnsInRound++;
         if (_checkRoundComplete()) return;
@@ -426,6 +520,7 @@ class MyTurnYourTurnGame extends FlameGame
   void _startChildTurn() {
     _isBuddyTurn = false;
     onTurnChanged(false);
+    _showTurn(buddy: false);
     onPlayYourTurnVo?.call();
     _turnStartTime = DateTime.now();
 
@@ -514,7 +609,7 @@ class MyTurnYourTurnGame extends FlameGame
       onDone: () {
         if (!isMounted) return;
         piece.removeFromParent();
-        slot.fill(color: _childColor, emoji: avatar, isBuddy: false);
+        slot.fill(color: childColor, emoji: avatar, isBuddy: false);
         _turnsInRound++;
         _score++;
 
@@ -584,6 +679,11 @@ class MyTurnYourTurnGame extends FlameGame
       if (_buddyWaitRemaining != null) {
         _buddyWaitRemaining =
             _buddyWaitRemaining! + _earlyTapWaitBonusMs / 1000.0;
+        // The timer stretches with the wait, so it never promises a turn
+        // sooner than the buddy will actually move.
+        if (_buddyWaitTotal != null) {
+          _buddyWaitTotal = _buddyWaitTotal! + _earlyTapWaitBonusMs / 1000.0;
+        }
       }
     }
   }

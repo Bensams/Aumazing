@@ -228,6 +228,30 @@ class AppStrings {
         GameLanguage.cebuano: 'Maayo kaayo! Natabangan nimo ang imong mga higala!',
       });
 
+  // ── My Turn, Your Turn (practice goal card) ──────────────────────────
+  /// The exact words the "Let's take turns" voice line says in each
+  /// language, so the card shows what the child hears.
+  String get turnGoalTitle => _pick(const {
+        GameLanguage.english: "Let's take turns.",
+        GameLanguage.tagalog: 'Magpalitan tayo.',
+        GameLanguage.cebuano: 'Magpuli-puli ta.',
+      });
+
+  /// Who goes first, then who goes next — the order the board will follow.
+  /// The second half reuses the "Your turn!" voice line's wording.
+  String get turnGoalOrder => _pick(const {
+        GameLanguage.english: "Buddy goes first. Then it's your turn!",
+        GameLanguage.tagalog: 'Mauuna si Buddy. Tapos, ikaw naman!',
+        GameLanguage.cebuano: 'Una si Buddy. Dayon, ikaw na!',
+      });
+
+  /// The child's side on the card, under their own piece.
+  String get turnGoalYou => _pick(const {
+        GameLanguage.english: 'You',
+        GameLanguage.tagalog: 'Ikaw',
+        GameLanguage.cebuano: 'Ikaw',
+      });
+
   // ── Settings ─────────────────────────────────────────────────────────
   String get settingsTitle => _pick(const {
         GameLanguage.english: 'Settings',
